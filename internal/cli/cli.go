@@ -21,24 +21,34 @@ type App struct {
 func NewApp() *App {
 	args := os.Args[1:]
 
+	commandRegistry := map[string]*Command{
+		"open":    Open(),
+		"install": Install(),
+		"update":  Update(),
+		"chat":    Chat(),
+	}
+
 	return &App{
+		Cmds: commandRegistry,
 		Args: args,
 	}
 }
 
 func (a *App) Run() error {
+	// app args reference
+	args := &a.Args
+
 	global := flag.NewFlagSet("bud", flag.ContinueOnError)
-	if err := global.Parse(a.Args); err != nil {
+	if err := global.Parse(*args); err != nil {
 		return err
 	}
-
-	a.Args = global.Args()
+	*args = global.Args()
 
 	// default to open if no args provided
 	name := "open"
-	if len(a.Args) > 0 {
-		name = a.Args[0]
-		a.Args = a.Args[1:]
+	if len(*args) > 0 {
+		name = (*args)[0]
+		*args = (*args)[1:]
 	}
 
 	cmd, ok := a.Cmds[name]
@@ -46,7 +56,15 @@ func (a *App) Run() error {
 		return errors.New("command not found")
 	}
 
-	if err := cmd.Run(a.Args); err != nil {
+	fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
+	if cmd.Flags != nil {
+		cmd.Flags(fs)
+	}
+	if err := fs.Parse(*args); err != nil {
+		return err
+	}
+
+	if err := cmd.Run(fs.Args()); err != nil {
 		return err
 	}
 

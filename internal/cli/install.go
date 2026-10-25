@@ -2,9 +2,11 @@ package cli
 
 func Install() *Command {
 	cmd := &Command{
-		Name:  "open",
+		Name:  "install",
+		Usage: "Installs the base items needed for Bud",
 		Flags: nil,
 		Run:   install,
+		Subs:  nil,
 	}
 
 	return cmd

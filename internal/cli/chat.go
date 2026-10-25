@@ -2,9 +2,11 @@ package cli
 
 func Chat() *Command {
 	cmd := &Command{
-		Name:  "open",
+		Name:  "chat",
+		Usage: "Opens bud to the chat interface",
 		Flags: nil,
 		Run:   chat,
+		Subs:  nil,
 	}
 
 	return cmd

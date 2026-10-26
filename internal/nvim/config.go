@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+
+	"jgarner.dev/bud"
 )
 
 // manifestName records every file SyncConfig wrote, so a file dropped from the
@@ -24,6 +27,55 @@ type SyncResult struct {
 
 func (r *SyncResult) Changed() bool {
 	return len(r.Added)+len(r.Updated)+len(r.Removed) > 0
+}
+
+func Apply() error {
+	fmt.Println("Configuring Neovim...")
+
+	dst, _ := ConfigDir()
+	fmt.Println("Bud config directory: " + dst)
+
+	fmt.Println("Syncing config...")
+	res, err := SyncConfig(bud.NvimConfig(), dst)
+	if err != nil {
+		return err
+	}
+
+	changes := 0
+	if len(res.Added) > 0 {
+		changes += len(res.Added)
+		fmt.Println("Added:")
+		for _, file := range res.Added {
+			fmt.Println(file)
+		}
+	}
+
+	if len(res.Updated) > 0 {
+		changes += len(res.Updated)
+		fmt.Println("Updated:")
+		for _, file := range res.Updated {
+			fmt.Println(file)
+		}
+	}
+
+	if len(res.Removed) > 0 {
+		changes += len(res.Removed)
+		fmt.Println("Removed:")
+		for _, file := range res.Removed {
+			fmt.Println(file)
+		}
+	}
+
+	if changes == 0 {
+		fmt.Println("Already up to date.")
+	} else {
+		fmt.Println("Restoring lazy.nvim plugins for changes...")
+		if err := RestorePlugins(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ConfigDir is stdpath("config") for NVIM_APPNAME=bud. Neovim uses

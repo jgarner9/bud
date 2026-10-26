@@ -1,0 +1,51 @@
+# Builds bud for linux/darwin × amd64/arm64 and attaches the archives to a GitHub release.
+# Archive names carry no version, so install.sh can fetch releases/latest/download/<name> directly.
+version: 2
+
+project_name: bud
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: bud
+    main: ./cmd/bud
+    binary: bud
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - id: bud
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: jgarner9
+    name: bud

@@ -29,7 +29,7 @@ func (r *recorder) cmd(name string) *Command {
 }
 
 func TestRegistry(t *testing.T) {
-	for _, name := range []string{"open", "chat", "install", "update"} {
+	for _, name := range []string{"open", "chat", "install", "update", "version"} {
 		if _, ok := CommandRegistry[name]; !ok {
 			t.Errorf("%s not registered", name)
 		}

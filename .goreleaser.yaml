@@ -24,7 +24,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w
+      - -s -w -X jgarner.dev/bud/internal/version.Version={{ .Version }}
 
 archives:
   - id: bud

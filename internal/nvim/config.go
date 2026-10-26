@@ -32,7 +32,10 @@ func (r *SyncResult) Changed() bool {
 func Apply() error {
 	fmt.Println("Configuring Neovim...")
 
-	dst, _ := ConfigDir()
+	dst, err := ConfigDir()
+	if err != nil {
+		return fmt.Errorf("finding config directory: %w", err)
+	}
 	fmt.Println("Bud config directory: " + dst)
 
 	fmt.Println("Syncing config...")
@@ -183,6 +186,13 @@ func readManifest(dir string) ([]string, error) {
 	var files []string
 	if err := json.Unmarshal(data, &files); err != nil {
 		return nil, err
+	}
+
+	// the manifest drives deletes, so an entry escaping dir must never reach os.Remove
+	for _, path := range files {
+		if !filepath.IsLocal(filepath.FromSlash(path)) {
+			return nil, fmt.Errorf("%s: path %q is outside the config directory", manifestName, path)
+		}
 	}
 
 	return files, nil

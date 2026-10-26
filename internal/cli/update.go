@@ -11,7 +11,7 @@ func init() {
 func Update() *Command {
 	cmd := &Command{
 		Name:  "update",
-		Usage: "Opens Bud chat interface",
+		Usage: "Syncs the Bud Neovim config and restores pinned plugins",
 		Flags: nil,
 		Run:   update,
 		Subs:  nil,

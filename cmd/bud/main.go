@@ -1,15 +1,12 @@
 package main
 
 import (
-	"log"
+	"os"
 
 	"jgarner.dev/bud/internal/cli"
 )
 
 func main() {
 	app := cli.NewApp()
-	if err := app.Run(); err != nil {
-		// TODO: look into better stderr printing (maybe os.Stderr directly)
-		log.Fatal(err.Error())
-	}
+	os.Exit(cli.ExitCode(app.Run(), os.Stderr))
 }

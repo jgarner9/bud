@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -116,7 +117,7 @@ func TestAppRunErrors(t *testing.T) {
 	if err := (&App{Cmds: cmds}).Run(); !errors.Is(err, boom) {
 		t.Errorf("run error = %v, want boom", err)
 	}
-	if err := (&App{Cmds: cmds, Args: []string{"-nope"}}).Run(); err == nil {
+	if err := (&App{Cmds: cmds, Args: []string{"-nope"}, Stderr: io.Discard}).Run(); err == nil {
 		t.Error("expected error for unknown global flag")
 	}
 }

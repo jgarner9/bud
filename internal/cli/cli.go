@@ -2,7 +2,10 @@
 package cli
 
 import (
+	"errors"
 	"flag"
+	"fmt"
+	"io"
 	"os"
 )
 
@@ -29,7 +32,7 @@ func (a *App) Run() error {
 	args := &a.Args
 
 	global := flag.NewFlagSet("bud", flag.ContinueOnError)
-	if err := global.Parse(*args); err != nil {
+	if err := a.parse(global, *args); err != nil {
 		return err
 	}
 	*args = global.Args()
@@ -47,7 +50,7 @@ func (a *App) Run() error {
 	if cmd.Flags != nil {
 		cmd.Flags(fs)
 	}
-	if err := fs.Parse(*args); err != nil {
+	if err := a.parse(fs, *args); err != nil {
 		return err
 	}
 
@@ -56,4 +59,43 @@ func (a *App) Run() error {
 	}
 
 	return nil
+}
+
+// parse runs fs.Parse and prints the usage itself: on stdout when help was asked
+// for, on stderr after the error when the flags were wrong. ErrHelp passes through
+// so callers can tell a help request from a mistake.
+func (a *App) parse(fs *flag.FlagSet, args []string) error {
+	// the flag package writes help and errors to one output, so silence it and split them here
+	fs.SetOutput(io.Discard)
+	err := fs.Parse(args)
+
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, flag.ErrHelp):
+		fs.SetOutput(a.stdout())
+		fs.Usage()
+		return err
+	default:
+		fs.SetOutput(a.stderr())
+		fmt.Fprintln(a.stderr(), err)
+		fs.Usage()
+		return &UsageError{Err: err, Printed: true}
+	}
+}
+
+func (a *App) stdout() io.Writer {
+	if a.Stdout == nil {
+		return os.Stdout
+	}
+
+	return a.Stdout
+}
+
+func (a *App) stderr() io.Writer {
+	if a.Stderr == nil {
+		return os.Stderr
+	}
+
+	return a.Stderr
 }

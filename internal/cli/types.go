@@ -1,6 +1,9 @@
 package cli
 
-import "flag"
+import (
+	"flag"
+	"io"
+)
 
 type Workspace struct {
 	Root string
@@ -18,4 +21,8 @@ type Command struct {
 type App struct {
 	Cmds map[string]*Command
 	Args []string
+
+	// Stdout gets requested help, Stderr gets usage errors; nil means os.Stdout/os.Stderr
+	Stdout io.Writer
+	Stderr io.Writer
 }

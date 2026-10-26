@@ -10,6 +10,10 @@ import (
 	"jgarner.dev/bud/internal/nvim"
 )
 
+func init() {
+	RegisterCommand(Open())
+}
+
 func Open() *Command {
 	cmd := &Command{
 		Name:  "open",

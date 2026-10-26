@@ -6,15 +6,20 @@ import (
 	"os"
 )
 
+var CommandRegistry = map[string]*Command{}
+
+func RegisterCommand(cmd *Command) {
+	if _, exists := CommandRegistry[cmd.Name]; exists {
+		panic("panic: " + cmd.Name + " command registered twice")
+	}
+	CommandRegistry[cmd.Name] = cmd
+}
+
 func NewApp() *App {
 	args := os.Args[1:]
 
-	commandRegistry := map[string]*Command{
-		"open": Open(),
-	}
-
 	return &App{
-		Cmds: commandRegistry,
+		Cmds: CommandRegistry,
 		Args: args,
 	}
 }

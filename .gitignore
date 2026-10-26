@@ -1,2 +1,4 @@
 .env
-bud
+/bud
+.claude/
+.serena/

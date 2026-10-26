@@ -2,32 +2,15 @@
 package cli
 
 import (
-	"errors"
 	"flag"
 	"os"
 )
-
-type Command struct {
-	Name  string
-	Usage string
-	Flags func(fs *flag.FlagSet)
-	Run   func(args []string) error
-	Subs  []*Command
-}
-
-type App struct {
-	Cmds map[string]*Command
-	Args []string
-}
 
 func NewApp() *App {
 	args := os.Args[1:]
 
 	commandRegistry := map[string]*Command{
-		"open":    Open(),
-		"install": Install(),
-		"update":  Update(),
-		"chat":    Chat(),
+		"open": Open(),
 	}
 
 	return &App{
@@ -46,16 +29,13 @@ func (a *App) Run() error {
 	}
 	*args = global.Args()
 
-	// default to open if no args provided
-	name := "open"
+	// default to open when no command is given, or when the first arg isn't a known command
+	cmd := a.Cmds["open"]
 	if len(*args) > 0 {
-		name = (*args)[0]
-		*args = (*args)[1:]
-	}
-
-	cmd, ok := a.Cmds[name]
-	if !ok {
-		return errors.New("command not found")
+		if c, ok := a.Cmds[(*args)[0]]; ok {
+			cmd = c
+			*args = (*args)[1:]
+		}
 	}
 
 	fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)

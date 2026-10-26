@@ -1,18 +1,18 @@
 # Bud IDE: BASE plan
 
-> Status: planning draft, nothing built yet. Names like `bud` are placeholders until you pick one.
-> Date: 2026-10-24
+> Status: planning draft. `open`, `install`, `update` (config sync only) and the release pipeline exist; everything else is still a plan. Names like `bud` are placeholders until you pick one.
+> Date: 2026-10-24, updated 2026-10-25
 
 ## 0. The one-paragraph version
 
-One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) that installs, launches, updates and extends the environment, a **Neovim config** that runs in its own isolated namespace (`NVIM_APPNAME=bud`, so it never touches an existing `~/.config/nvim`), declarative **language specs** that drive LSP / lint / format / treesitter, an **AI layer** (chat, inline help, and a generator that writes new tools on the fly), a **dashboard** you land on when you run `bud` with no arguments, and **app bundles** for macOS and Linux that open your terminal of choice with a custom pane layout. A one-line `curl | sh` grabs the Go binary, and the binary does the rest. Updates are `git pull` plus a lockfile restore, either manually from settings or automatically at boot.
+One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) that installs, launches, updates and extends the environment, a **Neovim config** that runs in its own isolated namespace (`NVIM_APPNAME=bud`, so it never touches an existing `~/.config/nvim`), declarative **language specs** that drive LSP / lint / format / treesitter, an **AI layer** (chat, inline help, and a generator that writes new tools on the fly), a **dashboard** you land on when you run `bud` with no arguments, and **app bundles** for macOS and Linux that open your terminal of choice with a custom pane layout. A one-line `curl | sh` grabs the Go binary, and the binary does the rest. The Neovim config (and later the language specs, layouts and migrations) is embedded in the binary, so the binary is the whole release: updating means swapping in a newer `bud` and syncing its embedded config, either manually from settings or automatically at boot. No repo clone or `git` is needed at runtime.
 
 ### Guiding principles
 
 1. **Fast first.** Lazy-load everything, keep startup under ~50 ms, no blocking work at boot (update checks are async).
 2. **One source of truth per concern.** A language is defined in exactly one file. A layout is defined in exactly one file.
-3. **Reproducible.** Plugin versions are pinned by a committed lockfile, so every machine gets the same thing.
-4. **Layered config.** Repo defaults < machine-local overrides < generated/user extras. Secrets never live in the repo.
+3. **Reproducible.** Plugin versions are pinned by a committed lockfile that ships inside the binary, so every machine on the same `bud` version gets the same thing.
+4. **Layered config.** Shipped defaults (embedded, bud-owned) < machine-local overrides < generated/user extras. Secrets never live in the repo.
 5. **Go does the system stuff, Lua does the editor stuff.** The CLI installs, launches and updates. Neovim configures itself.
 
 ## Decisions made
@@ -23,6 +23,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D2  | **All config is JSON** (`config.json`, tool `manifest.json`, `projects.json`, chat sessions).                                | 2026-10-24 | `encoding/json`, so it follows from D1. JSON has no comments, so the defaults are documented in `docs/config.md` and `bud config get/set` keeps you from hand-editing most of the time. Unknown keys are kept on rewrite, so a newer config never gets wiped by an older binary.                                                                                                                                            |
 | D3  | **The AI kit is harness-neutral.** One `kit/` in the repo, one adapter per harness (Claude Code, OpenCode, Hermes to start). | 2026-10-24 | New harnesses are one adapter file each. The Claude subscription only works in Claude Code; other harnesses use API keys. See 4.1.                                                                                                                                                                                                                                                                                          |
 | D4  | **Flags go before positional arguments.** The shape is `bud [global flags] <command> [command flags] [args]`.                | 2026-10-25 | This is plain stdlib `flag` behavior, with no interspersed parsing and no argv rewriting. `bud --layout focus .`, not `bud . --layout focus`. `bud kit adopt --from opencode context7`, not `bud kit adopt context7 --from opencode`. Anything after the first positional is treated as positional, so a flag there is passed through as an argument. `--` still works to end flags explicitly.                             |
+| D5  | **The config ships embedded in the binary.** No repo clone at runtime; `~/.config/bud` is a synced copy.                     | 2026-10-25 | Repo files the editor needs (`nvim/`, later `languages/`, `layouts/`, `tools/`, `migrations/`) are pulled in by `//go:embed` in the root `embed.go`, since embed can't reach parent dirs. One binary version means one config version, updates are checksummed releases, and syncing works offline. Updating is self-update (download, verify, swap, re-exec) followed by a sync from the new binary. Synced files are bud-owned and get overwritten; personal changes go in `local/` or `user-tools/`. Config changes ship by cutting a release; `bud dev link` covers the edit loop. |
 
 ---
 
@@ -35,6 +36,8 @@ bud/
 ├── README.md
 ├── go.mod
 │   # no third-party deps, so no go.sum to speak of
+├── embed.go
+│   # package bud: //go:embed for nvim/ (and later languages/, layouts/, tools/, migrations/), see D5
 ├── .goreleaser.yaml
 │   # builds bud for linux/darwin × amd64/arm64, attaches to GitHub releases
 ├── .github/workflows/
@@ -61,7 +64,7 @@ bud/
 │   ├── projects/
 │   │   # project registry (add/remove/list/recent), backs the dashboard
 │   ├── updater/
-│   │   # git fetch/pull, channel logic, binary self-replace, migrations
+│   │   # release check, download + verify, binary self-replace, re-exec, rollback, migrations
 │   ├── bundle/
 │   │   # builds the .app and .desktop / AppImage
 │   ├── ai/
@@ -74,7 +77,7 @@ bud/
 │       # health checks
 │
 ├── nvim/
-│   # the Neovim config, symlinked to ~/.config/bud
+│   # the Neovim config, embedded in the binary and synced to ~/.config/bud
 │   ├── init.lua
 │   │   # tiny: bootstrap lazy.nvim, load bud.core
 │   ├── lazy-lock.json
@@ -141,10 +144,13 @@ bud/
 
 ### Where things live on a machine (outside the repo)
 
+There's no repo clone on user machines. The `bud` binary carries the shipped files, and everything below is either synced from it or machine-local.
+
 | What                                                           | Linux                                                    | macOS                                           |
 | -------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------- |
-| Repo clone (the source of truth)                               | `~/.local/share/bud/repo`                                | `~/Library/Application Support/bud/repo`        |
-| Nvim config (symlink to `repo/nvim`)                           | `~/.config/bud`                                          | `~/.config/bud`                                 |
+| The `bud` binary (holds the embedded config)                   | `~/.local/bin/bud`                                       | same                                            |
+| Previous binary, kept for rollback                             | `~/.local/share/bud/bud.prev`                            | `~/Library/Application Support/bud/bud.prev`    |
+| Nvim config (synced copy of the embedded `nvim/`)              | `~/.config/bud`                                          | `~/.config/bud`                                 |
 | Machine config (terminal, AI provider, channel, enabled langs) | `~/.config/bud/local/config.json`                        | same                                            |
 | Personal generated tools (not in the repo yet)                 | `~/.local/share/bud/user-tools/`                         | `~/Library/Application Support/bud/user-tools/` |
 | Bud-managed binaries + Mason packages                          | `~/.local/share/bud/bin`, `.../mason`                    | Application Support equivalents                 |
@@ -154,8 +160,11 @@ bud/
 
 `bud` resolves all of these through `internal/paths`, so nothing else hardcodes a path.
 
+`~/.config/bud` holds a `.bud-manifest.json` listing every file the last sync wrote. Sync overwrites those files, deletes ones a newer release dropped, and never touches anything else in the directory (like `local/`). For working on bud itself, `bud dev link` replaces `~/.config/bud` with a symlink to a checkout's `nvim/` so Lua edits show up right away. Sync sees the symlink and leaves it alone until `bud dev unlink`.
+
 ### Key architectural choices (and why)
 
+- **The binary is the release (D5).** Shipping config inside `bud` means the CLI and the editor config can never drift apart, installs need no `git`, and an update is one verified download. The cost is that a config change needs a release, which GoReleaser makes a tag push.
 - **Languages are data, not code.** Each `languages/<lang>.lua` returns a table. The Lua engine wires it up, and the Go CLI can read the same file by running `nvim --headless` to dump it as JSON (so there's no second format to keep in sync).
 - **Mason installs language tooling, Go installs system tooling.** Mason handles LSP servers, linters, formatters and debuggers per language spec. `bud install` handles Neovim itself, git, ripgrep, fd, a Nerd Font, and runtimes like node/python when a language needs them.
 - **Plugin stack (proposed, all swappable):** lazy.nvim, native `vim.lsp.config` (Neovim 0.11+), mason.nvim, conform.nvim (format), nvim-lint (lint), nvim-treesitter, blink.cmp (completion), fzf-lua or snacks.picker (finding things), oil.nvim (file editing as a buffer), flash.nvim (jump), aerial.nvim (symbols outline), trouble.nvim (diagnostics list), gitsigns + a diff view, codecompanion.nvim or avante.nvim (AI chat/edits).
@@ -325,7 +334,8 @@ bud chat [--resume <title>] # jump straight into full-screen chat
 
 bud install [--profile full|minimal] [--yes]   # system deps + nvim + plugins + language tooling
 bud doctor                  # health checks: versions, missing tools, broken specs, keys present
-bud update [--check] [--channel stable|edge]   # pull repo, restore lockfile, migrate, swap binary
+bud update [--check] [--channel stable|edge]   # self-update the binary, then sync its embedded config + restore lockfile, migrate
+bud dev link [path] | unlink                   # point ~/.config/bud at a checkout's nvim/ for live editing
 bud uninstall [--keep-config]
 
 bud projects ls | add <path> | rm <name> | pin <name>
@@ -357,7 +367,7 @@ Global flags: `--no-update` (skip boot check), `--verbose`, `--profile`, and `--
    - which languages to enable (defaults from a preset)
    - AI provider + where the key lives (skippable)
    - AI harnesses: which to install (Claude Code / OpenCode / Hermes) and which is the default. Then it syncs the kit (Context7 etc.), prompting once for each missing secret and storing it in the keychain.
-4. It clones the repo, symlinks `nvim/`, installs system deps via the OS package manager, runs a headless `nvim` to install plugins from the lockfile and Mason packages for enabled languages.
+4. It installs system deps via the OS package manager, syncs the embedded `nvim/` into `~/.config/bud`, then runs a headless `nvim` to install plugins from the lockfile and Mason packages for enabled languages. No clone, no `git` needed for bud itself.
 5. On a desktop profile, it installs the app bundle (`/Applications/Bud.app` or `~/.local/share/applications/bud.desktop`).
 6. Ends with `bud doctor` output and "run `bud` to start".
 
@@ -490,21 +500,24 @@ A general-purpose chat that isn't tied to code, for bouncing ideas around. You c
 
 ```text
 boot (async, at most once per day, skippable with --no-update)
-  └─ git fetch → compare to channel (stable = latest tag, edge = main)
+  └─ ask GitHub releases for the channel's newest version
+     (stable = latest release, edge = newest prerelease) and compare to `bud version`
        ├─ nothing new → silent
        └─ new version → dashboard banner (or auto-apply if config says so)
 
 bud update  /  Settings → Update  /  [u] on dashboard
-  1. refuse if the repo clone has uncommitted local changes (offer stash)
-  2. git pull --ff-only to the target tag/commit
-  3. if a newer bud binary is required → download release, verify, swap in place
-  4. run new migrations/
-  5. nvim headless: Lazy restore (lockfile) + Mason install for new language specs
-  6. bud kit sync (bring every enabled harness in line with the kit)
-  7. bud doctor; on failure → roll back to previous tag and report
+  1. if a newer release exists:
+       download the archive + checksums.txt, verify SHA-256
+       keep the running binary as bud.prev, swap the new one in place (rename, so it's atomic)
+       re-exec the NEW binary for the rest (the old one still holds the old embedded config)
+  2. sync the embedded nvim/ into ~/.config/bud (overwrite managed files, drop removed ones)
+  3. run new migrations/
+  4. nvim headless: Lazy restore (lockfile) + Mason install for new language specs
+  5. bud kit sync (bring every enabled harness in line with the kit)
+  6. bud doctor; on failure → swap bud.prev back, re-exec it to sync its config, report
 ```
 
-Because plugin versions come from `lazy-lock.json`, "update" means "move every machine to the same known-good snapshot", not "pull the latest of 40 plugins and hope".
+With no newer release, `bud update` skips step 1 and just re-syncs, which also repairs a config someone edited by hand. Because plugin versions come from `lazy-lock.json`, and that file ships in the binary, "update" means "move every machine to the same known-good snapshot", not "pull the latest of 40 plugins and hope".
 
 ### 5.8 Extending, day to day
 
@@ -512,10 +525,11 @@ Because plugin versions come from `lazy-lock.json`, "update" means "move every m
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Add a language            | `bud lang add zig` (AI drafts the spec) or copy `_template.lua` → `bud install` picks up its Mason deps                                |
 | Add a quick tool          | `:BudGen "…"` in the editor → review diff → active now, lives in `user-tools/`                                                         |
-| Keep a tool everywhere    | `bud tools promote <name>` → moved into repo `tools/`, committed, pushed                                                               |
+| Keep a tool everywhere    | `bud tools promote <name>` → moved into repo `tools/`, committed, pushed → ships in the next release                                   |
 | Drop something            | `bud tools rm` / `bud lang disable`, or delete the file                                                                                |
-| Change a layout           | edit `layouts/*.lua`, `:BudLayout reload`                                                                                              |
-| Add an AI tool everywhere | `bud kit add mcp <name>` (or `bud kit adopt --from opencode <name>`) → commit → every machine and every harness gets it on next update |
+| Change a layout           | edit `layouts/*.lua` in the repo (with `bud dev link`, `:BudLayout reload` shows it live) → ships in the next release                 |
+| Ship config changes       | commit, push a `v*` tag → GoReleaser builds the release → every machine gets it on `bud update`                                        |
+| Add an AI tool everywhere | `bud kit add mcp <name>` (or `bud kit adopt --from opencode <name>`) → commit → release → every machine and harness gets it on update |
 | Try a new agent harness   | write one adapter in `internal/kit/adapters/`, add it to `ai.harnesses`                                                                |
 | Per-machine tweak         | `bud config set …` (never committed)                                                                                                   |
 
@@ -526,7 +540,7 @@ Because plugin versions come from `lazy-lock.json`, "update" means "move every m
 1. **Skeleton:** repo layout, `bud` with `open`, `install` (one OS), `doctor`, isolated `NVIM_APPNAME`.
 2. **Editor core:** lazy.nvim + lockfile, navigation set, language engine with 3–4 languages.
 3. **Dashboard (both styles) + project registry + the two-key open.**
-4. **Updater** (pull, lockfile restore, binary swap, rollback).
+4. **Updater** (release check, verified download, binary swap + re-exec, config sync, lockfile restore, rollback, `bud dev link`).
 5. **One-liner + releases** (GoReleaser, `install.sh`, minimal profile, `bootstrap`).
 6. **Launcher + layouts + bundles** (macOS then Linux).
 7. **AI kit + Claude Code adapter** (`bud kit sync` with Context7), then the OpenCode and Hermes adapters, then **full-screen chat + history panel**, then the side-pane chat, then the **tool generator** with lifecycle commands.
@@ -543,7 +557,7 @@ Because plugin versions come from `lazy-lock.json`, "update" means "move every m
 5. **Layout engine.** Panes inside Neovim (my recommendation, works over SSH) or terminal-native splits / tmux / zellij?
 6. **AI provider(s).** Claude only, or pluggable with others too? Do you want inline ghost-text completion, or just chat + actions?
 7. **Generated tools.** Should they stay machine-local until you promote them (my recommendation), or auto-commit to the repo?
-8. **Auto-update behavior.** Notify only, or auto-apply at boot? Stable tags or tracking `main`?
+8. **Auto-update behavior.** Notify only, or auto-apply at boot? Since updates are releases now (D5), "edge" means prereleases rather than tracking `main`. Is that enough, or do you want nightly builds from `main` too?
 9. **Linux distros.** Which package managers matter: apt, dnf, pacman, all three? Is Homebrew-on-Linux acceptable as a fallback?
 10. **Existing setup.** Is there a current Neovim config or dotfiles repo you want to fold in or migrate from?
 11. **Secrets.** OK with env vars + OS keychain for API keys, or do you use a password manager CLI (1Password `op`, Bitwarden) you'd like wired in?

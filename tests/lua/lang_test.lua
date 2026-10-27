@@ -105,6 +105,17 @@ eq(lang.servers(), {
   bashls = {},
 }, "servers")
 
+-- format markers by filetype, joined across specs
+write(dir .. "/cee.lua", [[return { filetypes = { "c", "h" }, format_markers = { ".clang-format" } }]])
+write(dir .. "/cee2.lua", [[return { filetypes = { "c" }, format_markers = { "_clang-format" } }]])
+write(lang.config_file, '{"languages": ["go", "cee", "cee2"]}')
+lang.reload()
+eq(lang.format_markers("c"), { ".clang-format", "_clang-format" }, "markers joined")
+eq(lang.format_markers("h"), { ".clang-format" }, "markers for one spec")
+eq(lang.format_markers("go"), nil, "no markers")
+os.remove(dir .. "/cee.lua")
+os.remove(dir .. "/cee2.lua")
+
 -- an empty languages list enables nothing
 write(lang.config_file, '{"languages": []}')
 lang.reload()

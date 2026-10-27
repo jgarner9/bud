@@ -56,6 +56,58 @@ local cases = {
     -- prettier needs a config (require_cwd), so tsc formats, without adding a semicolon
     formatted = { 1, "const x: number = 1" },
   },
+  {
+    lang = "c",
+    name = "c with .clang-format",
+    files = {
+      [".clang-format"] = "BasedOnStyle: LLVM\n",
+      ["main.c"] = "int main(void){return y;}\n",
+    },
+    open = "main.c",
+    servers = { "clangd" },
+    -- y is undeclared
+    lint = "clang",
+    formatted = { 1, "int main(void) { return y; }" },
+  },
+  {
+    lang = "c",
+    name = "c without .clang-format",
+    files = { ["main.c"] = "int main(void){return 0;}\n" },
+    open = "main.c",
+    servers = { "clangd" },
+    -- no style file, so saving leaves it alone (format_markers)
+    formatted = { 1, "int main(void){return 0;}" },
+  },
+  {
+    lang = "bash",
+    files = { ["run.sh"] = "#!/bin/sh\nif true;then\necho $1\nfi\n" },
+    open = "run.sh",
+    servers = {},
+    -- SC2086: $1 isn't quoted
+    lint = "shellcheck",
+    formatted = { 2, "if true; then" },
+  },
+  {
+    lang = "html",
+    files = {
+      ["package.json"] = '{ "name": "sample", "private": true }\n',
+      [".prettierrc"] = "{}\n",
+      ["index.html"] = "<a href='x'>y</a>\n",
+    },
+    open = "index.html",
+    servers = { "html" },
+    formatted = { 1, '<a href="x">y</a>' },
+  },
+  {
+    lang = "css",
+    files = { ["style.css"] = "a{colr:red}\n" },
+    open = "style.css",
+    servers = { "cssls" },
+    -- unknown property colr
+    lint = "css",
+    -- no Prettier config, so the server formats
+    formatted = { 1, "a {" },
+  },
 }
 
 local problems = {}

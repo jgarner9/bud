@@ -29,6 +29,11 @@ return {
   -- filetype, like lint. A filetype with none gets its LSP server's formatting
   format = { lang = { "lang-fmt" } },
 
+  -- format on save only in projects that have one of these files (looked for
+  -- from the file's directory up), for languages whose projects keep their own
+  -- style. Leave out to always format; <leader>cf formats either way
+  format_markers = { ".lang-fmt.toml" },
+
   -- Mason packages: the servers, linters and formatters above, installed when
   -- bud install / bud update runs. Mason names can differ from the ones above
   mason = { "lang-language-server", "lang-lint", "lang-fmt" },

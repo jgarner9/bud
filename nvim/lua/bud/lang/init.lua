@@ -27,6 +27,7 @@ local fields = {
   lsp = "table",
   lint = "by_ft",
   format = "by_ft",
+  format_markers = "list",
   mason = "list",
   system = "list",
   root = "list",
@@ -248,6 +249,20 @@ function M.collect(field)
     end
   end
   return out
+end
+
+-- format_markers returns the files one of which has to exist (upward from the
+-- buffer's file) before a buffer of filetype ft is formatted on save, or nil
+-- when it's always formatted. Specs sharing ft get their markers joined
+function M.format_markers(ft)
+  local markers
+  for _, spec in ipairs(M.enabled()) do
+    if spec.format_markers and vim.tbl_contains(spec.filetypes, ft) then
+      markers = markers or {}
+      vim.list_extend(markers, spec.format_markers)
+    end
+  end
+  return markers
 end
 
 -- servers returns the enabled LSP servers by name, with their settings. A

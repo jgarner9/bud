@@ -128,9 +128,17 @@ return {
         default_format_opts = { lsp_format = "fallback" },
         -- only bud's languages, so a stray file isn't reformatted by surprise
         format_on_save = function(buf)
-          if lang.format_on_save() and enabled[vim.bo[buf].filetype] then
-            return { timeout_ms = 1000 }
+          local ft = vim.bo[buf].filetype
+          if not lang.format_on_save() or not enabled[ft] then
+            return
           end
+          -- a spec can ask for a style file first (C's .clang-format)
+          local markers = lang.format_markers(ft)
+          local file = vim.api.nvim_buf_get_name(buf)
+          if markers and not vim.fs.find(markers, { path = vim.fs.dirname(file), upward = true })[1] then
+            return
+          end
+          return { timeout_ms = 1000 }
         end,
       })
       vim.keymap.set({ "n", "x" }, "<leader>cf", function()

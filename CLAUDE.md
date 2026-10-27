@@ -31,7 +31,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 ## Architecture
 
-**Command registry.** Each command is one file in `internal/cli/` that calls `RegisterCommand` from `init()`. `App.Run` (`internal/cli/cli.go`) parses global flags. If the first argument names a registered command it runs that command; otherwise it falls back to `open` with the argument as a path, so `bud .` and `bud file.go` work. Each command gets its own `FlagSet` through `Command.Flags`.
+**Command registry.** Each command is one file in `internal/cli/` that calls `RegisterCommand` from `init()`. `App.Run` (`internal/cli/cli.go`) parses global flags. If the first argument names a registered command it runs that command; otherwise it falls back to `open` with the argument as a path, so `bud .` and `bud file.go` work. Each command gets its own `FlagSet` through `Command.Flags`. Global flags (`--verbose`, `--no-update`, `--profile`, `--layout`) are parsed into a `*Globals` that `App.Run` hands to every `Command.Run`; `Globals.Logf` is the `--verbose` logger. Usage text is written by `globalUsage`/`commandUsage`, and `flagOrderHint` explains D4 when a global flag lands after the command.
 
 **Errors and output.** Commands return errors and never print errors or call `os.Exit`. `cli.ExitCode` (`internal/cli/errors.go`) is the only place that prints errors (one `bud: ...` line on stderr) and picks the exit code: 0 for success or `-h`, 2 for a `*UsageError` (build one with `usageErrorf`), 1 for anything else. `App.parse` silences the flag package and prints requested help to stdout, and the error plus usage to stderr. `App.Stdout`/`App.Stderr` let tests capture that output.
 

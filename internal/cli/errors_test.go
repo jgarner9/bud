@@ -57,7 +57,7 @@ func TestAppRunParseErrors(t *testing.T) {
 			if !errors.As(err, &usage) || !usage.Printed {
 				t.Fatalf("err = %#v, want printed UsageError", err)
 			}
-			if !strings.HasPrefix(stderr.String(), "flag provided but not defined: -nope\nUsage of ") {
+			if !strings.HasPrefix(stderr.String(), "flag provided but not defined: -nope\nUsage: bud ") {
 				t.Errorf("stderr = %q, want the error then usage", stderr.String())
 			}
 			if stdout.Len() != 0 {
@@ -75,9 +75,9 @@ func TestAppRunHelp(t *testing.T) {
 		args      []string
 		wantUsage string
 	}{
-		{"global", []string{"-h"}, "Usage of bud:\n"},
-		{"global long", []string{"--help"}, "Usage of bud:\n"},
-		{"command", []string{"open", "-h"}, "Usage of open:\n"},
+		{"global", []string{"-h"}, "Usage: bud [global flags] <command> [command flags] [args]\n"},
+		{"global long", []string{"--help"}, "Usage: bud [global flags] <command> [command flags] [args]\n"},
+		{"command", []string{"open", "-h"}, "Usage: bud [global flags] open [flags] [args]\n"},
 	}
 
 	for _, tt := range tests {
@@ -87,8 +87,8 @@ func TestAppRunHelp(t *testing.T) {
 			if !errors.Is(err, flag.ErrHelp) {
 				t.Fatalf("err = %v, want flag.ErrHelp", err)
 			}
-			if stdout.String() != tt.wantUsage {
-				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantUsage)
+			if !strings.HasPrefix(stdout.String(), tt.wantUsage) {
+				t.Errorf("stdout = %q, want it to start with %q", stdout.String(), tt.wantUsage)
 			}
 			if stderr.Len() != 0 {
 				t.Errorf("stderr = %q, want nothing", stderr.String())
@@ -99,7 +99,7 @@ func TestAppRunHelp(t *testing.T) {
 
 func TestOpenUsageErrors(t *testing.T) {
 	var usage *UsageError
-	if err := open([]string{"a", "b"}); !errors.As(err, &usage) {
+	if err := open(&Globals{}, []string{"a", "b"}); !errors.As(err, &usage) {
 		t.Errorf("two paths: err = %v, want UsageError", err)
 	}
 	if _, err := resolveWorkspace(filepath.Join(t.TempDir(), "nope")); !errors.As(err, &usage) {

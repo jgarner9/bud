@@ -22,7 +22,7 @@ func Version() *Command {
 	return cmd
 }
 
-func printVersion(args []string) error {
+func printVersion(g *Globals, args []string) error {
 	if len(args) > 0 {
 		return usageErrorf("version takes no arguments")
 	}

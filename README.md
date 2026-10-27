@@ -71,6 +71,8 @@ Working today:
 | `bud doctor`  | Checks deps, the Neovim version (0.11+), config sync and machine config; exits 1 on a failure |
 | `bud version` | Prints the version                                        |
 
+Global flags: `--verbose`, `--no-update`, `--profile full|minimal`, `--layout <name>`. `--no-update`, `--profile` and `--layout` are accepted but nothing uses them yet.
+
 Everything else in the list above is still planned. See [`BASE.md`](BASE.md) for the full plan and the decisions made so far.
 
 ## Development

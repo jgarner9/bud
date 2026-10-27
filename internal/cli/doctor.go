@@ -23,7 +23,7 @@ func Doctor() *Command {
 	return cmd
 }
 
-func runDoctor(args []string) error {
+func runDoctor(g *Globals, args []string) error {
 	if len(args) > 0 {
 		return usageErrorf("doctor takes no arguments")
 	}

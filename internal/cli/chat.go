@@ -16,6 +16,6 @@ func Chat() *Command {
 	return cmd
 }
 
-func chat(args []string) error {
+func chat(g *Globals, args []string) error {
 	return nil
 }

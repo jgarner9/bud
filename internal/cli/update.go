@@ -20,6 +20,6 @@ func Update() *Command {
 	return cmd
 }
 
-func update(args []string) error {
+func update(g *Globals, args []string) error {
 	return nvim.Apply()
 }

@@ -25,7 +25,7 @@ func Open() *Command {
 	return cmd
 }
 
-func open(args []string) error {
+func open(g *Globals, args []string) error {
 	// default to the current directory, same as `bud .`
 	target := "."
 	if len(args) > 1 {

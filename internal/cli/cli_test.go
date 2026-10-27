@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"io"
@@ -20,7 +21,7 @@ type recorder struct {
 func (r *recorder) cmd(name string) *Command {
 	return &Command{
 		Name: name,
-		Run: func(args []string) error {
+		Run: func(_ *Globals, args []string) error {
 			r.called = true
 			r.args = args
 			return nil
@@ -95,7 +96,7 @@ func TestAppRunCommandFlags(t *testing.T) {
 			"x": {
 				Name:  "x",
 				Flags: func(fs *flag.FlagSet) { fs.BoolVar(&verbose, "v", false, "") },
-				Run:   func(args []string) error { gotArgs = args; return nil },
+				Run:   func(_ *Globals, args []string) error { gotArgs = args; return nil },
 			},
 		},
 		Args: []string{"x", "-v", "rest"},
@@ -111,7 +112,7 @@ func TestAppRunCommandFlags(t *testing.T) {
 func TestAppRunErrors(t *testing.T) {
 	boom := errors.New("boom")
 	cmds := map[string]*Command{
-		"open": {Name: "open", Run: func([]string) error { return boom }},
+		"open": {Name: "open", Run: func(*Globals, []string) error { return boom }},
 	}
 
 	if err := (&App{Cmds: cmds}).Run(); !errors.Is(err, boom) {
@@ -123,7 +124,7 @@ func TestAppRunErrors(t *testing.T) {
 }
 
 func TestOpenTooManyArgs(t *testing.T) {
-	if err := open([]string{"a", "b"}); err == nil {
+	if err := open(&Globals{}, []string{"a", "b"}); err == nil {
 		t.Fatal("expected error for two paths")
 	}
 }
@@ -173,3 +174,4 @@ func TestResolveWorkspace(t *testing.T) {
 		}
 	})
 }
+

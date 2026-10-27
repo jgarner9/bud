@@ -23,7 +23,7 @@ func Install() *Command {
 	return cmd
 }
 
-func install(args []string) error {
+func install(g *Globals, args []string) error {
 	for _, dep := range installer.Deps {
 		status := "missing"
 		if dep.Installed() {

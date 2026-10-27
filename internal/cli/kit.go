@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/kit"
+	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/secrets"
 )
@@ -26,6 +28,7 @@ func init() {
 // 4.1): MCP servers, skills, subagents, slash commands and instructions
 func Kit() *Command {
 	var dryRun bool
+	var url, cmd, repo, profiles string
 	return &Command{
 		Name:  "kit",
 		Usage: "Syncs bud's Claude Code setup (MCP servers, skills, agents, commands) into Claude Code",
@@ -45,6 +48,46 @@ func Kit() *Command {
 				Usage: "store a kit secret in the keychain (set NAME, asks for the value), or delete it (rm NAME)",
 				Run:   func(_ *Globals, args []string) error { return kitSecret(args) },
 			},
+			{
+				Name:  "add",
+				Usage: "scaffold a kit entry in a bud checkout: add mcp --url URL|--cmd CMD <name>, or add skill|agent|command <name>",
+				Flags: func(fs *flag.FlagSet) {
+					fs.StringVar(&url, "url", "", "an MCP server over HTTP at this URL")
+					fs.StringVar(&cmd, "cmd", "", "an MCP server that runs this command (stdio)")
+					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
+				},
+				Run: func(_ *Globals, args []string) error { return kitAdd(args, url, cmd, repo) },
+			},
+			{
+				Name:  "rm",
+				Usage: "take an entry out of the kit in a bud checkout; the next sync removes it from Claude Code: rm <name>",
+				Flags: func(fs *flag.FlagSet) {
+					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
+				},
+				Run: func(_ *Globals, args []string) error { return kitRm(args, repo) },
+			},
+			{
+				Name:  "adopt",
+				Usage: "pull an MCP server, skill, agent or command you set up by hand into the kit: adopt <name>",
+				Flags: func(fs *flag.FlagSet) {
+					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
+				},
+				Run: func(_ *Globals, args []string) error { return kitAdopt(args, repo) },
+			},
+			{
+				Name:  "enable",
+				Usage: "turn a kit entry on for this machine: enable <name>; --profile sets which profiles an MCP entry is for, in the checkout",
+				Flags: func(fs *flag.FlagSet) {
+					fs.StringVar(&profiles, "profile", "", "comma-separated profiles (full,minimal) for the entry, written to the checkout")
+					fs.StringVar(&repo, "repo", "", "the bud checkout, for --profile")
+				},
+				Run: func(_ *Globals, args []string) error { return kitToggle(args, true, profiles, repo) },
+			},
+			{
+				Name:  "disable",
+				Usage: "turn a kit entry off for this machine; the next sync removes it from Claude Code: disable <name>",
+				Run:   func(_ *Globals, args []string) error { return kitToggle(args, false, "", "") },
+			},
 			{Name: "env", Usage: "print the kit's keychain secrets as JSON, for the Claude Code sessions bud starts", Run: func(_ *Globals, args []string) error { return kitEnvCmd(args) }},
 		},
 	}
@@ -52,7 +95,7 @@ func Kit() *Command {
 
 // swappable in tests
 var (
-	kitFS     = bud.Kit
+	kitFS     = defaultKitFS
 	kitClaude = func(args ...string) error {
 		bin := claude.Find()
 		if bin == "" {
@@ -66,6 +109,203 @@ var (
 	}
 )
 
+// defaultKitFS is the kit this binary ships, or a dev-linked checkout's, so
+// a change to kit/ syncs before it's released
+func defaultKitFS() fs.FS {
+	if p, err := paths.Resolve(); err == nil {
+		if checkout, ok := nvim.DevLink(p.Config); ok && isFile(filepath.Join(checkout, "kit", "kit.json")) {
+			return os.DirFS(filepath.Join(checkout, "kit"))
+		}
+	}
+
+	return bud.Kit()
+}
+
+// kitRepo is the checkout's kit/ that add, rm, adopt and --profile edit
+func kitRepo(repo string) (kit.Repo, error) {
+	if repo == "" {
+		p, err := paths.Resolve()
+		if err != nil {
+			return kit.Repo{}, err
+		}
+		checkout, ok := nvim.DevLink(p.Config)
+		if !ok {
+			return kit.Repo{}, usageErrorf("the kit lives in bud's repo: give --repo <checkout>, or bud dev link <checkout> first")
+		}
+		repo = checkout
+	}
+	dir := filepath.Join(repo, "kit")
+	if !isFile(filepath.Join(dir, "kit.json")) {
+		return kit.Repo{}, fmt.Errorf("%s isn't a bud checkout with a kit (no kit/kit.json)", repo)
+	}
+
+	return kit.Repo{Dir: dir}, nil
+}
+
+func kitAdd(args []string, url, cmd, repo string) error {
+	if len(args) != 2 {
+		return usageErrorf("kit add takes a kind and a name: add mcp|skill|agent|command <name>")
+	}
+	kind, name := args[0], args[1]
+	if _, ok := kit.Kinds[kind]; !ok {
+		return usageErrorf("kit add: %q isn't mcp, skill, agent or command", kind)
+	}
+	r, err := kitRepo(repo)
+	if err != nil {
+		return err
+	}
+	var path string
+	if kind == "mcp" {
+		path, err = r.AddMCP(name, url, cmd)
+	} else {
+		if url != "" || cmd != "" {
+			return usageErrorf("--url and --cmd are for MCP servers")
+		}
+		path, err = r.Scaffold(kind, name)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Added the %s %s: fill in %s, then bud kit sync.\n", kind, name, path)
+
+	return nil
+}
+
+func kitRm(args []string, repo string) error {
+	if len(args) != 1 {
+		return usageErrorf("kit rm takes one name")
+	}
+	name := args[0]
+	r, err := kitRepo(repo)
+	if err != nil {
+		return err
+	}
+	kind, err := r.Remove(name)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Took the %s %s out of the kit; bud kit sync removes it from Claude Code.\n", kind, name)
+
+	return nil
+}
+
+func kitAdopt(args []string, repo string) error {
+	if len(args) != 1 {
+		return usageErrorf("kit adopt takes one name")
+	}
+	r, err := kitRepo(repo)
+	if err != nil {
+		return err
+	}
+	p, err := paths.Resolve()
+	if err != nil {
+		return err
+	}
+	env, err := kitEnv(p)
+	if err != nil {
+		return err
+	}
+	kind, needed, err := r.Adopt(args[0], env.ClaudeDir, env.ClaudeJSON)
+	if err != nil {
+		return err
+	}
+	if err := kit.Own(env.Ledger, env.ClaudeDir, kind, args[0]); err != nil {
+		return err
+	}
+	fmt.Printf("Adopted the %s %s into %s.\n", kind, args[0], r.Dir)
+	if len(needed) > 0 {
+		fmt.Printf("Its values became secrets, so none are in the repo. Store each before syncing:\n")
+		for _, n := range needed {
+			fmt.Printf("  bud kit secret set %s\n", n)
+		}
+	}
+
+	return nil
+}
+
+// kitToggle turns an entry on or off for this machine (config.json's
+// kit.disabled), or with profiles, sets the entry's profiles in the checkout
+func kitToggle(args []string, on bool, profiles, repo string) error {
+	if len(args) != 1 {
+		return usageErrorf("kit enable and disable take one name")
+	}
+	name := args[0]
+	k, err := kit.Load(kitFS())
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, e := range k.Entries() {
+		found = found || e[1] == name
+	}
+	if !found {
+		return usageErrorf("the kit has nothing called %s", name)
+	}
+	if profiles != "" {
+		r, err := kitRepo(repo)
+		if err != nil {
+			return err
+		}
+		list := strings.Split(profiles, ",")
+		for _, pr := range list {
+			if !slices.Contains(config.Profiles, pr) {
+				return usageErrorf("--profile %q isn't one of %s", pr, strings.Join(config.Profiles, ", "))
+			}
+		}
+		if err := r.SetProfiles(name, list); err != nil {
+			return err
+		}
+		fmt.Printf("%s is for %s now, in %s.\n", name, strings.Join(list, " and "), r.Dir)
+	}
+
+	p, err := paths.Resolve()
+	if err != nil {
+		return err
+	}
+	f, err := config.Load(p.MachineConfig())
+	if err != nil {
+		return err
+	}
+	disabled := kitDisabled(f)
+	if on {
+		disabled = slices.DeleteFunc(disabled, func(n string) bool { return n == name })
+	} else if !slices.Contains(disabled, name) {
+		disabled = append(disabled, name)
+	}
+	slices.Sort(disabled)
+	list := make([]any, len(disabled))
+	for i, n := range disabled {
+		list[i] = n
+	}
+	if err := f.Set("kit.disabled", list); err != nil {
+		return err
+	}
+	if err := f.Save(); err != nil {
+		return err
+	}
+	state := "on"
+	if !on {
+		state = "off"
+	}
+	fmt.Printf("%s is %s on this machine; bud kit sync applies it.\n", name, state)
+
+	return nil
+}
+
+func kitDisabled(f *config.File) []string {
+	var out []string
+	if v, ok := f.Get("kit.disabled"); ok {
+		list, _ := v.([]any)
+		for _, n := range list {
+			if s, ok := n.(string); ok {
+				out = append(out, s)
+			}
+		}
+	}
+
+	return out
+}
+
 // kitEnv is where the kit goes on this machine
 func kitEnv(p *paths.Paths) (kit.Env, error) {
 	home, err := os.UserHomeDir()
@@ -77,10 +317,12 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 		dir, claudeJSON = d, filepath.Join(d, ".claude.json")
 	}
 	s := config.Defaults()
+	var disabled []string
 	if f, err := config.Load(p.MachineConfig()); err == nil {
 		if loaded, err := f.Settings(); err == nil {
 			s = loaded
 		}
+		disabled = kitDisabled(f)
 	}
 
 	return kit.Env{
@@ -90,6 +332,7 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 		Profile:    s.Profile,
 		Claude:     kitClaude,
 		SecretSet:  secrets.Has,
+		Disabled:   disabled,
 	}, nil
 }
 

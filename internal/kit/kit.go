@@ -187,6 +187,38 @@ func (l *Ledger) save(path string) error {
 	return atomicfile.WriteFile(path, append(data, '\n'), 0o644)
 }
 
+// Own records that bud manages something you adopted into the kit: an MCP
+// server (hash "", so the next sync rewrites it with the kit's version) or
+// the files of a skill, agent or command as they are now
+func Own(ledgerPath, claudeDir, kind, name string) error {
+	l, _, err := ReadLedger(ledgerPath)
+	if err != nil {
+		return err
+	}
+	if kind == "mcp" {
+		l.MCP[name] = ""
+		return l.save(ledgerPath)
+	}
+	root := filepath.Join(claudeDir, filepath.FromSlash(entryPath(kind, name)))
+	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(claudeDir, p)
+		l.Files[filepath.ToSlash(rel)] = hash(data)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return l.save(ledgerPath)
+}
+
 // Env is where sync writes and how it runs claude
 type Env struct {
 	ClaudeDir  string // ~/.claude
@@ -195,6 +227,22 @@ type Env struct {
 	Profile    string
 	Claude     func(args ...string) error // runs claude
 	SecretSet  func(name string) bool
+	Disabled   []string // entries turned off on this machine (bud kit disable)
+}
+
+// without is k minus the named entries
+func (k *Kit) without(names []string) *Kit {
+	if len(names) == 0 {
+		return k
+	}
+	keep := func(list []string) []string {
+		return slices.DeleteFunc(slices.Clone(list), func(n string) bool { return slices.Contains(names, n) })
+	}
+	out := *k
+	out.MCP = slices.DeleteFunc(slices.Clone(k.MCP), func(m MCP) bool { return slices.Contains(names, m.Name) })
+	out.Skills, out.Agents, out.Commands = keep(k.Skills), keep(k.Agents), keep(k.Commands)
+
+	return &out
 }
 
 // Action is one thing sync does, or would do with --dry-run
@@ -313,6 +361,7 @@ func withBlock(doc, body string) string {
 // says what it would do. It keeps going past one item failing, and returns
 // every failure at the end
 func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
+	k = k.without(env.Disabled)
 	ledger, _, err := ReadLedger(env.Ledger)
 	if err != nil {
 		return nil, err

@@ -57,7 +57,9 @@ run() {
 }
 
 run start
-[ "$(keys)" = 2 ] && [ "$(go_keys)" = 2 ] || fail "after start: $(keys) keys in install.sh, $(go_keys) in Go, want 2 each"
+if [ "$(keys)" != 2 ] || [ "$(go_keys)" != 2 ]; then
+	fail "after start: $(keys) keys in install.sh, $(go_keys) in Go, want 2 each"
+fi
 [ -x "$repo/install.sh" ] || fail "install.sh lost its execute bit"
 [ -z "$(git -C "$repo" status --porcelain)" ] || fail "start left changes uncommitted"
 title="$(ls "$tmp/vault")"
@@ -65,7 +67,9 @@ title="$(ls "$tmp/vault")"
 ls "$tmp"/bud-rotate.* >/dev/null 2>&1 && fail "the private key was left in a temp dir"
 
 run finish --item "$title" --old-item "bud release key old"
-[ "$(keys)" = 1 ] && [ "$(go_keys)" = 1 ] || fail "after finish: $(keys) and $(go_keys) keys, want 1 each"
+if [ "$(keys)" != 1 ] || [ "$(go_keys)" != 1 ]; then
+	fail "after finish: $(keys) and $(go_keys) keys, want 1 each"
+fi
 grep -qxF "$old" "$repo/install.sh" && fail "the old key is still trusted"
 cmp -s "$tmp/secret" "$tmp/vault/$title" || fail "the secret isn't the new private key"
 grep -qx "bud release key old" "$tmp/archived" || fail "the old 1Password item wasn't archived"

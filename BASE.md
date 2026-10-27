@@ -595,6 +595,7 @@ bud update  /  Settings → Update  /  [u] on dashboard
   4. nvim headless: `bud.pack.restore()` (lockfile) + Mason install for new language specs
   5. bud kit sync (bring Claude Code's config in line with the kit)
   6. bud doctor; on failure → swap bud.prev back, re-exec it to sync its config, report
+     (only checks that passed before the swap count, so an unrelated missing tool never rolls back)
 ```
 
 With no newer release, `bud update` skips step 1 and just re-syncs, which also repairs a config someone edited by hand. Because plugin versions come from `nvim-pack-lock.json`, and that file ships in the binary, "update" means "move every machine to the same known-good snapshot", not "pull the latest of 40 plugins and hope".

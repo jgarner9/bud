@@ -176,6 +176,11 @@ func Swap(newBin, target, prev string) error {
 	return nil
 }
 
+// Restore puts the kept binary at prev back at target
+func Restore(prev, target string) error {
+	return copyExecutable(prev, target)
+}
+
 // copyExecutable writes src to a temp file next to dst and renames it over dst
 func copyExecutable(src, dst string) error {
 	in, err := os.Open(src)

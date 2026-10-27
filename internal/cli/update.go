@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"jgarner.dev/bud/internal/config"
+	"jgarner.dev/bud/internal/doctor"
 	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
@@ -38,17 +39,28 @@ func Update() *Command {
 	}
 }
 
+// Environment one bud passes the next across an update's re-exec.
 // updatedFromEnv tells a freshly swapped-in bud which version it replaced, so
-// it skips the release check and goes straight to the sync
-const updatedFromEnv = "BUD_UPDATED_FROM"
+// it skips the release check and goes straight to the sync; failingBeforeEnv
+// lists the doctor checks already failing then, which don't count against the
+// new version. rolledBackEnv and rollbackWhyEnv tell the restored bud which
+// version was rolled back and why
+const (
+	updatedFromEnv   = "BUD_UPDATED_FROM"
+	failingBeforeEnv = "BUD_FAILING_BEFORE"
+	rolledBackEnv    = "BUD_ROLLED_BACK_FROM"
+	rollbackWhyEnv   = "BUD_ROLLBACK_WHY"
+)
 
 // swappable in tests
 var (
-	checkRelease = updater.Check
-	fetchRelease = updater.Fetch
-	checkBinary  = updater.CheckBinary
-	execBinary   = syscall.Exec
-	executable   = os.Executable
+	checkRelease  = updater.Check
+	fetchRelease  = updater.Fetch
+	checkBinary   = updater.CheckBinary
+	execBinary    = syscall.Exec
+	executable    = os.Executable
+	applyConfig   = nvim.Apply
+	failingChecks = failingNames
 )
 
 func update(g *Globals, args []string, check bool, channel string) error {
@@ -79,14 +91,82 @@ func update(g *Globals, args []string, check bool, channel string) error {
 		return checkForUpdate(g, channel)
 	}
 
+	if from := os.Getenv(rolledBackEnv); from != "" {
+		os.Unsetenv(rolledBackEnv)
+		reason := os.Getenv(rollbackWhyEnv)
+		os.Unsetenv(rollbackWhyEnv)
+		if err := applyConfig(); err != nil {
+			return err
+		}
+		return fmt.Errorf("the update to %s was rolled back to %s: %s", from, version.String(), reason)
+	}
 	if from := os.Getenv(updatedFromEnv); from != "" {
+		before := os.Getenv(failingBeforeEnv)
 		os.Unsetenv(updatedFromEnv)
+		os.Unsetenv(failingBeforeEnv)
 		fmt.Printf("Updated bud from %s to %s.\n", from, version.String())
-	} else if err := selfUpdate(g, p, channel); err != nil {
+		return finishUpdate(g, p, from, before)
+	}
+	if err := selfUpdate(g, p, channel); err != nil {
 		return err
 	}
 
-	return nvim.Apply()
+	return applyConfig()
+}
+
+// finishUpdate runs in the freshly swapped-in binary: sync its config, then
+// doctor. A sync error, or a check failing that passed before the swap,
+// puts bud.prev back and re-execs it to sync its own config (5.7 step 6)
+func finishUpdate(g *Globals, p *paths.Paths, from, failingBefore string) error {
+	why := ""
+	if err := applyConfig(); err != nil {
+		why = "syncing its config failed: " + err.Error()
+	} else {
+		before := strings.Split(failingBefore, ",")
+		var broke []string
+		for _, name := range failingChecks() {
+			if !slices.Contains(before, name) {
+				broke = append(broke, name)
+			}
+		}
+		if len(broke) == 0 {
+			return nil
+		}
+		why = "bud doctor failed: " + strings.Join(broke, ", ")
+	}
+
+	receipt, err := installer.ReadReceipt(p.InstallReceipt())
+	if err != nil || receipt == nil {
+		return fmt.Errorf("%s, and there's no install record to roll back with: %v", why, err)
+	}
+	fmt.Printf("%s; going back to %s.\n", why, from)
+	if err := updater.Restore(p.PrevBinary(), receipt.Path); err != nil {
+		return fmt.Errorf("%s, and rolling back failed: %w", why, err)
+	}
+
+	args := []string{receipt.Path}
+	if g.Verbose {
+		args = append(args, "--verbose")
+	}
+	args = append(args, "update")
+	env := append(os.Environ(), rolledBackEnv+"="+version.String(), rollbackWhyEnv+"="+why)
+	if err := execBinary(receipt.Path, args, env); err != nil {
+		return fmt.Errorf("starting %s again: %w", from, err)
+	}
+
+	return nil
+}
+
+// failingNames runs the quick doctor checks and names the ones that fail
+func failingNames() []string {
+	var names []string
+	for _, r := range doctor.Run(doctor.Options{Quick: true}) {
+		if r.Status == doctor.Fail {
+			names = append(names, r.Name)
+		}
+	}
+
+	return names
 }
 
 // selfUpdate swaps in the channel's newest release and re-execs it to finish
@@ -124,6 +204,8 @@ func selfUpdate(g *Globals, p *paths.Paths, channel string) error {
 	}
 
 	fmt.Printf("Updating bud %s to %s...\n", s.Current, s.Release.Version)
+	// what's broken already isn't the new version's fault (finishUpdate)
+	before := failingChecks()
 	dir, err := os.MkdirTemp("", "bud-update-")
 	if err != nil {
 		return err
@@ -149,7 +231,7 @@ func selfUpdate(g *Globals, p *paths.Paths, channel string) error {
 	}
 	args = append(args, "update")
 	os.RemoveAll(dir)
-	env := append(os.Environ(), updatedFromEnv+"="+s.Current)
+	env := append(os.Environ(), updatedFromEnv+"="+s.Current, failingBeforeEnv+"="+strings.Join(before, ","))
 	if err := execBinary(receipt.Path, args, env); err != nil {
 		return fmt.Errorf("starting the new bud: %w", err)
 	}

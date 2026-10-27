@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"jgarner.dev/bud/internal/paths"
@@ -34,6 +35,7 @@ func Projects() *Command {
 			},
 			{Name: "rm", Usage: "forget a project (its files are untouched)", Run: func(_ *Globals, args []string) error { return projectsRm(args) }},
 			{Name: "pin", Usage: "pin a project to the top of the dashboard", Run: func(_ *Globals, args []string) error { return projectsPin(args, true) }},
+			{Name: "measure", Usage: "measure a project's size, for kit entries that only load in large ones: measure [project]", Run: func(_ *Globals, args []string) error { return projectsMeasure(args) }},
 			{Name: "unpin", Usage: "unpin a project", Run: func(_ *Globals, args []string) error { return projectsPin(args, false) }},
 		},
 	}
@@ -172,4 +174,35 @@ func projectsPin(args []string, pinned bool) error {
 	}
 
 	return r.Save()
+}
+
+func projectsMeasure(args []string) error {
+	if len(args) > 1 {
+		return usageErrorf("projects measure takes at most one project")
+	}
+	dir := "."
+	if len(args) == 1 {
+		dir = args[0]
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = resolved
+	}
+	size, err := projects.Measure(abs)
+	if err != nil {
+		return err
+	}
+	if p, err := paths.Resolve(); err == nil {
+		if r, err := projects.Load(p.Projects()); err == nil {
+			if _, err := r.SetSize(abs, size); err == nil {
+				_ = r.Save()
+			}
+		}
+	}
+	fmt.Printf("%s: %d files, about %d lines of tracked source\n", abs, size.Files, size.LOC)
+
+	return nil
 }

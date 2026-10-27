@@ -56,7 +56,59 @@ type MCP struct {
 	// a binary the server needs on PATH, and how to install it; without it
 	// sync skips the server and says how
 	Requires *Requires `json:"requires,omitempty"`
-	Profiles []string  `json:"profiles,omitempty"` // empty means every profile
+	// only for big projects: then it isn't synced for every session, and bud
+	// adds it to the sessions it starts in a project that's big enough (JGA-117)
+	When     *When    `json:"when,omitempty"`
+	Profiles []string `json:"profiles,omitempty"` // empty means every profile
+}
+
+// When is how big a project has to be for an entry; either threshold is
+// enough. Zero means config.json's default (kit.large_files, kit.large_loc)
+type When struct {
+	Large    bool  `json:"large"`
+	MinFiles int   `json:"min_files,omitempty"`
+	MinLOC   int64 `json:"min_loc,omitempty"`
+}
+
+// Big says whether a project of files and loc is big enough for w, with the
+// defaults standing in for thresholds it leaves out
+func (w When) Big(files int, loc int64, defFiles int, defLOC int64) bool {
+	minFiles, minLOC := w.MinFiles, w.MinLOC
+	if minFiles == 0 {
+		minFiles = defFiles
+	}
+	if minLOC == 0 {
+		minLOC = defLOC
+	}
+
+	return (minFiles > 0 && files >= minFiles) || (minLOC > 0 && loc >= minLOC)
+}
+
+// SessionServers is the --mcp-config bud adds to a session in a project of
+// files and loc: the conditional entries it qualifies for, that are on, have
+// their binary and secrets. nil when there are none
+func (k *Kit) SessionServers(profile string, files int, loc int64, defFiles int, defLOC int64, disabled []string, set func(string) bool, hasBinary func(string) bool) ([]byte, error) {
+	servers := map[string]json.RawMessage{}
+	for _, m := range k.MCP {
+		if m.When == nil || !m.For(profile) || slices.Contains(disabled, m.Name) || !m.When.Big(files, loc, defFiles, defLOC) {
+			continue
+		}
+		if m.Requires != nil && m.Requires.Bin != "" && !hasBinary(m.Requires.Bin) {
+			continue
+		}
+		server, missing, err := m.Server(set)
+		if err != nil {
+			return nil, err
+		}
+		if len(missing) == 0 {
+			servers[m.Name] = server
+		}
+	}
+	if len(servers) == 0 {
+		return nil, nil
+	}
+
+	return json.Marshal(map[string]any{"mcpServers": servers})
 }
 
 type Requires struct {
@@ -408,6 +460,11 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 	wanted := map[string]bool{}
 	for _, m := range k.MCP {
 		if !m.For(env.Profile) {
+			continue
+		}
+		if m.When != nil {
+			// not for every session: bud adds it per project (SessionServers)
+			actions = append(actions, Action{"mcp", m.Name, "skip", "only for large projects; bud adds it to their sessions"})
 			continue
 		}
 		wanted[m.Name] = true

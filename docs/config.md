@@ -61,6 +61,8 @@ bud config edit                           # open it in bud's editor, then check 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `tools.disabled` | unset | Tools turned off on this machine. `bud tools enable/disable` edits it; a tool that fails to load is added here with the reason (`bud tools ls` shows it). |
+| `kit.large_files` | `10000` | A project with this many tracked source files counts as large, for kit entries that only load there (Code-Index-MCP). |
+| `kit.large_loc` | `1000000` | The same, by lines of tracked source (estimated from bytes). Either threshold is enough. |
 | `kit.disabled` | unset | Kit entries turned off on this machine; `bud kit sync` removes them from Claude Code. `bud kit enable/disable` edits it. |
 
 ## Environment

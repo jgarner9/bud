@@ -29,12 +29,21 @@ type Project struct {
 	Layout string `json:"layout,omitempty"`
 	// zero, and left out of the file, when it was added but never opened through bud
 	LastOpened time.Time `json:"last_opened,omitzero"`
+	// how big it is, measured in the background when it opens (JGA-117); nil until then
+	Size *Size `json:"size,omitempty"`
 
 	// keys this binary doesn't know, kept as they were (D2)
 	extra map[string]json.RawMessage
 }
 
-var projectKeys = []string{"name", "path", "pinned", "layout", "last_opened"}
+var projectKeys = []string{"name", "path", "pinned", "layout", "last_opened", "size"}
+
+// Size is a project's tracked source: files, and lines estimated from bytes
+type Size struct {
+	Files    int       `json:"files"`
+	LOC      int64     `json:"loc"`
+	Measured time.Time `json:"measured"`
+}
 
 func (p *Project) UnmarshalJSON(data []byte) error {
 	type plain Project
@@ -256,6 +265,17 @@ func (r *Registry) SetLayout(nameOrPath, layout string) (Project, error) {
 
 // Sorted returns the projects the way they're listed: pinned first, then the
 // most recently opened, then by name
+// SetSize records how big a project is
+func (r *Registry) SetSize(nameOrPath string, size Size) (Project, error) {
+	i := r.index(nameOrPath)
+	if i < 0 {
+		return Project{}, fmt.Errorf("no project %q", nameOrPath)
+	}
+	r.Projects[i].Size = &size
+
+	return r.Projects[i], nil
+}
+
 func (r *Registry) Sorted() []Project {
 	out := slices.Clone(r.Projects)
 	slices.SortStableFunc(out, func(a, b Project) int {

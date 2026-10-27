@@ -1,0 +1,10 @@
+{
+  "name": "code-index",
+  "description": "Local symbol and text index for large repos (Code-Index-MCP)",
+  "transport": "stdio",
+  "command": "mcp-index",
+  "args": ["stdio"],
+  "requires": { "bin": "mcp-index", "install": "uv tool install git+https://github.com/ViperJuice/Code-Index-MCP" },
+  "when": { "large": true },
+  "profiles": ["full"]
+}

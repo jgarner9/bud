@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/claude"
@@ -17,6 +18,7 @@ import (
 	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/projects"
 	"jgarner.dev/bud/internal/secrets"
 )
 
@@ -88,7 +90,14 @@ func Kit() *Command {
 				Usage: "turn a kit entry off for this machine; the next sync removes it from Claude Code: disable <name>",
 				Run:   func(_ *Globals, args []string) error { return kitToggle(args, false, "", "") },
 			},
-			{Name: "env", Usage: "print the kit's keychain secrets as JSON, for the Claude Code sessions bud starts", Run: func(_ *Globals, args []string) error { return kitEnvCmd(args) }},
+			{
+				Name:  "env",
+				Usage: "what a Claude Code session bud starts needs, as JSON: the kit's keychain secrets, and with --root the project's own MCP servers",
+				Flags: func(fs *flag.FlagSet) {
+					fs.StringVar(&repo, "root", "", "the project the session runs in")
+				},
+				Run: func(_ *Globals, args []string) error { return kitEnvCmd(args, repo) },
+			},
 		},
 	}
 }
@@ -588,7 +597,7 @@ func keychainEnv() (map[string]string, error) {
 	return out, nil
 }
 
-func kitEnvCmd(args []string) error {
+func kitEnvCmd(args []string, root string) error {
 	if len(args) > 0 {
 		return usageErrorf("kit env takes no arguments")
 	}
@@ -596,13 +605,75 @@ func kitEnvCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	data, err := json.Marshal(vars)
+	out := map[string]any{"env": vars}
+	if root != "" {
+		if cfg, err := sessionMCP(root); err == nil && cfg != nil {
+			out["mcp_config"] = string(cfg)
+		}
+	}
+	data, err := json.Marshal(out)
 	if err != nil {
 		return err
 	}
 	fmt.Println(string(data))
 
 	return nil
+}
+
+// sizeMaxAge is how old a project's measured size may be before it's measured again
+const sizeMaxAge = 24 * time.Hour
+
+// projectSize is root's size from the registry, measured again when it's
+// missing or a day old (and saved, when the project is registered)
+func projectSize(root string) projects.Size {
+	p, err := paths.Resolve()
+	if err != nil {
+		return projects.Size{}
+	}
+	r, err := projects.Load(p.Projects())
+	if err == nil {
+		if pr, ok := r.Get(root); ok && pr.Size != nil && time.Since(pr.Size.Measured) < sizeMaxAge {
+			return *pr.Size
+		}
+	}
+	size, _ := projects.Measure(root)
+	if err == nil {
+		if _, err := r.SetSize(root, size); err == nil {
+			_ = r.Save()
+		}
+	}
+
+	return size
+}
+
+// sessionMCP is the --mcp-config for kit entries that only load in large
+// projects, when root is one (JGA-117); nil when there are none
+func sessionMCP(root string) ([]byte, error) {
+	k, env, err := loadKit()
+	if err != nil {
+		return nil, err
+	}
+	hasConditional := false
+	for _, m := range k.MCP {
+		hasConditional = hasConditional || m.When != nil
+	}
+	if !hasConditional {
+		return nil, nil
+	}
+	s := config.Defaults()
+	if p, err := paths.Resolve(); err == nil {
+		if f, err := config.Load(p.MachineConfig()); err == nil {
+			if loaded, err := f.Settings(); err == nil {
+				s = loaded
+			}
+		}
+	}
+	size := projectSize(root)
+
+	return k.SessionServers(env.Profile, size.Files, size.LOC, s.Kit.LargeFiles, s.Kit.LargeLOC, env.Disabled, secrets.Has, func(bin string) bool {
+		_, err := exec.LookPath(bin)
+		return err == nil
+	})
 }
 
 // askKitSecrets asks once for each required kit secret that isn't set and

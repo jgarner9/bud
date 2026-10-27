@@ -31,7 +31,15 @@ type Settings struct {
 	Dashboard    Dashboard `json:"dashboard"`
 	AI           AI        `json:"ai"`
 	Tools        Disabled  `json:"tools"` // bud tools enable/disable (D54)
-	Kit          Disabled  `json:"kit"`   // bud kit enable/disable (D58)
+	Kit          Kit       `json:"kit"`
+}
+
+// Kit is the kit's settings on this machine
+type Kit struct {
+	Disabled []string `json:"disabled"` // bud kit enable/disable (D58)
+	// how big a project is "large", for entries that only load there (JGA-117)
+	LargeFiles int   `json:"large_files"`
+	LargeLOC   int64 `json:"large_loc"`
 }
 
 // Disabled lists what's turned off on this machine
@@ -93,6 +101,7 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true},
 		AI:           AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}}, Chat: Chat{Pane: "native"}},
+		Kit:          Kit{LargeFiles: 10000, LargeLOC: 1000000},
 	}
 }
 

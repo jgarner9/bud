@@ -74,6 +74,10 @@ func agent(g *Globals, args []string) error {
 		argv = append(argv, "--continue")
 	}
 	argv = append(argv, s.AI.Claude.Args...)
+	// the kit's servers for large projects (JGA-117)
+	if cfg, err := sessionMCP(ws.Root); err == nil && cfg != nil {
+		argv = append(argv, "--mcp-config", string(cfg))
+	}
 	g.Logf("running %q in %s", argv, ws.Root)
 
 	return execClaude(ws.Root, argv)

@@ -246,3 +246,50 @@ func TestSyncPlugins(t *testing.T) {
 		t.Fatalf("ran %q, installed %v", ran, installed)
 	}
 }
+
+func TestLargeOnly(t *testing.T) {
+	big := MCP{Name: "code-index", Transport: "stdio", Command: "mcp-index", Args: []string{"stdio"}, When: &When{Large: true}, Requires: &Requires{Bin: "mcp-index"}}
+	small := MCP{Name: "docs", Transport: "http", URL: "https://d"}
+	k := &Kit{MCP: []MCP{big, small}}
+	none := func(string) bool { return false }
+	all := func(string) bool { return true }
+
+	// never in the machine-wide sync
+	dir := t.TempDir()
+	var ran []string
+	env := Env{ClaudeDir: dir, ClaudeJSON: filepath.Join(dir, "c.json"), Ledger: filepath.Join(dir, "l.json"), SecretSet: none, HasBin: all,
+		Claude: func(a ...string) error { ran = append(ran, a[4]); return nil }}
+	Sync(k, env, false)
+	if !slices.Equal(ran, []string{"docs"}) {
+		t.Fatalf("synced %v", ran)
+	}
+
+	// per session: only in a project past either threshold, with its binary
+	for _, c := range []struct {
+		files int
+		loc   int64
+		bin   func(string) bool
+		want  bool
+	}{
+		{100, 5000, all, false},
+		{10000, 5000, all, true},
+		{100, 1000000, all, true},
+		{20000, 0, none, false},
+	} {
+		cfg, err := k.SessionServers("full", c.files, c.loc, 10000, 1000000, nil, none, c.bin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(string(cfg), `"code-index"`); got != c.want {
+			t.Errorf("%d files, %d loc: %s", c.files, c.loc, cfg)
+		}
+	}
+	// its own thresholds win over the defaults; disabled is off
+	k.MCP[0].When = &When{MinFiles: 50}
+	if cfg, _ := k.SessionServers("full", 60, 0, 10000, 1000000, nil, none, all); cfg == nil {
+		t.Error("min_files ignored")
+	}
+	if cfg, _ := k.SessionServers("full", 60, 0, 10000, 1000000, []string{"code-index"}, none, all); cfg != nil {
+		t.Error("a disabled entry loaded")
+	}
+}

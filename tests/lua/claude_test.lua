@@ -51,7 +51,7 @@ claude.bin = function()
   return fake
 end
 local logged_in = true
-claude.secret_env = function(cb)
+claude.secret_env = function(_, cb)
   cb({})
 end
 claude.check_login = function(_, cb)
@@ -208,6 +208,31 @@ wait(function()
   return claude.status(f) == "missing"
 end, "logged out")
 eq(select(2, claude.status(f)), "not logged in", "why")
+
+-- a large project's session gets the kit's extra MCP config (JGA-117)
+claude._reset()
+claude.bin = function()
+  return fake
+end
+logged_in = true
+claude.secret_env = function(_, cb)
+  cb({ SOME_KEY = "v" }, '{"mcpServers":{"code-index":{}}}')
+end
+local big = project("big")
+claude.session(big)
+wait(function()
+  return claude.status(big) == "ready"
+end, "the big project's session")
+local last
+wait(function()
+  for _, l in ipairs(lines("argv.log")) do
+    if l:find("code-index", 1, true) then
+      last = l
+    end
+  end
+  return last ~= nil
+end, "the big project's claude to start")
+eq(last:find('--mcp-config {"mcpServers":{"code-index":{}}}', 1, true) ~= nil, true, "extra MCP config passed")
 
 claude._reset()
 require("bud.ai.bridge").stop()

@@ -1,0 +1,9 @@
+{
+  "name": "serena",
+  "description": "Symbol-level code tools through language servers (find, references, refactor)",
+  "transport": "stdio",
+  "command": "serena",
+  "args": ["start-mcp-server", "--context", "claude-code", "--project-from-cwd", "--open-web-dashboard", "false"],
+  "requires": { "bin": "serena", "install": "uv tool install -p 3.13 serena-agent" },
+  "profiles": ["full", "minimal"]
+}

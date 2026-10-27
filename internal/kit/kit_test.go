@@ -191,3 +191,23 @@ func TestSecretInsideAValue(t *testing.T) {
 		t.Fatalf("server %s", server)
 	}
 }
+
+func TestSyncSkipsMissingBinary(t *testing.T) {
+	dir := t.TempDir()
+	k := &Kit{MCP: []MCP{{Name: "serena", Transport: "stdio", Command: "serena", Requires: &Requires{Bin: "serena", Install: "uv tool install serena-agent"}}}}
+	var ran []string
+	env := Env{
+		ClaudeDir: filepath.Join(dir, ".claude"), ClaudeJSON: filepath.Join(dir, ".claude.json"), Ledger: filepath.Join(dir, "l.json"),
+		Claude:    func(a ...string) error { ran = append(ran, strings.Join(a, " ")); return nil },
+		SecretSet: func(string) bool { return false },
+		HasBin:    func(string) bool { return false },
+	}
+	actions, err := Sync(k, env, false)
+	if err != nil || len(ran) != 0 || actions[0].Do != "skip" || !strings.Contains(actions[0].Why, "uv tool install") {
+		t.Fatalf("actions %v, ran %q, %v", actions, ran, err)
+	}
+	env.HasBin = func(string) bool { return true }
+	if _, err := Sync(k, env, false); err != nil || len(ran) != 1 {
+		t.Fatalf("with the binary: ran %q, %v", ran, err)
+	}
+}

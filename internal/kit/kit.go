@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -51,7 +52,15 @@ type MCP struct {
 	Headers         map[string]string `json:"headers,omitempty"`
 	Env             map[string]string `json:"env,omitempty"`
 	OptionalSecrets bool              `json:"optional_secrets,omitempty"`
-	Profiles        []string          `json:"profiles,omitempty"` // empty means every profile
+	// a binary the server needs on PATH, and how to install it; without it
+	// sync skips the server and says how
+	Requires *Requires `json:"requires,omitempty"`
+	Profiles []string  `json:"profiles,omitempty"` // empty means every profile
+}
+
+type Requires struct {
+	Bin     string `json:"bin"`
+	Install string `json:"install"`
 }
 
 // Load reads the kit from fsys, laid out like the repo's kit/
@@ -243,7 +252,8 @@ type Env struct {
 	Profile    string
 	Claude     func(args ...string) error // runs claude
 	SecretSet  func(name string) bool
-	Disabled   []string // entries turned off on this machine (bud kit disable)
+	HasBin     func(name string) bool // nil means look on PATH
+	Disabled   []string               // entries turned off on this machine (bud kit disable)
 }
 
 // without is k minus the named entries
@@ -393,6 +403,10 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 			continue
 		}
 		wanted[m.Name] = true
+		if r := m.Requires; r != nil && r.Bin != "" && !hasBin(env, r.Bin) {
+			actions = append(actions, Action{"mcp", m.Name, "skip", "needs " + r.Bin + ": " + r.Install})
+			continue
+		}
 		server, missing, err := m.Server(env.SecretSet)
 		if err != nil {
 			errs = append(errs, err)
@@ -550,6 +564,14 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 	}
 
 	return actions, errors.Join(errs...)
+}
+
+func hasBin(env Env, name string) bool {
+	if env.HasBin != nil {
+		return env.HasBin(name)
+	}
+	_, err := exec.LookPath(name)
+	return err == nil
 }
 
 func sortedKeys(m map[string]string) []string {

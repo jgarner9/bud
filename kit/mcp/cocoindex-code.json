@@ -1,0 +1,9 @@
+{
+  "name": "cocoindex-code",
+  "description": "Local semantic code search: find code by what it does",
+  "transport": "stdio",
+  "command": "ccc",
+  "args": ["mcp"],
+  "requires": { "bin": "ccc", "install": "pipx install 'cocoindex-code[full]', then ccc init once in each project" },
+  "profiles": ["full"]
+}

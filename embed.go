@@ -11,7 +11,7 @@ import (
 // languages/*.lua names the files, so _template.lua comes along: a directory
 // pattern would leave out names starting with _
 //
-//go:embed nvim languages/*.lua layouts/*.lua migrations/*.lua
+//go:embed nvim languages/*.lua layouts/*.lua migrations/*.lua bundles
 var repoFS embed.FS
 
 // Config returns what bud syncs into ~/.config/bud: the repo's nvim/ directory
@@ -27,6 +27,11 @@ func Config() fs.FS {
 // release changes layout or paths (BASE.md 5.7 step 3)
 func Migrations() fs.FS {
 	return sub("migrations")
+}
+
+// Bundles returns the app bundle templates bud bundle builds from (BASE.md 5.6)
+func Bundles() fs.FS {
+	return sub("bundles")
 }
 
 func sub(dir string) fs.FS {

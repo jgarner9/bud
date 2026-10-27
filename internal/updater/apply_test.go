@@ -96,8 +96,8 @@ func TestFetch(t *testing.T) {
 	key, sig := sshsign(t, sums, SigNamespace)
 	_, otherSig := sshsign(t, sums, SigNamespace)
 
-	origKey := ReleaseKey
-	t.Cleanup(func() { ReleaseKey = origKey })
+	origKeys := ReleaseKeys
+	t.Cleanup(func() { ReleaseKeys = origKeys })
 	logf := func(string, ...any) {}
 
 	tests := []struct {
@@ -116,7 +116,10 @@ func TestFetch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ReleaseKey = tt.key
+			ReleaseKeys = nil
+			if tt.key != "" {
+				ReleaseKeys = []string{tt.key}
+			}
 			dir := t.TempDir()
 			bin, err := Fetch(context.Background(), fakeRelease(t, tt.assets), "linux", "arm64", dir, logf)
 			if tt.wantErr != "" {

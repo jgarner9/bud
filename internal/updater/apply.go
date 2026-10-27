@@ -42,7 +42,7 @@ func Fetch(ctx context.Context, r *Release, goos, goarch, dir string, logf func(
 	if err != nil {
 		return "", err
 	}
-	if ReleaseKey == "" {
+	if len(ReleaseKeys) == 0 {
 		logf("no release key pinned in this build; checking the SHA-256 only")
 	} else {
 		sig, err := fetchAsset(ctx, r, SignatureName)

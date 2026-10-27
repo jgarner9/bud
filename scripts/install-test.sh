@@ -1,7 +1,8 @@
 #!/bin/sh
 # Tests install.sh's checks against a fake release on disk, signed with a
 # throwaway key (D41): with no key pinned, the checksum alone; with one, a
-# good signature, someone else's, a missing one, and a changed archive.
+# good signature, someone else's, a missing one, and a changed archive; with
+# two (a rotation, D44), a signature by either.
 # Needs curl (for file:// URLs) and ssh-keygen.
 
 set -eu
@@ -30,10 +31,14 @@ release() {
 	fi
 }
 
-# script writes install.sh with key pinned as $1 (empty for none), in place
-# of whatever the real one pins
+# script writes install.sh trusting the keys given as arguments (none: no
+# signature check) in place of whatever the real one trusts
 script() {
-	sed "s|^RELEASE_KEY=\".*\"\$|RELEASE_KEY=\"$1\"|" "$root/install.sh" >"$tmp/install.sh"
+	awk -v keys="$*" '
+		/^RELEASE_KEYS="$/ { print; n = split(keys, k, ","); for (i = 1; i <= n; i++) print k[i]; skip = 1; next }
+		skip && /^"$/ { skip = 0 }
+		!skip { print }
+	' "$root/install.sh" >"$tmp/install.sh"
 }
 
 pass=0
@@ -57,6 +62,9 @@ run() {
 }
 
 pub="$(cut -d' ' -f1-2 "$tmp/key.pub")"
+otherpub="$(cut -d' ' -f1-2 "$tmp/other.pub")"
+ssh-keygen -q -t ed25519 -N '' -C third -f "$tmp/third"
+thirdpub="$(cut -d' ' -f1-2 "$tmp/third.pub")"
 
 release "$tmp/unsigned"
 release "$tmp/signed" "$tmp/key"
@@ -64,7 +72,7 @@ release "$tmp/other-signed" "$tmp/other"
 release "$tmp/tampered" "$tmp/key"
 printf 'junk' >>"$tmp/tampered/$archive"
 
-script ""
+script
 run no-key-unsigned ok "$tmp/unsigned"
 run no-key-tampered fail "$tmp/tampered"
 
@@ -74,9 +82,18 @@ run unsigned fail "$tmp/unsigned"
 run other-key fail "$tmp/other-signed"
 run tampered fail "$tmp/tampered"
 
-# sign-release.sh: signs with the key install.sh pins, refuses another
+# mid-rotation (D44): two keys trusted, a signature by either one installs
+script "$pub,$otherpub"
+run rotation-old-key ok "$tmp/signed"
+run rotation-new-key ok "$tmp/other-signed"
+run rotation-unsigned fail "$tmp/unsigned"
+script "$thirdpub,$otherpub"
+run rotation-untrusted fail "$tmp/signed"
+
+# sign-release.sh: signs with a key install.sh trusts, refuses another
 cp "$tmp/unsigned/checksums.txt" "$tmp/sums"
 mkdir -p "$tmp/repo/scripts"
+script "$pub"
 cp "$tmp/install.sh" "$tmp/repo/install.sh"
 cp "$root/scripts/sign-release.sh" "$tmp/repo/scripts/"
 if BUD_RELEASE_KEY="$(cat "$tmp/key")" sh "$tmp/repo/scripts/sign-release.sh" "$tmp/sums" >/dev/null &&

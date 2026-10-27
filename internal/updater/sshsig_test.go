@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -71,18 +72,37 @@ func TestVerifySSHSigGarbage(t *testing.T) {
 	}
 }
 
-func TestVerifyReleaseNeedsKey(t *testing.T) {
-	orig := ReleaseKey
-	t.Cleanup(func() { ReleaseKey = orig })
+func TestVerifyRelease(t *testing.T) {
+	orig := ReleaseKeys
+	t.Cleanup(func() { ReleaseKeys = orig })
+	msg, sig := readTestdata(t, "checksums.txt"), readTestdata(t, "checksums.txt.sig")
+	key := strings.TrimSpace(string(readTestdata(t, "test.pub")))
+	other := strings.TrimSpace(string(readTestdata(t, "other.pub")))
 
-	ReleaseKey = ""
-	if err := VerifyRelease(nil, nil); !errors.Is(err, ErrNoReleaseKey) {
-		t.Fatalf("want ErrNoReleaseKey, got %v", err)
+	ReleaseKeys = nil
+	if err := VerifyRelease(msg, sig); !errors.Is(err, ErrNoReleaseKey) {
+		t.Fatalf("no keys: want ErrNoReleaseKey, got %v", err)
 	}
 
-	ReleaseKey = strings.TrimSpace(string(readTestdata(t, "test.pub")))
-	if err := VerifyRelease(readTestdata(t, "checksums.txt"), readTestdata(t, "checksums.txt.sig")); err != nil {
-		t.Fatal(err)
+	// mid-rotation, both keys are trusted, in either order
+	for _, keys := range [][]string{{key}, {key, other}, {other, key}} {
+		ReleaseKeys = keys
+		if err := VerifyRelease(msg, sig); err != nil {
+			t.Errorf("trusting %d keys: %v", len(keys), err)
+		}
+	}
+
+	ReleaseKeys = []string{other}
+	if err := VerifyRelease(msg, sig); err == nil || !strings.Contains(err.Error(), "different key") {
+		t.Errorf("one untrusted key: %v", err)
+	}
+	ReleaseKeys = []string{other, other}
+	if err := VerifyRelease(msg, sig); err == nil || !strings.Contains(err.Error(), "doesn't trust") {
+		t.Errorf("only untrusted keys: %v", err)
+	}
+	ReleaseKeys = []string{key, other}
+	if err := VerifyRelease(append([]byte("x"), msg...), sig); err == nil || !strings.Contains(err.Error(), "doesn't match") {
+		t.Errorf("changed file: %v", err)
 	}
 }
 
@@ -113,19 +133,33 @@ func TestVerifySSHSigLiveKeygen(t *testing.T) {
 	}
 }
 
-// install.sh and self-update must trust the same key
-func TestReleaseKeyMatchesInstallScript(t *testing.T) {
+// install.sh and self-update must trust the same keys
+func TestReleaseKeysMatchInstallScript(t *testing.T) {
 	script, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(string(script), "\n") {
-		if pinned, ok := strings.CutPrefix(line, "RELEASE_KEY="); ok {
-			if got := strings.Trim(pinned, `"`); got != ReleaseKey {
-				t.Fatalf("install.sh pins %q, updater.ReleaseKey is %q", got, ReleaseKey)
-			}
-			return
+	// RELEASE_KEYS="<newline>one key per line<newline>"
+	_, block, ok := strings.Cut(string(script), "\nRELEASE_KEYS=\"\n")
+	if !ok {
+		t.Fatal(`install.sh has no RELEASE_KEYS=" line`)
+	}
+	block, _, ok = strings.Cut(block, "\n\"\n")
+	if !ok {
+		t.Fatal("install.sh's RELEASE_KEYS isn't closed by a line with only a quote")
+	}
+	var pinned []string
+	for _, line := range strings.Split(block, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			pinned = append(pinned, line)
 		}
 	}
-	t.Fatal("install.sh has no RELEASE_KEY line")
+	if !slices.Equal(pinned, ReleaseKeys) {
+		t.Fatalf("install.sh trusts %q, updater.ReleaseKeys is %q", pinned, ReleaseKeys)
+	}
+	for _, k := range ReleaseKeys {
+		if _, err := parseEd25519PublicKey(k); err != nil {
+			t.Errorf("%q: %v", k, err)
+		}
+	}
 }

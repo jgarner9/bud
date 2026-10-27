@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -17,24 +18,46 @@ import (
 // signature made with the release key for anything else never verifies here
 const SigNamespace = "bud-release"
 
-// ReleaseKey is the pinned public half of the release key (D41), as an
-// authorized_keys line. Keep it in step with RELEASE_KEY in install.sh
-var ReleaseKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJsl2QmIh9DiX0baf+L0CgLKfFLQRf9GNRIgXFZK/hqY"
+// ReleaseKeys are the release keys this build trusts (D41, D44), as
+// authorized_keys lines. Usually one; two while the key rotates, so machines
+// that update during the switch learn the new key before releases are signed
+// with it. Keep it in step with RELEASE_KEYS in install.sh
+var ReleaseKeys = []string{
+	"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJsl2QmIh9DiX0baf+L0CgLKfFLQRf9GNRIgXFZK/hqY",
+}
 
-// ErrNoReleaseKey means this build has no pinned release key yet
+// ErrNoReleaseKey means this build has no pinned release key
 var ErrNoReleaseKey = errors.New("this build has no release key pinned, so it can't verify downloads")
 
-// VerifyRelease checks a release's checksums.txt against its signature and the
-// pinned release key
+// VerifyRelease checks a release's checksums.txt against its signature: it
+// must be made by one of ReleaseKeys
 func VerifyRelease(checksums, sig []byte) error {
-	if ReleaseKey == "" {
+	if len(ReleaseKeys) == 0 {
 		return ErrNoReleaseKey
 	}
 
-	return VerifySSHSig(ReleaseKey, SigNamespace, checksums, sig)
+	var errs []error
+	for _, key := range ReleaseKeys {
+		err := VerifySSHSig(key, SigNamespace, checksums, sig)
+		if err == nil {
+			return nil
+		}
+		errs = append(errs, err)
+	}
+	if len(errs) == 1 {
+		return errs[0]
+	}
+	// a different key for each is the usual case: one line says it best
+	if !slices.ContainsFunc(errs, func(err error) bool { return !errors.Is(err, errOtherKey) }) {
+		return errors.New("signature: made by a key this bud doesn't trust")
+	}
+
+	return errors.Join(errs...)
 }
 
 const sshsigMagic = "SSHSIG"
+
+var errOtherKey = errors.New("signature: made by a different key")
 
 // VerifySSHSig checks an armored `ssh-keygen -Y sign` signature over message,
 // made by the ed25519 key in pubKey (an authorized_keys line) under namespace.
@@ -72,7 +95,7 @@ func VerifySSHSig(pubKey, namespace string, message, armored []byte) error {
 		return fmt.Errorf("signature: %w", err)
 	}
 	if !key.Equal(want) {
-		return errors.New("signature: made by a different key")
+		return errOtherKey
 	}
 	if string(ns) != namespace {
 		return fmt.Errorf("signature: namespace is %q, want %q", ns, namespace)

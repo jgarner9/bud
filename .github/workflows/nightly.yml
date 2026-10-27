@@ -1,0 +1,75 @@
+name: Nightly
+
+# D9, D42: rebuilds the rolling `nightly` prerelease from main, with the same
+# archive names as stable, so `bud update --channel nightly` and
+# `install.sh --version nightly` work. The tag never changes; the release's
+# name is its version, X.Y.Z-nightly.YYYYMMDDHHMM (one patch past the newest
+# stable tag), which is what the updater compares
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Skip when main hasn't moved
+        id: plan
+        env:
+          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          head="$(git rev-parse HEAD)"
+          built="$(git rev-parse -q --verify 'refs/tags/nightly^{commit}' || true)"
+          if [ "$head" = "$built" ] && [ "$FORCE" != true ]; then
+            echo "nightly is already $head"
+            echo "skip=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          stable="$(git tag -l 'v*' --sort=-v:refname | grep -v -- - | head -n1)"
+          version="$(echo "${stable#v}" | awk -F. '{ printf "%d.%d.%d", $1, $2, $3 + 1 }')-nightly.$(date -u +%Y%m%d%H%M)"
+          echo "building $version from $head (after $stable)"
+          echo "stable=$stable" >>"$GITHUB_OUTPUT"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+      - uses: actions/setup-go@v6
+        if: steps.plan.outputs.skip != 'true'
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v6
+        if: steps.plan.outputs.skip != 'true'
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean
+        env:
+          NIGHTLY_VERSION: ${{ steps.plan.outputs.version }}
+          # the nightly tag isn't a version; describe from the newest stable one
+          GORELEASER_CURRENT_TAG: ${{ steps.plan.outputs.stable }}
+      - name: Is the release key set?
+        id: key
+        run: echo "set=${{ secrets.BUD_RELEASE_KEY != '' }}" >>"$GITHUB_OUTPUT"
+      - name: Sign checksums.txt
+        if: steps.plan.outputs.skip != 'true' && steps.key.outputs.set == 'true'
+        env:
+          BUD_RELEASE_KEY: ${{ secrets.BUD_RELEASE_KEY }}
+        run: scripts/sign-release.sh dist/checksums.txt
+      - name: Replace the nightly release
+        if: steps.plan.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          gh release delete nightly --cleanup-tag --yes || true
+          git push origin ":refs/tags/nightly" || true
+          set -- dist/*.tar.gz dist/checksums.txt
+          if [ -f dist/checksums.txt.sig ]; then set -- "$@" dist/checksums.txt.sig; fi
+          gh release create nightly --prerelease --target "$GITHUB_SHA" --title "$VERSION" \
+            --notes "Rolling nightly build of main at $GITHUB_SHA. Install with: install.sh --version nightly" "$@"

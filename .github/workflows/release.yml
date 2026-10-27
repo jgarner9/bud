@@ -26,11 +26,14 @@ jobs:
       # D7, D41: signs checksums.txt once the release key exists. Off until
       # the BUD_RELEASE_KEY secret is set; sign-release.sh fails the release if
       # that key doesn't match the public key pinned in install.sh
+      - name: Is the release key set?
+        id: key
+        run: echo "set=${{ secrets.BUD_RELEASE_KEY != '' }}" >>"$GITHUB_OUTPUT"
       - name: Sign checksums.txt
+        if: steps.key.outputs.set == 'true'
         env:
           BUD_RELEASE_KEY: ${{ secrets.BUD_RELEASE_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if: env.BUD_RELEASE_KEY != ''
         run: |
           scripts/sign-release.sh dist/checksums.txt
           gh release upload "$GITHUB_REF_NAME" dist/checksums.txt.sig

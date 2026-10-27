@@ -37,6 +37,11 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+# the nightly workflow names its builds (X.Y.Z-nightly.YYYYMMDDHHMM, D42);
+# other snapshots (CI's goreleaser check) get GoReleaser's usual name
+snapshot:
+  version_template: '{{ if isEnvSet "NIGHTLY_VERSION" }}{{ .Env.NIGHTLY_VERSION }}{{ else }}{{ incpatch .Version }}-SNAPSHOT-{{ .ShortCommit }}{{ end }}'
+
 changelog:
   sort: asc
   filters:

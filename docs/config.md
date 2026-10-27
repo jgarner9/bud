@@ -43,6 +43,10 @@ bud config edit                           # open it in bud's editor, then check 
 | `dashboard.banners` | `true` | Doctor problems and updates, each with a key to fix it. |
 | `dashboard.tip` | `true` | A leader mapping a day. |
 | `dashboard.scratchpad` | `false` | `x` opens one notes file in bud's data dir. |
+| `dashboard.prs` | `false` | Open PRs per project, and how many ask you for a review, through `gh`. |
+| `dashboard.todos` | `false` | How many TODO and FIXME comments each project has, through `rg`. |
+| `dashboard.chats` | `false` | The last three full-screen chats, on `a`, `b` and `e` to resume. |
+| `dashboard.clock` | `false` | The date and time under the robot. |
 | `dashboard.sessions` | `false` | Save a project's open files on exit and restore them when you open it from the dashboard. |
 
 ## Claude Code

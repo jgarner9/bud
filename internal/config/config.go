@@ -62,6 +62,10 @@ type Dashboard struct {
 	// optional extras, off by default (JGA-99)
 	Scratchpad bool `json:"scratchpad"` // x opens a persistent notes buffer
 	Sessions   bool `json:"sessions"`   // opening a project restores its last session
+	PRs        bool `json:"prs"`        // open PRs and review requests per project, via gh
+	Todos      bool `json:"todos"`      // TODO/FIXME count per project, via rg
+	Chats      bool `json:"chats"`      // the last few chats, a b e to resume
+	Clock      bool `json:"clock"`      // the date and time under the robot
 }
 
 type AI struct {

@@ -88,6 +88,19 @@ local cases = {
     formatted = { 2, "if true; then" },
   },
   {
+    lang = "lua",
+    files = {
+      ["stylua.toml"] = 'indent_type = "Spaces"\nindent_width = 2\n',
+      ["selene.toml"] = 'std = "lua51"\n',
+      ["init.lua"] = "local x=1\nreturn y\n",
+    },
+    open = "init.lua",
+    servers = { "lua_ls" },
+    -- y is undefined
+    lint = "selene",
+    formatted = { 1, "local x = 1" },
+  },
+  {
     lang = "html",
     files = {
       ["package.json"] = '{ "name": "sample", "private": true }\n',

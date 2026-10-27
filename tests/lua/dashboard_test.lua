@@ -127,6 +127,25 @@ for _, h in ipairs(hls) do
     error(("highlight %s out of line %q"):format(vim.inspect(h), line))
   end
 end
+-- optional extras (JGA-97)
+local extra = vim.deepcopy(data)
+extra.projects[1].prs = { open = 2, review = 1 }
+extra.projects[1].todos = 7
+extra.chats = { { key = "a", title = "bud roadmap" } }
+extra.clock = "Tue Oct 27  21:30"
+lines = view.build(extra, 120, 60)
+has(lines, icons.pr .. "  2   " .. icons.review .. "  1", "PRs and reviews")
+has(lines, icons.todo .. "  7", "TODO count")
+has(lines, "a     bud roadmap", "a recent chat")
+has(lines, icons.clock .. "  Tue Oct 27  21:30", "clock")
+eq(
+  dashboard.parse_prs('[{"reviewRequests":[{"login":"me"}]},{"reviewRequests":[]}]', "me"),
+  { open = 2, review = 1 },
+  "parse PRs"
+)
+eq(dashboard.parse_prs("not json"), nil, "gh failed")
+eq(dashboard.count_lines("TODO\nFIXME\n\n"), 2, "count matches")
+
 -- a tall window gets the roomy layout; a short one falls back to the tight
 -- one, and at 80x24 the full dashboard (ten menu items) still fits
 local full = vim.deepcopy(data)

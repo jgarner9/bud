@@ -160,11 +160,22 @@ local function menu(settings)
   return items
 end
 
+-- recent chats open on these keys
+local chat_keys = { "a", "b", "e" }
+
 local function data()
   local list = {}
   for _, p in ipairs(projects.list()) do
     if not p.missing and #list < max_projects then
-      table.insert(list, vim.tbl_extend("force", p, { key = tostring(#list + 1), git = current.git[p.path] }))
+      table.insert(
+        list,
+        vim.tbl_extend("force", p, {
+          key = tostring(#list + 1),
+          git = current.git[p.path],
+          prs = current.prs[p.path],
+          todos = current.todos[p.path],
+        })
+      )
     end
   end
   return {
@@ -176,6 +187,8 @@ local function data()
     banners = current.update and { current.update, unpack(current.banners) } or current.banners,
     health = current.settings.health and health() or nil,
     tip = current.settings.tip and current.tip or nil,
+    clock = current.settings.clock and os.date("%a %b %d  %H:%M") or nil,
+    chats = current.chats,
   }
 end
 
@@ -280,10 +293,125 @@ local function keys(buf)
       end
     end, "Open project " .. i)
   end
+  -- recent chats on a b c (JGA-97)
+  if current.settings.chats then
+    for i, key in ipairs(chat_keys) do
+      map(key, function()
+        local c = current and current.chats and current.chats[i]
+        if c then
+          require("bud.chat").open({ resume = c.title })
+        end
+      end, "Resume chat " .. i)
+    end
+  end
 end
 
 -- background work, each piece redrawing when it's back
+-- parse_prs reads `gh pr list --json author,reviewRequests`: how many are
+-- open, and how many ask login for a review
+function M.parse_prs(out, login)
+  local ok, list = pcall(vim.json.decode, out or "")
+  if not ok or type(list) ~= "table" then
+    return nil
+  end
+  local review = 0
+  for _, pr in ipairs(list) do
+    for _, r in ipairs(pr.reviewRequests or {}) do
+      if login and r.login == login then
+        review = review + 1
+      end
+    end
+  end
+  return { open = #list, review = review }
+end
+
+-- count_lines counts non-empty lines, for rg's matches
+function M.count_lines(out)
+  local n = 0
+  for line in (out or ""):gmatch("[^\n]+") do
+    if line ~= "" then
+      n = n + 1
+    end
+  end
+  return n
+end
+
+-- the optional extras' background work: each redraws when it's back
+local function extras()
+  if current.settings.prs and vim.fn.executable("gh") == 1 then
+    vim.system({ "gh", "api", "user", "--jq", ".login" }, { text = true }, function(who)
+      local login = who.code == 0 and vim.trim(who.stdout or "") or nil
+      for _, p in ipairs(current and current.data and current.data.projects or {}) do
+        vim.system(
+          { "gh", "pr", "list", "--state", "open", "--limit", "100", "--json", "author,reviewRequests" },
+          { cwd = p.path, text = true },
+          function(res)
+            if res.code ~= 0 then
+              return
+            end
+            vim.schedule(function()
+              if current then
+                current.prs[p.path] = M.parse_prs(res.stdout, login)
+                draw()
+              end
+            end)
+          end
+        )
+      end
+    end)
+  end
+  if current.settings.todos and vim.fn.executable("rg") == 1 then
+    for _, p in ipairs(current.data and current.data.projects or {}) do
+      vim.system(
+        { "rg", "--no-messages", "-o", "--no-filename", "\\b(TODO|FIXME)\\b", "." },
+        { cwd = p.path, text = true },
+        function(res)
+          vim.schedule(function()
+            if current then
+              current.todos[p.path] = M.count_lines(res.stdout)
+              draw()
+            end
+          end)
+        end
+      )
+    end
+  end
+  if current.settings.chats then
+    local ok, store = pcall(require, "bud.chat.store")
+    if ok then
+      local recent = {}
+      for _, e in ipairs(store.list()) do
+        table.insert(recent, e)
+      end
+      table.sort(recent, function(a, b)
+        return a.mtime > b.mtime
+      end)
+      current.chats = {}
+      for i = 1, math.min(#chat_keys, #recent) do
+        table.insert(current.chats, { key = chat_keys[i], title = recent[i].title })
+      end
+    end
+  end
+  if current.settings.clock then
+    -- the minute changes, so redraw on it while the dashboard is open
+    local timer = vim.uv.new_timer()
+    timer:start(
+      60000 - (os.time() % 60) * 1000,
+      60000,
+      vim.schedule_wrap(function()
+        if not current then
+          timer:stop()
+          timer:close()
+          return
+        end
+        draw()
+      end)
+    )
+  end
+end
+
 local function load()
+  extras()
   local bin = cli.bin()
   if bin and current.settings.banners then
     vim.system({ bin, "doctor", "--quick", "--json" }, { text = true }, function(res)
@@ -364,6 +492,8 @@ function M.open(opts)
   current = {
     buf = buf,
     git = {},
+    prs = {},
+    todos = {},
     banners = {},
     update = settings.banners ~= false and M.update_banner(read_update()) or nil,
     tagline = taglines[math.random(#taglines)],
@@ -372,6 +502,11 @@ function M.open(opts)
     style = settings.style or "silly",
     settings = {
       scratchpad = settings.scratchpad == true,
+      -- optional extras (JGA-97), off unless config.json turns them on
+      prs = settings.prs == true,
+      todos = settings.todos == true,
+      chats = settings.chats == true,
+      clock = settings.clock == true,
       -- the default extras (JGA-62), each on unless config.json turns it off
       git = settings.git ~= false,
       health = settings.health ~= false,

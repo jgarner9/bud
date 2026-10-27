@@ -31,4 +31,8 @@ return {
   chat = "", -- nf-fa-comments
   search = "", -- nf-fa-search
   settings = "", -- nf-fa-cog
+  pr = "", -- nf-oct-git_pull_request
+  review = "", -- nf-fa-eye
+  todo = "", -- nf-fa-tasks
+  clock = "", -- nf-fa-clock_o
 }

@@ -38,6 +38,10 @@ M.sections = {
       { key = "dashboard.tip", label = "Tip of the day", kind = "bool" },
       { key = "dashboard.scratchpad", label = "Scratchpad (x)", kind = "bool" },
       { key = "dashboard.sessions", label = "Restore sessions", kind = "bool" },
+      { key = "dashboard.prs", label = "Open PRs (gh)", kind = "bool" },
+      { key = "dashboard.todos", label = "TODO count", kind = "bool" },
+      { key = "dashboard.chats", label = "Recent chats", kind = "bool" },
+      { key = "dashboard.clock", label = "Clock", kind = "bool" },
     },
   },
   {

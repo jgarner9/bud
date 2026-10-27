@@ -107,6 +107,16 @@ local function projects(list)
       seg(pad(p.name, name_width + 4)),
     }
     vim.list_extend(line, git_status(p.git))
+    -- optional extras (JGA-97): open PRs and review requests, TODO count
+    if p.prs and (p.prs.open > 0 or p.prs.review > 0) then
+      table.insert(line, seg("   " .. icons.pr .. "  " .. p.prs.open, "BudDashboardDim"))
+      if p.prs.review > 0 then
+        table.insert(line, seg("   " .. icons.review .. "  " .. p.prs.review, "BudDashboardWarn"))
+      end
+    end
+    if p.todos and p.todos > 0 then
+      table.insert(line, seg("   " .. icons.todo .. "  " .. p.todos, "BudDashboardDim"))
+    end
     table.insert(lines, line)
   end
   return lines
@@ -127,10 +137,20 @@ local function silly(data, roomy)
   local blank = roomy and { {}, {} } or { {} }
 
   add(art(data))
+  if data.clock then
+    add({ { seg("  " .. icons.clock .. "  " .. data.clock, "BudDashboardDim") } })
+  end
   add(blank)
   add(menu(data.menu, roomy))
   add(blank)
   add(projects(data.projects))
+  if data.chats and #data.chats > 0 then
+    add(blank)
+    add({ { seg("  " .. icons.chat .. "  ", "BudDashboardIcon"), seg("Recent chats", "BudDashboardHeader") } })
+    for _, c in ipairs(data.chats) do
+      add({ { seg("  " .. c.key, "BudDashboardKey"), seg("     " .. c.title) } })
+    end
+  end
   if #data.banners > 0 then
     add(blank)
     for _, b in ipairs(data.banners) do

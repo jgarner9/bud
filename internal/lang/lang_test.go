@@ -36,7 +36,7 @@ func TestLoadShipped(t *testing.T) {
 	}
 
 	// D10, and the minimal preset is what the specs mark (D30)
-	want := []string{"bash", "c", "css", "go", "html", "python", "typescript"}
+	want := []string{"bash", "c", "css", "go", "html", "lua", "python", "typescript"}
 	if got := set.Names(); !slices.Equal(got, want) {
 		t.Errorf("shipped specs = %v, want %v", got, want)
 	}

@@ -30,6 +30,13 @@ type Settings struct {
 	FormatOnSave bool      `json:"format_on_save"`
 	Dashboard    Dashboard `json:"dashboard"`
 	AI           AI        `json:"ai"`
+	Tools        Disabled  `json:"tools"` // bud tools enable/disable (D54)
+	Kit          Disabled  `json:"kit"`   // bud kit enable/disable (D58)
+}
+
+// Disabled lists what's turned off on this machine
+type Disabled struct {
+	Disabled []string `json:"disabled"`
 }
 
 type Update struct {
@@ -200,6 +207,79 @@ func (f *File) Set(key string, value any) error {
 	m[parts[len(parts)-1]] = value
 
 	return nil
+}
+
+// Unset removes a dotted key, so it goes back to its default, and drops the
+// objects it leaves empty. A key that isn't there is fine
+func (f *File) Unset(key string) {
+	parts := strings.Split(key, ".")
+	var walk func(m map[string]any, i int)
+	walk = func(m map[string]any, i int) {
+		if i == len(parts)-1 {
+			delete(m, parts[i])
+			return
+		}
+		child, ok := m[parts[i]].(map[string]any)
+		if !ok {
+			return
+		}
+		walk(child, i+1)
+		if len(child) == 0 {
+			delete(m, parts[i])
+		}
+	}
+	walk(f.doc, 0)
+}
+
+// Doc is the whole file as written, for printing
+func (f *File) Doc() map[string]any {
+	return f.doc
+}
+
+// Known says whether a dotted key is a setting bud has: a leaf of Defaults
+// (objects themselves can't be set whole)
+func Known(key string) bool {
+	_, ok := lookup(defaultsTree(), key)
+	return ok
+}
+
+// Effective returns a dotted key's value with defaults filled in: the setting
+// as bud sees it, or an unknown key as written in the file
+func (f *File) Effective(key string) (any, bool) {
+	s, err := f.Settings()
+	if err == nil {
+		data, _ := json.Marshal(s)
+		var tree map[string]any
+		if json.Unmarshal(data, &tree) == nil {
+			if v, ok := lookup(tree, key); ok {
+				return v, true
+			}
+		}
+	}
+
+	return f.Get(key)
+}
+
+func defaultsTree() map[string]any {
+	data, _ := json.Marshal(Defaults())
+	var tree map[string]any
+	_ = json.Unmarshal(data, &tree)
+	return tree
+}
+
+func lookup(tree map[string]any, key string) (any, bool) {
+	var cur any = tree
+	for _, part := range strings.Split(key, ".") {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if cur, ok = m[part]; !ok {
+			return nil, false
+		}
+	}
+
+	return cur, true
 }
 
 // Save writes the file atomically, so a crash never leaves a half-written config behind

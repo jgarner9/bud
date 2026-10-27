@@ -24,6 +24,7 @@ M.icons = {
   mason = "", -- nf-fa-wrench
   doctor = "", -- nf-fa-stethoscope
   update = "", -- nf-fa-refresh
+  style = "", -- nf-fa-exchange
   quit = "", -- nf-fa-power_off
   projects = "", -- nf-fa-folder
   pinned = "", -- nf-oct-pin
@@ -137,9 +138,9 @@ end
 
 local levels = { error = "BudDashboardError", warn = "BudDashboardWarn", info = "BudDashboardDim" }
 
--- build returns the dashboard's lines (padded to center it in width x height)
--- and its highlights as { row, start_col, end_col, group }, 0-based bytes
-function M.build(data, win_width, win_height)
+-- silly is the full dashboard: robot, menu with icons, projects with git,
+-- banners, health line and tip
+local function silly(data)
   local block = {}
   local function add(lines)
     vim.list_extend(block, lines)
@@ -171,6 +172,60 @@ function M.build(data, win_width, win_height)
       },
     })
   end
+  return block
+end
+
+-- minimal (BASE.md 5.4) keeps only the essentials: a one-line title, the keys
+-- four to a row, and one bottom line with the projects and, at the far end,
+-- a single symbol when doctor has something to say
+local function minimal(data)
+  local block =
+    { { seg("  " .. M.faces[data.mood or "normal"] .. " ", "BudDashboardArt"), seg("bud", "BudDashboardTitle") }, {} }
+
+  local per_row, cell = 4, 14
+  for i = 1, #data.menu, per_row do
+    local line = {}
+    for j = i, math.min(i + per_row - 1, #data.menu) do
+      local item = data.menu[j]
+      table.insert(line, seg("  " .. item.key, "BudDashboardKey"))
+      table.insert(line, seg(pad("  " .. (item.short or item.label:lower()), cell - 3)))
+    end
+    table.insert(block, line)
+  end
+  table.insert(block, {})
+
+  local bottom = {}
+  for _, p in ipairs(data.projects) do
+    table.insert(bottom, seg("  " .. p.key, "BudDashboardKey"))
+    table.insert(bottom, seg(" " .. p.name))
+  end
+  if #data.projects == 0 then
+    table.insert(bottom, seg("  no projects yet", "BudDashboardDim"))
+  end
+  -- the worst banner's icon only, right-aligned under the menu
+  local worst
+  for _, b in ipairs(data.banners) do
+    if b.level == "error" or not worst then
+      worst = b
+    end
+  end
+  if worst then
+    local keys_width = 0
+    for _, line in ipairs(block) do
+      keys_width = math.max(keys_width, width(line))
+    end
+    table.insert(bottom, seg(string.rep(" ", math.max(2, keys_width - width(bottom) - 1))))
+    table.insert(bottom, seg(icons[worst.level] or icons.warn, levels[worst.level]))
+  end
+  table.insert(block, bottom)
+  return block
+end
+
+-- build returns the dashboard's lines (padded to center it in width x height)
+-- and its highlights as { row, start_col, end_col, group }, 0-based bytes.
+-- data.style picks the layout: "silly" (the default) or "minimal"
+function M.build(data, win_width, win_height)
+  local block = data.style == "minimal" and minimal(data) or silly(data)
 
   local block_width = 0
   for _, line in ipairs(block) do

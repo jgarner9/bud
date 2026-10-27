@@ -113,6 +113,32 @@ end
 lines = view.build(data, 10, 5)
 has(lines, "hey bud.", "narrow window")
 
+-- minimal: one-line title, short keys four to a row, projects and the worst
+-- banner's icon on one bottom line; no tagline, health or tip
+data.style = "minimal"
+data.menu = {
+  { key = "p", label = "Open project", short = "project" },
+  { key = "f", label = "Open file", short = "file" },
+  { key = "r", label = "Recent files", short = "recent" },
+  { key = "n", label = "New file", short = "new" },
+  { key = "q", label = "Quit", short = "quit" },
+}
+data.banners = { { level = "warn", text = "w" }, { level = "error", text = "e" } }
+lines = view.build(data, 100, 40)
+has(lines, "[-.-] bud", "minimal title")
+has(lines, "p  project", "short labels")
+has(lines, "q  quit", "second row")
+has(lines, "1 bud  2 dollarwise", "projects on one line")
+has(lines, icons.error, "the worst banner's icon")
+for _, line in ipairs(lines) do
+  for _, absent in ipairs({ "hjkl and chill", "tip:", "plugins", icons.warn }) do
+    if line:find(absent, 1, true) then
+      error("minimal shows " .. absent .. ": " .. line)
+    end
+  end
+end
+data.style = nil
+
 -- open, offline: projects from the registry, missing ones hidden
 local f = assert(io.open(tmp .. "/projects.json", "w"))
 f:write(vim.json.encode({
@@ -141,6 +167,13 @@ end
 eq(vim.bo[buf].modifiable, false, "read-only")
 eq(vim.wo.number, false, "no line numbers on the dashboard")
 eq(vim.fn.maparg("1", "n", false, true).buffer, 1, "project keys are buffer-local")
+
+-- t switches style and back; config.json's dashboard.style is only the default
+has(shown, "t  " .. icons.style .. " Minimal view", "t in the silly menu")
+vim.api.nvim_feedkeys("t", "x", false)
+has(dashboard.lines(), "t  silly", "t in the minimal menu")
+vim.api.nvim_feedkeys("t", "x", false)
+has(dashboard.lines(), "Minimal view", "back to silly")
 
 -- leaving it wipes it, and the next buffer gets its window options back
 vim.o.number = true

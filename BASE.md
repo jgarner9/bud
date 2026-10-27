@@ -56,6 +56,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D35 | **The startup budget is 50 ms to the first screen**, empty or on a file of any enabled language, and `bud doctor` warns past it. | 2026-10-27 | Measured on an M-series Mac with every language installed: empty start 28 ms; opening a file was 132 ms (Go), 156 ms (Python) and 214 ms (TypeScript). The causes were Neovim's python3 provider probe (60 ms, so every provider is off: bud has no remote plugins), compiling TypeScript's highlight queries (119 ms), tsc's `--version` probe when its server is enabled (43 ms) and golangci-lint's version probe when nvim-lint first runs it (57 ms). Tree-sitter highlighting, `vim.lsp.enable` and linting now start on `vim.schedule`, after the first screen, so a file shows at once and the rest arrives a moment later. Every language now opens in 40-50 ms (HTML is the slowest, from Vim's regex syntax before tree-sitter takes over). The doctor check times an empty start and one buffer per enabled language (`setfiletype`), takes the median of three, and only warns, so a slow machine never triggers an update rollback. Not a CI check: shared runners are too noisy to time. |
 | D36 | **The project registry is `projects.json`: projects, pins and last-opened times only.** | 2026-10-27 | `internal/projects` reads and writes it (unknown keys kept, atomic save); `bud.projects` reads it from Lua. Recent files per project come from Neovim's own `v:oldfiles` filtered by project root, so Go is the only writer. `bud <dir>` registers the dir, and opening files registers the repo they're in when a `.git` was found (a loose file's folder isn't a project); bare `bud` registers nothing (D18). Paths are stored with symlinks resolved, and names are the dir's name, with parent dirs added while that's taken (`api`, `work/api`). A project whose dir is gone stays registered and shows as missing (an unmounted drive comes back); `bud projects rm` forgets it. `bud projects ls / add / rm / pin / unpin` manage the list, and `bud doctor` warns when the file is unreadable. |
 | D37 | **The silly dashboard** (JGA-99's choices). | 2026-10-27 | `bud.dashboard` opens on VimEnter for bare `bud` (no files, an empty buffer, not `--headless`) and with `:BudDashboard`. The buddy is the README robot with moods (normal, happy when doctor is clean, update waiting, sleepy after midnight); the menu only lists keys that work today (p f r n L M d u q, plus x with `dashboard.scratchpad`), and `f`, `r` and `L` replay the global leader maps so they follow them. Up to five projects from the registry, pinned then recent, on keys 1-5, with git branch, changed count and ahead/behind; missing ones are hidden. Everything slow runs in the background and redraws when it's back: `git status` per project and `bud doctor --quick --json` (no startup timing) for the banners, through `BUD_BIN`, which `bud` sets to itself when it launches nvim. The health line's startup time runs from the top of `init.lua` to VimEnter. The tip of the day is a leader mapping with a description, a different one each day. Nerd Font glyphs accent the menu, projects, git status, banners and health line (`view.icons`, long-standing Font Awesome / Octicons / Devicons codepoints only, one cell wide); with the robot they're bud's visual motif in the editor, while the README stays plain ASCII because GitHub has no Nerd Font. Optional, off by default: `dashboard.scratchpad` (`x`, one notes file in the data dir) and `dashboard.sessions` (on exit, a registered project with files open saves a session; opening it from the dashboard restores it, otherwise the file picker opens). Opening a project from the dashboard doesn't update its last-opened time yet, since Lua only reads the registry. |
+| D38 | **`t` switches dashboard style for the session only.** | 2026-10-27 | `dashboard.style` (`silly` or `minimal`) in `config.json` is the default each time the dashboard opens; `t` flips it until bud closes. Keeping the toggle would mean Lua writing `config.json`, which only the Go CLI writes (D13); `bud config set dashboard.style minimal` (JGA-93) will be the lasting way. The minimal style shows the one-line robot face and `bud`, short key labels four to a row, the projects on one line and the worst doctor banner as a single icon. |
 
 ---
 
@@ -904,15 +905,16 @@ The buddy is the README's robot (D37), and its face changes with state: `[o.o]` 
 #### Minimal style
 
 ```text
-  bud
+  [o.o] bud
 
-  p  project    f  file    c  chat    h  history
-  L  plugins    s  settings           q  quit
+  p  project    f  file       r  recent     n  new
+  L  plugins    M  mason      d  doctor     u  update
+  t  silly      q  quit
 
-  ● bud  ● dollarwise                 ⬆ update
+  1 bud  2 dollarwise                             
 ```
 
-Only the essentials: no art, no tips, no stats. Warnings shrink to a single symbol on the bottom line.
+Only the essentials: no art, tagline, tips or stats. Doctor's banners shrink to the worst one's icon at the end of the bottom line. `dashboard.style` in `config.json` picks the default; `t` switches between the two for the session (D38).
 
 #### The two-key open
 

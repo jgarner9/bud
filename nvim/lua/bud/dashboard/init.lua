@@ -110,20 +110,21 @@ end
 
 local function menu(settings)
   local items = {
-    { key = "p", icon = "project", label = "Open project" },
-    { key = "f", icon = "file", label = "Open file" },
-    { key = "r", icon = "recent", label = "Recent files" },
-    { key = "n", icon = "new", label = "New file" },
+    { key = "p", icon = "project", label = "Open project", short = "project" },
+    { key = "f", icon = "file", label = "Open file", short = "file" },
+    { key = "r", icon = "recent", label = "Recent files", short = "recent" },
+    { key = "n", icon = "new", label = "New file", short = "new" },
   }
   if settings.scratchpad then
-    table.insert(items, { key = "x", icon = "scratchpad", label = "Scratchpad" })
+    table.insert(items, { key = "x", icon = "scratchpad", label = "Scratchpad", short = "notes" })
   end
   vim.list_extend(items, {
-    { key = "L", icon = "plugins", label = "Plugins" },
-    { key = "M", icon = "mason", label = "Mason" },
-    { key = "d", icon = "doctor", label = "Doctor" },
-    { key = "u", icon = "update", label = "Update" },
-    { key = "q", icon = "quit", label = "Quit" },
+    { key = "L", icon = "plugins", label = "Plugins", short = "plugins" },
+    { key = "M", icon = "mason", label = "Mason", short = "mason" },
+    { key = "d", icon = "doctor", label = "Doctor", short = "doctor" },
+    { key = "u", icon = "update", label = "Update", short = "update" },
+    { key = "t", icon = "style", label = "Minimal view", short = "silly" },
+    { key = "q", icon = "quit", label = "Quit", short = "quit" },
   })
   return items
 end
@@ -138,6 +139,7 @@ local function data()
   return {
     mood = M.mood(current, tonumber(os.date("%H"))),
     tagline = current.tagline,
+    style = current.style,
     menu = menu(current.settings),
     projects = list,
     banners = current.banners,
@@ -250,6 +252,10 @@ local function keys(buf)
   map("u", function()
     terminal({ "update" })
   end, "Update")
+  map("t", function()
+    current.style = current.style == "minimal" and "silly" or "minimal"
+    draw()
+  end, "Switch style")
   map("q", function()
     vim.cmd("confirm qall")
   end, "Quit")
@@ -351,6 +357,8 @@ function M.open(opts)
     banners = {},
     tagline = taglines[math.random(#taglines)],
     tip = M.tip(tonumber(os.date("%j"))),
+    -- t switches it for this session; config.json's dashboard.style is the default
+    style = config.get("dashboard.style", "silly"),
     settings = {
       scratchpad = config.get("dashboard.scratchpad", false),
       sessions = config.get("dashboard.sessions", false),

@@ -23,6 +23,10 @@ return {
       map(modes, "s", function()
         jump2d.start(jump2d.builtin_opts.single_character)
       end, { desc = "Jump to character" })
+
+      require("mini.statusline").setup({
+        content = { active = require("bud.statusline").active },
+      })
     end,
   },
 }

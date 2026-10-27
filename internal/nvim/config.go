@@ -180,7 +180,8 @@ func RestorePlugins() error {
 	}
 
 	cmd := exec.Command(bin, "--headless", "+lua require('bud.pack').restore()", "+qa")
-	cmd.Env = env()
+	// plugin configs are skipped while restoring (bud.pack)
+	cmd.Env = setEnv(env(), "BUD_PACK_RESTORE", "1")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

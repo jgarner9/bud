@@ -24,6 +24,12 @@ vim.api.nvim_create_autocmd("VimEnter", {
     local headless = vim.tbl_contains(vim.v.argv, "--headless")
     -- bud sets BUD_OPEN=project for `bud <dir>`, which gets a layout, not the dashboard
     local project = vim.env.BUD_OPEN == "project"
+    if not headless then
+      -- after the first screen, like the panes (BASE.md 4.2)
+      vim.schedule(function()
+        require("bud.ai.claude").setup()
+      end)
+    end
     if vim.fn.argc() == 0 and empty and not headless and not project then
       require("bud.dashboard").open()
     elseif not headless and vim.env.BUD_BIN and (project or vim.fn.argc() > 0) then

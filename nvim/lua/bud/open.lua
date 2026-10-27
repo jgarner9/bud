@@ -65,6 +65,7 @@ function M.go(path)
     vim.system({ bin, "projects", "add", "--opened", path })
   end
   vim.cmd.cd(vim.fn.fnameescape(path))
+  require("bud.ai.claude").opened(path)
 
   -- the saved session, else the layout (D39, JGA-74) and the file picker
   if require("bud.layout").open_project(path) then

@@ -397,6 +397,7 @@ The side-pane chat, full-screen chat, inline actions, `:BudGen` and any TUI you 
 
 - **Opening a project** from the dashboard or `<leader>p` starts a session for that root, or reuses it if this Neovim already has one.
 - **Reopening a project later** resumes its most recent conversation by default (`ai.claude.resume = "continue"`); set `"new"` to start fresh each time.
+- **Switching projects** keeps the last three sessions running and stops any idle for `ai.claude.idle_minutes` (D49); a stopped one starts again on the same conversation (`--resume`) the next time it's used.
 - **Quitting Neovim** stops every session on `VimLeavePre`. If Claude Code crashes, the status line shows it and one key restarts it on the same session.
 - **Starting a session costs nothing.** No tokens are spent until you send something.
 

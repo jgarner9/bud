@@ -54,9 +54,11 @@ type AI struct {
 }
 
 type Claude struct {
-	Autostart bool     `json:"autostart"`
-	Resume    string   `json:"resume"` // "continue" or "new"
-	Args      []string `json:"args"`
+	Autostart bool   `json:"autostart"`
+	Resume    string `json:"resume"` // "continue" or "new"
+	// a session nothing has used for this long is stopped (D49); 0 never
+	IdleMinutes int      `json:"idle_minutes"`
+	Args        []string `json:"args"`
 }
 
 // Profiles are the install profiles
@@ -74,7 +76,7 @@ func Defaults() Settings {
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true},
-		AI:           AI{Claude: Claude{Autostart: true, Resume: "continue", Args: []string{}}},
+		AI:           AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}}},
 	}
 }
 

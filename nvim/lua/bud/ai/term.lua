@@ -68,6 +68,7 @@ function M.open(opts)
       t.job = vim.fn.jobstart(argv, {
         term = true,
         cwd = root,
+        env = claude.bridge_env(root),
         on_exit = function()
           vim.schedule(function()
             M._closed(root)

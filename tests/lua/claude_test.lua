@@ -18,6 +18,10 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp, "p")
 require("bud.config").file = tmp .. "/config.json"
+-- never the real ~/.claude/ide
+require("bud.ai.bridge").lock_dir = function()
+  return tmp .. "/ide"
+end
 
 -- the fake logs its argv and every line it's sent, answers each with a text
 -- block, a tool use and a result, and exits 3 when told to crash
@@ -196,5 +200,6 @@ end, "logged out")
 eq(select(2, claude.status(f)), "not logged in", "why")
 
 claude._reset()
+require("bud.ai.bridge").stop()
 vim.fn.delete(tmp, "rf")
 print("claude_test: ok")

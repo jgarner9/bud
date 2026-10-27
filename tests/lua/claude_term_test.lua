@@ -19,6 +19,10 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp .. "/proj", "p")
 require("bud.config").file = tmp .. "/config.json"
+-- never the real ~/.claude/ide
+require("bud.ai.bridge").lock_dir = function()
+  return tmp .. "/ide"
+end
 
 -- headless (-p) it answers each message; as the TUI it waits for a q line
 local fake = tmp .. "/claude"
@@ -116,5 +120,6 @@ require("bud.layout.panes")
 eq(require("bud.layout").providers.chat.available(), true, "chat pane available with claude")
 
 claude._reset()
+require("bud.ai.bridge").stop()
 vim.fn.delete(tmp, "rf")
 print("claude_term_test: ok")

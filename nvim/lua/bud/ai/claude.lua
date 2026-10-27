@@ -195,8 +195,11 @@ local function spawn(s)
       set_status(s, "missing", why)
       return
     end
-    local job = vim.fn.jobstart(M.argv(bin, s, settings()), {
+    local env = M.bridge_env(s.root)
+    local argv = vim.list_extend(M.argv(bin, s, settings()), require("bud.ai.bridge").headless_args())
+    local job = vim.fn.jobstart(argv, {
       cwd = s.root,
+      env = env,
       on_stdout = function(_, data)
         feed(s, data)
       end,
@@ -234,6 +237,19 @@ local function spawn(s)
     set_status(s, #s.queue > 0 and "busy" or "ready")
     s.queue = {}
   end)
+end
+
+-- bridge_env brings up the IDE bridge (JGA-81) and returns what a Claude
+-- Code process in root needs to connect to it; {} when it can't start
+function M.bridge_env(root)
+  local bridge = require("bud.ai.bridge")
+  local ok, why = bridge.start()
+  if not ok then
+    vim.notify_once("bud: the IDE bridge didn't start: " .. tostring(why), vim.log.levels.WARN)
+    return {}
+  end
+  bridge.add_folder(root)
+  return bridge.env()
 end
 
 local function root_of(root)
@@ -427,7 +443,15 @@ function M.setup()
       M.stop()
     else
       local status, why = M.status()
-      vim.notify(("Claude Code: %s%s"):format(status, why and (" (" .. why .. ")") or ""))
+      local bridge = require("bud.ai.bridge")
+      local port = bridge.port()
+      vim.notify(
+        ("Claude Code: %s%s; IDE bridge %s"):format(
+          status,
+          why and (" (" .. why .. ")") or "",
+          port and ("on port " .. port .. ", " .. bridge.connected() .. " TUI connected") or "not started"
+        )
+      )
     end
   end, {
     nargs = "?",
@@ -442,6 +466,14 @@ function M.setup()
   vim.keymap.set("n", "<leader>ar", function()
     M.restart()
   end, { desc = "Restart Claude Code" })
+  vim.keymap.set({ "n", "x" }, "<leader>as", function()
+    local first, last = vim.fn.line("v"), vim.fn.line(".")
+    if vim.fn.mode() == "n" then
+      first, last = last, last
+    end
+    M.share(vim.api.nvim_buf_get_name(0), math.min(first, last), math.max(first, last))
+    vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
+  end, { desc = "Share the selection with Claude Code" })
   require("bud.statusline").add(M.statusline)
 
   local group = vim.api.nvim_create_augroup("bud.ai.claude", { clear = true })
@@ -474,6 +506,24 @@ function M.setup()
     end
     M.session(nil, { context = files })
   end
+end
+
+-- share points Claude Code at lines first..last (1-based) of path: the TUI
+-- gets it as an @-mention right away, the headless session with the next
+-- message
+function M.share(path, first, last)
+  if path == "" then
+    return
+  end
+  local s = sessions[root_of()]
+  if s and s.term then
+    require("bud.ai.bridge").mention(path, first - 1, last - 1)
+  else
+    local rel = vim.fn.fnamemodify(path, ":.")
+    s = M.session()
+    table.insert(s.context, first == last and ("%s#L%d"):format(rel, first) or ("%s#L%d-%d"):format(rel, first, last))
+  end
+  vim.notify(("bud: shared %s:%d-%d with Claude Code"):format(vim.fn.fnamemodify(path, ":~:."), first, last))
 end
 
 -- opened starts the session for a project opened from inside bud (the

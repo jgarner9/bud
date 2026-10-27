@@ -11,15 +11,11 @@ func init() {
 }
 
 func Version() *Command {
-	cmd := &Command{
+	return &Command{
 		Name:  "version",
 		Usage: "Prints the bud version",
-		Flags: nil,
 		Run:   printVersion,
-		Subs:  nil,
 	}
-
-	return cmd
 }
 
 func printVersion(g *Globals, args []string) error {

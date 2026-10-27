@@ -81,14 +81,10 @@ type langEnv struct {
 	specs *lang.Set
 }
 
-// userSpecDir holds the user's own specs, kept out of ~/.config/bud since that's
-// bud's (D21) and `bud dev link` can swap it for a checkout
-func userSpecDir(p *paths.Paths) string { return filepath.Join(p.UserTools(), "languages") }
-
 // specDirs are where specs are read from, after the shipped ones: the user's,
 // then any dropped straight into the synced config
 func specDirs(p *paths.Paths) []string {
-	return []string{userSpecDir(p), filepath.Join(p.Config, "languages")}
+	return []string{p.UserLanguageSpecs(), p.LanguageSpecs()}
 }
 
 func loadLangEnv() (*langEnv, error) {
@@ -187,7 +183,7 @@ func langEnable(g *Globals, args []string, yes bool) error {
 			return fmt.Errorf("no language %q (see 'bud lang ls')", name)
 		}
 		// the template's placeholders would go to the package manager and Mason
-		if path := filepath.Join(userSpecDir(e.p), name+".lua"); isTemplate(path) {
+		if path := filepath.Join(e.p.UserLanguageSpecs(), name+".lua"); isTemplate(path) {
 			return fmt.Errorf("%s is still the template: fill it in first", path)
 		}
 	}
@@ -214,11 +210,7 @@ func langEnable(g *Globals, args []string, yes bool) error {
 		specs = append(specs, spec)
 	}
 	if deps := installer.ForBins(lang.System(specs)); len(installer.Missing(deps)) > 0 {
-		var pr *prompter
-		if !yes && isTerminal(os.Stdin) {
-			pr = newPrompter(os.Stdin, os.Stdout)
-		}
-		if err := installDepsShown(deps, pr, yes); err != nil {
+		if err := installDepsShown(deps, terminalPrompter(yes), yes); err != nil {
 			return err
 		}
 	}
@@ -297,7 +289,7 @@ func langAdd(args []string) error {
 		return fmt.Errorf("bud already ships %s: enable it with 'bud lang enable %s'", name, name)
 	}
 
-	path := filepath.Join(userSpecDir(p), name+".lua")
+	path := filepath.Join(p.UserLanguageSpecs(), name+".lua")
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("%s already exists", path)
 	}
@@ -340,25 +332,16 @@ func langRm(args []string, yes bool) error {
 		return err
 	}
 
-	path := filepath.Join(userSpecDir(e.p), name+".lua")
+	path := filepath.Join(e.p.UserLanguageSpecs(), name+".lua")
 	if _, err := os.Stat(path); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("no language spec of yours named %s in %s", name, userSpecDir(e.p))
+			return fmt.Errorf("no language spec of yours named %s in %s", name, e.p.UserLanguageSpecs())
 		}
 		return err
 	}
 
-	if !yes {
-		if !isTerminal(os.Stdin) {
-			return fmt.Errorf("nothing removed: there's no terminal to confirm on, run 'bud lang rm --yes %s'", name)
-		}
-		ok, err := newPrompter(os.Stdin, os.Stdout).confirm("Remove " + path + "?")
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return errors.New("nothing removed")
-		}
+	if err := confirmOnTerminal("Remove "+path+"?", yes, "bud lang rm --yes "+name); err != nil {
+		return err
 	}
 
 	if err := os.Remove(path); err != nil {

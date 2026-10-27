@@ -16,6 +16,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"jgarner.dev/bud/internal/atomicfile"
 )
 
 // Project is one registered project
@@ -109,7 +111,7 @@ func Load(path string) (*Registry, error) {
 	return r, nil
 }
 
-// Save writes the registry atomically: a temp file in the same dir, then a rename
+// Save writes the registry atomically
 func (r *Registry) Save() error {
 	doc := map[string]any{}
 	for k, v := range r.extra {
@@ -133,30 +135,7 @@ func (r *Registry) Save() error {
 	}
 	buf.WriteByte('\n')
 
-	dir := filepath.Dir(r.Path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".projects-*.json")
-	if err != nil {
-		return err
-	}
-	// a no-op once the rename succeeds
-	defer os.Remove(tmp.Name())
-
-	if _, err := tmp.Write(buf.Bytes()); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0o644); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	return os.Rename(tmp.Name(), r.Path)
+	return atomicfile.WriteFile(r.Path, buf.Bytes(), 0o644)
 }
 
 // canonical makes dir absolute and resolves symlinks, so one project can't be

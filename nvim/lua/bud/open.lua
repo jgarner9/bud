@@ -3,8 +3,9 @@
 -- leader keys, so they behave the same everywhere.
 
 local projects = require("bud.projects")
-local config = require("bud.config")
-local icons = require("bud.dashboard.view").icons
+local cli = require("bud.cli")
+local icons = require("bud.icons")
+local sessions = require("bud.sessions")
 
 local M = {}
 
@@ -13,16 +14,6 @@ local max_recent = 10
 
 local function fzf()
   return require("bud.pack").deferred["fzf-lua"]()
-end
-
--- bud_bin is the bud that launched this nvim (BUD_BIN), else the one on PATH
-function M.bud_bin()
-  local bin = vim.env.BUD_BIN
-  if bin and vim.fn.executable(bin) == 1 then
-    return bin
-  end
-  local found = vim.fn.exepath("bud")
-  return found ~= "" and found or nil
 end
 
 -- candidates lists what p offers: registered projects (pinned, then recent),
@@ -60,11 +51,6 @@ local function label(i, c)
   return ("%d\t%s %s%s"):format(i, icon, c.name, where)
 end
 
-local function session_file(path)
-  return vim.fn.stdpath("state") .. "/sessions/" .. path:gsub("[/\\:]", "%%") .. ".vim"
-end
-M.session_file = session_file
-
 -- go opens a project: registers it (or bumps when it was last opened) through
 -- the CLI, which owns projects.json, changes to it, then restores its session
 -- when sessions are on and it has one, else opens the file picker in it
@@ -74,21 +60,15 @@ function M.go(path)
     vim.notify("bud: " .. path .. " isn't a directory", vim.log.levels.WARN)
     return
   end
-  local bin = M.bud_bin()
+  local bin = cli.bin()
   if bin then
     vim.system({ bin, "projects", "add", "--opened", path })
   end
   vim.cmd.cd(vim.fn.fnameescape(path))
 
-  local session = session_file(vim.uv.fs_realpath(path) or path)
-  if config.get("dashboard.sessions", false) and vim.fn.filereadable(session) == 1 then
-    local ok, err = pcall(vim.cmd.source, vim.fn.fnameescape(session))
-    if ok then
-      return
-    end
-    vim.notify("bud: restoring the session failed: " .. tostring(err), vim.log.levels.WARN)
+  if not sessions.restore(path) then
+    M.file({ dir = path })
   end
-  M.file({ dir = path })
 end
 
 -- browse asks for a directory, with completion, and opens it as a project

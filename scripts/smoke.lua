@@ -24,9 +24,6 @@ else
       table.insert(problems, "plugin not installed: " .. name)
     end
   end
-  for _, name in ipairs(pack.failed) do
-    table.insert(problems, "plugin config failed: " .. name)
-  end
   -- lazy plugins and ones loaded on first use would otherwise never run here
   for name in pairs(pack.lazy) do
     local loaded, err = pcall(pack.load, name)
@@ -34,10 +31,9 @@ else
       table.insert(problems, "lazy plugin failed to load: " .. name .. ": " .. tostring(err))
     end
   end
+  -- once everything has loaded, so startup and lazy failures are both in it
   for _, name in ipairs(pack.failed) do
-    if not vim.tbl_contains(problems, "plugin config failed: " .. name) then
-      table.insert(problems, "plugin config failed: " .. name)
-    end
+    table.insert(problems, "plugin config failed: " .. name)
   end
   for module, load in pairs(pack.deferred) do
     local loaded, err = pcall(load)

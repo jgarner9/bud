@@ -21,7 +21,7 @@ func init() {
 
 func Uninstall() *Command {
 	var yes, keepConfig bool
-	cmd := &Command{
+	return &Command{
 		Name:  "uninstall",
 		Usage: "Removes everything bud put on this machine, after listing it and asking",
 		Flags: func(fs *flag.FlagSet) {
@@ -29,11 +29,8 @@ func Uninstall() *Command {
 			fs.BoolVar(&yes, "y", false, "short for -yes")
 			fs.BoolVar(&keepConfig, "keep-config", false, "keep the machine config (config.json) and user-tools/")
 		},
-		Run:  func(g *Globals, args []string) error { return uninstall(g, args, yes, keepConfig) },
-		Subs: nil,
+		Run: func(g *Globals, args []string) error { return uninstall(g, args, yes, keepConfig) },
 	}
-
-	return cmd
 }
 
 // removal is one thing uninstall deletes
@@ -74,18 +71,13 @@ func uninstall(g *Globals, args []string, yes, keepConfig bool) error {
 	}
 	printKept(os.Stdout, kept)
 
-	if !yes {
-		if !isTerminal(os.Stdin) {
-			return errors.New("nothing removed: there's no terminal to confirm on, run 'bud uninstall --yes' to remove without asking")
-		}
-		ok, err := newPrompter(os.Stdin, os.Stdout).confirm("Continue?")
-		if err != nil {
-			return err
-		}
-		if !ok {
-			fmt.Println("Nothing removed.")
-			return nil
-		}
+	err = confirmOnTerminal("Continue?", yes, "bud uninstall --yes")
+	if errors.Is(err, errNotConfirmed) {
+		fmt.Println("Nothing removed.")
+		return nil
+	}
+	if err != nil {
+		return err
 	}
 
 	// keep going after a failure, so one stuck path doesn't leave the rest behind

@@ -13,6 +13,7 @@ import (
 	"slices"
 
 	"jgarner.dev/bud"
+	"jgarner.dev/bud/internal/atomicfile"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -275,5 +276,6 @@ func writeManifest(dir string, files []string) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(dir, manifestName), append(data, '\n'), 0o644)
+	// the manifest decides what a sync deletes, so it's never left half-written
+	return atomicfile.WriteFile(filepath.Join(dir, manifestName), append(data, '\n'), 0o644)
 }

@@ -218,8 +218,8 @@ func checkLanguages(p *paths.Paths, cfg config.Settings) ([]Result, []lang.Spec)
 		return nil, nil
 	}
 
-	dir := filepath.Join(p.Config, "languages")
-	userDir := filepath.Join(p.UserTools(), "languages")
+	dir := p.LanguageSpecs()
+	userDir := p.UserLanguageSpecs()
 	specs, err := loadLanguages(false, dir, userDir)
 	if err != nil {
 		return []Result{{Name: "languages", Status: Fail, Detail: err.Error(), Fix: "bud update"}}, nil
@@ -272,24 +272,7 @@ func checkLanguages(p *paths.Paths, cfg config.Settings) ([]Result, []lang.Spec)
 // checkLanguageDeps reports the enabled languages' system deps. A missing one
 // warns: only that language's tooling is affected
 func checkLanguageDeps(deps []installer.Dep) []Result {
-	m, found := installer.DetectManager()
-
-	var results []Result
-	for _, dep := range deps {
-		r := Result{Name: dep.Name}
-		if !dep.Installed() {
-			r.Status = Warn
-			r.Detail = "not found on PATH (" + strings.Join(dep.Bins, " or ") + "), a language needs it"
-			if found {
-				r.Fix = strings.Join(m.Command(dep.Packages(m)), " ")
-			} else {
-				r.Fix = "install it with your system's package manager"
-			}
-		}
-		results = append(results, r)
-	}
-
-	return results
+	return checkDepList(deps, Warn, ", a language needs it")
 }
 
 // Failed counts the results that are Fail
@@ -306,14 +289,20 @@ func Failed(results []Result) int {
 
 // checkDeps reports the deps the profile installs (installer.Needed)
 func checkDeps(profile string) []Result {
+	return checkDepList(installer.Needed(profile), Fail, "")
+}
+
+// checkDepList reports each dep, marking a missing one with status and the
+// package manager command that installs it. why is added to the detail
+func checkDepList(deps []installer.Dep, status Status, why string) []Result {
 	m, found := installer.DetectManager()
 
 	var results []Result
-	for _, dep := range installer.Needed(profile) {
+	for _, dep := range deps {
 		r := Result{Name: dep.Name}
 		if !dep.Installed() {
-			r.Status = Fail
-			r.Detail = "not found on PATH (" + strings.Join(dep.Bins, " or ") + ")"
+			r.Status = status
+			r.Detail = "not found on PATH (" + strings.Join(dep.Bins, " or ") + ")" + why
 			if found {
 				r.Fix = strings.Join(m.Command(dep.Packages(m)), " ")
 			} else {

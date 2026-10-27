@@ -1,21 +1,21 @@
 package cli
 
+import "errors"
+
 func init() {
 	RegisterCommand(Chat())
 }
 
+// Chat will open full-screen chat with Claude Code (BASE.md 5.5, milestone 7).
+// Until then it says so, rather than exiting 0 having done nothing
 func Chat() *Command {
-	cmd := &Command{
+	return &Command{
 		Name:  "chat",
-		Usage: "Opens Bud chat interface",
-		Flags: nil,
+		Usage: "Opens Bud chat (not built yet)",
 		Run:   chat,
-		Subs:  nil,
 	}
-
-	return cmd
 }
 
 func chat(g *Globals, args []string) error {
-	return nil
+	return errors.New("chat isn't built yet: it comes with the AI layer (milestone 7)")
 }

@@ -161,7 +161,7 @@ func TestLangAdd(t *testing.T) {
 	if err := langAdd([]string{"zig"}); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(lt.p.UserTools(), "languages", "zig.lua")
+	path := filepath.Join(lt.p.UserLanguageSpecs(), "zig.lua")
 	data, err := os.ReadFile(path)
 	if err != nil || !strings.Contains(string(data), "filetypes =") {
 		t.Fatalf("template not copied: %v", err)
@@ -209,7 +209,7 @@ func TestLangRm(t *testing.T) {
 	if err := langRm([]string{"zig"}, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(lt.p.UserTools(), "languages", "zig.lua")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(lt.p.UserLanguageSpecs(), "zig.lua")); !os.IsNotExist(err) {
 		t.Errorf("spec still there: %v", err)
 	}
 	if got := lt.languages(t); !slices.Equal(got, []string{"go"}) {

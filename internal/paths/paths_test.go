@@ -28,6 +28,8 @@ func TestResolveDefaults(t *testing.T) {
 		{"projects", p.Projects(), "/home/me/.local/state/bud/projects.json"},
 		{"kit ledger", p.KitLedger(), "/home/me/.local/state/bud/kit-ledger.json"},
 		{"user tools", p.UserTools(), "/home/me/.local/share/bud/user-tools"},
+		{"language specs", p.LanguageSpecs(), "/home/me/.config/bud/languages"},
+		{"user language specs", p.UserLanguageSpecs(), "/home/me/.local/share/bud/user-tools/languages"},
 		{"bin", p.Bin(), "/home/me/.local/share/bud/bin"},
 		{"mason", p.Mason(), "/home/me/.local/share/bud/mason"},
 		{"prev binary", p.PrevBinary(), "/home/me/.local/share/bud/bud.prev"},

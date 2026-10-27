@@ -12,36 +12,7 @@ M.faces = {
   sleepy = "[-.-]", -- after midnight
 }
 
--- Nerd Font glyphs, bud's accent alongside the robot. Only long-standing ones
--- (Font Awesome, Octicons, Devicons), which every Nerd Font has
-M.icons = {
-  project = "", -- nf-fa-folder_open
-  file = "", -- nf-fa-file_o
-  recent = "", -- nf-fa-history
-  new = "", -- nf-fa-plus
-  scratchpad = "", -- nf-fa-pencil
-  plugins = "", -- nf-fa-plug
-  mason = "", -- nf-fa-wrench
-  doctor = "", -- nf-fa-stethoscope
-  update = "", -- nf-fa-refresh
-  style = "", -- nf-fa-exchange
-  quit = "", -- nf-fa-power_off
-  projects = "", -- nf-fa-folder
-  pinned = "", -- nf-oct-pin
-  unpinned = "", -- nf-fa-folder
-  branch = "", -- nf-dev-git_branch
-  changed = "", -- nf-fa-pencil_square_o
-  clean = "", -- nf-fa-check
-  ahead = "", -- nf-fa-arrow_up
-  behind = "", -- nf-fa-arrow_down
-  error = "", -- nf-fa-times_circle
-  warn = "", -- nf-fa-warning
-  startup = "", -- nf-fa-bolt
-  claude = "", -- nf-oct-hubot
-  tip = "", -- nf-fa-lightbulb_o
-}
-
-local icons = M.icons
+local icons = require("bud.icons")
 local menu_width = 26
 
 -- a line is a list of { text, group } segments; group may be nil

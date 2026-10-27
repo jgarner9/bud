@@ -19,15 +19,11 @@ func init() {
 }
 
 func Open() *Command {
-	cmd := &Command{
+	return &Command{
 		Name:  "open",
 		Usage: "Opens a project directory, or one or more files",
-		Flags: nil,
 		Run:   open,
-		Subs:  nil,
 	}
-
-	return cmd
 }
 
 func open(g *Globals, args []string) error {

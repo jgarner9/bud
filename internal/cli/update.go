@@ -9,17 +9,17 @@ func init() {
 }
 
 func Update() *Command {
-	cmd := &Command{
+	return &Command{
 		Name:  "update",
 		Usage: "Syncs the Bud Neovim config and restores pinned plugins",
-		Flags: nil,
 		Run:   update,
-		Subs:  nil,
 	}
-
-	return cmd
 }
 
 func update(g *Globals, args []string) error {
+	if len(args) > 0 {
+		return usageErrorf("update takes no arguments")
+	}
+
 	return nvim.Apply()
 }

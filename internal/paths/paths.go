@@ -61,6 +61,13 @@ func (p *Paths) InstallReceipt() string { return filepath.Join(p.State, "install
 // UserTools holds generated tools that haven't been promoted into the repo
 func (p *Paths) UserTools() string { return filepath.Join(p.Data, "user-tools") }
 
+// LanguageSpecs is where sync puts the language specs bud ships
+func (p *Paths) LanguageSpecs() string { return filepath.Join(p.Config, "languages") }
+
+// UserLanguageSpecs holds the user's own specs (bud lang add), kept out of the
+// synced config since that's bud's (D21, D34)
+func (p *Paths) UserLanguageSpecs() string { return filepath.Join(p.UserTools(), "languages") }
+
 // Bin holds binaries bud downloads itself, as opposed to the system package manager
 func (p *Paths) Bin() string { return filepath.Join(p.Data, "bin") }
 

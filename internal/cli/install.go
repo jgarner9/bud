@@ -3,7 +3,6 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -22,18 +21,15 @@ func init() {
 
 func Install() *Command {
 	var yes bool
-	cmd := &Command{
+	return &Command{
 		Name:  "install",
 		Usage: "Sets up bud: asks a few questions, installs missing system packages and the Bud Neovim config",
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&yes, "yes", false, "don't ask anything: take the defaults and run the package manager")
 			fs.BoolVar(&yes, "y", false, "short for -yes")
 		},
-		Run:  func(g *Globals, args []string) error { return install(g, args, yes) },
-		Subs: nil,
+		Run: func(g *Globals, args []string) error { return install(g, args, yes) },
 	}
-
-	return cmd
 }
 
 // swappable in tests
@@ -62,10 +58,7 @@ func install(g *Globals, args []string, yes bool) error {
 	}
 
 	// questions need someone to answer them: --yes or no terminal takes the defaults
-	var pr *prompter
-	if !yes && isTerminal(os.Stdin) {
-		pr = newPrompter(os.Stdin, os.Stdout)
-	}
+	pr := terminalPrompter(yes)
 	if s, err = askSetup(pr, f, s, g.Profile); err != nil {
 		return err
 	}

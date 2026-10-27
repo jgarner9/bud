@@ -10,9 +10,10 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
+
+	"jgarner.dev/bud/internal/atomicfile"
 )
 
 // Settings is the machine config merged over the defaults
@@ -186,42 +187,12 @@ func (f *File) Set(key string, value any) error {
 	return nil
 }
 
-// Save writes the file atomically: a temp file in the same dir, then a rename,
-// so a crash never leaves a half-written config behind
+// Save writes the file atomically, so a crash never leaves a half-written config behind
 func (f *File) Save() error {
 	data, err := json.MarshalIndent(f.doc, "", "  ")
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
 
-	dir := filepath.Dir(f.Path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-
-	tmp, err := os.CreateTemp(dir, ".config-*.json")
-	if err != nil {
-		return err
-	}
-	// a no-op once the rename succeeds
-	defer os.Remove(tmp.Name())
-
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0o644); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	return os.Rename(tmp.Name(), f.Path)
+	return atomicfile.WriteFile(f.Path, append(data, '\n'), 0o644)
 }

@@ -14,7 +14,8 @@ local max_projects = 5
 -- state for the dashboard on screen; nil when it isn't
 local current
 
-local bud_bin = require("bud.open").bud_bin
+local icons = require("bud.icons")
+local cli = require("bud.cli")
 
 -- mood picks the buddy's face: sleepy after midnight wins, then a waiting
 -- update, then happy once doctor came back clean
@@ -92,13 +93,10 @@ end
 local function health()
   local parts = {}
   if vim.g.bud_startup_ms then
-    table.insert(parts, (view.icons.startup .. " %d ms"):format(vim.g.bud_startup_ms))
+    table.insert(parts, (icons.startup .. " %d ms"):format(vim.g.bud_startup_ms))
   end
-  table.insert(parts, view.icons.plugins .. " " .. #require("bud.pack").names .. " plugins")
-  table.insert(
-    parts,
-    view.icons.claude .. " " .. (vim.fn.executable("claude") == 1 and "claude ready" or "no claude yet")
-  )
+  table.insert(parts, icons.plugins .. " " .. #require("bud.pack").names .. " plugins")
+  table.insert(parts, icons.claude .. " " .. (vim.fn.executable("claude") == 1 and "claude ready" or "no claude yet"))
   return table.concat(parts, " · ")
 end
 
@@ -166,7 +164,7 @@ end
 
 -- terminal runs a bud command in a new buffer, for d and u
 local function terminal(args)
-  local bin = bud_bin()
+  local bin = cli.bin()
   if not bin then
     vim.notify("bud: can't find the bud binary", vim.log.levels.ERROR)
     return
@@ -236,7 +234,7 @@ end
 
 -- background work, each piece redrawing when it's back
 local function load()
-  local bin = bud_bin()
+  local bin = cli.bin()
   if bin and current.settings.banners then
     vim.system({ bin, "doctor", "--quick", "--json" }, { text = true }, function(res)
       vim.schedule(function()
@@ -309,6 +307,8 @@ function M.open(opts)
     vim.api.nvim_set_option_value(opt, value, { scope = "local", win = 0 })
   end
 
+  -- config.json's dashboard section, read once
+  local settings = config.get("dashboard", {})
   local taglines = require("bud.dashboard.taglines")
   math.randomseed(vim.uv.hrtime())
   current = {
@@ -318,15 +318,14 @@ function M.open(opts)
     tagline = taglines[math.random(#taglines)],
     tip = M.tip(tonumber(os.date("%j"))),
     -- t switches it for this session; config.json's dashboard.style is the default
-    style = config.get("dashboard.style", "silly"),
+    style = settings.style or "silly",
     settings = {
-      scratchpad = config.get("dashboard.scratchpad", false),
-      sessions = config.get("dashboard.sessions", false),
+      scratchpad = settings.scratchpad == true,
       -- the default extras (JGA-62), each on unless config.json turns it off
-      git = config.get("dashboard.git", true),
-      health = config.get("dashboard.health", true),
-      banners = config.get("dashboard.banners", true),
-      tip = config.get("dashboard.tip", true),
+      git = settings.git ~= false,
+      health = settings.health ~= false,
+      banners = settings.banners ~= false,
+      tip = settings.tip ~= false,
     },
   }
   keys(buf)
@@ -355,30 +354,6 @@ function M.lines()
     return nil
   end
   return vim.api.nvim_buf_get_lines(current.buf, 0, -1, false)
-end
-
--- save_session writes the project's session on exit, when sessions are on and
--- there are files open in a registered project
-function M.save_session()
-  if not config.get("dashboard.sessions", false) then
-    return
-  end
-  local project = projects.find(vim.fn.getcwd())
-  if not project then
-    return
-  end
-  local has_files = vim.iter(vim.api.nvim_list_bufs()):any(function(b)
-    return vim.bo[b].buflisted and vim.bo[b].buftype == "" and vim.api.nvim_buf_get_name(b) ~= ""
-  end)
-  if not has_files then
-    return
-  end
-  local file = require("bud.open").session_file(project.path)
-  vim.fn.mkdir(vim.fs.dirname(file), "p")
-  local saved = vim.o.sessionoptions
-  vim.o.sessionoptions = "buffers,curdir,folds,tabpages,winsize"
-  pcall(vim.cmd.mksession, { vim.fn.fnameescape(file), bang = true })
-  vim.o.sessionoptions = saved
 end
 
 return M

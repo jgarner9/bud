@@ -362,3 +362,36 @@ func TestAppRunSubcommands(t *testing.T) {
 		t.Errorf("help: %v\n%s", err, out.String())
 	}
 }
+
+func TestStubAndArgChecks(t *testing.T) {
+	// chat isn't built yet, and says so instead of exiting 0 having done nothing
+	if err := chat(&Globals{}, nil); err == nil || !strings.Contains(err.Error(), "isn't built yet") {
+		t.Errorf("chat: %v", err)
+	}
+	var usage *UsageError
+	if err := update(&Globals{}, []string{"now"}); !errors.As(err, &usage) {
+		t.Errorf("update with an argument: %v, want a UsageError", err)
+	}
+}
+
+func TestPrompterHelpers(t *testing.T) {
+	// tests run without a terminal on stdin
+	devnull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer devnull.Close()
+	stdin := os.Stdin
+	os.Stdin = devnull
+	t.Cleanup(func() { os.Stdin = stdin })
+
+	if terminalPrompter(false) != nil || terminalPrompter(true) != nil {
+		t.Error("no terminal, or --yes, means no prompter")
+	}
+	if err := confirmOnTerminal("Sure?", true, "bud x --yes"); err != nil {
+		t.Errorf("--yes: %v", err)
+	}
+	if err := confirmOnTerminal("Sure?", false, "bud x --yes"); err == nil || !strings.Contains(err.Error(), "run 'bud x --yes'") {
+		t.Errorf("no terminal: %v", err)
+	}
+}

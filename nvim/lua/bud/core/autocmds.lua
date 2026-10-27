@@ -31,7 +31,7 @@ vim.api.nvim_create_autocmd("VimLeavePre", {
   group = group,
   desc = "Save the project's session (dashboard.sessions)",
   callback = function()
-    require("bud.dashboard").save_session()
+    require("bud.sessions").save()
   end,
 })
 

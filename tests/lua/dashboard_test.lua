@@ -81,7 +81,7 @@ local data = {
   health = " 30 ms · 23 plugins · claude ready",
   tip = { lhs = "<Space>f", desc = "Find file" },
 }
-local icons = view.icons
+local icons = require("bud.icons")
 -- every icon is one cell wide, or the centering is off
 for name, glyph in pairs(icons) do
   eq(vim.fn.strdisplaywidth(glyph), 1, "width of icon " .. name)

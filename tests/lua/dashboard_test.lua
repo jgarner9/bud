@@ -175,6 +175,21 @@ has(dashboard.lines(), "t  silly", "t in the minimal menu")
 vim.api.nvim_feedkeys("t", "x", false)
 has(dashboard.lines(), "Minimal view", "back to silly")
 
+-- each default extra can be turned off in config.json
+f = assert(io.open(tmp .. "/config.json", "w"))
+f:write('{"dashboard": {"health": false, "tip": false}}')
+f:close()
+dashboard.open({ offline = true })
+for _, line in ipairs(dashboard.lines()) do
+  if line:find("plugins ·", 1, true) or line:find("tip:", 1, true) then
+    error("turned-off extra still shown: " .. line)
+  end
+end
+f = assert(io.open(tmp .. "/config.json", "w"))
+f:write('{"dashboard": {"scratchpad": true}}')
+f:close()
+buf = dashboard.open({ offline = true })
+
 -- leaving it wipes it, and the next buffer gets its window options back
 vim.o.number = true
 vim.cmd.enew()

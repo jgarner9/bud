@@ -36,6 +36,11 @@ type Update struct {
 
 type Dashboard struct {
 	Style string `json:"style"` // "silly" or "minimal"
+	// the default extras (JGA-62), on unless turned off
+	Git     bool `json:"git"`     // branch and changes per project
+	Health  bool `json:"health"`  // startup time, plugins, Claude Code
+	Banners bool `json:"banners"` // doctor problems with a one-key fix
+	Tip     bool `json:"tip"`     // a keymap a day
 	// optional extras, off by default (JGA-99)
 	Scratchpad bool `json:"scratchpad"` // x opens a persistent notes buffer
 	Sessions   bool `json:"sessions"`   // opening a project restores its last session
@@ -64,7 +69,7 @@ func Defaults() Settings {
 		Terminal:     "kitty", // D11
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
-		Dashboard:    Dashboard{Style: "silly"},
+		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true},
 		AI:           AI{Claude: Claude{Autostart: true, Resume: "continue", Args: []string{}}},
 	}
 }

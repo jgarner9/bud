@@ -137,8 +137,8 @@ local function data()
     menu = menu(current.settings),
     projects = list,
     banners = current.banners,
-    health = health(),
-    tip = current.tip,
+    health = current.settings.health and health() or nil,
+    tip = current.settings.tip and current.tip or nil,
   }
 end
 
@@ -237,7 +237,7 @@ end
 -- background work, each piece redrawing when it's back
 local function load()
   local bin = bud_bin()
-  if bin then
+  if bin and current.settings.banners then
     vim.system({ bin, "doctor", "--quick", "--json" }, { text = true }, function(res)
       vim.schedule(function()
         if not current then
@@ -254,7 +254,7 @@ local function load()
     end)
   end
 
-  for _, p in ipairs(current.data.projects) do
+  for _, p in ipairs(current.settings.git and current.data.projects or {}) do
     vim.system({ "git", "-C", p.path, "status", "--porcelain=v2", "--branch" }, { text = true }, function(res)
       if res.code ~= 0 then
         return
@@ -322,6 +322,11 @@ function M.open(opts)
     settings = {
       scratchpad = config.get("dashboard.scratchpad", false),
       sessions = config.get("dashboard.sessions", false),
+      -- the default extras (JGA-62), each on unless config.json turns it off
+      git = config.get("dashboard.git", true),
+      health = config.get("dashboard.health", true),
+      banners = config.get("dashboard.banners", true),
+      tip = config.get("dashboard.tip", true),
     },
   }
   keys(buf)

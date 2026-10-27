@@ -30,7 +30,13 @@ vim.api.nvim_create_autocmd("VimEnter", {
         require("bud.ai.claude").setup()
       end)
     end
-    if vim.fn.argc() == 0 and empty and not headless and not project then
+    if vim.env.BUD_OPEN == "chat" and not headless then
+      -- bud chat: straight to full-screen chat
+      vim.schedule(function()
+        local resume = vim.env.BUD_CHAT_RESUME
+        require("bud.chat").open({ resume = resume ~= "" and resume or nil })
+      end)
+    elseif vim.fn.argc() == 0 and empty and not headless and not project then
       require("bud.dashboard").open()
     elseif not headless and vim.env.BUD_BIN and (project or vim.fn.argc() > 0) then
       -- after the first screen, so panes never count against startup (D35)

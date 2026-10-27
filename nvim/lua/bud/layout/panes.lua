@@ -22,12 +22,16 @@ end
 
 layout.register("tree", { open = neo_tree("filesystem") })
 layout.register("git", { available = in_git, open = neo_tree("git_status") })
--- chat is Claude Code's own TUI for now (D48); the native chat replaces it (JGA-89)
+-- chat is the native side pane (JGA-89), or Claude Code's own TUI with
+-- ai.chat.pane = "term" (D48)
 layout.register("chat", {
   available = function()
     return require("bud.ai.term").available()
   end,
   open = function(pane)
-    return require("bud.ai.term").open({ side = pane.side, focus = false })
+    if require("bud.config").get("ai.chat.pane", "native") == "term" then
+      return require("bud.ai.term").open({ side = pane.side, focus = false })
+    end
+    return require("bud.chat.pane").open({ side = pane.side, size = pane.size, focus = false })
   end,
 })

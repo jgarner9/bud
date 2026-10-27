@@ -143,6 +143,7 @@ local function menu(settings)
     { key = "f", icon = "file", label = "Open file", short = "file" },
     { key = "r", icon = "recent", label = "Recent files", short = "recent" },
     { key = "n", icon = "new", label = "New file", short = "new" },
+    { key = "c", icon = "chat", label = "Chat", short = "chat" },
   }
   if settings.scratchpad then
     table.insert(items, { key = "x", icon = "scratchpad", label = "Scratchpad", short = "notes" })
@@ -247,10 +248,14 @@ local function keys(buf)
   map("u", function()
     terminal({ "update" })
   end, "Update")
-  -- not in the menu: the Claude Code banner offers it when it's needed
+  -- chat, or setting up Claude Code first when the banner says it isn't
   map("c", function()
-    terminal({ "claude", "setup" })
-  end, "Set up Claude Code")
+    if current.claude and current.claude.status ~= "ok" then
+      terminal({ "claude", "setup" })
+    else
+      require("bud.chat").open()
+    end
+  end, "Chat")
   map("t", function()
     current.style = current.style == "minimal" and "silly" or "minimal"
     draw()

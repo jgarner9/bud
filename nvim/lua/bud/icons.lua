@@ -27,4 +27,7 @@ return {
   startup = "", -- nf-fa-bolt
   claude = "", -- nf-oct-hubot
   tip = "", -- nf-fa-lightbulb_o
+  tool = "", -- nf-fa-wrench
+  chat = "", -- nf-fa-comments
+  search = "", -- nf-fa-search
 }

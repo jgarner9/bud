@@ -363,11 +363,7 @@ func TestAppRunSubcommands(t *testing.T) {
 	}
 }
 
-func TestStubAndArgChecks(t *testing.T) {
-	// chat isn't built yet, and says so instead of exiting 0 having done nothing
-	if err := chat(&Globals{}, nil); err == nil || !strings.Contains(err.Error(), "isn't built yet") {
-		t.Errorf("chat: %v", err)
-	}
+func TestArgChecks(t *testing.T) {
 	var usage *UsageError
 	if err := update(&Globals{}, []string{"now"}, false, false, ""); !errors.As(err, &usage) {
 		t.Errorf("update with an argument: %v, want a UsageError", err)

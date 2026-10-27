@@ -110,7 +110,8 @@ end
 -- once it has one, else the most recent unless resume is "new"
 function M.argv(bin, s, cfg)
   local argv = { bin, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose" }
-  return vim.list_extend(vim.list_extend(argv, M.resume_args(s, cfg)), cfg.args or {})
+  vim.list_extend(argv, M.resume_args(s, cfg))
+  return vim.list_extend(vim.list_extend(argv, cfg.args or {}), s.args or {})
 end
 
 -- resume_args picks the conversation: the session's own once it has one, the
@@ -119,7 +120,7 @@ end
 function M.resume_args(s, cfg)
   if s.session_id and not s.continue_next then
     return { "--resume", s.session_id }
-  elseif s.continue_next or cfg.resume == "continue" then
+  elseif s.continue_next or (s.resume or cfg.resume) == "continue" then
     return { "--continue" }
   end
   return {}
@@ -168,11 +169,15 @@ local function feed(s, data)
   end
 end
 
--- least recently used running session other than keep, to make room
+-- least recently used running project session other than keep, to make
+-- room (chat's own sessions don't count: there's one at a time)
 local function evict(keep)
+  if keep.chat then
+    return
+  end
   local running, oldest = 0, nil
   for _, s in pairs(sessions) do
-    if s.job and s ~= keep then
+    if s.job and s ~= keep and not s.chat then
       running = running + 1
       if not oldest or s.last_used < oldest.last_used then
         oldest = s
@@ -180,7 +185,7 @@ local function evict(keep)
     end
   end
   if running >= M.max_sessions and oldest then
-    M.stop(oldest.root)
+    M.stop(oldest.key)
   end
 end
 
@@ -264,16 +269,40 @@ local function root_of(root)
   return vim.uv.fs_realpath(root) or root
 end
 
--- session returns root's session (default: the current dir), starting it if
--- it isn't running. opts.context lists files to mention with the first message
-function M.session(root, opts)
-  root = root_of(root)
-  local s = sessions[root]
-  if not s then
-    s = { root = root, status = "stopped", queue = {}, context = {}, last_used = now() }
-    sessions[root] = s
+-- lookup turns what callers pass (a session's key, or a project dir) into a key
+local function lookup(id)
+  if id and sessions[id] then
+    return id
   end
-  if opts and opts.context then
+  return root_of(id)
+end
+
+-- session returns root's session (default: the current dir), starting it if
+-- it isn't running. A project's session is keyed by its root; opts.key names
+-- another one in root (the chat's). opts: context (files to mention with the
+-- first message), and for a new keyed session session_id (the conversation to
+-- resume), resume ("new" or "continue", over config), args (extra flags such
+-- as --model) and chat (not counted against the project sessions)
+function M.session(root, opts)
+  opts = opts or {}
+  local key = opts.key or root_of(root)
+  local s = sessions[key]
+  if not s then
+    s = {
+      key = key,
+      root = root_of(root),
+      status = "stopped",
+      queue = {},
+      context = {},
+      last_used = now(),
+      session_id = opts.session_id,
+      resume = opts.resume,
+      args = opts.args,
+      chat = opts.chat,
+    }
+    sessions[key] = s
+  end
+  if opts.context then
     vim.list_extend(s.context, opts.context)
   end
   s.last_used = now()
@@ -292,7 +321,7 @@ function M.handover(root)
     return nil, "Claude Code isn't installed: run bud claude setup"
   end
   root = root_of(root)
-  local s = sessions[root] or { root = root, queue = {}, context = {} }
+  local s = sessions[root] or { key = root, root = root, queue = {}, context = {}, status = "stopped" }
   sessions[root] = s
   if s.job then
     s.stopping = true
@@ -307,7 +336,7 @@ end
 -- handback returns root's session from the TUI. The TUI may have moved to
 -- another conversation, so the next start continues the most recent one
 function M.handback(root)
-  local s = sessions[root_of(root)]
+  local s = sessions[lookup(root)]
   if s and s.term then
     s.term, s.continue_next = nil, true
     set_status(s, "stopped")
@@ -329,7 +358,8 @@ end
 -- starting it again if it was stopped. opts.context lists files to mention
 function M.send(text, opts)
   opts = opts or {}
-  local s = M.session(opts.root)
+  local keyed = opts.key and sessions[opts.key]
+  local s = keyed and M.session(keyed.root, { key = opts.key }) or M.session(opts.root)
   if s.term then
     vim.notify("bud: Claude Code is open in its terminal (<leader>ac)", vim.log.levels.INFO)
     return false
@@ -352,7 +382,7 @@ end
 
 -- interrupt stops the reply in progress, keeping the session
 function M.interrupt(root)
-  local s = sessions[root_of(root)]
+  local s = sessions[lookup(root)]
   if s and s.job and s.status == "busy" then
     s.requests = (s.requests or 0) + 1
     local req = { type = "control_request", request_id = "bud-" .. s.requests, request = { subtype = "interrupt" } }
@@ -363,13 +393,13 @@ end
 -- status is root's session status (default: the current dir's), "stopped"
 -- when there's none
 function M.status(root)
-  local s = sessions[root_of(root)]
+  local s = sessions[lookup(root)]
   return s and s.status or "stopped", s and s.why
 end
 
 -- stop ends root's session; its conversation stays, for the next start
 function M.stop(root)
-  local s = sessions[root_of(root)]
+  local s = sessions[lookup(root)]
   if s and s.job then
     s.stopping = true
     vim.fn.jobstop(s.job)
@@ -381,18 +411,36 @@ end
 
 -- restart starts root's session again on the same conversation
 function M.restart(root)
-  local s = sessions[root_of(root)]
+  local s = sessions[lookup(root)]
   if s and s.job then
     s.stopping = true
     vim.fn.jobstop(s.job)
     vim.fn.jobwait({ s.job }, 2000)
   end
+  if s then
+    return M.session(s.root, { key = s.key })
+  end
   return M.session(root)
 end
 
+-- drop stops a session and forgets it, so the next one under its key starts
+-- fresh (chat switching conversations)
+function M.drop(key)
+  local s = sessions[key]
+  if s then
+    M.stop(key)
+    sessions[key] = nil
+  end
+end
+
+-- get returns the session under key (or a project dir), nil when there's none
+function M.get(id)
+  return sessions[lookup(id)]
+end
+
 function M.stop_all()
-  for root in pairs(sessions) do
-    M.stop(root)
+  for key in pairs(sessions) do
+    M.stop(key)
   end
 end
 
@@ -407,7 +455,7 @@ function M.reap(minutes, at)
   at = at or now()
   for _, s in pairs(sessions) do
     if s.job and s.status ~= "busy" and at - s.last_used > minutes * 60 * 1000 then
-      M.stop(s.root)
+      M.stop(s.key)
     end
   end
   require("bud.ai.term").reap(minutes, at)
@@ -467,6 +515,15 @@ function M.setup()
       return { "term", "status", "restart", "stop" }
     end,
   })
+  vim.keymap.set("n", "<leader>c", function()
+    require("bud.chat").toggle()
+  end, { desc = "Chat" })
+  vim.keymap.set("n", "<leader>aa", function()
+    require("bud.chat.pane").toggle()
+  end, { desc = "Chat pane (this project)" })
+  vim.api.nvim_create_user_command("BudChat", function(o)
+    require("bud.chat").open({ resume = o.args ~= "" and o.args or nil })
+  end, { nargs = "?", desc = "Full-screen chat, resuming the chat titled like the argument" })
   vim.keymap.set("n", "<leader>ac", function()
     require("bud.ai.term").toggle()
   end, { desc = "Claude Code (its own TUI)" })

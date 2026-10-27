@@ -51,6 +51,12 @@ type Dashboard struct {
 
 type AI struct {
 	Claude Claude `json:"claude"`
+	Chat   Chat   `json:"chat"`
+}
+
+type Chat struct {
+	// the layout's chat pane: bud's own ("native", JGA-89) or Claude Code's TUI ("term", D48)
+	Pane string `json:"pane"`
 }
 
 type Claude struct {
@@ -76,7 +82,7 @@ func Defaults() Settings {
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true},
-		AI:           AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}}},
+		AI:           AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}}, Chat: Chat{Pane: "native"}},
 	}
 }
 
@@ -91,6 +97,7 @@ func (s Settings) Validate() error {
 		{"update.channel", s.Update.Channel, []string{"stable", "nightly"}},
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
 		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},
+		{"ai.chat.pane", s.AI.Chat.Pane, []string{"native", "term"}},
 	}
 	for _, c := range checks {
 		if !slices.Contains(c.allowed, c.value) {

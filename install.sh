@@ -135,8 +135,10 @@ if [ "$YES" != 1 ]; then
 	esac
 fi
 
-# bud install has no profiles yet, so minimal currently behaves like full
-[ "$PROFILE" = full ] || say "note: the '$PROFILE' profile isn't supported by 'bud install' yet, using defaults"
-
 say "running 'bud install'"
-"$BIN_DIR/bud" install
+if [ "$YES" = 1 ]; then
+	"$BIN_DIR/bud" --profile "$PROFILE" install --yes
+else
+	# bud install asks its own questions, and under `curl | sh` its stdin would be this script
+	"$BIN_DIR/bud" --profile "$PROFILE" install </dev/tty
+fi

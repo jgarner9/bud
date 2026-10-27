@@ -45,7 +45,7 @@ curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh -
 | ------------------ | -------------- | --------------------------------------------- |
 | `--version <tag>`  | latest release | Install a specific release                    |
 | `--bin-dir <dir>`  | `~/.local/bin` | Where to put the `bud` binary                 |
-| `--profile <name>` | `full`         | `full` or `minimal` (not used by bud yet)     |
+| `--profile <name>` | `full`         | `full` or `minimal`, handed to `bud install`  |
 | `--yes`            | off            | Run `bud install` without asking              |
 | `--no-install`     | off            | Install the binary, skip `bud install`        |
 

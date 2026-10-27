@@ -1,21 +1,26 @@
 #!/bin/sh
 # Bud installer: fetches the bud release binary for this OS/arch, verifies its
-# checksum, puts it in ~/.local/bin, and runs `bud install`.
+# checksum, puts it in ~/.local/bin, and asks before running `bud install`.
 #
 #   curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh
 #
 # Options (pass after `sh -s --`):
-#   --version <tag>   install a specific release, e.g. v0.1.0 (default: latest)
-#   --bin-dir <dir>   where to put the binary (default: ~/.local/bin)
-#   --no-install      only install the binary, skip `bud install`
+#   --version <tag>      install a specific release, e.g. v0.1.0 (default: latest)
+#   --bin-dir <dir>      where to put the binary (default: ~/.local/bin)
+#   --profile <name>     full or minimal (default: full)
+#   --yes                run `bud install` without asking
+#   --no-install         only install the binary, skip `bud install`
 #
-# The same options can be set with BUD_VERSION, BUD_BIN_DIR and BUD_NO_INSTALL=1.
+# The same options can be set with BUD_VERSION, BUD_BIN_DIR, BUD_PROFILE,
+# BUD_YES=1 and BUD_NO_INSTALL=1.
 
 set -eu
 
 REPO="jgarner9/bud"
 VERSION="${BUD_VERSION:-latest}"
 BIN_DIR="${BUD_BIN_DIR:-$HOME/.local/bin}"
+PROFILE="${BUD_PROFILE:-full}"
+YES="${BUD_YES:-0}"
 NO_INSTALL="${BUD_NO_INSTALL:-0}"
 
 say() { printf 'bud: %s\n' "$*"; }
@@ -23,11 +28,13 @@ die() { printf 'bud: error: %s\n' "$*" >&2; exit 1; }
 
 usage() {
 	cat <<'EOF'
-usage: install.sh [--version <tag>] [--bin-dir <dir>] [--no-install]
+usage: install.sh [--version <tag>] [--bin-dir <dir>] [--profile <name>] [--yes] [--no-install]
 
-  --version <tag>   install a specific release, e.g. v0.1.0 (default: latest)
-  --bin-dir <dir>   where to put the binary (default: ~/.local/bin)
-  --no-install      only install the binary, skip 'bud install'
+  --version <tag>      install a specific release, e.g. v0.1.0 (default: latest)
+  --bin-dir <dir>      where to put the binary (default: ~/.local/bin)
+  --profile <name>     full or minimal (default: full)
+  --yes                run 'bud install' without asking
+  --no-install         only install the binary, skip 'bud install'
 EOF
 }
 
@@ -35,11 +42,18 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--version) [ $# -ge 2 ] || die "--version needs a value"; VERSION="$2"; shift 2 ;;
 	--bin-dir) [ $# -ge 2 ] || die "--bin-dir needs a value"; BIN_DIR="$2"; shift 2 ;;
+	--profile) [ $# -ge 2 ] || die "--profile needs a value"; PROFILE="$2"; shift 2 ;;
+	--yes | -y) YES=1; shift ;;
 	--no-install) NO_INSTALL=1; shift ;;
 	-h | --help) usage; exit 0 ;;
 	*) die "unknown option: $1" ;;
 	esac
 done
+
+case "$PROFILE" in
+full | minimal) ;;
+*) die "unknown profile: $PROFILE (use full or minimal)" ;;
+esac
 
 case "$(uname -s)" in
 Linux) os=linux ;;
@@ -103,6 +117,26 @@ if [ "$NO_INSTALL" = 1 ]; then
 	say "skipping 'bud install' (run it yourself when ready)"
 	exit 0
 fi
+
+# under `curl | sh` stdin is this script, so the question goes to the terminal directly
+if [ "$YES" != 1 ]; then
+	if ! (: </dev/tty) 2>/dev/null; then
+		say "no terminal to ask on, skipping 'bud install' (rerun with --yes, or run it yourself)"
+		exit 0
+	fi
+	printf "bud: run 'bud install' now? It checks system packages and sets up the Neovim config [Y/n] " >/dev/tty
+	read -r answer </dev/tty || answer=n
+	case "$answer" in
+	"" | y | Y | yes | YES) ;;
+	*)
+		say "skipping 'bud install' (run it yourself when ready)"
+		exit 0
+		;;
+	esac
+fi
+
+# bud install has no profiles yet, so minimal currently behaves like full
+[ "$PROFILE" = full ] || say "note: the '$PROFILE' profile isn't supported by 'bud install' yet, using defaults"
 
 say "running 'bud install'"
 "$BIN_DIR/bud" install

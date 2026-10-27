@@ -14,7 +14,7 @@ func init() {
 func Install() *Command {
 	cmd := &Command{
 		Name:  "install",
-		Usage: "Installs system dependencies and the Bud Neovim config",
+		Usage: "Checks system dependencies and installs the Bud Neovim config",
 		Flags: nil,
 		Run:   install,
 		Subs:  nil,
@@ -32,7 +32,7 @@ func install(args []string) error {
 		fmt.Printf("%-8s %s\n", dep.Name, status)
 	}
 
-	if err := installer.EnsureAll(); err != nil {
+	if err := installer.Check(); err != nil {
 		return err
 	}
 

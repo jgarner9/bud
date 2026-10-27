@@ -20,7 +20,9 @@ import (
 type Settings struct {
 	Profile  string `json:"profile"` // "full" (desktop) or "minimal" (SSH/server)
 	Terminal string `json:"terminal"`
-	Update   Update `json:"update"`
+	// the pane layout projects open in, a file in layouts/ (bud.layout)
+	Layout string `json:"layout"`
+	Update Update `json:"update"`
 	// nil when config.json lists none, which means the profile's preset of
 	// the specs (lang.Set.Preset); an empty list enables nothing
 	Languages []string `json:"languages"`
@@ -68,6 +70,7 @@ func Defaults() Settings {
 	return Settings{
 		Profile:      "full",
 		Terminal:     "kitty", // D11
+		Layout:       "default",
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true},

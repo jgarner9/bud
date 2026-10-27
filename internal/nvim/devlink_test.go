@@ -16,6 +16,7 @@ func fakeCheckout(t *testing.T) string {
 		"nvim/init.lua":         "-- init",
 		"nvim/lua/bud/core.lua": "-- core",
 		"languages/go.lua":      "return {}",
+		"layouts/focus.lua":     "return {}",
 	} {
 		full := filepath.Join(repo, filepath.FromSlash(path))
 		os.MkdirAll(filepath.Dir(full), 0o755)
@@ -43,10 +44,11 @@ func TestLinkUnlink(t *testing.T) {
 		t.Fatalf("DevLink = %q, %v", got, ok)
 	}
 	for path, want := range map[string]string{
-		"init.lua":         "-- init",
-		"lua/bud/core.lua": "-- core",
-		"languages/go.lua": "return {}",
-		"mine.lua":         "keep",
+		"init.lua":          "-- init",
+		"lua/bud/core.lua":  "-- core",
+		"languages/go.lua":  "return {}",
+		"layouts/focus.lua": "return {}",
+		"mine.lua":          "keep",
 	} {
 		if b, err := os.ReadFile(filepath.Join(dst, path)); err != nil || string(b) != want {
 			t.Errorf("%s = %q, %v; want %q", path, b, err, want)

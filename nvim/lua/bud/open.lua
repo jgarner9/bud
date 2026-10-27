@@ -5,7 +5,6 @@
 local projects = require("bud.projects")
 local cli = require("bud.cli")
 local icons = require("bud.icons")
-local sessions = require("bud.sessions")
 
 local M = {}
 
@@ -53,7 +52,8 @@ end
 
 -- go opens a project: registers it (or bumps when it was last opened) through
 -- the CLI, which owns projects.json, changes to it, then restores its session
--- when sessions are on and it has one, else opens the file picker in it
+-- when sessions are on and it has one, else applies the layout and opens the
+-- file picker in it
 function M.go(path)
   path = vim.fs.normalize(vim.fn.expand(path))
   if vim.fn.isdirectory(path) == 0 then
@@ -66,7 +66,8 @@ function M.go(path)
   end
   vim.cmd.cd(vim.fn.fnameescape(path))
 
-  if not sessions.restore(path) then
+  -- the saved session, else the layout (D39, JGA-74) and the file picker
+  if require("bud.layout").open_project(path) then
     M.file({ dir = path })
   end
 end

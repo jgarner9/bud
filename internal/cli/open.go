@@ -48,7 +48,34 @@ func open(g *Globals, args []string) error {
 		startUpdateCheck(g, p)
 	}
 
-	return nvim.Launch(ws.Root, ws.Files, g.Layout)
+	if p, err := paths.Resolve(); err == nil && g.Layout != "" {
+		if err := checkLayout(p, g.Layout); err != nil {
+			return err
+		}
+	}
+
+	return nvim.Launch(ws.Root, ws.Files, g.Layout, ws.Project && len(ws.Files) == 0)
+}
+
+// checkLayout refuses a --layout the synced config doesn't have. With no
+// layouts dir yet (an old sync) there's nothing to check against, and nvim
+// reports it instead
+func checkLayout(p *paths.Paths, name string) error {
+	entries, err := os.ReadDir(p.Layouts())
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, e := range entries {
+		if n, ok := strings.CutSuffix(e.Name(), ".lua"); ok {
+			if n == name {
+				return nil
+			}
+			names = append(names, n)
+		}
+	}
+
+	return usageErrorf("no layout %q (have %s)", name, strings.Join(names, ", "))
 }
 
 // swappable in tests

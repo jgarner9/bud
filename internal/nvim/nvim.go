@@ -18,8 +18,10 @@ import (
 const AppName = paths.AppName
 
 // Launch replaces the bud process with nvim, running in root with each file in
-// its own buffer. layout is handed to the config as BUD_LAYOUT when it's set
-func Launch(root string, files []string, layout string) error {
+// its own buffer. layout is handed to the config as BUD_LAYOUT when it's set,
+// and project as BUD_OPEN=project, which opens root in a layout instead of the
+// dashboard (bud.layout)
+func Launch(root string, files []string, layout string, project bool) error {
 	bin, err := exec.LookPath("nvim")
 	if err != nil {
 		return err
@@ -44,6 +46,9 @@ func Launch(root string, files []string, layout string) error {
 	}
 	if layout != "" {
 		vars = setEnv(vars, "BUD_LAYOUT", layout)
+	}
+	if project {
+		vars = setEnv(vars, "BUD_OPEN", "project")
 	}
 
 	return syscall.Exec(bin, argv, vars)

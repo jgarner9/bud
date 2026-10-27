@@ -73,6 +73,9 @@ func (p *Paths) UserTools() string { return filepath.Join(p.Data, "user-tools") 
 // LanguageSpecs is where sync puts the language specs bud ships
 func (p *Paths) LanguageSpecs() string { return filepath.Join(p.Config, "languages") }
 
+// Layouts is the synced layouts dir (bud.layout reads it)
+func (p *Paths) Layouts() string { return filepath.Join(p.Config, "layouts") }
+
 // UserLanguageSpecs holds the user's own specs (bud lang add), kept out of the
 // synced config since that's bud's (D21, D34)
 func (p *Paths) UserLanguageSpecs() string { return filepath.Join(p.UserTools(), "languages") }

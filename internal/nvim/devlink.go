@@ -12,9 +12,9 @@ import (
 
 // devLinkName marks a config dir that `bud dev link` pointed at a checkout.
 // The dir holds a symlink for each top-level entry of the checkout's nvim/,
-// plus languages -> the checkout's languages/, the same tree bud.Config()
-// serves, so Lua edits show up on the next nvim start (D5). One symlink to
-// nvim/ can't do that: languages/ lives beside it in the repo
+// plus languages and layouts -> the checkout's own, the same tree
+// bud.Config() serves, so Lua edits show up on the next nvim start (D5). One
+// symlink to nvim/ can't do that: those dirs live beside it in the repo
 const devLinkName = ".bud-dev-link"
 
 type devLink struct {
@@ -59,7 +59,13 @@ func Link(checkout, dir string) error {
 		return err
 	}
 
-	targets := map[string]string{"languages": filepath.Join(checkout, "languages")}
+	targets := map[string]string{}
+	// the dirs bud.Config() mounts next to nvim/'s files
+	for _, mount := range []string{"languages", "layouts"} {
+		if _, err := os.Stat(filepath.Join(checkout, mount)); err == nil {
+			targets[mount] = filepath.Join(checkout, mount)
+		}
+	}
 	entries, err := os.ReadDir(filepath.Join(checkout, "nvim"))
 	if err != nil {
 		return err

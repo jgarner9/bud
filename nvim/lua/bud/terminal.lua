@@ -4,12 +4,17 @@
 
 local M = {}
 
--- share of the screen's height the terminal takes
-M.height = 0.35
+-- the terminal's height: a share of the screen under 1, else rows. The
+-- layout sets it (bud.layout); default_height is what it is without one
+M.default_height = 0.35
+M.height = M.default_height
 
 local buf, win
 
 local function rows()
+  if M.height >= 1 then
+    return math.floor(M.height)
+  end
   return math.max(3, math.floor((vim.o.lines - vim.o.cmdheight) * M.height))
 end
 

@@ -66,6 +66,7 @@ local function settings()
     resume = cfg.get("ai.claude.resume", "continue"),
     idle_minutes = cfg.get("ai.claude.idle_minutes", 30),
     args = cfg.get("ai.claude.args", {}),
+    command = cfg.get("ai.claude.command", {}),
   }
 end
 
@@ -109,9 +110,22 @@ end
 -- argv is the command line a session runs: resuming its own conversation
 -- once it has one, else the most recent unless resume is "new"
 function M.argv(bin, s, cfg)
-  local argv = { bin, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose" }
+  local argv = vim.list_extend(
+    M.prefix(bin, cfg),
+    { "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose" }
+  )
   vim.list_extend(argv, M.resume_args(s, cfg))
   return vim.list_extend(vim.list_extend(argv, cfg.args or {}), s.args or {})
+end
+
+-- prefix is what runs claude: ai.claude.command when it's set (a wrapper
+-- such as Headroom's, which passes what follows to claude), else claude itself
+function M.prefix(bin, cfg)
+  local cmd = cfg.command
+  if type(cmd) == "table" and #cmd > 0 then
+    return vim.list_slice(cmd)
+  end
+  return { bin }
 end
 
 -- resume_args picks the conversation: the session's own once it has one, the
@@ -359,7 +373,7 @@ function M.handover(root)
   s.starting, s.queue, s.term, s.last_used = nil, {}, true, now()
   set_status(s, "term")
   local cfg = settings()
-  return vim.list_extend(vim.list_extend({ bin }, M.resume_args(s, cfg)), cfg.args or {})
+  return vim.list_extend(vim.list_extend(M.prefix(bin, cfg), M.resume_args(s, cfg)), cfg.args or {})
 end
 
 -- handback returns root's session from the TUI. The TUI may have moved to

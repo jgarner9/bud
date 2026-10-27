@@ -89,6 +89,13 @@ eq(claude.argv("claude", {}, { resume = "continue", args = { "--model", "x" } })
 eq(claude.argv("claude", {}, { resume = "new" })[8], nil, "argv new")
 eq(claude.argv("claude", { session_id = "abc" }, { resume = "new" })[9], "abc", "argv resumes its own")
 
+-- ai.claude.command wraps claude (Headroom), passing the rest on
+eq(
+  vim.list_slice(claude.argv("claude", {}, { resume = "new", command = { "headroom", "wrap", "claude", "--" } }), 1, 5),
+  { "headroom", "wrap", "claude", "--", "-p" },
+  "a wrapper goes first"
+)
+
 -- a message mentions context files first
 local msg = vim.json.decode(claude.message("hi", { "a.go" }))
 eq(msg.message.content, "Context: @a.go\n\nhi", "context mentions")

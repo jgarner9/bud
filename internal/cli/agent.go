@@ -2,7 +2,9 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"syscall"
 
 	"jgarner.dev/bud/internal/claude"
@@ -61,6 +63,13 @@ func agent(g *Globals, args []string) error {
 		}
 	}
 	argv := []string{bin}
+	if len(s.AI.Claude.Command) > 0 {
+		wrapper, err := exec.LookPath(s.AI.Claude.Command[0])
+		if err != nil {
+			return fmt.Errorf("ai.claude.command: %w", err)
+		}
+		argv = append([]string{wrapper}, s.AI.Claude.Command[1:]...)
+	}
 	if s.AI.Claude.Resume == "continue" {
 		argv = append(argv, "--continue")
 	}

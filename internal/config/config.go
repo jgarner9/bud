@@ -65,6 +65,9 @@ type Claude struct {
 	// a session nothing has used for this long is stopped (D49); 0 never
 	IdleMinutes int      `json:"idle_minutes"`
 	Args        []string `json:"args"`
+	// what runs claude, when it isn't claude itself: a wrapper that passes
+	// what follows on, such as ["headroom", "wrap", "claude", "--"]
+	Command []string `json:"command"`
 }
 
 // Profiles are the install profiles

@@ -32,6 +32,20 @@ func TestAgent(t *testing.T) {
 		t.Fatalf("ran %q in %s", argv, dir)
 	}
 
+	// ai.claude.command wraps it
+	wrapper := filepath.Join(filepath.Dir(bin), "headroom")
+	os.WriteFile(wrapper, []byte("#!/bin/sh\n"), 0o755)
+	state := os.Getenv("XDG_STATE_HOME")
+	os.MkdirAll(filepath.Join(state, "bud"), 0o755)
+	os.WriteFile(filepath.Join(state, "bud", "config.json"), []byte(`{"ai": {"claude": {"command": ["headroom", "wrap", "claude", "--"]}}}`), 0o644)
+	if err := agent(&Globals{}, []string{project}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(argv, []string{wrapper, "wrap", "claude", "--", "--continue"}) {
+		t.Fatalf("wrapped argv %q", argv)
+	}
+	os.Remove(filepath.Join(state, "bud", "config.json"))
+
 	if err := agent(&Globals{}, []string{project, file}); err == nil {
 		t.Fatal("two paths accepted")
 	}

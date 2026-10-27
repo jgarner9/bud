@@ -41,7 +41,7 @@ lua-lint: (_need "stylua") (_need "selene")
 # go vet, gofmt check, Lua lint and shellcheck
 lint: fmt-check lua-lint
   go vet ./...
-  shellcheck install.sh scripts/smoke.sh scripts/lang-check.sh
+  shellcheck install.sh scripts/*.sh
 
 # run the headless Lua tests in tests/lua
 lua-test:
@@ -51,13 +51,17 @@ lua-test:
 smoke:
   sh scripts/smoke.sh
 
+# install.sh's checksum and signature checks against fake signed releases
+install-test:
+  sh scripts/install-test.sh </dev/null
+
 # install every language's tooling into a throwaway dir and check it on sample
 # projects, e.g. just lang-check go (needs network, tree-sitter, node, python3)
 lang-check *langs:
   sh scripts/lang-check.sh "$@"
 
 # everything CI checks (lint + tests + smoke)
-check: lint test lua-test smoke
+check: lint test lua-test install-test smoke
 
 # fail with an install hint when a tool isn't on PATH
 [private]

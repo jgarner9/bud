@@ -1,6 +1,7 @@
 #!/bin/sh
-# Bud installer: fetches the bud release binary for this OS/arch, verifies its
-# checksum, puts it in ~/.local/bin, and asks before running `bud install`.
+# Bud installer: fetches the bud release binary for this OS/arch, verifies the
+# signature on checksums.txt and then the archive's checksum (D7), puts it in
+# ~/.local/bin, and asks before running `bud install`.
 #
 #   curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh
 #
@@ -12,11 +13,17 @@
 #   --no-install         only install the binary, skip `bud install`
 #
 # The same options can be set with BUD_VERSION, BUD_BIN_DIR, BUD_PROFILE,
-# BUD_YES=1 and BUD_NO_INSTALL=1.
+# BUD_YES=1 and BUD_NO_INSTALL=1. BUD_RELEASE_URL downloads from somewhere
+# other than GitHub (a mirror, or the tests); the signature still has to match.
 
 set -eu
 
 REPO="jgarner9/bud"
+
+# The release key's public half (D7, D41). Empty until the key exists: until
+# then only the checksum is checked (D43). Keep it in step with
+# internal/updater.ReleaseKey
+RELEASE_KEY=""
 VERSION="${BUD_VERSION:-latest}"
 BIN_DIR="${BUD_BIN_DIR:-$HOME/.local/bin}"
 PROFILE="${BUD_PROFILE:-full}"
@@ -83,7 +90,9 @@ else
 	die "sha256sum or shasum is required to verify the download"
 fi
 
-if [ "$VERSION" = latest ]; then
+if [ -n "${BUD_RELEASE_URL:-}" ]; then
+	base="$BUD_RELEASE_URL"
+elif [ "$VERSION" = latest ]; then
 	base="https://github.com/$REPO/releases/latest/download"
 else
 	base="https://github.com/$REPO/releases/download/$VERSION"
@@ -96,6 +105,16 @@ trap 'rm -rf "$tmp"' EXIT INT TERM
 say "downloading $archive ($VERSION)"
 fetch "$base/$archive" "$tmp/$archive" || die "download failed: $base/$archive"
 fetch "$base/checksums.txt" "$tmp/checksums.txt" || die "download failed: $base/checksums.txt"
+
+if [ -n "$RELEASE_KEY" ]; then
+	command -v ssh-keygen >/dev/null 2>&1 || die "ssh-keygen (OpenSSH) is required to verify the release signature"
+	fetch "$base/checksums.txt.sig" "$tmp/checksums.txt.sig" || die "download failed: $base/checksums.txt.sig"
+	printf 'bud-release %s\n' "$RELEASE_KEY" >"$tmp/allowed_signers"
+	ssh-keygen -Y verify -f "$tmp/allowed_signers" -I bud-release -n bud-release \
+		-s "$tmp/checksums.txt.sig" <"$tmp/checksums.txt" >/dev/null 2>&1 ||
+		die "checksums.txt isn't signed by bud's release key; not installing"
+	say "signature ok"
+fi
 
 want="$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")"
 [ -n "$want" ] || die "no checksum listed for $archive"

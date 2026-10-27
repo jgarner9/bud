@@ -20,6 +20,7 @@ just build           # ./bud (gitignored)
 just fmt             # gofmt -w .
 just lua-fmt         # stylua over nvim/ and scripts/
 just lua-test        # headless Lua tests in tests/lua (plain asserts, no framework)
+just install-test    # install.sh's checks against fake releases signed with a throwaway key
 just smoke           # sync the config into temp XDG dirs, restore plugins, start nvim headless (needs network)
 just lang-check [go] # install every language's tooling in temp XDG dirs, check each on a sample project (slow, needs network)
 just snapshot        # local GoReleaser build into dist/, needs goreleaser installed
@@ -75,7 +76,10 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 ## Release and install
 
-Pushing a `v*` tag runs `.github/workflows/release.yml` (GoReleaser): linux/darwin × amd64/arm64 archives plus `checksums.txt`. Archive names deliberately leave out the version (`bud_<os>_<arch>.tar.gz`) because `install.sh` downloads from `releases/latest/download/<name>`, so keep `.goreleaser.yaml` and `install.sh` in sync. `install.sh` must stay POSIX `sh` and shellcheck-clean. It verifies the checksum, installs to `~/.local/bin`, and asks on `/dev/tty` before running `bud install`, because stdin is the script under `curl | sh`.
+Pushing a `v*` tag runs `.github/workflows/release.yml` (GoReleaser): linux/darwin × amd64/arm64 archives plus `checksums.txt`. Archive names deliberately leave out the version (`bud_<os>_<arch>.tar.gz`) because `install.sh` downloads from `releases/latest/download/<name>`, so keep `.goreleaser.yaml` and `install.sh` in sync. `install.sh` must stay POSIX `sh` and shellcheck-clean. It verifies the signature on `checksums.txt` with `ssh-keygen -Y verify` when its `RELEASE_KEY` is pinned (empty until the real key exists, D41/D43; keep it in step with `updater.ReleaseKey`), then the checksum, installs to `~/.local/bin`, and asks on `/dev/tty` before running `bud install`, because stdin is the script under `curl | sh`.
+
+
+**Signing.** The release workflow runs `scripts/sign-release.sh` only when the `BUD_RELEASE_KEY` Actions secret is set; it signs `dist/checksums.txt` under namespace `bud-release`, refuses if the key doesn't match install.sh's pinned `RELEASE_KEY`, and uploads `checksums.txt.sig`.
 
 ## Tests
 

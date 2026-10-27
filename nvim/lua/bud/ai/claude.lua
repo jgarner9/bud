@@ -18,7 +18,7 @@
 --   claude.send("explain this", { context = { "lua/x.lua" } })
 --   claude.on("message", function(ev, session) ... end)
 --   claude.interrupt()
---   claude.status()                        -- starting|ready|busy|stopped|missing
+--   claude.status()                        -- starting|ready|busy|stopped|missing|term
 
 local M = {}
 
@@ -103,12 +103,19 @@ end
 -- once it has one, else the most recent unless resume is "new"
 function M.argv(bin, s, cfg)
   local argv = { bin, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose" }
-  if s.session_id then
-    vim.list_extend(argv, { "--resume", s.session_id })
-  elseif cfg.resume == "continue" then
-    table.insert(argv, "--continue")
+  return vim.list_extend(vim.list_extend(argv, M.resume_args(s, cfg)), cfg.args or {})
+end
+
+-- resume_args picks the conversation: the session's own once it has one, the
+-- most recent after the terminal had it (its id may have moved on) or when
+-- resume is "continue", else a new one
+function M.resume_args(s, cfg)
+  if s.session_id and not s.continue_next then
+    return { "--resume", s.session_id }
+  elseif s.continue_next or cfg.resume == "continue" then
+    return { "--continue" }
   end
-  return vim.list_extend(argv, cfg.args or {})
+  return {}
 end
 
 -- handle turns one stream-json event into bud's events
@@ -203,11 +210,14 @@ local function spawn(s)
         local wanted = s.stopping
         s.job, s.stopping, s.partial = nil, nil, nil
         s.crashed = not wanted
-        set_status(
-          s,
-          "stopped",
-          s.crashed and ("Claude Code exited (" .. code .. ")" .. (s.stderr and ": " .. s.stderr or "")) or nil
-        )
+        -- a handover stopped it, and the terminal has the session now
+        if not s.term then
+          set_status(
+            s,
+            "stopped",
+            s.crashed and ("Claude Code exited (" .. code .. ")" .. (s.stderr and ": " .. s.stderr or "")) or nil
+          )
+        end
         emit("exit", { code = code, crashed = s.crashed }, s)
       end,
     })
@@ -216,7 +226,7 @@ local function spawn(s)
       s.crashed = true
       return
     end
-    s.job, s.crashed, s.stderr = job, false, nil
+    s.job, s.crashed, s.stderr, s.continue_next = job, false, nil, nil
     -- what was sent while it started
     for _, line in ipairs(s.queue) do
       vim.fn.chansend(job, line)
@@ -244,10 +254,41 @@ function M.session(root, opts)
     vim.list_extend(s.context, opts.context)
   end
   s.last_used = now()
-  if not s.job and not s.starting then
+  if not s.job and not s.starting and not s.term then
     spawn(s)
   end
   return s
+end
+
+-- handover gives root's session to Claude Code's own TUI (D48): the headless
+-- job stops, and nothing can send until handback. It returns the TUI's argv,
+-- or nil and why it can't run
+function M.handover(root)
+  local bin = M.bin()
+  if not bin then
+    return nil, "Claude Code isn't installed: run bud claude setup"
+  end
+  root = root_of(root)
+  local s = sessions[root] or { root = root, queue = {}, context = {} }
+  sessions[root] = s
+  if s.job then
+    s.stopping = true
+    vim.fn.jobstop(s.job)
+  end
+  s.starting, s.queue, s.term, s.last_used = nil, {}, true, now()
+  set_status(s, "term")
+  local cfg = settings()
+  return vim.list_extend(vim.list_extend({ bin }, M.resume_args(s, cfg)), cfg.args or {})
+end
+
+-- handback returns root's session from the TUI. The TUI may have moved to
+-- another conversation, so the next start continues the most recent one
+function M.handback(root)
+  local s = sessions[root_of(root)]
+  if s and s.term then
+    s.term, s.continue_next = nil, true
+    set_status(s, "stopped")
+  end
 end
 
 -- message is the stream-json line for text, with files to mention first
@@ -266,6 +307,10 @@ end
 function M.send(text, opts)
   opts = opts or {}
   local s = M.session(opts.root)
+  if s.term then
+    vim.notify("bud: Claude Code is open in its terminal (<leader>ac)", vim.log.levels.INFO)
+    return false
+  end
   if s.status == "missing" then
     vim.notify("bud: " .. (s.why or "Claude Code isn't available"), vim.log.levels.WARN)
     return false
@@ -342,6 +387,7 @@ function M.reap(minutes, at)
       M.stop(s.root)
     end
   end
+  require("bud.ai.term").reap(minutes, at)
 end
 
 -- statusline is the session's part of the status line: nothing until there's
@@ -355,7 +401,14 @@ function M.statusline()
   if s.crashed then
     return icon .. " crashed, <leader>ar"
   end
-  local label = ({ starting = "starting", ready = "", busy = "thinking", stopped = "idle", missing = "not set up" })[s.status]
+  local label = ({
+    starting = "starting",
+    ready = "",
+    busy = "thinking",
+    stopped = "idle",
+    missing = "not set up",
+    term = "in terminal",
+  })[s.status]
   return label == "" and icon or (icon .. " " .. label)
 end
 
@@ -366,7 +419,9 @@ function M.setup()
   local cfg = settings()
   vim.api.nvim_create_user_command("BudClaude", function(o)
     local sub = o.fargs[1] or "status"
-    if sub == "restart" then
+    if sub == "term" then
+      require("bud.ai.term").open()
+    elseif sub == "restart" then
       M.restart()
     elseif sub == "stop" then
       M.stop()
@@ -376,11 +431,14 @@ function M.setup()
     end
   end, {
     nargs = "?",
-    desc = "Claude Code session: status, restart or stop",
+    desc = "Claude Code: its own TUI (term), or the session's status, restart or stop",
     complete = function()
-      return { "status", "restart", "stop" }
+      return { "term", "status", "restart", "stop" }
     end,
   })
+  vim.keymap.set("n", "<leader>ac", function()
+    require("bud.ai.term").toggle()
+  end, { desc = "Claude Code (its own TUI)" })
   vim.keymap.set("n", "<leader>ar", function()
     M.restart()
   end, { desc = "Restart Claude Code" })

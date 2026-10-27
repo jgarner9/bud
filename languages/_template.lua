@@ -19,12 +19,15 @@ return {
     lang_ls = {},
   },
 
-  -- nvim-lint linter names, run on open, on write and on leaving insert mode
+  -- nvim-lint linter names, run on open, on write and on leaving insert mode.
+  -- A list covers every filetype above; a table by filetype, like
+  -- { lang = { "lang-lint" } }, covers only the ones it names
   lint = { "lang-lint" },
 
   -- conform.nvim formatter names, run in order on write unless config.json sets
-  -- "format_on_save": false, and by hand with <leader>cf. With none, the LSP formats
-  format = { "lang-fmt" },
+  -- "format_on_save": false, and by hand with <leader>cf. A list or a table by
+  -- filetype, like lint. A filetype with none gets its LSP server's formatting
+  format = { lang = { "lang-fmt" } },
 
   -- Mason packages: the servers, linters and formatters above, installed when
   -- bud install / bud update runs. Mason names can differ from the ones above

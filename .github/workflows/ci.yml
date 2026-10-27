@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: shellcheck install.sh scripts/smoke.sh
+      - run: shellcheck install.sh scripts/smoke.sh scripts/lang-check.sh
 
   lua:
     runs-on: ubuntu-latest
@@ -44,8 +44,8 @@ jobs:
           unzip -o "$RUNNER_TEMP/selene.zip" -d "$RUNNER_TEMP/bin"
           chmod +x "$RUNNER_TEMP/bin/stylua" "$RUNNER_TEMP/bin/selene"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - run: stylua --check nvim scripts tests
-      - run: selene nvim scripts tests
+      - run: stylua --check nvim scripts tests languages
+      - run: selene nvim scripts tests languages
 
   smoke:
     runs-on: ubuntu-latest

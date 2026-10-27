@@ -5,7 +5,12 @@
 -- ten minutes for a restore hook's downloads and builds
 local restore_timeout = 600000
 
--- the enabled languages' filetypes, which the LSP side loads on; nil with
+-- Mason's bin dir goes on PATH now, the way mason.setup() does it, so servers,
+-- linters and formatters are found without loading mason first
+vim.env.MASON = vim.fn.stdpath("data") .. "/mason"
+vim.env.PATH = vim.env.MASON .. "/bin:" .. vim.env.PATH
+
+-- the enabled languages' filetypes, which the LSP and lint sides load on; nil with
 -- none, since an empty ft list would never load the plugin
 local filetypes = vim.tbl_keys(require("bud.lang").filetypes())
 table.sort(filetypes)
@@ -15,22 +20,20 @@ end
 
 return {
   {
-    -- ahead of nvim-lspconfig, so on a shared first filetype the servers are on PATH before they start
     src = "mason-org/mason.nvim",
     version = vim.version.range("2"),
-    -- ~3 ms to set up, so it waits for the first buffer of an enabled language too
-    ft = filetypes,
+    -- ~3 ms to set up, and PATH is handled above, so only its UI loads it
     cmd = { "Mason", "MasonInstall", "MasonLog" },
     config = function()
-      -- puts Mason's bin dir on PATH, where the servers, linters and formatters are found
-      require("mason").setup()
+      -- PATH is already set, so mason must not prepend its bin dir again
+      require("mason").setup({ PATH = "skip" })
     end,
     restore = function()
       local names = require("bud.lang").collect("mason")
       if #names == 0 then
         return
       end
-      require("mason").setup()
+      require("mason").setup({ PATH = "skip" })
       local registry = require("mason-registry")
       local ok, err = registry.refresh()
       if not ok then
@@ -118,6 +121,9 @@ return {
       local enabled = lang.filetypes()
       require("conform").setup({
         formatters_by_ft = lang.by_ft("format"),
+        -- only in projects with a Prettier config, so format on save doesn't
+        -- rewrite every file of a repo that doesn't use it
+        formatters = { prettier = { require_cwd = true } },
         -- a language with no formatters gets its LSP server's formatting
         default_format_opts = { lsp_format = "fallback" },
         -- only bud's languages, so a stray file isn't reformatted by surprise
@@ -134,7 +140,7 @@ return {
   },
   {
     src = "mfussenegger/nvim-lint",
-    event = { "BufReadPost", "BufNewFile" },
+    ft = filetypes,
     config = function()
       local lint = require("lint")
       lint.linters_by_ft = require("bud.lang").by_ft("lint")
@@ -146,7 +152,8 @@ return {
         end
         return type(cmd) == "string" and vim.fn.executable(cmd) == 1
       end
-      vim.api.nvim_create_autocmd({ "BufReadPost", "BufWritePost", "InsertLeave" }, {
+      -- FileType rather than BufReadPost, which runs before the filetype is known
+      vim.api.nvim_create_autocmd({ "FileType", "BufWritePost", "InsertLeave" }, {
         group = vim.api.nvim_create_augroup("bud.lang.lint", {}),
         desc = "lint the buffer",
         callback = function()

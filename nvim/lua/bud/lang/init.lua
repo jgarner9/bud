@@ -19,13 +19,14 @@ M.config_file = vim.fn.stdpath("state") .. "/config.json"
 M.failed = {}
 M.unknown = {}
 
--- the field each spec may set, with its type; "list" is a list of strings
+-- the field each spec may set, with its type: "list" is a list of strings, and
+-- "by_ft" is a list for every filetype or a table of lists by filetype
 local fields = {
   filetypes = "list",
   treesitter = "list",
   lsp = "table",
-  lint = "list",
-  format = "list",
+  lint = "by_ft",
+  format = "by_ft",
   mason = "list",
   system = "list",
   root = "list",
@@ -45,6 +46,29 @@ local function is_list(v)
   return true
 end
 
+-- is_by_ft reports whether v is a table of string lists keyed by filetype
+local function is_by_ft(v)
+  if type(v) ~= "table" or vim.islist(v) then
+    return false
+  end
+  for ft, names in pairs(v) do
+    if type(ft) ~= "string" or not is_list(names) then
+      return false
+    end
+  end
+  return true
+end
+
+local checks = {
+  list = { is_list, "list of strings" },
+  by_ft = {
+    function(v)
+      return is_list(v) or is_by_ft(v)
+    end,
+    "list of strings, or a table of them by filetype",
+  },
+}
+
 -- validate returns an error for the first thing wrong with spec, or nil
 local function validate(spec)
   if type(spec) ~= "table" then
@@ -55,13 +79,24 @@ local function validate(spec)
     if not want then
       return ("unknown field %q"):format(tostring(key))
     end
-    local ok = want == "list" and is_list(value) or (want ~= "list" and type(value) == want)
-    if not ok then
-      return ("%s should be a %s"):format(key, want == "list" and "list of strings" or want)
+    local check = checks[want]
+    if check and not check[1](value) then
+      return ("%s should be a %s"):format(key, check[2])
+    elseif not check and type(value) ~= want then
+      return ("%s should be a %s"):format(key, want)
     end
   end
   if not spec.filetypes or #spec.filetypes == 0 then
     return "filetypes is required"
+  end
+  for key, want in pairs(fields) do
+    if want == "by_ft" and is_by_ft(spec[key]) then
+      for ft in pairs(spec[key]) do
+        if not vim.tbl_contains(spec.filetypes, ft) then
+          return ("%s names filetype %q, which isn't in filetypes"):format(key, ft)
+        end
+      end
+    end
   end
   for server, settings in pairs(spec.lsp or {}) do
     if type(server) ~= "string" or type(settings) ~= "table" then
@@ -181,14 +216,17 @@ function M.filetypes()
   return set
 end
 
--- by_ft maps each enabled filetype to the names a list field holds, for
--- conform's formatters_by_ft and nvim-lint's linters_by_ft. Two specs sharing a
--- filetype get their lists joined, without repeats
+-- by_ft maps each enabled filetype to the names a by_ft field (lint, format)
+-- holds, for conform's formatters_by_ft and nvim-lint's linters_by_ft. A list
+-- applies to every filetype of its spec. Two specs sharing a filetype get their
+-- lists joined, without repeats
 function M.by_ft(field)
   local out = {}
   for _, spec in ipairs(M.enabled()) do
+    local value = spec[field] or {}
     for _, ft in ipairs(spec.filetypes) do
-      for _, name in ipairs(spec[field] or {}) do
+      local names = vim.islist(value) and value or value[ft] or {}
+      for _, name in ipairs(names) do
         out[ft] = out[ft] or {}
         if not vim.tbl_contains(out[ft], name) then
           table.insert(out[ft], name)

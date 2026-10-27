@@ -31,17 +31,17 @@ fmt-check:
 
 # format Lua in place
 lua-fmt: (_need "stylua")
-  stylua nvim scripts tests
+  stylua nvim scripts tests languages
 
 # stylua check and selene lint over the Lua config
 lua-lint: (_need "stylua") (_need "selene")
-  stylua --check nvim scripts tests
-  selene nvim scripts tests
+  stylua --check nvim scripts tests languages
+  selene nvim scripts tests languages
 
 # go vet, gofmt check, Lua lint and shellcheck
 lint: fmt-check lua-lint
   go vet ./...
-  shellcheck install.sh scripts/smoke.sh
+  shellcheck install.sh scripts/smoke.sh scripts/lang-check.sh
 
 # run the headless Lua tests in tests/lua
 lua-test:
@@ -50,6 +50,11 @@ lua-test:
 # sync the config into a throwaway dir, restore plugins, start nvim headless (needs network)
 smoke:
   sh scripts/smoke.sh
+
+# install every language's tooling into a throwaway dir and check it on sample
+# projects, e.g. just lang-check go (needs network, tree-sitter, node, python3)
+lang-check *langs:
+  sh scripts/lang-check.sh "$@"
 
 # everything CI checks (lint + tests + smoke)
 check: lint test lua-test smoke

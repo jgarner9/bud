@@ -49,7 +49,7 @@ write(
   treesitter = { "go", "gomod" },
   lsp = { gopls = { settings = { gopls = { gofumpt = true } } } },
   lint = { "golangcilint" },
-  format = { "goimports", "gofumpt" },
+  format = { go = { "goimports", "gofumpt" } },
   mason = { "gopls", "goimports" },
   root = { "go.mod" },
 }]]
@@ -91,9 +91,9 @@ eq(lang.specs().posix ~= nil, true, "disabled specs are still loaded")
 write(lang.config_file, '{"languages": ["go", "bash", "posix"]}')
 lang.reload()
 eq(lang.filetypes(), { go = true, gomod = true, sh = true, bash = true }, "filetypes")
+-- go's format is by filetype, so gomod gets none
 eq(lang.by_ft("format"), {
   go = { "goimports", "gofumpt" },
-  gomod = { "goimports", "gofumpt" },
   sh = { "shfmt", "beautysh" },
   bash = { "shfmt" },
 }, "formatters by filetype")
@@ -119,6 +119,8 @@ local broken = {
   badlsp = [[return { filetypes = { "t" }, lsp = { "server" } }]],
   syntax = [[return {]],
   notable = [[return "go"]],
+  badft = [[return { filetypes = { "t" }, format = { u = { "x" } } }]],
+  badbyft = [[return { filetypes = { "t" }, lint = { t = "x" } }]],
 }
 for name, text in pairs(broken) do
   write(dir .. "/" .. name .. ".lua", text)
@@ -128,8 +130,13 @@ lang.reload()
 eq(names(), { "bash", "go", "posix" }, "valid specs survive broken ones")
 local failed = vim.deepcopy(lang.failed)
 table.sort(failed)
-eq(failed, { "badlsp", "nofts", "notable", "syntax", "typo", "wrongtype" }, "failed specs")
-eq(#notified, 6, "each broken spec is reported")
+eq(failed, { "badbyft", "badft", "badlsp", "nofts", "notable", "syntax", "typo", "wrongtype" }, "failed specs")
+eq(#notified, 8, "each broken spec is reported")
+eq(
+  vim.tbl_contains(notified, [[bud: language badft: format names filetype "u", which isn't in filetypes]]),
+  true,
+  "names the stray filetype"
+)
 eq(vim.tbl_contains(notified, 'bud: language typo: unknown field "formatter"'), true, "names the bad field")
 
 -- a broken spec named in the list isn't also unknown

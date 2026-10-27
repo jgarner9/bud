@@ -17,6 +17,11 @@ export XDG_DATA_HOME="$root/data"
 export XDG_STATE_HOME="$root/state"
 export XDG_CACHE_HOME="$root/cache"
 
+# no languages, so the restore doesn't build parsers or install Mason packages;
+# smoke.lua still checks every spec loads, and scripts/lang-check.sh covers the rest
+mkdir -p "$XDG_STATE_HOME/bud"
+echo '{"languages": []}' >"$XDG_STATE_HOME/bud/config.json"
+
 echo "smoke: $(nvim --version | head -n 1)"
 "$root/bud" update
 

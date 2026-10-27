@@ -47,6 +47,17 @@ else
   end
 end
 
+-- every shipped spec loads, enabled or not
+local lang_ok, lang = pcall(require, "bud.lang")
+if not lang_ok then
+  table.insert(problems, "bud.lang didn't load: " .. tostring(lang))
+else
+  lang.specs()
+  for _, name in ipairs(lang.failed) do
+    table.insert(problems, "language spec failed to load: " .. name)
+  end
+end
+
 if #problems > 0 then
   -- Neovim's own error output may not end in a newline. selene's Lua 5.1
   -- definitions leave out file methods on io.stderr, so it flags this wrongly

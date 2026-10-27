@@ -36,7 +36,9 @@ return {
       vim.keymap.set("n", "<leader>M", "<cmd>Mason<cr>", { desc = "Mason" })
     end,
     restore = function()
-      local names = require("bud.lang").collect("mason")
+      local lang = require("bud.lang")
+      -- the debug adapters too (JGA-108)
+      local names = vim.list_extend(lang.collect("mason"), lang.collect("dap"))
       if #names == 0 then
         return
       end

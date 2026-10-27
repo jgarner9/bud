@@ -50,6 +50,8 @@ return {
   -- config.json has no "languages" list
   minimal = false,
 
-  -- the debug adapter's Mason name. Debugging isn't wired up yet (JGA-108)
+  -- the debug adapter's Mason name, installed with the others. bud knows how
+  -- to run delve, debugpy, js-debug-adapter and codelldb (bud.dap.adapters);
+  -- another one installs but needs its definition added there
   dap = nil,
 }

@@ -35,4 +35,6 @@ return {
   review = "", -- nf-fa-eye
   todo = "", -- nf-fa-tasks
   clock = "", -- nf-fa-clock_o
+  breakpoint = "", -- nf-fa-circle
+  stopped = "", -- nf-fa-arrow_right
 }

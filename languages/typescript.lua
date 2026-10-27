@@ -15,4 +15,5 @@ return {
   -- Mason installs all three from npm
   system = { "node" },
   root = { "tsconfig.json", "jsconfig.json", "package.json", ".git" },
+  dap = "js-debug-adapter",
 }

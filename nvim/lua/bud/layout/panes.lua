@@ -35,3 +35,18 @@ layout.register("chat", {
     return require("bud.chat.pane").open({ side = pane.side, size = pane.size, focus = false })
   end,
 })
+
+-- the debugger panel (JGA-108): nvim-dap-view, loaded with nvim-dap
+layout.register("debug", {
+  open = function()
+    local pack = require("bud.pack")
+    pack.load("nvim-dap")
+    pack.load("nvim-dap-view")
+    require("dap-view").open()
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if vim.bo[vim.api.nvim_win_get_buf(win)].filetype:match("^dap%-view") then
+        return win
+      end
+    end
+  end,
+})

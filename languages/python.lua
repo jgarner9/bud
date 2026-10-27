@@ -23,4 +23,5 @@ return {
   system = { "python3" },
   root = { "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", ".git" },
   minimal = true,
+  dap = "debugpy",
 }

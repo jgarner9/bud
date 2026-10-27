@@ -13,4 +13,5 @@ return {
   mason = { "clangd" },
   system = { "cc" },
   root = { "compile_commands.json", "compile_flags.txt", ".clangd", "Makefile", "CMakeLists.txt", ".git" },
+  dap = "codelldb",
 }

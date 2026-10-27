@@ -260,7 +260,9 @@ end
 function M.collect(field)
   local out = {}
   for _, spec in ipairs(M.enabled()) do
-    for _, name in ipairs(spec[field] or {}) do
+    local value = spec[field]
+    -- a single name (dap) counts as a list of one
+    for _, name in ipairs(type(value) == "string" and { value } or value or {}) do
       if not vim.tbl_contains(out, name) then
         table.insert(out, name)
       end

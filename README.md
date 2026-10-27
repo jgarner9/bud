@@ -154,6 +154,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and which-key shows the rest.
 | <kbd>Space</kbd> <kbd>a</kbd> <kbd>c</kbd> | Claude Code's own TUI |
 | <kbd>g</kbd> <kbd>a</kbd> · <kbd>q</kbd> | In a proposed edit: accept · reject |
 | <kbd>Space</kbd> <kbd>,</kbd> | Settings |
+| <kbd>F5</kbd> · <kbd>F9</kbd> · <kbd>Space</kbd> <kbd>D</kbd> | Debug: start or continue · breakpoint · the debugger panel |
 
 ## Roadmap
 
@@ -165,7 +166,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and which-key shows the rest.
 - [x] Signed releases and a nightly channel
 - [x] Pane layouts, a Kitty/Ghostty launcher, and app bundles
 - [x] **Claude Code built in:** one session per project, shared by side-pane chat, full-screen chat, inline actions and a tool generator, with edits as diffs you accept
-- [ ] Polish: settings screen, `bud config`, completions, docs, more languages, debugging
+- [x] Polish: settings screen, `bud config`, completions, docs, Lua, debugging
 
 The full plan and every decision made so far live in [`BASE.md`](BASE.md). How-tos and the config reference are in [`docs/`](docs/): [config](docs/config.md), [languages](docs/languages.md), [tools](docs/tools.md), [layouts](docs/layouts.md), [building a Claude TUI](docs/claude-tui.md) and [troubleshooting](docs/troubleshooting.md).
 

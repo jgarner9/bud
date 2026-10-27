@@ -15,7 +15,7 @@ end
 
 -- the shipped layouts all load
 layout.dir = root .. "/layouts"
-eq(layout.names(), { "default", "focus", "review" }, "shipped layouts")
+eq(layout.names(), { "debug", "default", "focus", "review" }, "shipped layouts")
 for _, name in ipairs(layout.names()) do
   local spec, err = layout.load(name)
   eq(err, nil, name .. " loads")

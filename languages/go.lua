@@ -13,4 +13,5 @@ return {
   -- Mason builds gopls and goimports with the go toolchain
   system = { "go" },
   root = { "go.work", "go.mod", ".git" },
+  dap = "delve",
 }

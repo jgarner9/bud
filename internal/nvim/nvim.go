@@ -37,6 +37,11 @@ func Launch(root string, files []string, layout string) error {
 	}
 
 	vars := env()
+	// the config calls back into bud (the dashboard runs bud doctor), and this
+	// binary may not be the one on PATH
+	if self, err := os.Executable(); err == nil {
+		vars = setEnv(vars, "BUD_BIN", self)
+	}
 	if layout != "" {
 		vars = setEnv(vars, "BUD_LAYOUT", layout)
 	}

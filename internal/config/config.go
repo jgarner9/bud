@@ -36,6 +36,9 @@ type Update struct {
 
 type Dashboard struct {
 	Style string `json:"style"` // "silly" or "minimal"
+	// optional extras, off by default (JGA-99)
+	Scratchpad bool `json:"scratchpad"` // x opens a persistent notes buffer
+	Sessions   bool `json:"sessions"`   // opening a project restores its last session
 }
 
 type AI struct {

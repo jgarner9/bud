@@ -105,7 +105,7 @@ func install(g *Globals, args []string, yes bool) error {
 	}
 
 	fmt.Println()
-	if err := report(doctor.Run()); err != nil {
+	if err := report(doctor.Run(doctor.Options{})); err != nil {
 		return err
 	}
 	fmt.Println("\nAll set. Run 'bud' to start.")

@@ -55,6 +55,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D34 | **`bud lang` manages languages; your specs live in `user-tools/languages/` and are opt-in.** | 2026-10-27 | `ls` shows every spec (enabled or not, bud's or yours, broken ones with why, and enabled names with no spec). `enable` writes the list into `config.json` (starting from the preset when there's none), installs the new languages' system deps after asking, then runs `bud.pack.restore()` for their parsers and Mason packages; it refuses a spec still identical to the template, whose placeholders would go to the package manager. `disable` only edits the list: Mason packages and parsers stay. `add` copies the template into `~/.local/share/bud/user-tools/languages/` (not `~/.config/bud`, which is bud's, D21, and which `bud dev link` swaps out) and refuses a name bud ships. `rm` deletes one of yours after asking and drops it from the list; bud's own can only be disabled. Presets only cover bud's own specs (the first dir `bud.lang` reads), so a new spec never switches itself on. |
 | D35 | **The startup budget is 50 ms to the first screen**, empty or on a file of any enabled language, and `bud doctor` warns past it. | 2026-10-27 | Measured on an M-series Mac with every language installed: empty start 28 ms; opening a file was 132 ms (Go), 156 ms (Python) and 214 ms (TypeScript). The causes were Neovim's python3 provider probe (60 ms, so every provider is off: bud has no remote plugins), compiling TypeScript's highlight queries (119 ms), tsc's `--version` probe when its server is enabled (43 ms) and golangci-lint's version probe when nvim-lint first runs it (57 ms). Tree-sitter highlighting, `vim.lsp.enable` and linting now start on `vim.schedule`, after the first screen, so a file shows at once and the rest arrives a moment later. Every language now opens in 40-50 ms (HTML is the slowest, from Vim's regex syntax before tree-sitter takes over). The doctor check times an empty start and one buffer per enabled language (`setfiletype`), takes the median of three, and only warns, so a slow machine never triggers an update rollback. Not a CI check: shared runners are too noisy to time. |
 | D36 | **The project registry is `projects.json`: projects, pins and last-opened times only.** | 2026-10-27 | `internal/projects` reads and writes it (unknown keys kept, atomic save); `bud.projects` reads it from Lua. Recent files per project come from Neovim's own `v:oldfiles` filtered by project root, so Go is the only writer. `bud <dir>` registers the dir, and opening files registers the repo they're in when a `.git` was found (a loose file's folder isn't a project); bare `bud` registers nothing (D18). Paths are stored with symlinks resolved, and names are the dir's name, with parent dirs added while that's taken (`api`, `work/api`). A project whose dir is gone stays registered and shows as missing (an unmounted drive comes back); `bud projects rm` forgets it. `bud projects ls / add / rm / pin / unpin` manage the list, and `bud doctor` warns when the file is unreadable. |
+| D37 | **The silly dashboard** (JGA-99's choices). | 2026-10-27 | `bud.dashboard` opens on VimEnter for bare `bud` (no files, an empty buffer, not `--headless`) and with `:BudDashboard`. The buddy is the README robot with moods (normal, happy when doctor is clean, update waiting, sleepy after midnight); the menu only lists keys that work today (p f r n L M d u q, plus x with `dashboard.scratchpad`), and `f`, `r` and `L` replay the global leader maps so they follow them. Up to five projects from the registry, pinned then recent, on keys 1-5, with git branch, changed count and ahead/behind; missing ones are hidden. Everything slow runs in the background and redraws when it's back: `git status` per project and `bud doctor --quick --json` (no startup timing) for the banners, through `BUD_BIN`, which `bud` sets to itself when it launches nvim. The health line's startup time runs from the top of `init.lua` to VimEnter. The tip of the day is a leader mapping with a description, a different one each day. Nerd Font glyphs accent the menu, projects, git status, banners and health line (`view.icons`, long-standing Font Awesome / Octicons / Devicons codepoints only, one cell wide); with the robot they're bud's visual motif in the editor, while the README stays plain ASCII because GitHub has no Nerd Font. Optional, off by default: `dashboard.scratchpad` (`x`, one notes file in the data dir) and `dashboard.sessions` (on exit, a registered project with files open saves a session; opening it from the dashboard restores it, otherwise the file picker opens). Opening a project from the dashboard doesn't update its last-opened time yet, since Lua only reads the registry. |
 
 ---
 
@@ -456,32 +457,449 @@ There are two styles, picked with `dashboard.style = "silly" | "minimal"` in con
 #### Silly style (default)
 
 ```text
+          ___
+         [o.o]        hey bud.
+         /[_]\        "what are we breaking today?"
+          ] [
 
-        ██████╗ ██╗   ██╗██████╗
-        ██╔══██╗██║   ██║██╔══██╗
-        ██████╔╝██║   ██║██║  ██║
-        ██╔══██╗██║   ██║██║  ██║
-        ██████╔╝╚██████╔╝██████╔╝
-        ╚═════╝  ╚═════╝ ╚═════╝
-              (•‿•)ノ  hey bud.
-      "what are we breaking today?"
+   p   Open project        L   Plugins
+   f   Open file           M   Mason
+   r   Recent files        d   Doctor
+   n   New file            u   Update
+   x   Scratchpad          q   Quit
 
-   p  Open project        c  Chat with bud
-   f  Open file           h  Chat history
-   r  Recent files        g  Generate a tool
-   n  New file            L  Plugins
-   s  Settings            M  Mason (tooling)
-   u  Update              q  Quit
+    Projects
+   1   bud           main  3 1
+   2   dollarwise    main 
 
-   Pinned                      Recent chats
-    ● bud         main ✱ 3      "go embed vs fs"     2h
-    ● dollarwise  main ✓        "nvim layout ideas"  1d
-
-   ⬆ v0.4.2 available, press u     ⚠ rust-analyzer missing, press d
-   ⚡ 38 ms · 41 plugins · claude ready          tip: <leader>s jumps to symbols
+    1 doctor warning, press d
+    24 ms ·  18 plugins ·  claude ready
+    tip: <Space>o  Symbols outline
 ```
 
-The tagline under the buddy rotates from a small list in the repo (`nvim/lua/bud/dashboard/taglines.lua`), for example "hey bud, what are we breaking today?", "compiling vibes…", "it works on my machine (this one)", "no thoughts, just keybinds". The buddy face changes with state: `(•‿•)` normal, `(°o°)` when an update is waiting, `(-_-)zz` after midnight.
+Nerd Font glyphs are bud's accent in the editor, alongside the robot (D37); they're shown here as the editor draws them, so they need a Nerd Font to read. The buddy is the README robot with moods (normal, happy when doctor is clean, update waiting, sleepy after midnight); the menu only lists keys that work today (p f r n L M d u q, plus x with `dashboard.scratchpad`), and `f`, `r` and `L` replay the global leader maps so they follow them. Up to five projects from the registry, pinned then recent, on keys 1-5, with git branch, changed count and ahead/behind; missing ones are hidden. Everything slow runs in the background and redraws when it's back: `git status` per project and `bud doctor --quick --json` (no startup timing) for the banners, through `BUD_BIN`, which `bud` sets to itself when it launches nvim. The health line's startup time runs from the top of `init.lua` to VimEnter. The tip of the day is a leader mapping with a description, a different one each day. Nerd Font glyphs accent the menu, projects, git status, banners and health line (`view.icons`, long-standing Font Awesome / Octicons / Devicons codepoints only, one cell wide); with the robot they're bud's visual motif in the editor, while the README stays plain ASCII because GitHub has no Nerd Font. Optional, off by default: `dashboard.scratchpad` (`x`, one notes file in the data dir) and `dashboard.sessions` (on exit, a registered project with files open saves a session; opening it from the dashboard restores it, otherwise the file picker opens). Opening a project from the dashboard doesn't update its last-opened time yet, since Lua only reads the registry. |
+
+---
+
+## 1. Repo structure
+
+```text
+bud/
+├── install.sh
+│   # the one-liner target: detect OS/arch, fetch bud binary, run `bud install`
+├── README.md
+├── go.mod
+│   # no third-party deps, so no go.sum to speak of
+├── embed.go
+│   # package bud: //go:embed for nvim/ and languages/ (later layouts/, tools/, migrations/), see D5
+├── .goreleaser.yaml
+│   # builds bud for linux/darwin × amd64/arm64, attaches to GitHub releases
+├── .github/workflows/
+│   # CI: go test, lua lint (stylua/selene), headless nvim smoke test, releases
+│
+├── cmd/bud/
+├── internal/
+│   # Go packages (not importable from outside)
+│   ├── cli/
+│   │   # one file per command (open, install, update, lang, tools, ...)
+│   ├── config/
+│   │   # reads/writes ~/.local/state/bud/config.json (D13), merges defaults
+│   ├── paths/
+│   │   # XDG paths on Linux, ~/Library on macOS, one place to resolve them
+│   ├── installer/
+│   │   # system deps: nvim, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, fonts, plus each language's (go, python3, node)
+│   │   ├── brew.go  apt.go  dnf.go  pacman.go
+│   │   └── release.go
+│   │       # fallback: download prebuilt binaries into bud's own bin dir
+│   ├── launcher/
+│   │   # spawns the chosen terminal with the layout
+│   │   └── terminals/
+│   │       # kitty.go ghostty.go first (D11); wezterm.go alacritty.go iterm2.go later
+│   ├── projects/
+│   │   # project registry (add/remove/list/recent), backs the dashboard
+│   ├── updater/
+│   │   # release check, download + verify, binary self-replace, re-exec, rollback, migrations
+│   ├── bundle/
+│   │   # builds the .app and .desktop / AppImage
+│   ├── claude/
+│   │   # finds and checks the claude CLI (installed, logged in, version) for install and doctor
+│   ├── kit/
+│   │   # bud kit: syncs kit/ into Claude Code's user config (~/.claude), with a ledger
+│   └── doctor/
+│       # health checks
+│
+├── nvim/
+│   # the Neovim config, embedded in the binary and synced to ~/.config/bud
+│   ├── init.lua
+│   │   # tiny: set the leader, load bud.core and bud.pack
+│   ├── nvim-pack-lock.json
+│   │   # COMMITTED plugin lockfile (reproducibility)
+│   └── lua/bud/
+│       ├── core/
+│       │   # options, keymaps, autocmds, the extension loader
+│       ├── plugins/
+│       │   # vim.pack specs grouped by area (bud.pack loads them)
+│       │   ├── editor.lua  nav.lua  ui.lua  git.lua  lang.lua  ai.lua  dashboard.lua
+│       ├── lang/
+│       │   # the language engine: reads the synced languages/*, says what plugins/lang.lua wires up (D30)
+│       ├── ai/
+│       │   # claude.lua: the per-project Claude Code session + the API every AI UI uses (4.2);
+│       │   # inline actions, side-pane chat, tool generator UI (:BudGen)
+│       ├── chat/
+│       │   # full-screen chat mode + history panel + session store
+│       ├── dashboard/
+│       │   # custom start screen (silly + minimal styles, taglines.lua)
+│       ├── layout/
+│       │   # pane layout engine (reads ../../layouts/*)
+│       └── settings/
+│           # in-editor settings UI (update, toggle langs/tools, pick terminal)
+│
+├── languages/
+│   # ONE FILE PER LANGUAGE (the extension point)
+│   ├── _template.lua
+│   ├── go.lua  python.lua  typescript.lua (TS + JS)  c.lua  bash.lua  html.lua  css.lua  (D10)
+│
+├── layouts/
+│   # pane layouts (the "design" of the environment)
+│   ├── default.lua
+│   │   # e.g. tree | editor | ai, terminal along the bottom
+│   ├── focus.lua
+│   │   # editor only
+│   └── review.lua
+│       # editor + diff + git
+│
+├── tools/
+│   # curated AI-generated or hand-written tools that were "promoted"
+│   └── <tool-name>/
+│       ├── manifest.json
+│       │   # name, description, keymaps/commands it adds, deps
+│       └── init.lua
+│
+├── bundles/
+│   ├── macos/
+│   │   # Info.plist template, icon.icns, launcher stub
+│   └── linux/
+│       # bud.desktop template, icons, AppImage recipe
+│
+├── kit/
+│   # Claude Code setup: MCP servers, skills, agents, commands, hooks, instructions (see 4.1)
+│
+├── completions/
+│   # hand-written bash/zsh/fish completions (later)
+│
+├── migrations/
+│   # numbered scripts run by `bud update` when a release changes layout/paths
+│   └── 0001_example.lua
+│
+└── docs/
+    # how-tos: adding a language, writing a tool, layouts, troubleshooting
+```
+
+### Where things live on a machine (outside the repo)
+
+There's no repo clone on user machines. The `bud` binary carries the shipped files, and everything below is either synced from it or machine-local.
+
+Linux and macOS use the same XDG paths (D13), which is also where Neovim looks on both.
+
+| What                                                   | Where                                                    |
+| ------------------------------------------------------ | -------------------------------------------------------- |
+| The `bud` binary (holds the embedded config)           | `~/.local/bin/bud` (or `install.sh --bin-dir`)           |
+| Previous binary, kept for rollback                     | `~/.local/share/bud/bud.prev`                            |
+| Nvim config (synced copy of the embedded `nvim/`)      | `~/.config/bud`                                          |
+| Machine config (terminal, channel, langs, `ai.claude.*`) | `~/.local/state/bud/config.json`                         |
+| Personal generated tools (not in the repo yet)         | `~/.local/share/bud/user-tools/`                         |
+| Bud-managed binaries + Mason packages                  | `~/.local/share/bud/bin`, `~/.local/share/bud/mason`     |
+| Project registry (recent files come from Neovim's oldfiles) | `~/.local/state/bud/projects.json`                       |
+| Pinned files (`bud.marks`, per project)                | `~/.local/state/bud/marks.json`                          |
+| Chat history                                           | Claude Code's own session store (D23)                    |
+| Secrets (MCP keys)                                     | env vars or OS keychain (`secret-tool` / macOS Keychain) |
+
+`XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME` override the defaults when set.
+
+`bud` resolves all of these through `internal/paths`, so nothing else hardcodes a path.
+
+`~/.config/bud` holds a `.bud-manifest.json` listing every file the last sync wrote. Sync overwrites those files, deletes ones a newer release dropped, and never touches anything else in the directory. For working on bud itself, `bud dev link` replaces `~/.config/bud` with a symlink to a checkout's `nvim/` so Lua edits show up right away. Sync sees the symlink and leaves it alone until `bud dev unlink`.
+
+### Key architectural choices (and why)
+
+- **The binary is the release (D5).** Shipping config inside `bud` means the CLI and the editor config can never drift apart, installs need no `git`, and an update is one verified download. The cost is that a config change needs a release, which GoReleaser makes a tag push.
+- **Languages are data, not code.** Each `languages/<lang>.lua` returns a table. The Lua engine wires it up, and the Go CLI can read the same file by running `nvim --headless` to dump it as JSON (so there's no second format to keep in sync).
+- **Mason installs language tooling, Go installs system tooling.** Mason handles LSP servers, linters, formatters and debuggers per language spec. `bud install` handles Neovim itself, git, ripgrep, fd, a Nerd Font, and runtimes like node/python when a language needs them.
+- **Plugin stack (D29):** `vim.pack` (D27), native `vim.lsp.config` + nvim-lspconfig, mason.nvim, conform.nvim (format), nvim-lint (lint), nvim-treesitter, blink.cmp (completion), fzf-lua (finding things, D28), mini.nvim (jump2d, statusline), oil.nvim (file editing as a buffer), neo-tree (file tree pane), aerial.nvim (symbols outline), which-key, gitsigns + diffview-plus, catppuccin. AI is Claude Code through `bud.ai.claude` (D26), not a chat plugin.
+- **The pane layout lives inside Neovim**, not in the terminal. That way it works identically in any terminal and over SSH. An optional tmux/zellij wrapper gives persistent sessions on remote boxes.
+
+---
+
+## 2. Language specs (the extensibility contract)
+
+A language file answers six questions: what files, what parser, what LSP, what linter, what formatter, what it needs installed.
+
+```lua
+-- languages/go.lua (illustrative; languages/_template.lua documents every field)
+return {
+  filetypes  = { "go", "gomod", "gowork", "gotmpl" },
+  treesitter = { "go", "gomod", "gowork", "gosum" },
+  lsp        = { gopls = { settings = { gopls = { gofumpt = true } } } },
+  lint       = { "golangcilint" },        -- nvim-lint names
+  format     = { "goimports", "gofumpt" }, -- conform names
+  mason      = { "gopls", "golangci-lint", "goimports", "gofumpt" },
+  system     = { "go" },                -- things `bud install` makes sure exist
+  root       = { "go.work", "go.mod", ".git" },
+  minimal    = false,                   -- true: in the minimal profile's preset (D30)
+  dap        = "delve",                 -- optional debugger, not wired yet (JGA-108)
+}
+```
+
+Adding a language is: `bud lang add <name>` copies `_template.lua` into `~/.local/share/bud/user-tools/languages/`, you fill it in, then `bud lang enable <name>` installs its tools (or let the AI draft it, see section 4). Bud's own specs are in every preset; yours are only on when enabled by name. Removing is `bud lang disable <name>` (or `bud lang rm <name>` for one of yours). Enabled languages per machine are a list in `config.json`, so a small SSH box can run only `bash` and `python` while your laptop runs everything (D34).
+
+---
+
+## 3. Navigation (what "easy navigability" means here)
+
+| Need                                | Tool                       | Default key idea                      |
+| ----------------------------------- | -------------------------- | ------------------------------------- |
+| Find file / grep / buffers / recent | fzf-lua                    | `<leader>f`, `<leader>/`, `<leader>b` |
+| Jump anywhere on screen             | mini.jump2d                | `gw` (every word), `s` (by character) |
+| Pin hot files                       | `bud.marks` (bud's own)    | `<leader>1..4`                        |
+| Symbols in file / workspace         | aerial + LSP               | `<leader>o`, `<leader>S`              |
+| Go to def/refs/impl                 | LSP                        | `gd`, `gr`, `gi`                      |
+| File tree vs edit-dir-as-buffer     | neo-tree (pane) + oil.nvim | `<leader>e`, `-`                      |
+| Diagnostics list                    | fzf-lua diagnostics picker | `<leader>x`                           |
+| Switch project                      | dashboard picker           | `<leader>p`                           |
+
+A `which-key` popup documents all of it, so the keymap is self-describing.
+
+---
+
+## 4. AI layer
+
+Claude Code only, for now (D26). Every part below runs on the project's Claude Code session (4.2) and is drawn by TUIs in Neovim. Three parts:
+
+1. **Assistance:** chat pane (part of the default layout), "explain / refactor / write tests for selection" and commit-message drafting. Claude Code's own login is the only auth.
+2. **Tool generator (`:BudGen` in nvim, `bud tools gen` in the CLI):** you describe what you want ("a command that opens the test file for the current file", "add Zig support"), the AI writes either a **tool** (`manifest.json` + `init.lua`) or a **language spec**, shows you a diff, and on accept it lands in `user-tools/` and loads immediately, no restart.
+3. **Lifecycle commands** so generated stuff never rots: list, enable, disable, remove, and **promote** (move from your machine-local `user-tools/` into the repo's `tools/`, commit, push, so every machine gets it).
+
+Guardrails: generated code runs through a headless nvim load test before it's activated, a broken tool is auto-disabled with a notification, and nothing is promoted to the repo without your explicit accept.
+
+### 4.1 Claude Code setup (`bud kit`)
+
+The repo tracks the Claude Code setup you want on every machine: MCP servers, skills, subagents, slash commands, hooks and global instructions. `bud kit sync` writes it into Claude Code's user config, so every session bud starts (4.2), and any `claude` you run by hand, gets the same tools. Context7 is the first entry, and the kit grows from there.
+
+**In the repo:**
+
+```text
+kit/
+├── kit.json
+│   # the index: what's in the kit, per-profile on/off
+├── mcp/
+│   # one JSON file per MCP server
+│   └── context7.json
+├── skills/
+│   # SKILL.md folders
+├── agents/
+│   # subagent definitions (*.md with frontmatter)
+├── commands/
+│   # slash commands (*.md)
+├── hooks/
+│   # hook scripts + hooks.json
+└── CLAUDE.md
+    # your global instructions ("You are Bud. Be a bud.")
+```
+
+An MCP entry never holds a secret. It names the env vars it needs, and sync writes them as Claude Code's `${VAR}` references, which it expands at runtime:
+
+```json
+// kit/mcp/context7.json (illustrative)
+{
+  "name": "context7",
+  "description": "Up-to-date library docs",
+  "transport": "http",
+  "url": "https://mcp.context7.com/mcp",
+  "headers": { "CONTEXT7_API_KEY": "$secret:CONTEXT7_API_KEY" },
+  "profiles": ["full", "minimal"]
+}
+```
+
+**Where each piece goes:**
+
+| Kit piece         | Written to                                             |
+| ----------------- | ------------------------------------------------------ |
+| MCP servers       | `claude mcp add-json --scope user`                     |
+| Skills            | symlinked into `~/.claude/skills/`                     |
+| Agents / commands | `~/.claude/agents/`, `~/.claude/commands/`             |
+| Hooks             | merged into `~/.claude/settings.json`                  |
+| Instructions      | a fenced bud-managed block in `~/.claude/CLAUDE.md`    |
+
+These paths and commands come from Claude Code's current docs and get re-checked when sync is built.
+
+**Sync rules:**
+
+1. Bud only touches what it owns. It keeps a ledger (`~/.local/state/bud/kit-ledger.json`) of everything it wrote. When something is removed from the repo, the next sync removes it from Claude Code. Anything you set up by hand isn't in the ledger, so it's never touched.
+2. Where `claude` has a command for something (like `claude mcp add-json`), sync uses it instead of editing files. JSON files are merged key by key with `encoding/json`, keeping unknown keys.
+3. **Secrets** are resolved from env vars or the OS keychain (D15). If a secret is missing, sync warns and skips that item instead of failing.
+
+**Commands:**
+
+```text
+bud kit sync [--dry-run]                       # write the kit into Claude Code (also runs in bud update)
+bud kit status                                 # per item: synced / drifted / missing secret
+bud kit ls
+bud kit add mcp [--url … | --cmd …] <name>     # scaffold kit/mcp/<name>.json
+bud kit add skill|agent|command <name>         # scaffold (Claude can draft it, like :BudGen)
+bud kit rm <name>                              # remove from the kit (next sync uninstalls it)
+bud kit adopt <name>                           # pull something you set up by hand in ~/.claude INTO the kit
+bud kit enable|disable [--profile …] <name>
+```
+
+**Candidate tools to grow the kit** (only Context7 is decided, so pick from these):
+
+| Tool                   | Kind       | What it's for                                                                  |
+| ---------------------- | ---------- | ------------------------------------------------------------------------------ |
+| ✅ Context7            | MCP (http) | current library/framework docs                                                 |
+| GitHub                 | MCP        | PRs, issues, code search                                                       |
+| Playwright / browser   | MCP        | drive a browser to test web UIs                                                |
+| Web search (e.g. Exa)  | MCP        | fresh research beyond docs                                                     |
+| Linear / issue tracker | MCP        | tickets, if you use one                                                        |
+| Basic Memory           | MCP        | your notes knowledge base (you already use it)                                 |
+| `bud-dev` skill        | skill      | teaches Claude how _this_ repo works: add a language spec, a tool, a layout    |
+| code-reviewer          | subagent   | a second pass over a diff before you commit                                    |
+| `/commit`, `/pr`       | commands   | your house style for commit messages and PRs                                   |
+| format-on-edit         | hook       | run the language formatter after Claude edits a file                           |
+
+### 4.2 A Claude Code session alongside the editor (D25)
+
+Opening a project or files in bud also starts Claude Code in the same place. Every AI UI in the config talks to that one session, so Claude already knows which project you're in and what you have open, and you can build your own TUIs in Neovim on top of it.
+
+**Who starts it, and when.** Neovim does, from `nvim/lua/bud/ai/claude.lua`. The Go CLI can't: `bud` hands its process over to nvim with `syscall.Exec`, so there's nothing left to own a child process, and starting things inside the editor is Lua's job anyway (principle 5). The session starts in a `vim.schedule` callback after `VimEnter`, so the editor is on screen before Claude Code begins loading (principle 1).
+
+**Where it runs.**
+
+| How bud was opened              | Claude Code's working directory                                | Context it gets                    |
+| ------------------------------- | -------------------------------------------------------------- | ---------------------------------- |
+| `bud <dir>`                     | that directory (the project root)                              | the project                        |
+| `bud <file>` / `bud a.go b.go`  | the project root found from the files (language `root` markers, then `.git`), else the files' directory | the opened files, as `@file` context |
+| bare `bud` (dashboard)          | no session until you open a project from the dashboard         |                                    |
+| full-screen chat (5.5)          | its own session in `~/.local/state/bud/chat/`, not tied to code | whatever you pull in with `@file` etc. |
+
+**What runs.** One Claude Code process per project root per Neovim instance, run as a job in headless streaming mode (`claude -p --input-format stream-json --output-format stream-json`). Lua owns the conversation, so any UI can render it however it likes. For the times you want Claude Code's own interface, `:BudClaude term` opens it in a terminal buffer on the **same session** (it resumes the session id), and closing it hands the session back to the native UIs. Only one of the two drives the session at a time.
+
+**What it can see in the editor.** bud also runs the IDE bridge, the WebSocket protocol Claude Code uses for editor integrations (the one `claudecode.nvim` implements), and starts Claude Code pointed at it. That lets Claude Code see your open buffers, current selection and diagnostics, and lets its proposed edits show up as Neovim diffs you accept or reject.
+
+**The API your TUIs use.** `require("bud.ai.claude")` is the only way anything in bud talks to Claude Code, so nothing spawns its own process:
+
+```lua
+local claude = require("bud.ai.claude")
+
+claude.session()                      -- the current project's session (starting it if needed)
+claude.send("explain this", { context = { "@selection" } })
+claude.on("message", function(msg) ... end)   -- also: tool_use, permission_request, done, exit
+claude.interrupt()                    -- stop the current reply
+claude.status()                       -- "starting" | "ready" | "busy" | "stopped" | "missing"
+```
+
+The side-pane chat, full-screen chat, inline actions, `:BudGen` and any TUI you add are all just consumers of this module.
+
+**Lifecycle.**
+
+- **Opening a project** from the dashboard or `<leader>p` starts a session for that root, or reuses it if this Neovim already has one.
+- **Reopening a project later** resumes its most recent conversation by default (`ai.claude.resume = "continue"`); set `"new"` to start fresh each time.
+- **Quitting Neovim** stops every session on `VimLeavePre`. If Claude Code crashes, the status line shows it and one key restarts it on the same session.
+- **Starting a session costs nothing.** No tokens are spent until you send something.
+
+**Permissions.** Claude Code's permission questions ("allow this edit?", "run this command?") come through as `permission_request` events and appear as a Neovim prompt, using the hook headless mode provides for that (`--permission-prompt-tool`, pointed at a tool on bud's bridge). bud never loosens Claude Code's permission mode on its own.
+
+**When Claude Code isn't there.** If `claude` isn't installed or isn't logged in, no session starts and the editor works as normal. The dashboard shows a banner with a one-key fix (`bud install`, which installs Claude Code and walks you to its login), and `bud doctor` reports it.
+
+**Config** (machine config, D13): `ai.claude.autostart` (default `true`), `ai.claude.resume` (`"continue"` or `"new"`), and `ai.claude.args` for extra flags.
+
+Flag names and the bridge protocol details get re-checked against Claude Code's docs when this is built, like the paths in 4.1. The module's interface avoids Claude Code specifics, so another backend could slot in later (D26), but none is planned.
+
+---
+
+## 5. How the program is used
+
+### 5.1 CLI surface
+
+```text
+bud                         # open the dashboard (doesn't register the current dir)
+bud <path>                  # open a directory as a project (registers it) or a file; starts Claude Code there (D25)
+bud <file1> <file2> ...     # open files, one buffer each
+bud --layout focus .        # open with a specific layout (flags before the path)
+bud chat [--resume <title>] # jump straight into full-screen chat
+
+bud install [--profile full|minimal] [--yes]   # system deps + nvim + plugins + language tooling
+bud doctor                  # health checks: versions, missing tools, broken specs, keys present
+bud update [--check] [--channel stable|nightly]   # self-update the binary, then sync its embedded config + restore lockfile, migrate
+bud dev link [path] | unlink                   # point ~/.config/bud at a checkout's nvim/ for live editing
+bud uninstall [--keep-config]
+
+bud projects ls | add <path> | rm <name> | pin <name>
+bud lang ls | add <name> | rm <name> | enable <name> | disable <name>
+bud tools ls | gen "<description>" | enable | disable | rm | promote <name>
+bud kit sync | status | ls | add | rm | adopt | enable | disable
+bud agent [path]            # open Claude Code's own TUI in a project, outside Neovim
+bud layout ls | set-default <name>
+bud config get <key> | set <key> <value> | edit
+
+bud launch [--terminal kitty] [--layout default] [path]   # what the app bundle calls
+bud bundle [--macos|--linux]                             # build/install the app bundle locally
+bud bootstrap <user@host>                                # set up a remote machine over SSH
+bud version
+```
+
+Global flags: `--no-update` (skip boot check), `--verbose`, `--profile`, and `--layout` for the bare open.
+
+**Flag order (D4):** `bud [global flags] <command> [command flags] [args]`. Global flags go before the command (`bud --verbose update --check`), command flags go right after the command name, and positionals always come last. When you type the wrong order, the help text shows the right one.
+
+### 5.2 First-run flow
+
+1. `curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh`
+2. The script detects OS + arch, downloads the matching `bud` release binary, verifies the signature on `checksums.txt` and then the archive's checksum (D7), drops it in `~/.local/bin`, and asks before running `bud install` (skip the question with `--yes`, D17).
+3. `bud install` asks (or reads flags):
+   - profile: **full** (desktop: everything, app bundle, fonts) or **minimal** (SSH/server: no bundle, no fonts, fewer languages)
+   - terminal emulator (auto-detects what's installed)
+   - which languages to enable (defaults from a preset)
+   - Claude Code: installs it if missing and checks you're logged in (`claude` runs its own login; skippable, and bud works without it). Then it syncs the kit (Context7 etc.), prompting once for each missing secret and storing it in the keychain.
+4. It installs system deps via the OS package manager, syncs the embedded `nvim/` into `~/.config/bud`, then runs a headless `nvim` to install plugins from the lockfile and Mason packages for enabled languages. No clone. `git` is only there for `vim.pack`.
+5. On a desktop profile, it installs the app bundle (`/Applications/Bud.app` or `~/.local/share/applications/bud.desktop`).
+6. Ends with `bud doctor` output and "run `bud` to start".
+
+### 5.3 Over SSH / new machines
+
+- Simplest: `ssh host 'curl -fsSL .../install.sh | sh -s -- --profile minimal --yes'`
+- Convenience: `bud bootstrap user@host` runs exactly that from your local machine and can optionally copy your local `config.json` (never secrets) across.
+- On the remote, `bud` works the same in whatever terminal you SSH'd from. Pair with tmux/zellij if you want the session to survive disconnects.
+
+### 5.4 Dashboard (the home screen)
+
+Bud is meant to be the all-in-one AI + dev stop. The dashboard is where every session starts: the app bundle always opens here, and so does `bud` with no arguments. It reads the project registry written by the Go CLI, the chat history store, the async update check and `doctor` results.
+
+There are two styles, picked with `dashboard.style = "silly" | "minimal"` in config. Pressing `t` on the dashboard swaps between them on the fly.
+
+#### Silly style (default)
+
+```text
+          ___
+         [o.o]        hey bud.
+         /[_]\        "what are we breaking today?"
+          ] [
+
+   p  Open project         L  Plugins
+   f  Open file            M  Mason
+   r  Recent files         d  Doctor
+   n  New file             u  Update
+   x  Scratchpad           q  Quit
+
+   Projects
+   1  ● bud          main ✱ 3 ↑1
+   2  ○ dollarwise   main ✓
+
+   ⚠ 1 doctor warning, press d
+    24 ms · 18 plugins · claude ready
+   tip: <Space>o  Symbols outline
+```
+
+The buddy is the README's robot (D37), and its face changes with state: `[o.o]` normal, `[^.^]` once doctor comes back clean, `[O.O]` when an update is waiting, `[-.-] z` after midnight. The tagline under it rotates from `nvim/lua/bud/dashboard/taglines.lua`. Chat (`c`, `h`), the tool generator (`g`) and settings (`s`) join the menu, and a recent-chats column joins the projects, once those exist.
 
 #### Minimal style
 

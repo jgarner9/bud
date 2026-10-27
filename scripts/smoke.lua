@@ -58,6 +58,18 @@ else
   end
 end
 
+-- the dashboard draws with the real config (offline: no background jobs here)
+local dash_ok, dash_err = pcall(function()
+  local dashboard = require("bud.dashboard")
+  dashboard.open({ offline = true })
+  if #(dashboard.lines() or {}) == 0 then
+    error("drew nothing")
+  end
+end)
+if not dash_ok then
+  table.insert(problems, "dashboard failed: " .. tostring(dash_err))
+end
+
 if #problems > 0 then
   -- Neovim's own error output may not end in a newline. selene's Lua 5.1
   -- definitions leave out file methods on io.stderr, so it flags this wrongly

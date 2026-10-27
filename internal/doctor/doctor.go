@@ -76,8 +76,15 @@ var (
 	startupTime   = nvim.StartupTime
 )
 
+// Options picks which checks Run does
+type Options struct {
+	// Quick skips the slow ones (startup timing runs nvim several times), for
+	// the dashboard, which runs doctor in the background every time it opens
+	Quick bool
+}
+
 // Run runs every check, in the order they're worth reading
-func Run() []Result {
+func Run(opts Options) []Result {
 	p, err := paths.Resolve()
 	if err != nil {
 		return []Result{{Name: "paths", Status: Fail, Detail: err.Error()}}
@@ -97,8 +104,10 @@ func Run() []Result {
 	}
 	results = append(results, checkConfigSync(p))
 	results = append(results, langResults...)
-	if r, ok := checkStartup(p, enabled); ok {
-		results = append(results, r)
+	if !opts.Quick {
+		if r, ok := checkStartup(p, enabled); ok {
+			results = append(results, r)
+		}
 	}
 
 	return append(results, cfgResult, checkProjects(p))

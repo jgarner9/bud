@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -16,12 +17,21 @@ func init() {
 // Projects manages the project registry (D36) that the dashboard and the
 // project picker list. Opening a dir with bud registers it too
 func Projects() *Command {
+	var opened bool
 	return &Command{
 		Name:  "projects",
 		Usage: "Lists, adds, removes and pins registered projects",
 		Subs: []*Command{
 			{Name: "ls", Usage: "list registered projects, pinned first", Run: func(_ *Globals, args []string) error { return projectsLs(args) }},
-			{Name: "add", Usage: "register a directory without opening it", Run: func(_ *Globals, args []string) error { return projectsAdd(args) }},
+			{
+				Name:  "add",
+				Usage: "register a directory without opening it",
+				Flags: func(fs *flag.FlagSet) {
+					// the editor's project picker uses this, since only the CLI writes projects.json
+					fs.BoolVar(&opened, "opened", false, "also record it as opened just now")
+				},
+				Run: func(_ *Globals, args []string) error { return projectsAdd(args, opened) },
+			},
 			{Name: "rm", Usage: "forget a project (its files are untouched)", Run: func(_ *Globals, args []string) error { return projectsRm(args) }},
 			{Name: "pin", Usage: "pin a project to the top of the dashboard", Run: func(_ *Globals, args []string) error { return projectsPin(args, true) }},
 			{Name: "unpin", Usage: "unpin a project", Run: func(_ *Globals, args []string) error { return projectsPin(args, false) }},
@@ -85,7 +95,7 @@ func ago(d time.Duration) string {
 	}
 }
 
-func projectsAdd(args []string) error {
+func projectsAdd(args []string, opened bool) error {
 	if len(args) == 0 {
 		return usageErrorf("projects add needs a directory")
 	}
@@ -93,9 +103,13 @@ func projectsAdd(args []string) error {
 	if err != nil {
 		return err
 	}
+	at := time.Time{}
+	if opened {
+		at = now()
+	}
 	for _, dir := range args {
 		before := len(r.Projects)
-		p, err := r.Add(dir, time.Time{})
+		p, err := r.Add(dir, at)
 		if err != nil {
 			return err
 		}

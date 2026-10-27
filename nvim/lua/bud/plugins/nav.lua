@@ -17,7 +17,13 @@ return {
           fzf()[name]()
         end
       end
-      map("n", "<leader>f", picker("files"), { desc = "Find file" })
+      -- the two-key open (D39): the same pickers as p and f on the dashboard
+      map("n", "<leader>p", function()
+        require("bud.open").project()
+      end, { desc = "Open project" })
+      map("n", "<leader>f", function()
+        require("bud.open").file()
+      end, { desc = "Find file" })
       map("n", "<leader>/", picker("live_grep"), { desc = "Grep project" })
       map("n", "<leader>b", picker("buffers"), { desc = "Buffers" })
       map("n", "<leader>r", picker("oldfiles"), { desc = "Recent files" })

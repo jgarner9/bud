@@ -14,13 +14,7 @@ local max_projects = 5
 -- state for the dashboard on screen; nil when it isn't
 local current
 
-local function bud_bin()
-  local bin = vim.env.BUD_BIN
-  if bin and vim.fn.executable(bin) == 1 then
-    return bin
-  end
-  return vim.fn.exepath("bud") ~= "" and vim.fn.exepath("bud") or nil
-end
+local bud_bin = require("bud.open").bud_bin
 
 -- mood picks the buddy's face: sleepy after midnight wins, then a waiting
 -- update, then happy once doctor came back clean
@@ -189,55 +183,21 @@ local function leader(keys)
   end
 end
 
-local function session_file(path)
-  return vim.fn.stdpath("state") .. "/sessions/" .. path:gsub("[/\\:]", "%%") .. ".vim"
-end
-
--- open_project goes to a registered project: its last session when sessions
--- are on and it has one, otherwise the file picker in it
+-- open_project goes to a registered project (bud.open.go)
 function M.open_project(p)
-  if vim.fn.isdirectory(p.path) == 0 then
-    vim.notify("bud: " .. p.path .. " is missing", vim.log.levels.WARN)
-    return
-  end
-  vim.cmd.cd(vim.fn.fnameescape(p.path))
-  local session = session_file(p.path)
-  if config.get("dashboard.sessions", false) and vim.fn.filereadable(session) == 1 then
-    local ok, err = pcall(vim.cmd.source, vim.fn.fnameescape(session))
-    if ok then
-      return
-    end
-    vim.notify("bud: restoring the session failed: " .. tostring(err), vim.log.levels.WARN)
-  end
-  leader("f")()
-end
-
-local function pick_project()
-  local list = vim.tbl_filter(function(p)
-    return not p.missing
-  end, projects.list())
-  if #list == 0 then
-    vim.notify("bud: no projects yet: open one with `bud <dir>`", vim.log.levels.INFO)
-    return
-  end
-  vim.ui.select(list, {
-    prompt = "Project",
-    format_item = function(p)
-      return p.name .. "  " .. vim.fn.fnamemodify(p.path, ":~")
-    end,
-  }, function(p)
-    if p then
-      M.open_project(p)
-    end
-  end)
+  require("bud.open").go(p.path)
 end
 
 local function keys(buf)
   local function map(lhs, fn, desc)
     vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true, silent = true, desc = desc })
   end
-  map("p", pick_project, "Open project")
-  map("f", leader("f"), "Open file")
+  map("p", function()
+    require("bud.open").project()
+  end, "Open project")
+  map("f", function()
+    require("bud.open").file()
+  end, "Open file")
   map("r", leader("r"), "Recent files")
   map("n", function()
     vim.cmd.enew()
@@ -408,7 +368,7 @@ function M.save_session()
   if not has_files then
     return
   end
-  local file = session_file(project.path)
+  local file = require("bud.open").session_file(project.path)
   vim.fn.mkdir(vim.fs.dirname(file), "p")
   local saved = vim.o.sessionoptions
   vim.o.sessionoptions = "buffers,curdir,folds,tabpages,winsize"

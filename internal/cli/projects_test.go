@@ -57,12 +57,18 @@ func TestProjectsCommands(t *testing.T) {
 		}
 	}
 
-	if err := projectsAdd([]string{filepath.Join(root, "a"), filepath.Join(root, "b")}); err != nil {
+	if err := projectsAdd([]string{filepath.Join(root, "a"), filepath.Join(root, "b")}, false); err != nil {
 		t.Fatal(err)
 	}
-	// adding again is fine
-	if err := projectsAdd([]string{filepath.Join(root, "a")}); err != nil {
+	if p, _ := registry(t, path).Get("a"); !p.LastOpened.IsZero() {
+		t.Errorf("plain add set last opened: %v", p.LastOpened)
+	}
+	// adding again with --opened bumps its last opened time
+	if err := projectsAdd([]string{filepath.Join(root, "a")}, true); err != nil {
 		t.Fatal(err)
+	}
+	if p, _ := registry(t, path).Get("a"); p.LastOpened.IsZero() {
+		t.Error("--opened didn't set last opened")
 	}
 	if err := projectsPin([]string{"b"}, true); err != nil {
 		t.Fatal(err)

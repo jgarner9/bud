@@ -128,7 +128,8 @@ Leader is <kbd>Space</kbd>. Press it and wait, and which-key shows the rest.
 
 | Keys | Does |
 | --- | --- |
-| <kbd>Space</kbd> <kbd>f</kbd> | Find file |
+| <kbd>Space</kbd> <kbd>p</kbd> | Open a project |
+| <kbd>Space</kbd> <kbd>f</kbd> | Find a file in this project (or type a full path) |
 | <kbd>Space</kbd> <kbd>/</kbd> | Grep the project |
 | <kbd>Space</kbd> <kbd>b</kbd> · <kbd>Space</kbd> <kbd>r</kbd> | Buffers · recent files |
 | <kbd>g</kbd> <kbd>w</kbd> · <kbd>s</kbd> | Jump to any word · jump by character |

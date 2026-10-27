@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"jgarner.dev/bud/internal/paths"
 )
 
 func TestExecArg(t *testing.T) {
@@ -60,5 +62,39 @@ func TestLinuxInstall(t *testing.T) {
 	os.WriteFile(entry, []byte("[Desktop Entry]\nName=Someone else's\n"), 0o644)
 	if err := l.Install(entry, icon); err == nil || !strings.Contains(err.Error(), "didn't write it") {
 		t.Fatalf("replaced someone else's entry: %v", err)
+	}
+}
+
+func TestFindLinux(t *testing.T) {
+	orig := goos
+	goos = "linux"
+	t.Cleanup(func() { goos = orig })
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	p, err := paths.Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found := Find(p); len(found) != 0 {
+		t.Fatalf("found %+v before installing", found)
+	}
+
+	if err := (Linux{Bin: "/bin/bud", Path: "/bin"}).Install(p.DesktopEntry(), p.DesktopIcon); err != nil {
+		t.Fatal(err)
+	}
+	found := Find(p)
+	if len(found) != 1 || found[0].Path != p.DesktopEntry() || len(found[0].Files) != 1+len(IconSizes) {
+		t.Fatalf("found %+v", found)
+	}
+	if err := found[0].Remove(); err != nil {
+		t.Fatal(err)
+	}
+	if found := Find(p); len(found) != 0 {
+		t.Fatalf("found %+v after removing", found)
+	}
+
+	// someone else's bud.desktop isn't bud's to remove
+	os.WriteFile(p.DesktopEntry(), []byte("[Desktop Entry]\n"), 0o644)
+	if found := Find(p); len(found) != 0 {
+		t.Fatalf("claimed %+v", found)
 	}
 }

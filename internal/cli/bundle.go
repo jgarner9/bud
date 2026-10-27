@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"jgarner.dev/bud/internal/bundle"
+	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/version"
 )
@@ -52,14 +53,10 @@ func bundleCmd(g *Globals, args []string, macos, linux bool, dest string) error 
 		macos = bundleGOOS == "darwin"
 		linux = !macos
 	}
-	self, err := os.Executable()
+	self, err := bundleBin()
 	if err != nil {
 		return err
 	}
-	if resolved, err := filepath.EvalSymlinks(self); err == nil {
-		self = resolved
-	}
-
 	if linux {
 		return bundleLinux(g, self, dest)
 	}
@@ -79,6 +76,18 @@ func bundleCmd(g *Globals, args []string, macos, linux bool, dest string) error 
 	fmt.Printf("Installed %s: it opens bud with %s\n", dest, self)
 
 	return nil
+}
+
+// bundleBin is the bud the app runs: the one install.sh put in place, whose
+// path a self-update keeps, else this one
+func bundleBin() (string, error) {
+	if p, err := paths.Resolve(); err == nil {
+		if r, err := installer.ReadReceipt(p.InstallReceipt()); err == nil && r != nil && isFile(r.Path) {
+			return r.Path, nil
+		}
+	}
+
+	return os.Executable()
 }
 
 // bundleLinux writes bud.desktop and its icons under ~/.local/share, or the

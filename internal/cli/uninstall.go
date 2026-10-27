@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	"jgarner.dev/bud/internal/bundle"
 	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
@@ -96,6 +97,9 @@ func uninstall(g *Globals, args []string, yes, keepConfig bool) error {
 	return nil
 }
 
+// swappable in tests
+var findBundles = bundle.Find
+
 // planUninstall works out what to remove and what to deliberately leave. exe is
 // the running binary, reported as kept when install.sh didn't put it there
 func planUninstall(p *paths.Paths, keepConfig bool, exe string) (removals []removal, kept []string, err error) {
@@ -130,6 +134,10 @@ func planUninstall(p *paths.Paths, keepConfig bool, exe string) (removals []remo
 		}
 		dir := d.dir
 		removals = append(removals, removal{dir, d.what, func() error { return os.RemoveAll(dir) }})
+	}
+
+	for _, b := range findBundles(p) {
+		removals = append(removals, removal{b.Path, b.What, b.Remove})
 	}
 
 	if receipt != nil && isFile(receipt.Path) {

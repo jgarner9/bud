@@ -8,6 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"jgarner.dev/bud/internal/bundle"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -16,6 +17,10 @@ import (
 // every XDG dir in a temp dir, and returns its paths and the binary's path
 func fakeInstall(t *testing.T) (*paths.Paths, string) {
 	t.Helper()
+	// never the real /Applications/Bud.app
+	orig := findBundles
+	findBundles = func(*paths.Paths) []bundle.Installed { return nil }
+	t.Cleanup(func() { findBundles = orig })
 	root := t.TempDir()
 	t.Setenv("HOME", root)
 	for _, v := range []string{"CONFIG", "DATA", "STATE", "CACHE"} {
@@ -164,5 +169,26 @@ func TestPlanUninstallBadReceipt(t *testing.T) {
 	}
 	if _, _, err := planUninstall(p, false, ""); err == nil {
 		t.Fatal("expected an error for a receipt that doesn't name a bud binary")
+	}
+}
+
+func TestPlanUninstallBundle(t *testing.T) {
+	p, bin := fakeInstall(t)
+	app := filepath.Join(t.TempDir(), "Bud.app")
+	os.MkdirAll(app, 0o755)
+	findBundles = func(*paths.Paths) []bundle.Installed {
+		return []bundle.Installed{{Path: app, What: "the Bud app", Files: []string{app}}}
+	}
+
+	removals, _, err := planUninstall(p, false, bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := targets(removals); !slices.Contains(got, app) {
+		t.Fatalf("removes %q, not the app", got)
+	}
+	runRemovals(t, removals)
+	if exists(app) {
+		t.Fatal("app still there")
 	}
 }

@@ -96,6 +96,13 @@ func install(g *Globals, args []string, yes bool) error {
 	if err := nvim.Apply(); err != nil {
 		return err
 	}
+	if s.Profile == "full" {
+		// the editor works without the app, so a failure here only warns
+		fmt.Println()
+		if err := installBundle(g); err != nil {
+			fmt.Printf("Couldn't install the app (%v); 'bud bundle' tries again.\n", err)
+		}
+	}
 
 	fmt.Println()
 	if err := report(doctor.Run(doctor.Options{})); err != nil {
@@ -105,6 +112,9 @@ func install(g *Globals, args []string, yes bool) error {
 
 	return nil
 }
+
+// swappable in tests: the desktop app on the full profile (BASE.md 5.2 step 5)
+var installBundle = func(g *Globals) error { return bundleCmd(g, nil, false, false, "") }
 
 // askLanguages reads the specs (this binary's, then the user's in userSpecs),
 // asks which to enable and saves the answer

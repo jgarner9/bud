@@ -407,6 +407,10 @@ func firstLine(s string) string {
 // checkConfigSync compares ~/.config/bud with the config embedded in this binary
 func checkConfigSync(p *paths.Paths) Result {
 	r := Result{Name: "nvim config"}
+	if checkout, ok := nvim.DevLink(p.Config); ok {
+		r.Detail = "linked to " + checkout + " (bud dev unlink)"
+		return r
+	}
 	if !nvim.HasManifest(p.Config) {
 		r.Status = Fail
 		r.Detail = "not installed in " + p.Config

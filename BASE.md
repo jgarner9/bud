@@ -31,7 +31,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D10 | **Day-one languages:** Go, Python, TypeScript/JavaScript, C, Bash, HTML/CSS. | 2026-10-26 | One spec file each in `languages/` (TS and JS share one; HTML and CSS are separate files). More are added the usual way (section 2). |
 | D11 | **Terminals: Kitty and Ghostty**, Kitty is the default when none is configured. | 2026-10-26 | Others (WezTerm, Alacritty, iTerm2) can come later as one launcher file each. |
 | D12 | **The dashboard and pane layouts live inside Neovim.** | 2026-10-26 | One process, works over SSH and in any terminal. Keybinds stay the same on the dashboard, in the editor and in chat, so muscle memory carries across. |
-| D13 | **XDG paths on macOS too**, and machine config lives in state: `~/.local/state/bud/config.json`. | 2026-10-26 | Matches where Neovim already looks, and gives one code path. Keeping machine config out of `~/.config/bud` means `bud dev link` can turn that dir into a symlink to a checkout without dragging local settings into the repo. |
+| D13 | **XDG paths on macOS too**, and machine config lives in state: `~/.local/state/bud/config.json`. | 2026-10-26 | Matches where Neovim already looks, and gives one code path. Keeping machine config out of `~/.config/bud` means `bud dev link` can point that dir at a checkout without dragging local settings into the repo. |
 | D14 | **Claude Code is the AI backend, and chat runs through it.** Narrowed by D26: no other providers or harnesses for now. | 2026-10-26 | Generated tools stay machine-local in `user-tools/` until promoted. The goal is Neovim-native TUIs that drive Claude Code, not just a terminal pane, see 4.2. |
 | D15 | **Secrets come from env vars or the OS keychain only.** | 2026-10-26 | `secret-tool` on Linux, Keychain on macOS. No password-manager CLI for now. |
 | D16 | **System packages:** Homebrew on macOS; on Linux pacman first, then apt, then dnf. No Homebrew-on-Linux. | 2026-10-26 | Until the installers are real, `bud install` fails with a clear list of what's missing and how to get it, instead of pretending. |
@@ -206,7 +206,7 @@ Linux and macOS use the same XDG paths (D13), which is also where Neovim looks o
 
 `bud` resolves all of these through `internal/paths`, so nothing else hardcodes a path.
 
-`~/.config/bud` holds a `.bud-manifest.json` listing every file the last sync wrote. Sync overwrites those files, deletes ones a newer release dropped, and never touches anything else in the directory. For working on bud itself, `bud dev link` replaces `~/.config/bud` with a symlink to a checkout's `nvim/` so Lua edits show up right away. Sync sees the symlink and leaves it alone until `bud dev unlink`.
+`~/.config/bud` holds a `.bud-manifest.json` listing every file the last sync wrote. Sync overwrites those files, deletes ones a newer release dropped, and never touches anything else in the directory. For working on bud itself, `bud dev link` fills `~/.config/bud` with symlinks into a checkout (one per top-level entry of `nvim/`, plus `languages` → the checkout's `languages/`, the same tree the binary embeds; one symlink to `nvim/` would miss the specs) and a `.bud-dev-link` marker, so Lua edits show up on the next nvim start. Sync sees the marker and leaves it alone until `bud dev unlink`, which removes the links and syncs the shipped copy back. A new top-level file in `nvim/` needs `bud dev link` again.
 
 ### Key architectural choices (and why)
 
@@ -418,7 +418,7 @@ bud chat [--resume <title>] # jump straight into full-screen chat
 bud install [--profile full|minimal] [--yes]   # system deps + nvim + plugins + language tooling
 bud doctor                  # health checks: versions, missing tools, broken specs, keys present
 bud update [--check] [--channel stable|nightly]   # self-update the binary, then sync its embedded config + restore lockfile, migrate
-bud dev link [path] | unlink                   # point ~/.config/bud at a checkout's nvim/ for live editing
+bud dev link [path] | unlink                   # point ~/.config/bud at a checkout for live editing
 bud uninstall [--keep-config]
 
 bud projects ls | add <path> | rm <name> | pin <name>

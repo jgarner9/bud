@@ -382,3 +382,17 @@ func TestStartDetached(t *testing.T) {
 	b, _ := os.ReadFile(p.UpdateLog())
 	t.Fatalf("log has %q", b)
 }
+
+func TestDevArgs(t *testing.T) {
+	var usage *UsageError
+	if err := devLink([]string{"a", "b"}); !errors.As(err, &usage) {
+		t.Errorf("two paths: %v", err)
+	}
+	if err := devUnlink([]string{"x"}); !errors.As(err, &usage) {
+		t.Errorf("unlink with an arg: %v", err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := devUnlink(nil); err == nil || !strings.Contains(err.Error(), "isn't linked") {
+		t.Errorf("unlink when not linked: %v", err)
+	}
+}

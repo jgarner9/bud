@@ -43,6 +43,11 @@ func Apply() error {
 	dst := p.Config
 	fmt.Println("Bud config directory: " + dst)
 
+	if checkout, ok := DevLink(dst); ok {
+		fmt.Printf("It's linked to %s, so there's nothing to sync (bud dev unlink goes back).\n", checkout)
+		return nil
+	}
+
 	fmt.Println("Syncing config...")
 	fresh := !HasManifest(dst)
 	res, err := SyncConfig(bud.Config(), dst)
@@ -119,6 +124,10 @@ func CheckConfig(src fs.FS, dst string) (*SyncResult, error) {
 
 func syncConfig(src fs.FS, dst string, write bool) (*SyncResult, error) {
 	res := &SyncResult{}
+	// a dev link is the checkout's to manage
+	if _, ok := DevLink(dst); ok {
+		return res, nil
+	}
 
 	prev, err := readManifest(dst)
 	if err != nil {
@@ -226,6 +235,16 @@ func RemoveConfig(dir string) error {
 	}
 	if info.Mode()&fs.ModeSymlink != 0 {
 		return os.Remove(dir)
+	}
+	if _, ok := DevLink(dir); ok {
+		if _, err := Unlink(dir); err != nil {
+			return err
+		}
+		// what's left is the user's; the dir goes only when that's nothing
+		if entries, err := os.ReadDir(dir); err == nil && len(entries) == 0 {
+			return os.Remove(dir)
+		}
+		return nil
 	}
 
 	files, err := readManifest(dir)

@@ -47,6 +47,10 @@ lint: fmt-check lua-lint
 lua-test:
   for t in tests/lua/*_test.lua; do nvim --clean --headless -l "$t" || exit 1; done
 
+# rotate-release-key.sh against a throwaway repo, with fake op and gh
+rotate-test:
+  sh scripts/rotate_test.sh
+
 # sync the config into a throwaway dir, restore plugins, start nvim headless (needs network)
 smoke:
   sh scripts/smoke.sh
@@ -61,7 +65,7 @@ lang-check *langs:
   sh scripts/lang-check.sh "$@"
 
 # everything CI checks (lint + tests + smoke)
-check: lint test lua-test install-test smoke
+check: lint test lua-test install-test rotate-test smoke
 
 # fail with an install hint when a tool isn't on PATH
 [private]

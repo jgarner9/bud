@@ -103,7 +103,7 @@ Pushing a `v*` tag runs `.github/workflows/release.yml` (GoReleaser): linux/darw
 
 **Nightly.** `.github/workflows/nightly.yml` runs daily (and by hand): when main moved since the `nightly` tag, GoReleaser builds a snapshot named `X.Y.Z-nightly.YYYYMMDDHHMM` (one patch past the newest stable tag, via `NIGHTLY_VERSION` in `.goreleaser.yaml`'s snapshot template) and the `nightly` prerelease is deleted and recreated with the same archive names, so `releases/latest` never sees it.
 
-**Signing.** The release workflow runs `scripts/sign-release.sh` only when the `BUD_RELEASE_KEY` Actions secret is set; it signs `dist/checksums.txt` under namespace `bud-release`, refuses if the key isn't one of install.sh's `RELEASE_KEYS`, and uploads `checksums.txt.sig`.
+**Signing.** Rotating the key is `scripts/rotate-release-key.sh start|finish` (D64), run by hand, never by you: it creates a real key, writes to 1Password and sets the Actions secret. `just rotate-test` covers it with fakes. The release workflow runs `scripts/sign-release.sh` only when the `BUD_RELEASE_KEY` Actions secret is set; it signs `dist/checksums.txt` under namespace `bud-release`, refuses if the key isn't one of install.sh's `RELEASE_KEYS`, and uploads `checksums.txt.sig`.
 
 ## Tests
 

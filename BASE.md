@@ -448,6 +448,7 @@ bud kit sync | status | ls | add | rm | adopt | enable | disable
 bud agent [path]            # open Claude Code's own TUI in a project, outside Neovim
 bud layout ls | set-default <name> | set <name> [project] | unset [project]
 bud config ls | get <key> | set <key> <value> | unset <key> | edit | path
+bud completion bash|zsh|fish                  # eval "$(bud completion zsh)" in your shell rc
 
 bud launch [--terminal kitty] [--layout default] [path]   # what the app bundle calls
 bud bundle [--macos|--linux]                             # build/install the app bundle locally

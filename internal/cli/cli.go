@@ -146,7 +146,10 @@ func (a *App) globalUsage(fs *flag.FlagSet) {
 
 	names := make([]string, 0, len(a.Cmds))
 	for name := range a.Cmds {
-		names = append(names, name)
+		// __complete is for the shell scripts, not for people
+		if !strings.HasPrefix(name, "__") {
+			names = append(names, name)
+		}
 	}
 	slices.Sort(names)
 	for _, name := range names {

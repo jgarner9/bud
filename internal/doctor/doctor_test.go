@@ -10,6 +10,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/lang"
@@ -444,5 +445,37 @@ func TestCheckProjects(t *testing.T) {
 	}
 	if r := checkProjects(p); r.Status != Warn || r.Fix == "" {
 		t.Fatalf("corrupt: %+v", r)
+	}
+}
+
+func TestCheckClaude(t *testing.T) {
+	orig := claudeCheck
+	t.Cleanup(func() { claudeCheck = orig })
+	on := config.Defaults()
+	off := config.Defaults()
+	off.AI.Claude.Autostart = false
+
+	for _, c := range []struct {
+		name   string
+		cfg    config.Settings
+		status claude.Status
+		err    error
+		want   Status
+		detail string
+	}{
+		{"logged in", on, claude.Status{Bin: "/c", Version: "2.1.0", LoggedIn: true, Method: "claude.ai"}, nil, OK, "2.1.0, logged in with claude.ai"},
+		{"logged out", on, claude.Status{Bin: "/c", Version: "2.1.0"}, nil, Warn, "not logged in"},
+		{"missing", on, claude.Status{}, nil, Warn, "not installed"},
+		{"missing and not wanted", off, claude.Status{}, nil, OK, "autostart is off"},
+		{"broken", on, claude.Status{Bin: "/c"}, errors.New("boom"), Warn, "boom"},
+	} {
+		claudeCheck = func() (claude.Status, error) { return c.status, c.err }
+		r := checkClaude(c.cfg)
+		if r.Status != c.want || !strings.Contains(r.Detail, c.detail) {
+			t.Errorf("%s: got %v %q", c.name, r.Status, r.Detail)
+		}
+		if r.Status == Warn && c.err == nil && r.Fix != "bud claude setup" {
+			t.Errorf("%s: fix %q", c.name, r.Fix)
+		}
 	}
 }

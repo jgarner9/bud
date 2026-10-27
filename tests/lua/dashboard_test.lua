@@ -53,6 +53,19 @@ eq(banners, {
 }, "banners")
 banners, clean = dashboard.doctor_banners({ { name = "git", status = "ok" } })
 eq({ banners, clean }, { {}, true }, "clean")
+local claude
+banners, clean, claude = dashboard.doctor_banners({
+  { name = "git", status = "ok" },
+  { name = "claude code", status = "warn", detail = "not installed" },
+})
+eq(banners, { { level = "warn", text = "Claude Code isn't set up, press c" } }, "claude banner, not a doctor warning")
+eq({ clean, claude.detail }, { false, "not installed" }, "claude result comes back")
+
+-- health line's Claude Code part
+eq(dashboard.claude_health(nil, false), "no claude yet", "before doctor, not on PATH")
+eq(dashboard.claude_health(nil, true), "claude ready", "before doctor, on PATH")
+eq(dashboard.claude_health({ status = "warn" }, true), "claude not set up", "logged out")
+eq(dashboard.claude_health({ status = "ok" }, true), "claude ready", "ready")
 
 -- git
 eq(

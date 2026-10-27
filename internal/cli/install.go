@@ -104,6 +104,13 @@ func install(g *Globals, args []string, yes bool) error {
 		}
 	}
 
+	if s.AI.Claude.Autostart {
+		fmt.Println()
+		if err := installClaude(pr, yes); err != nil {
+			fmt.Printf("Claude Code isn't set up (%v); 'bud claude setup' tries again.\n", err)
+		}
+	}
+
 	fmt.Println()
 	if err := report(doctor.Run(doctor.Options{})); err != nil {
 		return err
@@ -115,6 +122,35 @@ func install(g *Globals, args []string, yes bool) error {
 
 // swappable in tests: the desktop app on the full profile (BASE.md 5.2 step 5)
 var installBundle = func(g *Globals) error { return bundleCmd(g, nil, false, false, "") }
+
+// installClaude offers Claude Code's setup (BASE.md 4.2). bud works without
+// it, so saying no, or having nobody to ask, is fine
+var installClaude = func(pr *prompter, yes bool) error {
+	s, err := checkClaude()
+	if err != nil {
+		return err
+	}
+	if s.Bin != "" && s.LoggedIn {
+		fmt.Printf("Claude Code %s is ready.\n", s.Version)
+		return nil
+	}
+	if !yes {
+		if pr == nil {
+			fmt.Println("Claude Code isn't set up; run 'bud claude setup' for the AI parts.")
+			return nil
+		}
+		ok, err := pr.confirm("Set up Claude Code for bud's AI now?")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Println("Skipped; 'bud claude setup' does it later.")
+			return nil
+		}
+	}
+
+	return claudeSetup(pr, true)
+}
 
 // askLanguages reads the specs (this binary's, then the user's in userSpecs),
 // asks which to enable and saves the answer

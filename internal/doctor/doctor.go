@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"jgarner.dev/bud"
+	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/lang"
@@ -74,6 +75,7 @@ var (
 	embedded      = func() fs.FS { return bud.Config() }
 	loadLanguages = lang.Load
 	startupTime   = nvim.StartupTime
+	claudeCheck   = claude.Check
 )
 
 // Options picks which checks Run does
@@ -110,7 +112,31 @@ func Run(opts Options) []Result {
 		}
 	}
 
-	return append(results, cfgResult, checkProjects(p))
+	return append(results, checkClaude(cfg), cfgResult, checkProjects(p))
+}
+
+// ClaudeCheck names the Claude Code check, which the dashboard gives its own banner
+const ClaudeCheck = "claude code"
+
+// checkClaude reports Claude Code. It only ever warns: bud works without it,
+// there's just no AI (BASE.md 4.2)
+func checkClaude(cfg config.Settings) Result {
+	r := Result{Name: ClaudeCheck}
+	s, err := claudeCheck()
+	switch {
+	case err != nil:
+		r.Status, r.Detail = Warn, err.Error()
+	case s.Bin == "" && !cfg.AI.Claude.Autostart:
+		r.Detail = "not installed (ai.claude.autostart is off)"
+	case s.Bin == "":
+		r.Status, r.Detail, r.Fix = Warn, "not installed, so there's no AI in the editor", "bud claude setup"
+	case !s.LoggedIn:
+		r.Status, r.Detail, r.Fix = Warn, s.Version+", not logged in", "bud claude setup"
+	default:
+		r.Detail = s.Version + ", logged in with " + s.Method
+	}
+
+	return r
 }
 
 // checkProjects reads the project registry. A broken one only warns: bud still

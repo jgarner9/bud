@@ -30,11 +30,16 @@ function M.mood(state, hour)
   return "normal"
 end
 
--- doctor_banners turns `bud doctor --json` output into banners
+-- doctor_banners turns `bud doctor --json` output into banners. Claude Code
+-- gets its own, with its own key, since setting it up is one command; its
+-- result comes back too, for the health line
 function M.doctor_banners(results)
   local fails, warns = 0, 0
+  local claude
   for _, r in ipairs(results) do
-    if r.status == "fail" then
+    if r.name == "claude code" then
+      claude = r
+    elseif r.status == "fail" then
       fails = fails + 1
     elseif r.status == "warn" then
       warns = warns + 1
@@ -50,7 +55,20 @@ function M.doctor_banners(results)
   if warns > 0 then
     table.insert(banners, { level = "warn", text = plural(warns, "doctor warning") .. ", press d" })
   end
-  return banners, fails + warns == 0
+  local claude_ok = not claude or claude.status == "ok"
+  if not claude_ok then
+    table.insert(banners, { level = "warn", text = "Claude Code isn't set up, press c" })
+  end
+  return banners, fails + warns == 0 and claude_ok, claude
+end
+
+-- claude_health is the health line's Claude Code part: from doctor once it's
+-- back, until then from whether claude is on PATH
+function M.claude_health(result, executable)
+  if result then
+    return result.status == "ok" and "claude ready" or "claude not set up"
+  end
+  return executable and "claude ready" or "no claude yet"
 end
 
 -- update_banner turns update.json (what `bud update --background` found, D9)
@@ -115,7 +133,7 @@ local function health()
     table.insert(parts, (icons.startup .. " %d ms"):format(vim.g.bud_startup_ms))
   end
   table.insert(parts, icons.plugins .. " " .. #require("bud.pack").names .. " plugins")
-  table.insert(parts, icons.claude .. " " .. (vim.fn.executable("claude") == 1 and "claude ready" or "no claude yet"))
+  table.insert(parts, icons.claude .. " " .. M.claude_health(current.claude, vim.fn.executable("claude") == 1))
   return table.concat(parts, " · ")
 end
 
@@ -229,6 +247,10 @@ local function keys(buf)
   map("u", function()
     terminal({ "update" })
   end, "Update")
+  -- not in the menu: the Claude Code banner offers it when it's needed
+  map("c", function()
+    terminal({ "claude", "setup" })
+  end, "Set up Claude Code")
   map("t", function()
     current.style = current.style == "minimal" and "silly" or "minimal"
     draw()
@@ -263,7 +285,7 @@ local function load()
         local ok, results = pcall(vim.json.decode, res.stdout or "")
         if ok and type(results) == "table" then
           local clean
-          current.banners, clean = M.doctor_banners(results)
+          current.banners, clean, current.claude = M.doctor_banners(results)
           current.doctor = { clean = clean }
           draw()
         end

@@ -66,6 +66,9 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D45 | **How layouts apply.** | 2026-10-27 | `layouts/*.lua` (embedded, synced to `~/.config/bud/layouts`) list panes by kind (`tree`, `git`, `chat`), side and size; a kind with no provider yet is skipped, so `default` is tree \| editor until chat exists (JGA-89) and gains the chat pane with no layout change. `bud <dir>` and `bud <files>` open in a layout instead of the dashboard, after the first screen (D35); bare `bud` still shows the dashboard. A project's saved session wins over its layout; `--layout` always applies. Layouts set the `<leader>t` terminal's height (`default` keeps 35%). The layout comes from `--layout`, then the project's own (`layout` in `projects.json`, set with `bud layout set`), then `config.json`'s `layout` (`bud layout set-default`), then `default`. |
 | D46 | **`bud launch` opens a new terminal window running `bud open`.** | 2026-10-27 | The window runs this same binary as `bud [--verbose] [--no-update] [--layout L] open <abs paths>`, so registering the project, the update check and the layout all work as they do for `bud <path>`; no path opens the dashboard. Paths, `--layout` and `--terminal` are checked first, so a mistake is reported where you typed it, not in a window that flashes and closes. The terminal is `--terminal`, else `terminal` in `config.json`, else the first installed (Kitty before Ghostty, D11). On macOS both start through their app bundle with `open -n -a <app> --args ...` (Ghostty's CLI can't open windows there, and `-n` because a running app ignores new arguments), so each launch is a new app instance; elsewhere the terminal's binary starts in its own session. `open` doesn't pass the environment on, so the command is wrapped in `/usr/bin/env PATH=<caller's PATH>` for nvim and its tools. `launch` takes `--layout` as a command flag too, since that's how the app bundles will call it. |
 | D47 | **Bud.app is an AppleScript droplet built on the machine by `bud bundle`.** | 2026-10-27 | macOS hands files dropped on an app (Finder or Dock) to it as Apple Events, not argv, so a shell-script stub could never open a dropped folder, and handling the events in Go would need cgo. `osacompile` (part of macOS) compiles `bundles/macos/main.applescript` into a droplet; `on run` is `bud launch` (the dashboard, from `~`) and `on open` is `bud launch <paths>`, with errors shown in an alert. `bud bundle` bakes in the absolute path of the bud that built it and its `PATH`, since an app started from the Dock gets only the system's; building again refreshes both. It sets the bundle id `dev.jgarner.bud` (how bud knows a Bud.app is its own and may replace it; any other app there is refused), lets any file or folder be dropped (`public.item`), replaces the icon with the README robot as pixel art (drawn with `image/png` and written as `.icns` in Go, no binary asset in the repo) and re-signs it ad hoc. It goes to `/Applications` when writable, else `~/Applications`. The bud it runs is install.sh's recorded binary when there is one, which self-update swaps in place, so an update never has to rebuild the app. `bud install` on the full profile builds it (a failure only warns), and `bud uninstall` removes it. |
+| D48 | **`:BudClaude term` is the first chat UI; the native buffer UI follows.** | 2026-10-27 | Answers open question 3 (JGA-102). Claude Code's own TUI in a Neovim terminal is complete from day one (permissions, slash commands), so it ships first on the 4.2 session; the native chat (JGA-88/89) and Neovim permission prompts (JGA-82) come after. |
+| D49 | **A Neovim keeps the sessions of its last three projects, and stops any that sit idle.** | 2026-10-27 | Answers open question 4 (JGA-104). Switching projects keeps the previous sessions running so switching back is instant; opening a fourth stops the least recently used. A session nothing has used for `ai.claude.idle_minutes` (default 30) is stopped too, current one included, so a bud left open overnight doesn't hold Claude Code processes; the next use starts it again, resuming the conversation. Quitting Neovim still stops them all. |
+| D50 | **Each Neovim has its own sessions, even on the same project.** | 2026-10-27 | Answers open question 5 (JGA-105). Two bud windows on one project run two Claude Code processes, two separate conversations; no broker. With `resume = "continue"` the next one to start picks up the most recent conversation. |
 
 ---
 
@@ -401,7 +404,7 @@ The side-pane chat, full-screen chat, inline actions, `:BudGen` and any TUI you 
 
 **When Claude Code isn't there.** If `claude` isn't installed or isn't logged in, no session starts and the editor works as normal. The dashboard shows a banner with a one-key fix (`bud install`, which installs Claude Code and walks you to its login), and `bud doctor` reports it.
 
-**Config** (machine config, D13): `ai.claude.autostart` (default `true`), `ai.claude.resume` (`"continue"` or `"new"`), and `ai.claude.args` for extra flags.
+**Config** (machine config, D13): `ai.claude.autostart` (default `true`), `ai.claude.resume` (`"continue"` or `"new"`), `ai.claude.idle_minutes` (default 30, D49) and `ai.claude.args` for extra flags.
 
 Flag names and the bridge protocol details get re-checked against Claude Code's docs when this is built, like the paths in 4.1. The module's interface avoids Claude Code specifics, so another backend could slot in later (D26), but none is planned.
 
@@ -420,6 +423,7 @@ bud chat [--resume <title>] # jump straight into full-screen chat
 
 bud install [--profile full|minimal] [--yes]   # system deps + nvim + plugins + language tooling
 bud doctor                  # health checks: versions, missing tools, broken specs, keys present
+bud claude status | setup    # is Claude Code installed and logged in; install it and hand over to its login
 bud update [--check] [--channel stable|nightly]   # self-update the binary, then sync its embedded config + restore lockfile, migrate
 bud dev link [path] | unlink                   # point ~/.config/bud at a checkout for live editing
 bud uninstall [--keep-config]
@@ -634,10 +638,7 @@ With no newer release, `bud update` skips step 1 and just re-syncs, which also r
 
 ## 7. Open questions for you
 
-Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42). What's left:
+Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50). What's left:
 
 1. **AI kit contents.** Beyond Context7, which tools from the candidates table in 4.1, plus anything not listed? (To discuss.)
 2. **Lua in the language preset?** D10 leaves out Lua. Do you want it anyway, for editing bud's own config and tools?
-3. **First chat UI.** Both run on the 4.2 session, so this is only about order: build the native buffer UI first, or ship `:BudClaude term` (Claude Code's own TUI) first and the native UI after?
-4. **Sessions when switching projects.** Keep the previous project's Claude Code session running so switching back is instant (costs memory, no tokens), or stop it when you leave? I'd keep the last two or three.
-5. **Several bud windows on one project.** Two Neovim instances on the same project each get their own Claude Code process. Fine as is, or should the second one attach to the first one's session?

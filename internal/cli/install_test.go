@@ -77,6 +77,39 @@ func TestPrompterChooseMany(t *testing.T) {
 	if err != nil || !slices.Equal(got, []string{"bash"}) {
 		t.Errorf("retry then default: got %q, %v", got, err)
 	}
+
+	for _, in := range []string{"all", "ALL", "go, all"} {
+		got, err = answers(in).chooseMany("Languages", config.Languages, []string{"bash"})
+		if err != nil || !slices.Equal(got, config.Languages) {
+			t.Errorf("%q: got %q, %v; want every language", in, got, err)
+		}
+	}
+	// the result is a copy, so changing it can't change config.Languages
+	got[0] = "x"
+	if config.Languages[0] == "x" {
+		t.Error("chooseMany returned config.Languages itself")
+	}
+}
+
+func TestPrompterChooseManyShowsAllAsDefault(t *testing.T) {
+	var out strings.Builder
+	pr := newPrompter(strings.NewReader("\n"), &out)
+	got, err := pr.chooseMany("Languages", config.Languages, config.PresetLanguages("full"))
+	if err != nil || !slices.Equal(got, config.Languages) {
+		t.Fatalf("empty answer: got %q, %v", got, err)
+	}
+	if want := "or all) [all]: "; !strings.HasSuffix(out.String(), want) {
+		t.Fatalf("prompt = %q, want it to end with %q", out.String(), want)
+	}
+
+	out.Reset()
+	pr = newPrompter(strings.NewReader("\n"), &out)
+	if _, err := pr.chooseMany("Languages", config.Languages, []string{"python", "bash"}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "[python bash]: "; !strings.HasSuffix(out.String(), want) {
+		t.Fatalf("prompt = %q, want it to end with %q", out.String(), want)
+	}
 }
 
 func TestPrompterConfirm(t *testing.T) {

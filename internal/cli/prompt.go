@@ -63,16 +63,25 @@ func (p *prompter) choose(question string, options []string, def string) (string
 	return "", fmt.Errorf("no valid answer to %q", question)
 }
 
-// chooseMany asks for a space or comma separated list drawn from options
+// chooseMany asks for a space or comma separated list drawn from options, or
+// "all" for every option
 func (p *prompter) chooseMany(question string, options, def []string) ([]string, error) {
-	q := fmt.Sprintf("%s (any of: %s)", question, strings.Join(options, " "))
+	q := fmt.Sprintf("%s (any of: %s, or all)", question, strings.Join(options, " "))
+	defLabel := strings.Join(def, " ")
+	if isAll(def, options) {
+		defLabel = "all"
+	}
+
 	for range maxTries {
-		answer, err := p.ask(q, strings.Join(def, " "))
+		answer, err := p.ask(q, defLabel)
 		if err != nil {
 			return nil, err
 		}
 
 		picked := strings.FieldsFunc(answer, func(r rune) bool { return r == ' ' || r == ',' })
+		if slices.ContainsFunc(picked, func(s string) bool { return strings.EqualFold(s, "all") }) {
+			return slices.Clone(options), nil
+		}
 		var unknown []string
 		for _, s := range picked {
 			if !slices.Contains(options, s) {
@@ -95,6 +104,17 @@ func (p *prompter) chooseMany(question string, options, def []string) ([]string,
 	}
 
 	return nil, fmt.Errorf("no valid answer to %q", question)
+}
+
+// isAll reports whether picked holds every option
+func isAll(picked, options []string) bool {
+	for _, o := range options {
+		if !slices.Contains(picked, o) {
+			return false
+		}
+	}
+
+	return len(options) > 0
 }
 
 // confirm asks a yes/no question that defaults to no

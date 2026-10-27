@@ -5,6 +5,10 @@ return {
     -- v2 is a rewrite still in progress; v1 is the stable line
     src = "Saghen/blink.cmp",
     version = vim.version.range("1"),
+    -- ~8 ms at startup, mostly from loading vim.lsp; nothing needs it before typing.
+    -- An LSP server started earlier misses blink's extra capabilities, but
+    -- Neovim's defaults already advertise completion and snippets
+    event = { "InsertEnter", "CmdlineEnter" },
     config = function()
       require("blink.cmp").setup({
         -- <C-space> opens, <C-y> accepts, <C-n>/<C-p> move: Neovim's own completion keys

@@ -29,11 +29,25 @@ return {
     end,
   },
   {
-    -- maintained fork of diffview.nvim; same module and commands. No setup()
-    -- call: the defaults suit bud, and requiring it costs ~10 ms at startup,
-    -- while its commands load it on first use by themselves
+    -- maintained fork of diffview.nvim; same module and commands. Loads on its
+    -- first command (~3 ms otherwise). No setup() call: the defaults suit bud.
+    -- Its session-restore hook waits too, which is fine until bud has sessions
     src = "dlyongemallo/diffview-plus.nvim",
-    config = function()
+    cmd = {
+      "DiffviewOpen",
+      "DiffviewClose",
+      "DiffviewToggle",
+      "DiffviewFileHistory",
+      "DiffviewFocusFiles",
+      "DiffviewToggleFiles",
+      "DiffviewRefresh",
+      "DiffviewLog",
+      "DiffviewDiffFiles",
+      "DiffviewDiffDirs",
+      "DiffviewMergeFiles",
+      "DiffviewWorktreeOverview",
+    },
+    init = function()
       map("n", "<leader>gd", "<cmd>DiffviewOpen<cr>", { desc = "Diff working tree" })
       map("n", "<leader>gh", "<cmd>DiffviewFileHistory %<cr>", { desc = "File history" })
       map("n", "<leader>gH", "<cmd>DiffviewFileHistory<cr>", { desc = "Repo history" })

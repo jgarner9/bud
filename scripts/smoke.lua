@@ -27,7 +27,18 @@ else
   for _, name in ipairs(pack.failed) do
     table.insert(problems, "plugin config failed: " .. name)
   end
-  -- plugins that load on first use would otherwise never run here
+  -- lazy plugins and ones loaded on first use would otherwise never run here
+  for name in pairs(pack.lazy) do
+    local loaded, err = pcall(pack.load, name)
+    if not loaded then
+      table.insert(problems, "lazy plugin failed to load: " .. name .. ": " .. tostring(err))
+    end
+  end
+  for _, name in ipairs(pack.failed) do
+    if not vim.tbl_contains(problems, "plugin config failed: " .. name) then
+      table.insert(problems, "plugin config failed: " .. name)
+    end
+  end
   for module, load in pairs(pack.deferred) do
     local loaded, err = pcall(load)
     if not loaded then

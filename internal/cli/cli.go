@@ -112,7 +112,7 @@ func (g *Globals) Logf(format string, a ...any) {
 	if w == nil {
 		w = os.Stderr
 	}
-	fmt.Fprintf(w, "bud: "+format+"\n", a...)
+	fmt.Fprintln(w, paint(w, ansiDim, fmt.Sprintf("bud: "+format, a...)))
 }
 
 // isGlobalFlag reports whether arg, like "--verbose" or "-layout=focus", names a global flag

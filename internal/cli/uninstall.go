@@ -68,7 +68,7 @@ func uninstall(g *Globals, args []string, yes, keepConfig bool) error {
 
 	fmt.Println("bud uninstall will remove:")
 	for _, r := range removals {
-		fmt.Printf("  %s\n      %s\n", r.path, r.what)
+		fmt.Printf("  %s\n      %s\n", paint(os.Stdout, ansiBold, r.path), paint(os.Stdout, ansiDim, r.what))
 	}
 	printKept(os.Stdout, kept)
 

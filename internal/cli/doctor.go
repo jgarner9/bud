@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 
 	"jgarner.dev/bud/internal/doctor"
@@ -65,10 +66,13 @@ func reportJSON(results []doctor.Result) error {
 
 // report prints doctor results and returns an error when any of them failed
 func report(results []doctor.Result) error {
+	w := os.Stdout
 	for _, r := range results {
-		fmt.Printf("%-4s  %-15s %s\n", r.Status, r.Name, r.Detail)
+		// pad before painting, so the escape codes don't break the columns
+		status := fmt.Sprintf("%-4s", r.Status)
+		fmt.Fprintf(w, "%s  %-15s %s\n", paint(w, statusStyle(strings.ToLower(r.Status.String())), status), r.Name, r.Detail)
 		if r.Fix != "" {
-			fmt.Printf("      %-15s fix: %s\n", "", r.Fix)
+			fmt.Fprintf(w, "      %-15s %s\n", "", paint(w, ansiDim, "fix: "+r.Fix))
 		}
 	}
 

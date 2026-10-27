@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -179,11 +180,11 @@ func languageDeps(specs *lang.Set, s config.Settings) []installer.Dep {
 func installDepsShown(deps []installer.Dep, pr *prompter, yes bool) error {
 	fmt.Println()
 	for _, dep := range deps {
-		status := "missing"
+		status, style := "missing", ansiRed
 		if dep.Installed() {
-			status = "ok"
+			status, style = "ok", ansiGreen
 		}
-		fmt.Printf("%-15s %s\n", dep.Name, status)
+		fmt.Printf("%-15s %s\n", dep.Name, paint(os.Stdout, style, status))
 	}
 
 	return installDeps(installer.NewPlan(deps), pr, yes)
@@ -198,7 +199,7 @@ func installDeps(plan *installer.Plan, pr *prompter, yes bool) error {
 		return plan.Err()
 	}
 
-	fmt.Printf("\nbud will run:\n  %s\n", strings.Join(argv, " "))
+	fmt.Printf("\nbud will run:\n  %s\n", paint(os.Stdout, ansiBold, strings.Join(argv, " ")))
 	if !yes {
 		if pr == nil {
 			return plan.Err()

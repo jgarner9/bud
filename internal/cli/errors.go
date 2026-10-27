@@ -35,12 +35,12 @@ func ExitCode(err error, stderr io.Writer) int {
 		return 0
 	case errors.As(err, &usage):
 		if !usage.Printed {
-			fmt.Fprintf(stderr, "bud: %v\n", usage.Err)
+			fmt.Fprintf(stderr, "%s %v\n", paint(stderr, ansiRed, "bud:"), usage.Err)
 			fmt.Fprintln(stderr, "run 'bud --help' for usage")
 		}
 		return ExitUsage
 	default:
-		fmt.Fprintf(stderr, "bud: %v\n", err)
+		fmt.Fprintf(stderr, "%s %v\n", paint(stderr, ansiRed, "bud:"), err)
 		return ExitFailure
 	}
 }

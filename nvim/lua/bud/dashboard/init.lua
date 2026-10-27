@@ -53,6 +53,25 @@ function M.doctor_banners(results)
   return banners, fails + warns == 0
 end
 
+-- update_banner turns update.json (what `bud update --background` found, D9)
+-- into a banner: a release waiting for `bud update`, or nil
+function M.update_banner(st)
+  if type(st) ~= "table" or type(st.available) ~= "string" or st.available == "" then
+    return nil
+  end
+  return { level = "update", text = "bud " .. st.available .. " is available, press u" }
+end
+
+local function read_update()
+  local fd = io.open(vim.fn.stdpath("state") .. "/update.json", "r")
+  if not fd then
+    return nil
+  end
+  local ok, st = pcall(vim.json.decode, fd:read("*a"))
+  fd:close()
+  return ok and st or nil
+end
+
 -- parse_git reads `git status --porcelain=v2 --branch`
 function M.parse_git(out)
   local git = { changed = 0, ahead = 0, behind = 0 }
@@ -134,7 +153,7 @@ local function data()
     style = current.style,
     menu = menu(current.settings),
     projects = list,
-    banners = current.banners,
+    banners = current.update and { current.update, unpack(current.banners) } or current.banners,
     health = current.settings.health and health() or nil,
     tip = current.settings.tip and current.tip or nil,
   }
@@ -315,6 +334,7 @@ function M.open(opts)
     buf = buf,
     git = {},
     banners = {},
+    update = settings.banners ~= false and M.update_banner(read_update()) or nil,
     tagline = taglines[math.random(#taglines)],
     tip = M.tip(tonumber(os.date("%j"))),
     -- t switches it for this session; config.json's dashboard.style is the default

@@ -41,6 +41,13 @@ func open(g *Globals, args []string) error {
 		}
 	}
 
+	if p, err := paths.Resolve(); err == nil {
+		if err := finishPendingUpdate(g, p); err != nil {
+			return err
+		}
+		startUpdateCheck(g, p)
+	}
+
 	return nvim.Launch(ws.Root, ws.Files, g.Layout)
 }
 

@@ -583,7 +583,7 @@ boot (detached, at most once per day, skippable with --no-update, D9)
      (stable = latest release, nightly = rolling prerelease from main) and compare to `bud version`
        ├─ nothing new → silent
        └─ new version → steps 1–2 below in the background, the rest at next launch
-                        (update.auto = false → dashboard banner instead)
+                        (nightly, D42, or update.auto = false → dashboard banner instead)
 
 bud update  /  Settings → Update  /  [u] on dashboard
   1. if a newer release exists:

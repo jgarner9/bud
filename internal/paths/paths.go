@@ -55,6 +55,12 @@ func (p *Paths) Projects() string { return filepath.Join(p.State, "projects.json
 // KitLedger records everything `bud kit sync` wrote into Claude Code's config
 func (p *Paths) KitLedger() string { return filepath.Join(p.State, "kit-ledger.json") }
 
+// UpdateState records the last background update check (D9)
+func (p *Paths) UpdateState() string { return filepath.Join(p.State, "update.json") }
+
+// UpdateLog is where the detached background update check writes
+func (p *Paths) UpdateLog() string { return filepath.Join(p.Cache, "update.log") }
+
 // Migrations records which migrations/ scripts have run
 func (p *Paths) Migrations() string { return filepath.Join(p.State, "migrations.json") }
 

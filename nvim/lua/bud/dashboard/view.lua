@@ -107,7 +107,8 @@ local function projects(list)
   return lines
 end
 
-local levels = { error = "BudDashboardError", warn = "BudDashboardWarn", info = "BudDashboardDim" }
+local levels =
+  { error = "BudDashboardError", warn = "BudDashboardWarn", info = "BudDashboardDim", update = "BudDashboardOk" }
 
 -- silly is the full dashboard: robot, menu with icons, projects with git,
 -- banners, health line and tip

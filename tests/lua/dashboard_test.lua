@@ -28,6 +28,11 @@ local function has(lines, text, what)
   error(("%s: no line with %q in\n%s"):format(what, text, table.concat(lines, "\n")), 2)
 end
 
+-- update banner from update.json
+eq(dashboard.update_banner(nil), nil, "no update.json")
+eq(dashboard.update_banner({ checked_at = "x" }), nil, "nothing available")
+eq(dashboard.update_banner({ available = "0.6.0" }).text, "bud 0.6.0 is available, press u", "update waiting")
+
 -- moods
 eq(dashboard.mood({}, 2), "sleepy", "after midnight")
 eq(dashboard.mood({ update = true }, 14), "update", "update waiting")

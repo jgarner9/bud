@@ -38,17 +38,38 @@ func DetectTerminals() []string {
 }
 
 func (t Terminal) installed() bool {
-	if _, err := exec.LookPath(t.Bin); err == nil {
-		return true
-	}
-	if goos != "darwin" {
-		return false
-	}
-	for _, dir := range appDirs() {
-		if _, err := os.Stat(filepath.Join(dir, t.App)); err == nil {
-			return true
+	bin, app := t.Locate()
+	return bin != "" || app != ""
+}
+
+// Lookup returns the terminal called name
+func Lookup(name string) (Terminal, bool) {
+	for _, t := range Terminals {
+		if t.Name == name {
+			return t, true
 		}
 	}
 
-	return false
+	return Terminal{}, false
+}
+
+// Locate finds the terminal's binary on PATH and, on macOS, its app bundle.
+// Either is "" when it isn't there
+func (t Terminal) Locate() (bin, app string) {
+	bin, _ = exec.LookPath(t.Bin)
+	if goos != "darwin" {
+		return bin, ""
+	}
+	for _, dir := range appDirs() {
+		if path := filepath.Join(dir, t.App); isDir(path) {
+			return bin, path
+		}
+	}
+
+	return bin, ""
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }

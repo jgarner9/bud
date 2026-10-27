@@ -64,6 +64,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D43 | **Until the release key is pinned, self-update checks the SHA-256 only.** (Ended 2026-10-27: the key is pinned from v0.7.1, so every release from then on must be signed.) | 2026-10-27 | Interim, pending Jason's review (overnight run). `bud update` downloads `checksums.txt`, checks the archive against it and swaps; that's the same trust install.sh gives today (HTTPS from GitHub). Once `updater.ReleaseKey` is set, `checksums.txt.sig` is required and a missing or bad signature stops the update. |
 | D44 | **bud trusts a list of release keys, so the key can rotate without stranding installs.** | 2026-10-27 | Every binary and install.sh pin the keys they trust (`updater.ReleaseKeys`, install.sh's `RELEASE_KEYS`, a test keeps them equal); a signature by any of them passes. Usually there is one. To rotate, a release first trusts old and new while still signed with the old key; after a grace period the secret switches to the new key and the old one is dropped. A machine that skips the whole grace period has to reinstall. The rotation script and the grace period are JGA-111. |
 | D45 | **How layouts apply.** | 2026-10-27 | `layouts/*.lua` (embedded, synced to `~/.config/bud/layouts`) list panes by kind (`tree`, `git`, `chat`), side and size; a kind with no provider yet is skipped, so `default` is tree \| editor until chat exists (JGA-89) and gains the chat pane with no layout change. `bud <dir>` and `bud <files>` open in a layout instead of the dashboard, after the first screen (D35); bare `bud` still shows the dashboard. A project's saved session wins over its layout; `--layout` always applies. Layouts set the `<leader>t` terminal's height (`default` keeps 35%). The layout comes from `--layout`, then the project's own (`layout` in `projects.json`, set with `bud layout set`), then `config.json`'s `layout` (`bud layout set-default`), then `default`. |
+| D46 | **`bud launch` opens a new terminal window running `bud open`.** | 2026-10-27 | The window runs this same binary as `bud [--verbose] [--no-update] [--layout L] open <abs paths>`, so registering the project, the update check and the layout all work as they do for `bud <path>`; no path opens the dashboard. Paths, `--layout` and `--terminal` are checked first, so a mistake is reported where you typed it, not in a window that flashes and closes. The terminal is `--terminal`, else `terminal` in `config.json`, else the first installed (Kitty before Ghostty, D11). On macOS both start through their app bundle with `open -n -a <app> --args ...` (Ghostty's CLI can't open windows there, and `-n` because a running app ignores new arguments), so each launch is a new app instance; elsewhere the terminal's binary starts in its own session. `open` doesn't pass the environment on, so the command is wrapped in `/usr/bin/env PATH=<caller's PATH>` for nvim and its tools. `launch` takes `--layout` as a command flag too, since that's how the app bundles will call it. |
 
 ---
 
@@ -102,9 +103,8 @@ bud/
 │   │   └── release.go
 │   │       # fallback: download prebuilt binaries into bud's own bin dir
 │   ├── launcher/
-│   │   # spawns the chosen terminal with the layout
-│   │   └── terminals/
-│   │       # kitty.go ghostty.go first (D11); wezterm.go alacritty.go iterm2.go later
+│   │   # spawns the chosen terminal running bud open (D46), one file per terminal:
+│   │   # kitty.go ghostty.go first (D11); wezterm.go alacritty.go iterm2.go later
 │   ├── projects/
 │   │   # project registry (add/remove/list/recent), backs the dashboard
 │   ├── updater/

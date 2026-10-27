@@ -44,6 +44,8 @@ return {
     version = vim.version.range("1.*"),
     cmd = { "DapViewOpen", "DapViewClose", "DapViewToggle" },
     config = function()
+      -- it needs nvim-dap, which may not be loaded yet (:DapViewOpen first)
+      require("bud.pack").load("nvim-dap")
       require("dap-view").setup({ auto_toggle = true, windows = { position = "below", size = 0.3 } })
     end,
   },

@@ -68,7 +68,7 @@ Working today:
 | `bud open`    | Launches Neovim with the Bud config on a directory, or on one or more files (`bud a.go b.go`) from their project root |
 | `bud install` | Asks for profile, terminal and languages (`all` picks every language), installs missing system packages (after showing the command and asking), installs the Bud Neovim config, then runs `bud doctor`. `--yes` takes the defaults without asking |
 | `bud update`  | Syncs the config and restores pinned plugins              |
-| `bud doctor`  | Checks deps, the Neovim version (0.12+), config sync and machine config; exits 1 on a failure |
+| `bud doctor`  | Checks deps, the Neovim (0.12+) and tree-sitter CLI (0.26.1+) versions, config sync and machine config; exits 1 on a failure |
 | `bud version` | Prints the version                                        |
 | `bud uninstall` | Lists everything bud put on the machine and removes it once you confirm (`--yes` skips). `--keep-config` keeps `config.json` and `user-tools/`. The binary is only removed if `install.sh` installed it |
 

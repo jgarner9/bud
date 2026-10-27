@@ -1,0 +1,158 @@
+-- Languages (D29): each plugin wires up its part of the enabled language specs,
+-- which bud.lang reads from languages/. Parsers and Mason packages are installed
+-- by the restore hooks, while bud install / bud update runs, never at startup.
+
+-- ten minutes for a restore hook's downloads and builds
+local restore_timeout = 600000
+
+-- the enabled languages' filetypes, which the LSP side loads on; nil with
+-- none, since an empty ft list would never load the plugin
+local filetypes = vim.tbl_keys(require("bud.lang").filetypes())
+table.sort(filetypes)
+if #filetypes == 0 then
+  filetypes = nil
+end
+
+return {
+  {
+    -- ahead of nvim-lspconfig, so on a shared first filetype the servers are on PATH before they start
+    src = "mason-org/mason.nvim",
+    version = vim.version.range("2"),
+    -- ~3 ms to set up, so it waits for the first buffer of an enabled language too
+    ft = filetypes,
+    cmd = { "Mason", "MasonInstall", "MasonLog" },
+    config = function()
+      -- puts Mason's bin dir on PATH, where the servers, linters and formatters are found
+      require("mason").setup()
+    end,
+    restore = function()
+      local names = require("bud.lang").collect("mason")
+      if #names == 0 then
+        return
+      end
+      require("mason").setup()
+      local registry = require("mason-registry")
+      local ok, err = registry.refresh()
+      if not ok then
+        error("refreshing the Mason registry: " .. tostring(err), 0)
+      end
+
+      local pending, failed = 0, {}
+      for _, name in ipairs(names) do
+        local found, pkg = pcall(registry.get_package, name)
+        if not found then
+          table.insert(failed, name .. " (no such Mason package)")
+        elseif not pkg:is_installed() then
+          pending = pending + 1
+          vim.api.nvim_echo({ { "bud: installing " .. name .. "\n" } }, true, {})
+          pkg:install({}, function(success, result)
+            if not success then
+              table.insert(failed, ("%s (%s)"):format(name, tostring(result)))
+            end
+            pending = pending - 1
+          end)
+        end
+      end
+      if not vim.wait(restore_timeout, function()
+        return pending == 0
+      end, 200) then
+        error("timed out installing Mason packages", 0)
+      end
+      if #failed > 0 then
+        error("installing Mason packages failed: " .. table.concat(failed, ", "), 0)
+      end
+    end,
+  },
+  {
+    -- server settings for vim.lsp.config: its lsp/<name>.lua files merge under ours
+    src = "neovim/nvim-lspconfig",
+    version = vim.version.range("2"),
+    -- loading vim.lsp costs ~4 ms, so wait for a buffer that needs it
+    ft = filetypes,
+    config = function()
+      -- a server that isn't installed is skipped (and logged) when a buffer opens
+      for server, settings in pairs(require("bud.lang").servers()) do
+        vim.lsp.config(server, settings)
+        vim.lsp.enable(server)
+      end
+    end,
+  },
+  {
+    src = "nvim-treesitter/nvim-treesitter",
+    -- main is the rewrite for Neovim 0.12; master is frozen
+    version = "main",
+    config = function()
+      if not filetypes then
+        return
+      end
+      vim.api.nvim_create_autocmd("FileType", {
+        group = vim.api.nvim_create_augroup("bud.lang.treesitter", {}),
+        pattern = filetypes,
+        desc = "start tree-sitter highlighting",
+        callback = function(ev)
+          -- fails when the parser isn't built yet, which leaves regex highlighting on
+          pcall(vim.treesitter.start, ev.buf)
+        end,
+      })
+    end,
+    restore = function()
+      local ts = require("nvim-treesitter")
+      -- parsers have to match the queries of the plugin revision just checked out
+      if not ts.update():wait(restore_timeout) then
+        error("updating tree-sitter parsers failed (bud doctor checks the tree-sitter CLI)", 0)
+      end
+      local parsers = require("bud.lang").collect("treesitter")
+      if #parsers > 0 and not ts.install(parsers, { summary = true }):wait(restore_timeout) then
+        error("building tree-sitter parsers failed (bud doctor checks the tree-sitter CLI)", 0)
+      end
+    end,
+  },
+  {
+    src = "stevearc/conform.nvim",
+    version = vim.version.range("9"),
+    keys = { { "<leader>cf", desc = "Format buffer", mode = { "n", "x" } } },
+    event = "BufWritePre",
+    cmd = "ConformInfo",
+    config = function()
+      local lang = require("bud.lang")
+      local enabled = lang.filetypes()
+      require("conform").setup({
+        formatters_by_ft = lang.by_ft("format"),
+        -- a language with no formatters gets its LSP server's formatting
+        default_format_opts = { lsp_format = "fallback" },
+        -- only bud's languages, so a stray file isn't reformatted by surprise
+        format_on_save = function(buf)
+          if lang.format_on_save() and enabled[vim.bo[buf].filetype] then
+            return { timeout_ms = 1000 }
+          end
+        end,
+      })
+      vim.keymap.set({ "n", "x" }, "<leader>cf", function()
+        require("conform").format({ async = true })
+      end, { desc = "Format buffer" })
+    end,
+  },
+  {
+    src = "mfussenegger/nvim-lint",
+    event = { "BufReadPost", "BufNewFile" },
+    config = function()
+      local lint = require("lint")
+      lint.linters_by_ft = require("bud.lang").by_ft("lint")
+      -- a linter that isn't installed is skipped rather than warned about on every write
+      local function installed(linter)
+        local cmd = linter.cmd
+        if type(cmd) == "function" then
+          cmd = cmd()
+        end
+        return type(cmd) == "string" and vim.fn.executable(cmd) == 1
+      end
+      vim.api.nvim_create_autocmd({ "BufReadPost", "BufWritePost", "InsertLeave" }, {
+        group = vim.api.nvim_create_augroup("bud.lang.lint", {}),
+        desc = "lint the buffer",
+        callback = function()
+          lint.try_lint(nil, { filter = installed })
+        end,
+      })
+    end,
+  },
+}

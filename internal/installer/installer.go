@@ -34,6 +34,12 @@ var Deps = []Dep{
 	}},
 	// fzf-lua's matcher (D28)
 	{Name: "fzf", Bins: []string{"fzf"}},
+	// nvim-treesitter builds parsers with these two (D29); doctor checks the
+	// CLI's version, since some distros ship one too old for it
+	{Name: "tree-sitter-cli", Bins: []string{"tree-sitter"}},
+	// macOS always has /usr/bin/cc (it offers to install the command line tools
+	// on first use, and Homebrew needs them anyway), so only Linux installs this
+	{Name: "gcc", Bins: []string{"cc", "gcc", "clang"}},
 	// only language servers like TypeScript's need node, which a server rarely runs
 	{Name: "node", Bins: []string{"node"}, FullOnly: true, Pkgs: map[string][]string{
 		"pacman": {"nodejs", "npm"},

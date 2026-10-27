@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -48,13 +49,20 @@ type Result struct {
 // MinNeovim is the oldest Neovim bud supports (D19)
 var MinNeovim = [2]int{0, 12}
 
+// MinTreeSitter is the oldest tree-sitter CLI nvim-treesitter's main branch builds parsers with
+var MinTreeSitter = [3]int{0, 26, 1}
+
 // swappable in tests
 var (
 	nvimVersion = func() (string, error) {
 		out, err := exec.Command("nvim", "--version").Output()
 		return string(out), err
 	}
-	embedded = func() fs.FS { return bud.NvimConfig() }
+	treeSitterVersion = func() (string, error) {
+		out, err := exec.Command("tree-sitter", "--version").Output()
+		return string(out), err
+	}
+	embedded = func() fs.FS { return bud.Config() }
 )
 
 // Run runs every check, in the order they're worth reading
@@ -69,6 +77,9 @@ func Run() []Result {
 
 	results := checkDeps(cfg.Profile)
 	if r, ok := checkNeovim(); ok {
+		results = append(results, r)
+	}
+	if r, ok := checkTreeSitter(); ok {
 		results = append(results, r)
 	}
 
@@ -152,6 +163,45 @@ func parseNvimVersion(out string) (version string, major, minor int, ok bool) {
 	minor, _ = strconv.Atoi(m[2])
 
 	return strings.TrimPrefix(m[0], "NVIM "), major, minor, true
+}
+
+var treeSitterVersionRe = regexp.MustCompile(`^tree-sitter (\d+)\.(\d+)\.(\d+)`)
+
+// checkTreeSitter reports the tree-sitter CLI's version. Too old only warns:
+// the editor still works, but new parsers won't build. It's skipped when the
+// CLI isn't on PATH, since checkDeps already says so
+func checkTreeSitter() (Result, bool) {
+	if _, err := exec.LookPath("tree-sitter"); err != nil {
+		return Result{}, false
+	}
+
+	r := Result{Name: "tree-sitter version"}
+	out, err := treeSitterVersion()
+	if err != nil {
+		r.Status = Warn
+		r.Detail = "tree-sitter --version: " + err.Error()
+		return r, true
+	}
+
+	m := treeSitterVersionRe.FindStringSubmatch(firstLine(out))
+	if m == nil {
+		r.Status = Warn
+		r.Detail = fmt.Sprintf("can't read the version from %q", firstLine(out))
+		return r, true
+	}
+
+	var have [3]int
+	for i := range have {
+		have[i], _ = strconv.Atoi(m[i+1])
+	}
+	r.Detail = strings.TrimPrefix(m[0], "tree-sitter ")
+	if slices.Compare(have[:], MinTreeSitter[:]) < 0 {
+		r.Status = Warn
+		r.Detail += fmt.Sprintf(", parsers need %d.%d.%d or newer", MinTreeSitter[0], MinTreeSitter[1], MinTreeSitter[2])
+		r.Fix = "upgrade tree-sitter-cli with your package manager, or install a newer release from GitHub"
+	}
+
+	return r, true
 }
 
 func firstLine(s string) string {

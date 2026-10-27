@@ -17,12 +17,14 @@ import (
 
 // Settings is the machine config merged over the defaults
 type Settings struct {
-	Profile   string    `json:"profile"` // "full" (desktop) or "minimal" (SSH/server)
-	Terminal  string    `json:"terminal"`
-	Update    Update    `json:"update"`
-	Languages []string  `json:"languages"`
-	Dashboard Dashboard `json:"dashboard"`
-	AI        AI        `json:"ai"`
+	Profile   string   `json:"profile"` // "full" (desktop) or "minimal" (SSH/server)
+	Terminal  string   `json:"terminal"`
+	Update    Update   `json:"update"`
+	Languages []string `json:"languages"`
+	// bud.lang formats a buffer of an enabled language when it's written (D30)
+	FormatOnSave bool      `json:"format_on_save"`
+	Dashboard    Dashboard `json:"dashboard"`
+	AI           AI        `json:"ai"`
 }
 
 type Update struct {
@@ -51,7 +53,9 @@ var (
 	Terminals = []string{"kitty", "ghostty"} // D11
 )
 
-// PresetLanguages are the languages a profile enables when none are configured
+// PresetLanguages are the languages a profile enables when none are configured.
+// The specs are the source of truth (a spec with minimal = true is in the minimal
+// preset, D30), and bud.lang reads them; this copy goes once Go reads the specs too (JGA-54)
 func PresetLanguages(profile string) []string {
 	if profile == "minimal" {
 		return []string{"python", "bash"}
@@ -63,12 +67,13 @@ func PresetLanguages(profile string) []string {
 // Defaults are the settings with no config.json at all
 func Defaults() Settings {
 	return Settings{
-		Profile:   "full",
-		Terminal:  "kitty", // D11
-		Update:    Update{Channel: "stable", Auto: true},
-		Languages: PresetLanguages("full"),
-		Dashboard: Dashboard{Style: "silly"},
-		AI:        AI{Claude: Claude{Autostart: true, Resume: "continue", Args: []string{}}},
+		Profile:      "full",
+		Terminal:     "kitty", // D11
+		Update:       Update{Channel: "stable", Auto: true},
+		Languages:    PresetLanguages("full"),
+		FormatOnSave: true,
+		Dashboard:    Dashboard{Style: "silly"},
+		AI:           AI{Claude: Claude{Autostart: true, Resume: "continue", Args: []string{}}},
 	}
 }
 

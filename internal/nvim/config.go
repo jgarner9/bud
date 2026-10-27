@@ -42,7 +42,7 @@ func Apply() error {
 	fmt.Println("Bud config directory: " + dst)
 
 	fmt.Println("Syncing config...")
-	res, err := SyncConfig(bud.NvimConfig(), dst)
+	res, err := SyncConfig(bud.Config(), dst)
 	if err != nil {
 		return err
 	}

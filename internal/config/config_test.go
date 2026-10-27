@@ -29,7 +29,7 @@ func TestLoadMissingIsDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if want := Defaults(); s.Terminal != want.Terminal || s.Update != want.Update ||
-		!slices.Equal(s.Languages, want.Languages) || s.Dashboard != want.Dashboard {
+		!slices.Equal(s.Languages, want.Languages) || s.Dashboard != want.Dashboard || !s.FormatOnSave {
 		t.Fatalf("got %+v, want defaults", s)
 	}
 }
@@ -38,6 +38,7 @@ func TestSettingsMergeOverDefaults(t *testing.T) {
 	f, err := Load(writeFile(t, `{
 		"update": {"channel": "nightly"},
 		"languages": ["bash"],
+		"format_on_save": false,
 		"ai": {"claude": {"args": ["--model", "opus"]}}
 	}`))
 	if err != nil {
@@ -53,6 +54,9 @@ func TestSettingsMergeOverDefaults(t *testing.T) {
 	}
 	if !slices.Equal(s.Languages, []string{"bash"}) {
 		t.Errorf("languages = %v, want the file's list to replace the default", s.Languages)
+	}
+	if s.FormatOnSave {
+		t.Error("format_on_save = true, want the file's false")
 	}
 	if c := s.AI.Claude; !c.Autostart || c.Resume != "continue" || !slices.Equal(c.Args, []string{"--model", "opus"}) {
 		t.Errorf("ai.claude = %+v", c)

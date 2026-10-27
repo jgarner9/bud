@@ -64,6 +64,46 @@ func tempPaths(t *testing.T) *paths.Paths {
 	return p
 }
 
+func TestCheckTreeSitter(t *testing.T) {
+	tests := []struct {
+		name   string
+		out    string
+		err    error
+		status Status
+		detail string
+	}{
+		{"oldest supported", "tree-sitter 0.26.1\n", nil, OK, "0.26.1"},
+		{"newer, with a hash", "tree-sitter 0.27.1 (6bd5d5d1e1e1)\n", nil, OK, "0.27.1"},
+		{"too old", "tree-sitter 0.22.6\n", nil, Warn, "0.22.6, parsers need 0.26.1 or newer"},
+		{"unreadable", "something else\n", nil, Warn, `can't read the version from "something else"`},
+		{"won't run", "", errors.New("exit status 1"), Warn, "tree-sitter --version: exit status 1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakePath(t, "tree-sitter")
+			orig := treeSitterVersion
+			treeSitterVersion = func() (string, error) { return tt.out, tt.err }
+			t.Cleanup(func() { treeSitterVersion = orig })
+
+			r, ok := checkTreeSitter()
+			if !ok {
+				t.Fatal("check was skipped")
+			}
+			if r.Status != tt.status || r.Detail != tt.detail {
+				t.Fatalf("got %v %q, want %v %q", r.Status, r.Detail, tt.status, tt.detail)
+			}
+		})
+	}
+
+	t.Run("skipped without tree-sitter", func(t *testing.T) {
+		fakePath(t)
+		if _, ok := checkTreeSitter(); ok {
+			t.Fatal("expected the check to be skipped")
+		}
+	})
+}
+
 func TestParseNvimVersion(t *testing.T) {
 	tests := []struct {
 		out          string

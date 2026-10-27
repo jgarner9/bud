@@ -23,7 +23,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D2  | **All config is JSON** (`config.json`, tool `manifest.json`, `projects.json`, chat sessions).                                | 2026-10-24 | `encoding/json`, so it follows from D1. JSON has no comments, so the defaults are documented in `docs/config.md` and `bud config get/set` keeps you from hand-editing most of the time. Unknown keys are kept on rewrite, so a newer config never gets wiped by an older binary.                                                                                                                                            |
 | D3  | **Superseded by D26.** ~~The AI kit is harness-neutral, with one adapter per harness (Claude Code, OpenCode, Hermes).~~ | 2026-10-24 | The kit stays, but only as Claude Code setup (4.1). |
 | D4  | **Flags go before positional arguments.** The shape is `bud [global flags] <command> [command flags] [args]`.                | 2026-10-25 | This is plain stdlib `flag` behavior, with no interspersed parsing and no argv rewriting. `bud --layout focus .`, not `bud . --layout focus`. `bud kit enable --profile minimal context7`, not `bud kit enable context7 --profile minimal`. Anything after the first positional is treated as positional, so a flag there is passed through as an argument. `--` still works to end flags explicitly.                             |
-| D5  | **The config ships embedded in the binary.** No repo clone at runtime; `~/.config/bud` is a synced copy.                     | 2026-10-25 | Repo files the editor needs (`nvim/`, later `languages/`, `layouts/`, `tools/`, `migrations/`) are pulled in by `//go:embed` in the root `embed.go`, since embed can't reach parent dirs. One binary version means one config version, updates are checksummed releases, and syncing works offline. Updating is self-update (download, verify, swap, re-exec) followed by a sync from the new binary. Synced files are bud-owned and get overwritten without warning (D21); personal changes go in machine config (D13) or `user-tools/`. Config changes ship by cutting a release; `bud dev link` covers the edit loop. Bud itself needs no `git`, but `vim.pack` still does. |
+| D5  | **The config ships embedded in the binary.** No repo clone at runtime; `~/.config/bud` is a synced copy.                     | 2026-10-25 | Repo files the editor needs (`nvim/` and `languages/`, later `layouts/`, `tools/`, `migrations/`) are pulled in by `//go:embed` in the root `embed.go`, since embed can't reach parent dirs. One binary version means one config version, updates are checksummed releases, and syncing works offline. Updating is self-update (download, verify, swap, re-exec) followed by a sync from the new binary. Synced files are bud-owned and get overwritten without warning (D21); personal changes go in machine config (D13) or `user-tools/`. Config changes ship by cutting a release; `bud dev link` covers the edit loop. Bud itself needs no `git`, but `vim.pack` still does. |
 | D6  | **The name is `bud`**, the repo is `jgarner9/bud`. | 2026-10-26 | Already hardcoded in `install.sh`, `.goreleaser.yaml` and the README. |
 | D7  | **Releases are signed.** `checksums.txt` gets an SSH signature from a dedicated Ed25519 release key. | 2026-10-26 | The release workflow signs with `ssh-keygen -Y sign` (key kept as an Actions secret). `install.sh` verifies with `ssh-keygen -Y verify` against a public key pinned in the script, which works on any Mac or Linux box with OpenSSH, so no extra tool. Self-update verifies the same signature in Go with `crypto/ed25519` plus a small SSHSIG parser, keeping D1. Checksums then cover each archive. |
 | D8  | **Leader is `<Space>`**, local leader is `\`. | 2026-10-26 | Already set in `nvim/init.lua`. |
@@ -48,6 +48,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D27 | **Plugins are managed by Neovim's built-in `vim.pack`, not lazy.nvim.** | 2026-10-27 | lazy.nvim had no commits in 6 months; `vim.pack` ships with Neovim. Measured: lazy.nvim alone cost ~5.3 ms of a 14.6 ms headless start. `nvim-pack-lock.json` ships in the binary like the old lockfile, and `bud.pack.restore()` (run by install/update) drops plugins a release removed and checks the rest out at their locked revision. `vim.pack` has no lazy loading, so `bud.pack` has its own (`event`, `ft`, `cmd`, `keys`; JGA-107): blink.cmp and diffview load on first use, taking headless startup from ~42 ms to ~25 ms. Requires Neovim 0.12 (D19). |
 | D28 | **fzf-lua is the picker.** | 2026-10-27 | Over snacks.picker, which had 5 commits in 6 months against fzf-lua's 130. Adds `fzf` as a system dependency. |
 | D29 | **The plugin set for milestone 2** (reviewed for maintenance: commits in the 6 months to 2026-10-27). | 2026-10-27 | Nav: fzf-lua (D28), mini.jump2d (`gw` labels every word start with two-character labels like Helix, `s` jumps by one character then label; replaces flash.nvim), bud's own `bud.marks` for pinned files (harpoon, grapple and arrow are all unmaintained), aerial.nvim, neo-tree.nvim (+ plenary, nui, nvim-web-devicons), oil.nvim, which-key.nvim. oil owns directory buffers and `-`; neo-tree's netrw hijack is off, so it only opens as the side pane. Diagnostics list is fzf-lua's diagnostics picker on `<leader>x`, not trouble.nvim. Editor/UI/git: blink.cmp (pinned to a release tag), mini.statusline with bud's own sections, catppuccin (Macchiato), gitsigns.nvim, diffview-plus.nvim (diffview.nvim is unmaintained). Languages: nvim-lspconfig (server settings for `vim.lsp.config`), mason.nvim, conform.nvim, nvim-lint, nvim-treesitter `main` branch, whose `tree-sitter` CLI and C compiler become `installer.Deps` that install and doctor track. mini.nvim comes in as one plugin for jump2d and statusline. Debugging (nvim-dap) is deferred (JGA-108). Dropped: flash, harpoon, trouble, lualine, diffview, snacks, todo-comments. |
+| D30 | **The language engine (`bud.lang`).** Specs are synced to `~/.config/bud/languages/`; a spec's `minimal = true` puts it in the minimal preset; format-on-save is on by default. | 2026-10-27 | The binary embeds `languages/*.lua` (so `_template.lua` comes along) and mounts it inside the synced `nvim/` tree. With no `languages` list in `config.json`, `full` enables every spec and `minimal` the ones marked `minimal`; Go's `config.PresetLanguages` copies that until it reads the specs itself (JGA-54). Enabled names with no spec are skipped quietly (kept in `bud.lang.unknown`), and a spec with an unknown field or wrong type is reported and skipped. `format_on_save` (default `true`) formats enabled languages on write with conform, falling back to the LSP server; `<leader>cf` formats by hand. Parsers and Mason packages install in `bud.pack.restore()` (install/update), never at startup; a missing server, linter or formatter is skipped without a warning. mason.nvim and nvim-lspconfig load on the first buffer of an enabled filetype, which keeps `vim.lsp` (~4 ms) and Mason (~3 ms) out of startup. `tree-sitter-cli` (0.26.1+, doctor warns when older) and a C compiler join `installer.Deps`. `dap` is accepted but not wired yet (JGA-108). |
 
 ---
 
@@ -61,7 +62,7 @@ bud/
 ├── go.mod
 │   # no third-party deps, so no go.sum to speak of
 ├── embed.go
-│   # package bud: //go:embed for nvim/ (and later languages/, layouts/, tools/, migrations/), see D5
+│   # package bud: //go:embed for nvim/ and languages/ (later layouts/, tools/, migrations/), see D5
 ├── .goreleaser.yaml
 │   # builds bud for linux/darwin × amd64/arm64, attaches to GitHub releases
 ├── .github/workflows/
@@ -77,7 +78,7 @@ bud/
 │   ├── paths/
 │   │   # XDG paths on Linux, ~/Library on macOS, one place to resolve them
 │   ├── installer/
-│   │   # system deps: nvim, git, ripgrep, fd, fzf, node, fonts
+│   │   # system deps: nvim, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, node, fonts
 │   │   ├── brew.go  apt.go  dnf.go  pacman.go
 │   │   └── release.go
 │   │       # fallback: download prebuilt binaries into bud's own bin dir
@@ -109,9 +110,9 @@ bud/
 │       │   # options, keymaps, autocmds, the extension loader
 │       ├── plugins/
 │       │   # vim.pack specs grouped by area (bud.pack loads them)
-│       │   ├── editor.lua  nav.lua  ui.lua  git.lua  lsp.lua  ai.lua  dashboard.lua
+│       │   ├── editor.lua  nav.lua  ui.lua  git.lua  lang.lua  ai.lua  dashboard.lua
 │       ├── lang/
-│       │   # the language engine: reads ../../languages/*, wires LSP/lint/fmt/ts
+│       │   # the language engine: reads the synced languages/*, says what plugins/lang.lua wires up (D30)
 │       ├── ai/
 │       │   # claude.lua: the per-project Claude Code session + the API every AI UI uses (4.2);
 │       │   # inline actions, side-pane chat, tool generator UI (:BudGen)
@@ -205,17 +206,18 @@ Linux and macOS use the same XDG paths (D13), which is also where Neovim looks o
 A language file answers six questions: what files, what parser, what LSP, what linter, what formatter, what it needs installed.
 
 ```lua
--- languages/go.lua (illustrative shape, not final)
+-- languages/go.lua (illustrative; languages/_template.lua documents every field)
 return {
   filetypes  = { "go", "gomod", "gowork", "gotmpl" },
   treesitter = { "go", "gomod", "gowork", "gosum" },
   lsp        = { gopls = { settings = { gopls = { gofumpt = true } } } },
-  lint       = { "golangci-lint" },
-  format     = { "goimports", "gofumpt" },
-  dap        = "delve",                 -- optional debugger
-  mason      = { "gopls", "golangci-lint", "goimports", "gofumpt", "delve" },
+  lint       = { "golangcilint" },        -- nvim-lint names
+  format     = { "goimports", "gofumpt" }, -- conform names
+  mason      = { "gopls", "golangci-lint", "goimports", "gofumpt" },
   system     = { "go" },                -- things `bud install` makes sure exist
   root       = { "go.work", "go.mod", ".git" },
+  minimal    = false,                   -- true: in the minimal profile's preset (D30)
+  dap        = "delve",                 -- optional debugger, not wired yet (JGA-108)
 }
 ```
 

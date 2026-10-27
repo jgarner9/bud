@@ -20,10 +20,9 @@ set -eu
 
 REPO="jgarner9/bud"
 
-# The release key's public half (D7, D41). Empty until the key exists: until
-# then only the checksum is checked (D43). Keep it in step with
+# The release key's public half (D7, D41). Keep it in step with
 # internal/updater.ReleaseKey
-RELEASE_KEY=""
+RELEASE_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJsl2QmIh9DiX0baf+L0CgLKfFLQRf9GNRIgXFZK/hqY"
 VERSION="${BUD_VERSION:-latest}"
 BIN_DIR="${BUD_BIN_DIR:-$HOME/.local/bin}"
 PROFILE="${BUD_PROFILE:-full}"

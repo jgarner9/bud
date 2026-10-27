@@ -112,3 +112,20 @@ func TestVerifySSHSigLiveKeygen(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// install.sh and self-update must trust the same key
+func TestReleaseKeyMatchesInstallScript(t *testing.T) {
+	script, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(script), "\n") {
+		if pinned, ok := strings.CutPrefix(line, "RELEASE_KEY="); ok {
+			if got := strings.Trim(pinned, `"`); got != ReleaseKey {
+				t.Fatalf("install.sh pins %q, updater.ReleaseKey is %q", got, ReleaseKey)
+			}
+			return
+		}
+	}
+	t.Fatal("install.sh has no RELEASE_KEY line")
+}

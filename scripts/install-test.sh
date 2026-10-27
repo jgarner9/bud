@@ -30,9 +30,10 @@ release() {
 	fi
 }
 
-# script writes install.sh with key pinned as $1 (empty for none)
+# script writes install.sh with key pinned as $1 (empty for none), in place
+# of whatever the real one pins
 script() {
-	sed "s|^RELEASE_KEY=\"\"\$|RELEASE_KEY=\"$1\"|" "$root/install.sh" >"$tmp/install.sh"
+	sed "s|^RELEASE_KEY=\".*\"\$|RELEASE_KEY=\"$1\"|" "$root/install.sh" >"$tmp/install.sh"
 }
 
 pass=0

@@ -17,10 +17,9 @@ import (
 // signature made with the release key for anything else never verifies here
 const SigNamespace = "bud-release"
 
-// ReleaseKey is the pinned public half of the release key, as an
-// authorized_keys line. Empty until the real key exists (D41): until then
-// nothing is checked against it, and VerifyRelease refuses
-var ReleaseKey = ""
+// ReleaseKey is the pinned public half of the release key (D41), as an
+// authorized_keys line. Keep it in step with RELEASE_KEY in install.sh
+var ReleaseKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJsl2QmIh9DiX0baf+L0CgLKfFLQRf9GNRIgXFZK/hqY"
 
 // ErrNoReleaseKey means this build has no pinned release key yet
 var ErrNoReleaseKey = errors.New("this build has no release key pinned, so it can't verify downloads")

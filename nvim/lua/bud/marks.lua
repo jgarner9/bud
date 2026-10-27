@@ -140,6 +140,7 @@ local function describe(slots)
   return items
 end
 
+-- pin_current toggles the current file: pins it, or unpins it when it already is
 function M.pin_current()
   local path = vim.api.nvim_buf_get_name(0)
   if path == "" then
@@ -147,7 +148,11 @@ function M.pin_current()
     return
   end
   local slot, err = M.pin(path)
-  if slot then
+  local pinned_to = err and tonumber(err:match("^already pinned to (%d+)$"))
+  if pinned_to then
+    M.unpin(pinned_to)
+    vim.notify(("bud: unpinned from %d"):format(pinned_to))
+  elseif slot then
     vim.notify(("bud: pinned to %d"):format(slot))
   elseif err == "all slots are taken" then
     vim.ui.select(describe(M.get()), {
@@ -186,8 +191,9 @@ function M.setup()
       M.jump(i)
     end, { desc = "Pinned file " .. i })
   end
-  map("n", "<leader>m", M.pin_current, { desc = "Pin file" })
-  map("n", "<leader>M", M.unpin_menu, { desc = "Unpin file" })
+  map("n", "<leader>m", M.pin_current, { desc = "Pin / unpin file" })
+  -- <leader>M is Mason (D40), so the unpin menu sits next to the slot keys
+  map("n", "<leader>0", M.unpin_menu, { desc = "Unpin a file" })
 end
 
 return M

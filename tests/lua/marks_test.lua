@@ -60,4 +60,20 @@ vim.notify = function() end
 eq(marks.get(), {}, "corrupt file")
 vim.notify = notify
 
+-- pin_current toggles: a second press unpins
+local notified = {}
+vim.notify = function(msg)
+  table.insert(notified, msg)
+end
+local toggle = vim.fs.normalize(tmp .. "/toggle")
+vim.fn.mkdir(toggle, "p")
+vim.cmd.cd(toggle)
+vim.cmd.edit(vim.fn.fnameescape(toggle .. "/t.go"))
+marks.pin_current()
+eq(marks.get()[1], "t.go", "pinned by pin_current")
+marks.pin_current()
+eq(marks.get()[1], nil, "unpinned by pressing it again")
+eq(notified[#notified], "bud: unpinned from 1", "says it unpinned")
+vim.notify = notify
+
 print("marks_test: ok")

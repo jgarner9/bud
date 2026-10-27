@@ -29,9 +29,11 @@ return {
     version = vim.version.range("2"),
     -- ~3 ms to set up, and PATH is handled above, so only its UI loads it
     cmd = { "Mason", "MasonInstall", "MasonLog" },
+    keys = { { "<leader>M", desc = "Mason" } },
     config = function()
       -- PATH is already set, so mason must not prepend its bin dir again
       require("mason").setup({ PATH = "skip" })
+      vim.keymap.set("n", "<leader>M", "<cmd>Mason<cr>", { desc = "Mason" })
     end,
     restore = function()
       local names = require("bud.lang").collect("mason")

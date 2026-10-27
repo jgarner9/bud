@@ -134,7 +134,8 @@ Leader is <kbd>Space</kbd>. Press it and wait, and which-key shows the rest.
 | <kbd>Space</kbd> <kbd>b</kbd> · <kbd>Space</kbd> <kbd>r</kbd> | Buffers · recent files |
 | <kbd>g</kbd> <kbd>w</kbd> · <kbd>s</kbd> | Jump to any word · jump by character |
 | <kbd>Space</kbd> <kbd>e</kbd> · <kbd>-</kbd> | File tree · edit the parent directory as a buffer |
-| <kbd>Space</kbd> <kbd>m</kbd> · <kbd>Space</kbd> <kbd>1</kbd>–<kbd>4</kbd> | Pin a file · jump to a pinned file |
+| <kbd>Space</kbd> <kbd>m</kbd> · <kbd>Space</kbd> <kbd>1</kbd>–<kbd>4</kbd> | Pin or unpin a file · jump to a pinned file |
+| <kbd>Space</kbd> <kbd>d</kbd> · <kbd>Space</kbd> <kbd>M</kbd> | Dashboard · Mason |
 | <kbd>Space</kbd> <kbd>o</kbd> · <kbd>Space</kbd> <kbd>S</kbd> | Symbols outline · workspace symbols |
 | <kbd>Space</kbd> <kbd>x</kbd> | Diagnostics |
 | <kbd>Space</kbd> <kbd>c</kbd> <kbd>f</kbd> | Format buffer |

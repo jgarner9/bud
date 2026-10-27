@@ -28,7 +28,11 @@ func runDoctor(g *Globals, args []string) error {
 		return usageErrorf("doctor takes no arguments")
 	}
 
-	results := doctor.Run()
+	return report(doctor.Run())
+}
+
+// report prints doctor results and returns an error when any of them failed
+func report(results []doctor.Result) error {
 	for _, r := range results {
 		fmt.Printf("%-4s  %-15s %s\n", r.Status, r.Name, r.Detail)
 		if r.Fix != "" {

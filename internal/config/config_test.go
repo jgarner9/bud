@@ -64,6 +64,8 @@ func TestSettingsMergeOverDefaults(t *testing.T) {
 
 func TestSettingsValidate(t *testing.T) {
 	for _, doc := range []string{
+		`{"profile": "huge"}`,
+		`{"terminal": "xterm"}`,
 		`{"update": {"channel": "beta"}}`,
 		`{"dashboard": {"style": "loud"}}`,
 		`{"ai": {"claude": {"resume": "maybe"}}}`,
@@ -180,5 +182,19 @@ func TestGetSet(t *testing.T) {
 	}
 	if err := f.Set("update..channel", "x"); err == nil {
 		t.Error("expected an error for an empty key part")
+	}
+}
+
+func TestPresetLanguages(t *testing.T) {
+	if got := PresetLanguages("full"); !slices.Equal(got, Languages) {
+		t.Errorf("full = %v", got)
+	}
+	if got := PresetLanguages("minimal"); !slices.Equal(got, []string{"python", "bash"}) {
+		t.Errorf("minimal = %v", got)
+	}
+	// the preset is a copy, so callers can't change Languages through it
+	PresetLanguages("full")[0] = "x"
+	if Languages[0] != "go" {
+		t.Error("PresetLanguages returned Languages itself")
 	}
 }

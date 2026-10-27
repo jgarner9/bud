@@ -9,6 +9,8 @@ import (
 	"os"
 	"slices"
 	"strings"
+
+	"jgarner.dev/bud/internal/config"
 )
 
 var CommandRegistry = map[string]*Command{}
@@ -42,8 +44,8 @@ func (a *App) Run() error {
 	}
 	*args = global.Args()
 
-	if g.Profile != "" && !slices.Contains(profiles, g.Profile) {
-		return usageErrorf("--profile must be one of %s, not %q", strings.Join(profiles, ", "), g.Profile)
+	if g.Profile != "" && !slices.Contains(config.Profiles, g.Profile) {
+		return usageErrorf("--profile must be one of %s, not %q", strings.Join(config.Profiles, ", "), g.Profile)
 	}
 
 	// default to open when no command is given, or when the first arg isn't a known command
@@ -75,13 +77,10 @@ func (a *App) Run() error {
 	return nil
 }
 
-// profiles are the install profiles --profile accepts
-var profiles = []string{"full", "minimal"}
-
 func (g *Globals) flags(fs *flag.FlagSet) {
 	fs.BoolVar(&g.Verbose, "verbose", false, "log what bud is doing on stderr")
 	fs.BoolVar(&g.NoUpdate, "no-update", false, "skip the background update check at boot")
-	fs.StringVar(&g.Profile, "profile", "", "install profile: "+strings.Join(profiles, " or "))
+	fs.StringVar(&g.Profile, "profile", "", "install profile: "+strings.Join(config.Profiles, " or "))
 	fs.StringVar(&g.Layout, "layout", "", "pane layout to open the editor with")
 }
 

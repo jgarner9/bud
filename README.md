@@ -66,12 +66,12 @@ Working today:
 | Command       | What it does                                              |
 | ------------- | --------------------------------------------------------- |
 | `bud open`    | Launches Neovim with the Bud config on a directory, or on one or more files (`bud a.go b.go`) from their project root |
-| `bud install` | Checks system dependencies and installs the Bud Neovim config |
+| `bud install` | Asks for profile, terminal and languages, installs missing system packages (after showing the command and asking), installs the Bud Neovim config, then runs `bud doctor`. `--yes` takes the defaults without asking |
 | `bud update`  | Syncs the config and restores pinned plugins              |
 | `bud doctor`  | Checks deps, the Neovim version (0.11+), config sync and machine config; exits 1 on a failure |
 | `bud version` | Prints the version                                        |
 
-Global flags: `--verbose`, `--no-update`, `--profile full|minimal`, `--layout <name>`. `--no-update`, `--profile` and `--layout` are accepted but nothing uses them yet.
+Global flags: `--verbose`, `--no-update`, `--profile full|minimal`, `--layout <name>`. `--profile` is used by `install`; `--no-update` and `--layout` are accepted but nothing uses them yet.
 
 Everything else in the list above is still planned. See [`BASE.md`](BASE.md) for the full plan and the decisions made so far.
 

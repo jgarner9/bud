@@ -59,17 +59,20 @@ var (
 
 // Run runs every check, in the order they're worth reading
 func Run() []Result {
-	results := checkDeps()
+	p, err := paths.Resolve()
+	if err != nil {
+		return []Result{{Name: "paths", Status: Fail, Detail: err.Error()}}
+	}
+
+	// a broken config is reported by its own check; the deps fall back to the full profile
+	cfg, cfgResult := checkMachineConfig(p)
+
+	results := checkDeps(cfg.Profile)
 	if r, ok := checkNeovim(); ok {
 		results = append(results, r)
 	}
 
-	p, err := paths.Resolve()
-	if err != nil {
-		return append(results, Result{Name: "paths", Status: Fail, Detail: err.Error()})
-	}
-
-	return append(results, checkConfigSync(p), checkMachineConfig(p))
+	return append(results, checkConfigSync(p), cfgResult)
 }
 
 // Failed counts the results that are Fail
@@ -84,17 +87,18 @@ func Failed(results []Result) int {
 	return n
 }
 
-func checkDeps() []Result {
+// checkDeps reports the deps the profile installs (installer.Needed)
+func checkDeps(profile string) []Result {
 	m, found := installer.DetectManager()
 
 	var results []Result
-	for _, dep := range installer.Deps {
+	for _, dep := range installer.Needed(profile) {
 		r := Result{Name: dep.Name}
 		if !dep.Installed() {
 			r.Status = Fail
 			r.Detail = "not found on PATH (" + strings.Join(dep.Bins, " or ") + ")"
 			if found {
-				r.Fix = m.Install + " " + strings.Join(dep.Packages(m), " ")
+				r.Fix = strings.Join(m.Command(dep.Packages(m)), " ")
 			} else {
 				r.Fix = "install it with your system's package manager"
 			}
@@ -198,18 +202,20 @@ func checkConfigSync(p *paths.Paths) Result {
 	return r
 }
 
-func checkMachineConfig(p *paths.Paths) Result {
+// checkMachineConfig returns the settings, or the defaults when config.json is broken
+func checkMachineConfig(p *paths.Paths) (config.Settings, Result) {
 	r := Result{Name: "machine config"}
 
+	s := config.Defaults()
 	f, err := config.Load(p.MachineConfig())
 	if err == nil {
-		_, err = f.Settings()
+		s, err = f.Settings()
 	}
 	if err != nil {
 		r.Status = Fail
 		r.Detail = err.Error()
 		r.Fix = "fix or remove " + p.MachineConfig()
-		return r
+		return config.Defaults(), r
 	}
 
 	r.Detail = p.MachineConfig()
@@ -217,7 +223,7 @@ func checkMachineConfig(p *paths.Paths) Result {
 		r.Detail = "defaults (no " + p.MachineConfig() + ")"
 	}
 
-	return r
+	return s, r
 }
 
 func plural(n int, word string) string {

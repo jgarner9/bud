@@ -17,6 +17,7 @@ import (
 
 // Settings is the machine config merged over the defaults
 type Settings struct {
+	Profile   string    `json:"profile"` // "full" (desktop) or "minimal" (SSH/server)
 	Terminal  string    `json:"terminal"`
 	Update    Update    `json:"update"`
 	Languages []string  `json:"languages"`
@@ -43,12 +44,29 @@ type Claude struct {
 	Args      []string `json:"args"`
 }
 
+// Profiles are the install profiles; Languages is every language bud ships a spec for (D10)
+var (
+	Profiles  = []string{"full", "minimal"}
+	Languages = []string{"go", "python", "typescript", "c", "bash", "html", "css"}
+	Terminals = []string{"kitty", "ghostty"} // D11
+)
+
+// PresetLanguages are the languages a profile enables when none are configured
+func PresetLanguages(profile string) []string {
+	if profile == "minimal" {
+		return []string{"python", "bash"}
+	}
+
+	return slices.Clone(Languages)
+}
+
 // Defaults are the settings with no config.json at all
 func Defaults() Settings {
 	return Settings{
+		Profile:   "full",
 		Terminal:  "kitty", // D11
 		Update:    Update{Channel: "stable", Auto: true},
-		Languages: []string{"go", "python", "typescript", "c", "bash", "html", "css"}, // D10
+		Languages: PresetLanguages("full"),
 		Dashboard: Dashboard{Style: "silly"},
 		AI:        AI{Claude: Claude{Autostart: true, Resume: "continue", Args: []string{}}},
 	}
@@ -60,6 +78,8 @@ func (s Settings) Validate() error {
 		key, value string
 		allowed    []string
 	}{
+		{"profile", s.Profile, Profiles},
+		{"terminal", s.Terminal, Terminals},
 		{"update.channel", s.Update.Channel, []string{"stable", "nightly"}},
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
 		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},

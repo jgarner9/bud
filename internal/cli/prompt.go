@@ -1,0 +1,113 @@
+package cli
+
+import (
+	"bufio"
+	"errors"
+	"fmt"
+	"io"
+	"slices"
+	"strings"
+)
+
+// prompter asks questions on a terminal. Every question has a default, which an
+// empty answer or end of input picks
+type prompter struct {
+	in  *bufio.Reader
+	out io.Writer
+}
+
+func newPrompter(in io.Reader, out io.Writer) *prompter {
+	return &prompter{in: bufio.NewReader(in), out: out}
+}
+
+// ask prints question with its default and returns the trimmed answer
+func (p *prompter) ask(question, def string) (string, error) {
+	if def == "" {
+		fmt.Fprintf(p.out, "%s: ", question)
+	} else {
+		fmt.Fprintf(p.out, "%s [%s]: ", question, def)
+	}
+
+	line, err := p.in.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	if errors.Is(err, io.EOF) {
+		// keep the next output off the prompt line
+		fmt.Fprintln(p.out)
+	}
+	if line = strings.TrimSpace(line); line == "" {
+		return def, nil
+	}
+
+	return line, nil
+}
+
+// maxTries is how many invalid answers a question takes before giving up
+const maxTries = 3
+
+// choose asks until the answer is one of options
+func (p *prompter) choose(question string, options []string, def string) (string, error) {
+	q := fmt.Sprintf("%s (%s)", question, strings.Join(options, ", "))
+	for range maxTries {
+		answer, err := p.ask(q, def)
+		if err != nil {
+			return "", err
+		}
+		if slices.Contains(options, answer) {
+			return answer, nil
+		}
+		fmt.Fprintf(p.out, "%q isn't one of %s\n", answer, strings.Join(options, ", "))
+	}
+
+	return "", fmt.Errorf("no valid answer to %q", question)
+}
+
+// chooseMany asks for a space or comma separated list drawn from options
+func (p *prompter) chooseMany(question string, options, def []string) ([]string, error) {
+	q := fmt.Sprintf("%s (any of: %s)", question, strings.Join(options, " "))
+	for range maxTries {
+		answer, err := p.ask(q, strings.Join(def, " "))
+		if err != nil {
+			return nil, err
+		}
+
+		picked := strings.FieldsFunc(answer, func(r rune) bool { return r == ' ' || r == ',' })
+		var unknown []string
+		for _, s := range picked {
+			if !slices.Contains(options, s) {
+				unknown = append(unknown, s)
+			}
+		}
+		if len(unknown) == 0 && len(picked) > 0 {
+			// in the options' order, without repeats
+			var out []string
+			for _, o := range options {
+				if slices.Contains(picked, o) {
+					out = append(out, o)
+				}
+			}
+			return out, nil
+		}
+		if len(unknown) > 0 {
+			fmt.Fprintf(p.out, "unknown: %s\n", strings.Join(unknown, ", "))
+		}
+	}
+
+	return nil, fmt.Errorf("no valid answer to %q", question)
+}
+
+// confirm asks a yes/no question that defaults to no
+func (p *prompter) confirm(question string) (bool, error) {
+	answer, err := p.ask(question+" [y/N]", "")
+	if err != nil {
+		return false, err
+	}
+
+	switch strings.ToLower(answer) {
+	case "y", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
+}

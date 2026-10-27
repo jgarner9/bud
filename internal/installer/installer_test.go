@@ -53,7 +53,7 @@ func TestMissingKeepsOrder(t *testing.T) {
 	withDeps(t, []Dep{{Name: "a", Bins: []string{"a"}}, {Name: "b", Bins: []string{"b"}}, {Name: "c", Bins: []string{"c"}}})
 
 	var names []string
-	for _, d := range Missing() {
+	for _, d := range Missing("full") {
 		names = append(names, d.Name)
 	}
 	if !slices.Equal(names, []string{"a", "c"}) {
@@ -88,7 +88,20 @@ func TestDetectManager(t *testing.T) {
 	}
 }
 
+func withRoot(t *testing.T, root bool) {
+	t.Helper()
+	orig := geteuid
+	geteuid = func() int {
+		if root {
+			return 0
+		}
+		return 1000
+	}
+	t.Cleanup(func() { geteuid = orig })
+}
+
 func TestCheck(t *testing.T) {
+	withRoot(t, false)
 	withDeps(t, []Dep{
 		{Name: "git", Bins: []string{"git"}},
 		{Name: "fd", Bins: []string{"fd"}, Pkgs: map[string][]string{"apt": {"fd-find"}}},
@@ -98,20 +111,20 @@ func TestCheck(t *testing.T) {
 
 	t.Run("nothing missing", func(t *testing.T) {
 		fakePath(t, "git", "fd", "node")
-		if err := Check(); err != nil {
+		if err := Check("full"); err != nil {
 			t.Fatal(err)
 		}
 	})
 
 	t.Run("uses the manager's package names", func(t *testing.T) {
 		fakePath(t, "git", "apt-get")
-		err := Check()
+		err := Check("full")
 		var missing *MissingError
 		if !errors.As(err, &missing) {
 			t.Fatalf("err = %v, want *MissingError", err)
 		}
 		want := "missing system dependencies: fd, node\n" +
-			"install them with:\n  sudo apt install fd-find nodejs npm\n" +
+			"install them with:\n  sudo apt-get install -y fd-find nodejs npm\n" +
 			"then run 'bud install' again"
 		if err.Error() != want {
 			t.Fatalf("got:\n%s\nwant:\n%s", err, want)
@@ -123,7 +136,7 @@ func TestCheck(t *testing.T) {
 		want := "missing system dependencies: git, fd, node\n" +
 			"install them with your system's package manager\n" +
 			"then run 'bud install' again"
-		if err := Check(); err == nil || err.Error() != want {
+		if err := Check("full"); err == nil || err.Error() != want {
 			t.Fatalf("got:\n%v\nwant:\n%s", err, want)
 		}
 	})
@@ -134,4 +147,151 @@ func TestDepsOrder(t *testing.T) {
 	if len(Deps) < 2 || Deps[0].Bins[0] != "nvim" || Deps[1].Bins[0] != "git" {
 		t.Fatalf("nvim and git must be the first two deps")
 	}
+}
+
+func TestNeeded(t *testing.T) {
+	withDeps(t, []Dep{{Name: "git"}, {Name: "node", FullOnly: true}, {Name: "rg"}})
+
+	names := func(deps []Dep) []string {
+		var out []string
+		for _, d := range deps {
+			out = append(out, d.Name)
+		}
+		return out
+	}
+	if got := names(Needed("full")); !slices.Equal(got, []string{"git", "node", "rg"}) {
+		t.Errorf("full = %v", got)
+	}
+	if got := names(Needed("minimal")); !slices.Equal(got, []string{"git", "rg"}) {
+		t.Errorf("minimal = %v", got)
+	}
+}
+
+func TestManagerCommand(t *testing.T) {
+	apt := linuxManagers[1]
+
+	withRoot(t, false)
+	if got := apt.Command([]string{"rg"}); !slices.Equal(got, []string{"sudo", "apt-get", "install", "-y", "rg"}) {
+		t.Errorf("as a user: %q", got)
+	}
+	if got := brew.Command([]string{"rg"}); !slices.Equal(got, []string{"brew", "install", "rg"}) {
+		t.Errorf("brew: %q", got)
+	}
+
+	withRoot(t, true)
+	if got := apt.Command([]string{"rg"}); !slices.Equal(got, []string{"apt-get", "install", "-y", "rg"}) {
+		t.Errorf("as root: %q", got)
+	}
+}
+
+func withRun(t *testing.T, fn func(argv []string) error) {
+	t.Helper()
+	orig := run
+	run = fn
+	t.Cleanup(func() { run = orig })
+}
+
+func TestPlanRun(t *testing.T) {
+	withRoot(t, false)
+	withGOOS(t, "linux")
+	withDeps(t, []Dep{
+		{Name: "git", Bins: []string{"git"}},
+		{Name: "fd", Bins: []string{"fd", "fdfind"}, Pkgs: map[string][]string{"apt": {"fd-find"}}},
+		{Name: "node", Bins: []string{"node"}, FullOnly: true},
+	})
+
+	t.Run("installs what's missing", func(t *testing.T) {
+		fakePath(t, "git", "apt-get")
+		var got []string
+		withRun(t, func(argv []string) error {
+			got = argv
+			// the package manager puts fdfind on PATH, as apt does
+			return os.WriteFile(filepath.Join(os.Getenv("PATH"), "fdfind"), []byte("#!/bin/sh\n"), 0o755)
+		})
+
+		plan := NewPlan("minimal")
+		if err := plan.Run(); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(got, []string{"sudo", "apt-get", "install", "-y", "fd-find"}) {
+			t.Fatalf("ran %q", got)
+		}
+	})
+
+	t.Run("still missing after install", func(t *testing.T) {
+		fakePath(t, "git", "apt-get")
+		withRun(t, func([]string) error { return nil })
+
+		var missing *MissingError
+		if err := NewPlan("minimal").Run(); !errors.As(err, &missing) || missing.Deps[0].Name != "fd" {
+			t.Fatalf("err = %v, want fd still missing", err)
+		}
+	})
+
+	t.Run("install fails", func(t *testing.T) {
+		fakePath(t, "git", "apt-get")
+		withRun(t, func([]string) error { return errors.New("exit status 100") })
+
+		err := NewPlan("minimal").Run()
+		if err == nil || err.Error() != "sudo apt-get install -y fd-find: exit status 100" {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("no package manager", func(t *testing.T) {
+		fakePath(t, "git")
+		withRun(t, func([]string) error { t.Fatal("nothing should run"); return nil })
+
+		plan := NewPlan("minimal")
+		if plan.Command() != nil {
+			t.Fatalf("command = %q, want none", plan.Command())
+		}
+		var missing *MissingError
+		if err := plan.Run(); !errors.As(err, &missing) || missing.Found {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("nothing missing", func(t *testing.T) {
+		fakePath(t, "git", "fd", "apt-get")
+		withRun(t, func([]string) error { t.Fatal("nothing should run"); return nil })
+
+		if err := NewPlan("minimal").Run(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func TestDetectTerminals(t *testing.T) {
+	apps := t.TempDir()
+	orig := appDirs
+	appDirs = func() []string { return []string{apps} }
+	t.Cleanup(func() { appDirs = orig })
+
+	t.Run("on PATH", func(t *testing.T) {
+		withGOOS(t, "linux")
+		fakePath(t, "ghostty")
+		if got := DetectTerminals(); !slices.Equal(got, []string{"ghostty"}) {
+			t.Fatalf("got %v", got)
+		}
+	})
+
+	t.Run("mac app bundle", func(t *testing.T) {
+		withGOOS(t, "darwin")
+		fakePath(t)
+		if err := os.Mkdir(filepath.Join(apps, "kitty.app"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := DetectTerminals(); !slices.Equal(got, []string{"kitty"}) {
+			t.Fatalf("got %v", got)
+		}
+	})
+
+	t.Run("app bundles only count on macOS", func(t *testing.T) {
+		withGOOS(t, "linux")
+		fakePath(t)
+		if got := DetectTerminals(); len(got) != 0 {
+			t.Fatalf("got %v", got)
+		}
+	})
 }

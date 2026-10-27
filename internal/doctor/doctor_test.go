@@ -128,9 +128,13 @@ func TestCheckDeps(t *testing.T) {
 	withDeps(t, []installer.Dep{
 		{Name: "here", Bins: []string{"here"}},
 		{Name: "gone", Bins: []string{"gone"}},
+		{Name: "desktop", Bins: []string{"desktop"}, FullOnly: true},
 	})
 
-	results := checkDeps()
+	if results := checkDeps("full"); len(results) != 3 {
+		t.Fatalf("full profile checked %d deps, want 3", len(results))
+	}
+	results := checkDeps("minimal")
 	if len(results) != 2 || results[0].Status != OK || results[1].Status != Fail {
 		t.Fatalf("got %+v", results)
 	}
@@ -193,7 +197,7 @@ func TestCheckConfigSync(t *testing.T) {
 
 func TestCheckMachineConfig(t *testing.T) {
 	p := tempPaths(t)
-	if r := checkMachineConfig(p); r.Status != OK {
+	if _, r := checkMachineConfig(p); r.Status != OK {
 		t.Fatalf("no config.json: got %+v", r)
 	}
 
@@ -203,8 +207,12 @@ func TestCheckMachineConfig(t *testing.T) {
 	if err := os.WriteFile(p.MachineConfig(), []byte(`{"update": {"channel": "beta"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if r := checkMachineConfig(p); r.Status != Fail {
+	s, r := checkMachineConfig(p)
+	if r.Status != Fail {
 		t.Fatalf("bad channel: got %+v", r)
+	}
+	if s.Profile != "full" {
+		t.Fatalf("a broken config should fall back to the defaults, got %+v", s)
 	}
 }
 

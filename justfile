@@ -31,12 +31,12 @@ fmt-check:
 
 # format Lua in place
 lua-fmt: (_need "stylua")
-  stylua nvim scripts tests languages layouts migrations
+  stylua nvim scripts tests languages layouts migrations tools
 
 # stylua check and selene lint over the Lua config
 lua-lint: (_need "stylua") (_need "selene")
-  stylua --check nvim scripts tests languages layouts migrations
-  selene nvim scripts tests languages layouts migrations
+  stylua --check nvim scripts tests languages layouts migrations tools
+  selene nvim scripts tests languages layouts migrations tools
 
 # go vet, gofmt check, Lua lint and shellcheck
 lint: fmt-check lua-lint

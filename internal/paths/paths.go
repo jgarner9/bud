@@ -74,6 +74,12 @@ func (p *Paths) UserTools() string { return filepath.Join(p.Data, "user-tools") 
 // LanguageSpecs is where sync puts the language specs bud ships
 func (p *Paths) LanguageSpecs() string { return filepath.Join(p.Config, "languages") }
 
+// ToolsState records why a tool was turned off (bud tools disable --reason)
+func (p *Paths) ToolsState() string { return filepath.Join(p.State, "tools.json") }
+
+// Tools is the synced dir of tools bud ships (bud.tools loads them)
+func (p *Paths) Tools() string { return filepath.Join(p.Config, "tools") }
+
 // Layouts is the synced layouts dir (bud.layout reads it)
 func (p *Paths) Layouts() string { return filepath.Join(p.Config, "layouts") }
 

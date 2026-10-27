@@ -11,15 +11,15 @@ import (
 // languages/*.lua names the files, so _template.lua comes along: a directory
 // pattern would leave out names starting with _
 //
-//go:embed nvim languages/*.lua layouts/*.lua migrations/*.lua bundles
+//go:embed nvim languages/*.lua layouts/*.lua migrations/*.lua bundles tools
 var repoFS embed.FS
 
 // Config returns what bud syncs into ~/.config/bud: the repo's nvim/ directory
-// at the root, so paths read like "init.lua", with languages/ and layouts/ inside it
+// at the root, so paths read like "init.lua", with languages/, layouts/ and tools/ inside it
 func Config() fs.FS {
 	return configFS{
 		root:   sub("nvim"),
-		mounts: map[string]fs.FS{"languages": sub("languages"), "layouts": sub("layouts")},
+		mounts: map[string]fs.FS{"languages": sub("languages"), "layouts": sub("layouts"), "tools": sub("tools")},
 	}
 }
 

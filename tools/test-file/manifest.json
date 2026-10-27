@@ -1,0 +1,6 @@
+{
+  "name": "test-file",
+  "description": "Jump between a file and its test (:BudTestFile)",
+  "commands": ["BudTestFile"],
+  "keymaps": []
+}

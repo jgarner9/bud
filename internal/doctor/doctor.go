@@ -6,8 +6,10 @@ package doctor
 import (
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -16,6 +18,7 @@ import (
 	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
+	"jgarner.dev/bud/internal/lang"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -62,7 +65,8 @@ var (
 		out, err := exec.Command("tree-sitter", "--version").Output()
 		return string(out), err
 	}
-	embedded = func() fs.FS { return bud.Config() }
+	embedded      = func() fs.FS { return bud.Config() }
+	loadLanguages = lang.Load
 )
 
 // Run runs every check, in the order they're worth reading
@@ -76,14 +80,101 @@ func Run() []Result {
 	cfg, cfgResult := checkMachineConfig(p)
 
 	results := checkDeps(cfg.Profile)
+	langResults, langDeps := checkLanguages(p, cfg)
+	results = append(results, checkLanguageDeps(langDeps)...)
 	if r, ok := checkNeovim(); ok {
 		results = append(results, r)
 	}
 	if r, ok := checkTreeSitter(); ok {
 		results = append(results, r)
 	}
+	results = append(results, checkConfigSync(p))
+	results = append(results, langResults...)
 
-	return append(results, checkConfigSync(p), cfgResult)
+	return append(results, cfgResult)
+}
+
+// checkLanguages reads the synced specs and reports the ones that don't load and
+// the enabled names with no spec. A broken spec bud shipped is a Fail (a bad
+// release, which an update should roll back); one the user added, or a name
+// with no spec, only warns, since the rest of the editor still works (D33). It
+// also returns the enabled languages' system deps. Skipped, with no results,
+// until the config is synced or when nvim is missing, which other checks report
+func checkLanguages(p *paths.Paths, cfg config.Settings) ([]Result, []installer.Dep) {
+	if !nvim.HasManifest(p.Config) {
+		return nil, nil
+	}
+	if _, err := exec.LookPath("nvim"); err != nil {
+		return nil, nil
+	}
+
+	dir := filepath.Join(p.Config, "languages")
+	specs, err := loadLanguages(false, dir)
+	if err != nil {
+		return []Result{{Name: "languages", Status: Fail, Detail: err.Error(), Fix: "bud update"}}, nil
+	}
+	managed, err := nvim.ManagedFiles(p.Config)
+	if err != nil {
+		return []Result{{Name: "languages", Status: Fail, Detail: err.Error(), Fix: "bud update"}}, nil
+	}
+
+	var results []Result
+	for _, name := range slices.Sorted(maps.Keys(specs.Errors)) {
+		r := Result{Name: "language " + name, Detail: specs.Errors[name]}
+		if slices.Contains(managed, lang.File(name)) {
+			r.Status = Fail
+			r.Fix = "bud update"
+		} else {
+			r.Status = Warn
+			r.Fix = "fix or remove " + filepath.Join(dir, name+".lua")
+		}
+		results = append(results, r)
+	}
+
+	enabled, unknown := specs.Enabled(cfg.Languages, cfg.Profile)
+	if len(unknown) > 0 {
+		results = append(results, Result{
+			Name:   "languages",
+			Status: Warn,
+			Detail: "no spec for " + strings.Join(unknown, ", "),
+			Fix:    "remove them from languages in " + p.MachineConfig(),
+		})
+	}
+
+	var names []string
+	for _, spec := range enabled {
+		names = append(names, spec.Name)
+	}
+	detail := "none enabled"
+	if len(names) > 0 {
+		detail = strings.Join(names, ", ")
+	}
+	results = append([]Result{{Name: "languages", Detail: detail}}, results...)
+
+	return results, installer.ForBins(lang.System(enabled))
+}
+
+// checkLanguageDeps reports the enabled languages' system deps. A missing one
+// warns: only that language's tooling is affected
+func checkLanguageDeps(deps []installer.Dep) []Result {
+	m, found := installer.DetectManager()
+
+	var results []Result
+	for _, dep := range deps {
+		r := Result{Name: dep.Name}
+		if !dep.Installed() {
+			r.Status = Warn
+			r.Detail = "not found on PATH (" + strings.Join(dep.Bins, " or ") + "), a language needs it"
+			if found {
+				r.Fix = strings.Join(m.Command(dep.Packages(m)), " ")
+			} else {
+				r.Fix = "install it with your system's package manager"
+			}
+		}
+		results = append(results, r)
+	}
+
+	return results
 }
 
 // Failed counts the results that are Fail

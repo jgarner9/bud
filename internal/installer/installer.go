@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -40,12 +41,53 @@ var Deps = []Dep{
 	// macOS always has /usr/bin/cc (it offers to install the command line tools
 	// on first use, and Homebrew needs them anyway), so only Linux installs this
 	{Name: "gcc", Bins: []string{"cc", "gcc", "clang"}},
-	// only language servers like TypeScript's need node, which a server rarely runs
-	{Name: "node", Bins: []string{"node"}, FullOnly: true, Pkgs: map[string][]string{
+}
+
+// LanguageDeps are the system deps a language spec can ask for by binary (its
+// system field), with their package names. Anything else a spec asks for is
+// taken to be a package named after the binary (ForBins)
+var LanguageDeps = []Dep{
+	{Name: "go", Bins: []string{"go"}, Pkgs: map[string][]string{
+		"apt": {"golang-go"},
+		"dnf": {"golang"},
+	}},
+	// venv too, which Mason installs PyPI packages (basedpyright) into; apt splits it out
+	{Name: "python3", Bins: []string{"python3"}, Pkgs: map[string][]string{
+		"brew":   {"python"},
+		"pacman": {"python"},
+		"apt":    {"python3", "python3-venv"},
+	}},
+	// npm too, which Mason installs npm packages (tsc, prettier) with
+	{Name: "node", Bins: []string{"node"}, Pkgs: map[string][]string{
 		"pacman": {"nodejs", "npm"},
 		"apt":    {"nodejs", "npm"},
 		"dnf":    {"nodejs", "npm"},
 	}},
+}
+
+// ForBins returns the deps that provide bins, leaving out the ones Deps already
+// has (a spec's "cc" is the base C compiler). A binary no dep lists becomes a
+// dep of its own, installed as a package of the same name
+func ForBins(bins []string) []Dep {
+	var out []Dep
+	have := func(name string) bool {
+		return slices.ContainsFunc(out, func(d Dep) bool { return d.Name == name })
+	}
+	for _, bin := range bins {
+		provides := func(d Dep) bool { return slices.Contains(d.Bins, bin) }
+		if slices.ContainsFunc(Deps, provides) {
+			continue
+		}
+		dep := Dep{Name: bin, Bins: []string{bin}}
+		if i := slices.IndexFunc(LanguageDeps, provides); i >= 0 {
+			dep = LanguageDeps[i]
+		}
+		if !have(dep.Name) {
+			out = append(out, dep)
+		}
+	}
+
+	return out
 }
 
 // Needed returns the deps a profile installs, in install order
@@ -80,10 +122,10 @@ func (d Dep) Installed() bool {
 	return false
 }
 
-// Missing returns the profile's deps with no binary on PATH
-func Missing(profile string) []Dep {
+// Missing returns the deps with no binary on PATH
+func Missing(deps []Dep) []Dep {
 	var missing []Dep
-	for _, dep := range Needed(profile) {
+	for _, dep := range deps {
 		if !dep.Installed() {
 			missing = append(missing, dep)
 		}
@@ -177,17 +219,16 @@ func (e *MissingError) Error() string {
 	return b.String()
 }
 
-// Plan is what installing a profile's missing deps takes
+// Plan is what installing the missing ones of some deps takes
 type Plan struct {
-	Profile string
 	Missing []Dep
 	Manager Manager
 	Found   bool // false when no supported package manager is on PATH
 }
 
-func NewPlan(profile string) *Plan {
+func NewPlan(deps []Dep) *Plan {
 	m, found := DetectManager()
-	return &Plan{Profile: profile, Missing: Missing(profile), Manager: m, Found: found}
+	return &Plan{Missing: Missing(deps), Manager: m, Found: found}
 }
 
 // Command is the command line Run executes, or nil when there's nothing it can run
@@ -224,10 +265,5 @@ func (p *Plan) Run() error {
 		return fmt.Errorf("%s: %w", strings.Join(argv, " "), err)
 	}
 
-	return Check(p.Profile)
-}
-
-// Check returns a *MissingError when any of the profile's deps is missing
-func Check(profile string) error {
-	return NewPlan(profile).Err()
+	return NewPlan(p.Missing).Err()
 }

@@ -11,13 +11,16 @@
 
 local M = {}
 
--- where specs and the machine config live; tests point these elsewhere
+-- where specs and the machine config live; tests point these elsewhere. When
+-- two dirs have a spec of the same name, the earlier dir's wins
 M.dirs = { vim.fn.stdpath("config") .. "/languages" }
 M.config_file = vim.fn.stdpath("state") .. "/config.json"
 
--- specs that failed to load, and enabled names with no spec, by name
+-- specs that failed to load, and enabled names with no spec, by name; errors
+-- maps each failed name to why
 M.failed = {}
 M.unknown = {}
+M.errors = {}
 
 -- the field each spec may set, with its type: "list" is a list of strings, and
 -- "by_ft" is a list for every filetype or a table of lists by filetype
@@ -128,28 +131,34 @@ end
 local state
 
 local function load()
-  state = { specs = {}, enabled = {}, failed = {}, unknown = {} }
+  state = { specs = {}, enabled = {}, failed = {}, unknown = {}, errors = {} }
 
+  local seen = {}
   local files = {}
   for _, dir in ipairs(M.dirs) do
-    vim.list_extend(files, vim.fn.glob(dir .. "/*.lua", true, true))
+    -- glob sorts, so each dir's specs load by name
+    for _, file in ipairs(vim.fn.glob(dir .. "/*.lua", true, true)) do
+      local name = vim.fn.fnamemodify(file, ":t:r")
+      if name:sub(1, 1) ~= "_" and not seen[name] then
+        seen[name] = true
+        table.insert(files, file)
+      end
+    end
   end
-  table.sort(files)
   for _, file in ipairs(files) do
     local name = vim.fn.fnamemodify(file, ":t:r")
-    if name:sub(1, 1) ~= "_" and not state.specs[name] then
-      local ok, spec = pcall(dofile, file)
-      local err = spec
-      if ok then
-        err = validate(spec)
-      end
-      if err then
-        table.insert(state.failed, name)
-        vim.notify(("bud: language %s: %s"):format(name, err), vim.log.levels.ERROR)
-      else
-        spec.name = name
-        state.specs[name] = spec
-      end
+    local ok, spec = pcall(dofile, file)
+    local err = spec
+    if ok then
+      err = validate(spec)
+    end
+    if err then
+      table.insert(state.failed, name)
+      state.errors[name] = tostring(err)
+      vim.notify(("bud: language %s: %s"):format(name, err), vim.log.levels.ERROR)
+    else
+      spec.name = name
+      state.specs[name] = spec
     end
   end
 
@@ -176,6 +185,7 @@ local function load()
 
   M.failed = state.failed
   M.unknown = state.unknown
+  M.errors = state.errors
 end
 
 -- reload reads the specs and config.json again

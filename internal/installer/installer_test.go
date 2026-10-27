@@ -53,7 +53,7 @@ func TestMissingKeepsOrder(t *testing.T) {
 	withDeps(t, []Dep{{Name: "a", Bins: []string{"a"}}, {Name: "b", Bins: []string{"b"}}, {Name: "c", Bins: []string{"c"}}})
 
 	var names []string
-	for _, d := range Missing("full") {
+	for _, d := range Missing(Needed("full")) {
 		names = append(names, d.Name)
 	}
 	if !slices.Equal(names, []string{"a", "c"}) {
@@ -111,14 +111,14 @@ func TestCheck(t *testing.T) {
 
 	t.Run("nothing missing", func(t *testing.T) {
 		fakePath(t, "git", "fd", "node")
-		if err := Check("full"); err != nil {
+		if err := NewPlan(Needed("full")).Err(); err != nil {
 			t.Fatal(err)
 		}
 	})
 
 	t.Run("uses the manager's package names", func(t *testing.T) {
 		fakePath(t, "git", "apt-get")
-		err := Check("full")
+		err := NewPlan(Needed("full")).Err()
 		var missing *MissingError
 		if !errors.As(err, &missing) {
 			t.Fatalf("err = %v, want *MissingError", err)
@@ -136,10 +136,31 @@ func TestCheck(t *testing.T) {
 		want := "missing system dependencies: git, fd, node\n" +
 			"install them with your system's package manager\n" +
 			"then run 'bud install' again"
-		if err := Check("full"); err == nil || err.Error() != want {
+		if err := NewPlan(Needed("full")).Err(); err == nil || err.Error() != want {
 			t.Fatalf("got:\n%v\nwant:\n%s", err, want)
 		}
 	})
+}
+
+func TestForBins(t *testing.T) {
+	withDeps(t, []Dep{{Name: "gcc", Bins: []string{"cc", "gcc"}}})
+
+	got := ForBins([]string{"go", "cc", "zig", "python3", "go"})
+	var names []string
+	for _, d := range got {
+		names = append(names, d.Name)
+	}
+	// in the order asked for: cc is a base dep, go comes once, and zig is a package named zig
+	if !slices.Equal(names, []string{"go", "zig", "python3"}) {
+		t.Fatalf("got %v", names)
+	}
+	apt := linuxManagers[1]
+	if pkgs := got[2].Packages(apt); !slices.Equal(pkgs, []string{"python3", "python3-venv"}) {
+		t.Errorf("python3 on apt = %v", pkgs)
+	}
+	if pkgs := got[1].Packages(apt); !slices.Equal(pkgs, []string{"zig"}) || !slices.Equal(got[1].Bins, []string{"zig"}) {
+		t.Errorf("zig = %+v", got[1])
+	}
 }
 
 func TestDepsOrder(t *testing.T) {
@@ -209,7 +230,7 @@ func TestPlanRun(t *testing.T) {
 			return os.WriteFile(filepath.Join(os.Getenv("PATH"), "fdfind"), []byte("#!/bin/sh\n"), 0o755)
 		})
 
-		plan := NewPlan("minimal")
+		plan := NewPlan(Needed("minimal"))
 		if err := plan.Run(); err != nil {
 			t.Fatal(err)
 		}
@@ -223,7 +244,7 @@ func TestPlanRun(t *testing.T) {
 		withRun(t, func([]string) error { return nil })
 
 		var missing *MissingError
-		if err := NewPlan("minimal").Run(); !errors.As(err, &missing) || missing.Deps[0].Name != "fd" {
+		if err := NewPlan(Needed("minimal")).Run(); !errors.As(err, &missing) || missing.Deps[0].Name != "fd" {
 			t.Fatalf("err = %v, want fd still missing", err)
 		}
 	})
@@ -232,7 +253,7 @@ func TestPlanRun(t *testing.T) {
 		fakePath(t, "git", "apt-get")
 		withRun(t, func([]string) error { return errors.New("exit status 100") })
 
-		err := NewPlan("minimal").Run()
+		err := NewPlan(Needed("minimal")).Run()
 		if err == nil || err.Error() != "sudo apt-get install -y fd-find: exit status 100" {
 			t.Fatalf("err = %v", err)
 		}
@@ -242,7 +263,7 @@ func TestPlanRun(t *testing.T) {
 		fakePath(t, "git")
 		withRun(t, func([]string) error { t.Fatal("nothing should run"); return nil })
 
-		plan := NewPlan("minimal")
+		plan := NewPlan(Needed("minimal"))
 		if plan.Command() != nil {
 			t.Fatalf("command = %q, want none", plan.Command())
 		}
@@ -256,7 +277,7 @@ func TestPlanRun(t *testing.T) {
 		fakePath(t, "git", "fd", "apt-get")
 		withRun(t, func([]string) error { t.Fatal("nothing should run"); return nil })
 
-		if err := NewPlan("minimal").Run(); err != nil {
+		if err := NewPlan(Needed("minimal")).Run(); err != nil {
 			t.Fatal(err)
 		}
 	})

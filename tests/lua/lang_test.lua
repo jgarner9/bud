@@ -150,6 +150,24 @@ eq(
 )
 eq(vim.tbl_contains(notified, 'bud: language typo: unknown field "formatter"'), true, "names the bad field")
 
+eq(lang.errors.typo, 'unknown field "formatter"', "errors say why")
+for name in pairs(broken) do
+  os.remove(dir .. "/" .. name .. ".lua")
+end
+
+-- an earlier dir wins on a name clash, even when its file sorts later
+local first = tmp .. "/zz-first"
+vim.fn.mkdir(first, "p")
+write(first .. "/go.lua", [[return { filetypes = { "first" } }]])
+lang.dirs = { first, dir }
+lang.reload()
+eq(lang.specs().go.filetypes, { "first" }, "the earlier dir wins")
+eq(lang.specs().bash ~= nil, true, "the later dir's other specs still load")
+lang.dirs = { dir }
+for name, text in pairs(broken) do
+  write(dir .. "/" .. name .. ".lua", text)
+end
+
 -- a broken spec named in the list isn't also unknown
 write(lang.config_file, '{"languages": ["typo"]}')
 lang.reload()

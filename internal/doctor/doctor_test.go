@@ -9,7 +9,9 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
+	"jgarner.dev/bud/internal/lang"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -260,5 +262,97 @@ func TestFailed(t *testing.T) {
 	results := []Result{{Status: OK}, {Status: Warn}, {Status: Fail}, {Status: Fail}}
 	if n := Failed(results); n != 2 {
 		t.Fatalf("Failed = %d, want 2", n)
+	}
+}
+
+func withLanguages(t *testing.T, set *lang.Set, err error) {
+	t.Helper()
+	orig := loadLanguages
+	loadLanguages = func(bool, ...string) (*lang.Set, error) { return set, err }
+	t.Cleanup(func() { loadLanguages = orig })
+}
+
+func TestCheckLanguages(t *testing.T) {
+	// a synced config where go.lua is bud's and zig.lua the user's
+	synced := func(t *testing.T) *paths.Paths {
+		t.Helper()
+		p := tempPaths(t)
+		src := fstest.MapFS{"init.lua": {Data: []byte("1")}, "languages/go.lua": {Data: []byte("2")}}
+		if _, err := nvim.SyncConfig(src, p.Config); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	specs := []lang.Spec{
+		{Name: "go", System: []string{"go"}},
+		{Name: "python", Minimal: true, System: []string{"python3"}},
+	}
+
+	t.Run("all good", func(t *testing.T) {
+		fakePath(t, "nvim")
+		withLanguages(t, &lang.Set{Specs: specs}, nil)
+		results, deps := checkLanguages(synced(t), config.Defaults())
+		if len(results) != 1 || results[0].Status != OK || results[0].Detail != "go, python" {
+			t.Fatalf("got %+v", results)
+		}
+		if len(deps) != 2 || deps[0].Name != "go" || deps[1].Name != "python3" {
+			t.Fatalf("deps = %+v", deps)
+		}
+	})
+
+	t.Run("broken shipped spec fails, broken user spec warns", func(t *testing.T) {
+		fakePath(t, "nvim")
+		withLanguages(t, &lang.Set{Errors: map[string]string{"go": "oops", "zig": "typo"}}, nil)
+		results, _ := checkLanguages(synced(t), config.Settings{Profile: "full", Languages: []string{}})
+		if len(results) != 3 || results[0].Detail != "none enabled" {
+			t.Fatalf("got %+v", results)
+		}
+		if r := results[1]; r.Name != "language go" || r.Status != Fail || r.Fix != "bud update" {
+			t.Errorf("go = %+v", r)
+		}
+		if r := results[2]; r.Name != "language zig" || r.Status != Warn || !strings.HasSuffix(r.Fix, "zig.lua") {
+			t.Errorf("zig = %+v", r)
+		}
+	})
+
+	t.Run("enabled name with no spec warns", func(t *testing.T) {
+		fakePath(t, "nvim")
+		withLanguages(t, &lang.Set{Specs: specs}, nil)
+		results, _ := checkLanguages(synced(t), config.Settings{Profile: "full", Languages: []string{"go", "zig"}})
+		if len(results) != 2 || results[1].Status != Warn || results[1].Detail != "no spec for zig" {
+			t.Fatalf("got %+v", results)
+		}
+	})
+
+	t.Run("specs can't be read", func(t *testing.T) {
+		fakePath(t, "nvim")
+		withLanguages(t, nil, errors.New("boom"))
+		results, _ := checkLanguages(synced(t), config.Defaults())
+		if len(results) != 1 || results[0].Status != Fail {
+			t.Fatalf("got %+v", results)
+		}
+	})
+
+	t.Run("skipped before the first sync or without nvim", func(t *testing.T) {
+		withLanguages(t, nil, errors.New("must not be called"))
+		fakePath(t, "nvim")
+		if results, _ := checkLanguages(tempPaths(t), config.Defaults()); results != nil {
+			t.Errorf("not synced: %+v", results)
+		}
+		fakePath(t)
+		if results, _ := checkLanguages(synced(t), config.Defaults()); results != nil {
+			t.Errorf("no nvim: %+v", results)
+		}
+	})
+}
+
+func TestCheckLanguageDeps(t *testing.T) {
+	fakePath(t, "go")
+	results := checkLanguageDeps([]installer.Dep{
+		{Name: "go", Bins: []string{"go"}},
+		{Name: "node", Bins: []string{"node"}},
+	})
+	if len(results) != 2 || results[0].Status != OK || results[1].Status != Warn || results[1].Fix == "" {
+		t.Fatalf("got %+v", results)
 	}
 }

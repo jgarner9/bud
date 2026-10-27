@@ -2,15 +2,11 @@ package config
 
 import (
 	"encoding/json"
-	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
-
-	"jgarner.dev/bud"
 )
 
 func writeFile(t *testing.T, data string) string {
@@ -58,6 +54,14 @@ func TestSettingsMergeOverDefaults(t *testing.T) {
 	}
 	if !slices.Equal(s.Languages, []string{"bash"}) {
 		t.Errorf("languages = %v, want the file's list to replace the default", s.Languages)
+	}
+	if s, _ := (&File{doc: map[string]any{}}).Settings(); s.Languages != nil {
+		t.Errorf("no languages key = %v, want nil for the preset", s.Languages)
+	}
+	if f, _ := Load(writeFile(t, `{"languages": []}`)); f != nil {
+		if s, _ := f.Settings(); s.Languages == nil || len(s.Languages) != 0 {
+			t.Errorf("an empty list = %#v, want empty but not nil", s.Languages)
+		}
 	}
 	if s.FormatOnSave {
 		t.Error("format_on_save = true, want the file's false")
@@ -190,52 +194,5 @@ func TestGetSet(t *testing.T) {
 	}
 	if err := f.Set("update..channel", "x"); err == nil {
 		t.Error("expected an error for an empty key part")
-	}
-}
-
-func TestPresetLanguages(t *testing.T) {
-	if got := PresetLanguages("full"); !slices.Equal(got, Languages) {
-		t.Errorf("full = %v", got)
-	}
-	if got := PresetLanguages("minimal"); !slices.Equal(got, []string{"python", "bash"}) {
-		t.Errorf("minimal = %v", got)
-	}
-	// the preset is a copy, so callers can't change Languages through it
-	PresetLanguages("full")[0] = "x"
-	if Languages[0] != "go" {
-		t.Error("PresetLanguages returned Languages itself")
-	}
-}
-
-// Languages and the minimal preset copy the shipped specs until Go reads them
-// itself (JGA-54), so they must name the same languages
-func TestLanguagesMatchSpecs(t *testing.T) {
-	cfg := bud.Config()
-	files, err := fs.Glob(cfg, "languages/*.lua")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var specs, minimal []string
-	for _, file := range files {
-		name := strings.TrimSuffix(path.Base(file), ".lua")
-		if strings.HasPrefix(name, "_") {
-			continue
-		}
-		specs = append(specs, name)
-		data, err := fs.ReadFile(cfg, file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(string(data), "\n  minimal = true,") {
-			minimal = append(minimal, name)
-		}
-	}
-
-	if got := slices.Sorted(slices.Values(Languages)); !slices.Equal(got, specs) {
-		t.Errorf("Languages = %v, specs in languages/ = %v", got, specs)
-	}
-	if got := slices.Sorted(slices.Values(PresetLanguages("minimal"))); !slices.Equal(got, minimal) {
-		t.Errorf("minimal preset = %v, specs with minimal = true: %v", got, minimal)
 	}
 }

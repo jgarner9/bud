@@ -4,12 +4,15 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/doctor"
 	"jgarner.dev/bud/internal/installer"
+	"jgarner.dev/bud/internal/lang"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -34,8 +37,12 @@ func Install() *Command {
 	return cmd
 }
 
-// detectTerminals is installer.DetectTerminals, swappable in tests
-var detectTerminals = installer.DetectTerminals
+// swappable in tests
+var (
+	detectTerminals = installer.DetectTerminals
+	loadLanguages   = lang.Load
+	nvimInstalled   = func() bool { _, err := exec.LookPath("nvim"); return err == nil }
+)
 
 func install(g *Globals, args []string, yes bool) error {
 	if len(args) > 0 {
@@ -63,22 +70,36 @@ func install(g *Globals, args []string, yes bool) error {
 	if s, err = askSetup(pr, f, s, g.Profile); err != nil {
 		return err
 	}
-	if err := saveSetup(f, s); err != nil {
+	if err := saveSetup(f, s, nil); err != nil {
 		return err
+	}
+
+	// the language question needs the specs, which need nvim to read. With nvim
+	// already here, every question comes first and one install covers it all;
+	// on a fresh machine the base deps go in first, nvim among them
+	userSpecs := filepath.Join(p.Config, "languages")
+	deps := installer.Needed(s.Profile)
+	var specs *lang.Set
+	if nvimInstalled() {
+		if specs, s, err = askLanguages(pr, f, s, userSpecs); err != nil {
+			return err
+		}
+		deps = append(deps, languageDeps(specs, s)...)
+	}
+	if err := installDepsShown(deps, pr, yes); err != nil {
+		return err
+	}
+	if specs == nil {
+		if specs, s, err = askLanguages(pr, f, s, userSpecs); err != nil {
+			return err
+		}
+		if extra := languageDeps(specs, s); len(installer.Missing(extra)) > 0 {
+			if err := installDepsShown(extra, pr, yes); err != nil {
+				return err
+			}
+		}
 	}
 	g.Logf("profile %s, terminal %s, languages %s", s.Profile, s.Terminal, strings.Join(s.Languages, " "))
-
-	fmt.Println()
-	for _, dep := range installer.Needed(s.Profile) {
-		status := "missing"
-		if dep.Installed() {
-			status = "ok"
-		}
-		fmt.Printf("%-8s %s\n", dep.Name, status)
-	}
-	if err := installDeps(installer.NewPlan(s.Profile), pr, yes); err != nil {
-		return err
-	}
 
 	if err := nvim.Apply(); err != nil {
 		return err
@@ -91,6 +112,40 @@ func install(g *Globals, args []string, yes bool) error {
 	fmt.Println("\nAll set. Run 'bud' to start.")
 
 	return nil
+}
+
+// askLanguages reads the specs (this binary's, then any of the user's in
+// userSpecs), asks which to enable and saves the answer
+func askLanguages(pr *prompter, f *config.File, s config.Settings, userSpecs string) (*lang.Set, config.Settings, error) {
+	specs, err := loadLanguages(true, userSpecs)
+	if err != nil {
+		return nil, s, err
+	}
+	if s, err = chooseLanguages(pr, specs, s); err != nil {
+		return nil, s, err
+	}
+
+	return specs, s, saveSetup(f, s, specs.Preset(s.Profile))
+}
+
+// languageDeps are the system deps of the languages s enables
+func languageDeps(specs *lang.Set, s config.Settings) []installer.Dep {
+	enabled, _ := specs.Enabled(s.Languages, s.Profile)
+	return installer.ForBins(lang.System(enabled))
+}
+
+// installDepsShown lists deps with whether each is installed, then installs the missing ones
+func installDepsShown(deps []installer.Dep, pr *prompter, yes bool) error {
+	fmt.Println()
+	for _, dep := range deps {
+		status := "missing"
+		if dep.Installed() {
+			status = "ok"
+		}
+		fmt.Printf("%-15s %s\n", dep.Name, status)
+	}
+
+	return installDeps(installer.NewPlan(deps), pr, yes)
 }
 
 // installDeps shows the package manager command and runs it once confirmed.
@@ -119,9 +174,9 @@ func installDeps(plan *installer.Plan, pr *prompter, yes bool) error {
 	return plan.Run()
 }
 
-// askSetup asks install's questions (BASE.md 5.2 step 3), defaulting to what's
-// configured. A nil prompter takes every default. profileFlag, from --profile,
-// answers the profile question
+// askSetup asks install's profile and terminal questions (BASE.md 5.2 step 3),
+// defaulting to what's configured. A nil prompter takes every default.
+// profileFlag, from --profile, answers the profile question
 func askSetup(pr *prompter, f *config.File, s config.Settings, profileFlag string) (config.Settings, error) {
 	var err error
 
@@ -146,22 +201,38 @@ func askSetup(pr *prompter, f *config.File, s config.Settings, profileFlag strin
 		}
 	}
 
-	if _, set := f.Get("languages"); !set {
-		s.Languages = config.PresetLanguages(s.Profile)
+	return s, nil
+}
+
+// chooseLanguages asks which specs to enable, defaulting to the configured list
+// or, with none, the profile's preset. A configured name with no spec is
+// dropped from the default, since it can't be picked
+func chooseLanguages(pr *prompter, specs *lang.Set, s config.Settings) (config.Settings, error) {
+	names := specs.Names()
+	def := specs.Preset(s.Profile)
+	if s.Languages != nil {
+		def = slices.DeleteFunc(slices.Clone(s.Languages), func(n string) bool { return !slices.Contains(names, n) })
 	}
-	if pr != nil {
-		if s.Languages, err = pr.chooseMany("Languages", config.Languages, s.Languages); err != nil {
-			return s, err
+	if pr == nil {
+		// nothing asked, so a configured list stays exactly as it is
+		if s.Languages == nil {
+			s.Languages = def
 		}
+		return s, nil
 	}
 
-	return s, nil
+	var err error
+	s.Languages, err = pr.chooseMany("Languages", names, def)
+
+	return s, err
 }
 
 // saveSetup writes install's answers to config.json. An answer that matches the
 // default isn't written, unless the file already set that key, so a fresh
-// machine that keeps every default gets no config.json at all
-func saveSetup(f *config.File, s config.Settings) error {
+// machine that keeps every default gets no config.json at all. preset is the
+// profile's preset of languages, the default for that answer; nil means the
+// languages haven't been asked yet
+func saveSetup(f *config.File, s config.Settings, preset []string) error {
 	def := config.Defaults()
 	answers := []struct {
 		key       string
@@ -170,7 +241,7 @@ func saveSetup(f *config.File, s config.Settings) error {
 	}{
 		{"profile", s.Profile, s.Profile == def.Profile},
 		{"terminal", s.Terminal, s.Terminal == def.Terminal},
-		{"languages", s.Languages, slices.Equal(s.Languages, def.Languages)},
+		{"languages", s.Languages, s.Languages == nil || preset == nil || slices.Equal(s.Languages, preset)},
 	}
 
 	changed := false

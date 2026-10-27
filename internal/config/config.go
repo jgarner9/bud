@@ -17,9 +17,11 @@ import (
 
 // Settings is the machine config merged over the defaults
 type Settings struct {
-	Profile   string   `json:"profile"` // "full" (desktop) or "minimal" (SSH/server)
-	Terminal  string   `json:"terminal"`
-	Update    Update   `json:"update"`
+	Profile  string `json:"profile"` // "full" (desktop) or "minimal" (SSH/server)
+	Terminal string `json:"terminal"`
+	Update   Update `json:"update"`
+	// nil when config.json lists none, which means the profile's preset of
+	// the specs (lang.Set.Preset); an empty list enables nothing
 	Languages []string `json:"languages"`
 	// bud.lang formats a buffer of an enabled language when it's written (D30)
 	FormatOnSave bool      `json:"format_on_save"`
@@ -46,23 +48,11 @@ type Claude struct {
 	Args      []string `json:"args"`
 }
 
-// Profiles are the install profiles; Languages is every language bud ships a spec for (D10)
+// Profiles are the install profiles
 var (
 	Profiles  = []string{"full", "minimal"}
-	Languages = []string{"go", "python", "typescript", "c", "bash", "html", "css"}
 	Terminals = []string{"kitty", "ghostty"} // D11
 )
-
-// PresetLanguages are the languages a profile enables when none are configured.
-// The specs are the source of truth (a spec with minimal = true is in the minimal
-// preset, D30), and bud.lang reads them; this copy goes once Go reads the specs too (JGA-54)
-func PresetLanguages(profile string) []string {
-	if profile == "minimal" {
-		return []string{"python", "bash"}
-	}
-
-	return slices.Clone(Languages)
-}
 
 // Defaults are the settings with no config.json at all
 func Defaults() Settings {
@@ -70,7 +60,6 @@ func Defaults() Settings {
 		Profile:      "full",
 		Terminal:     "kitty", // D11
 		Update:       Update{Channel: "stable", Auto: true},
-		Languages:    PresetLanguages("full"),
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly"},
 		AI:           AI{Claude: Claude{Autostart: true, Resume: "continue", Args: []string{}}},

@@ -255,7 +255,14 @@ eq(vim.json.decode(answer.result.content[1].text).folders[1].path, vim.uv.fs_rea
 
 local args = bridge.headless_args()
 eq(args[1], "--mcp-config", "headless sessions get the bridge as an MCP server")
-eq(vim.json.decode(args[2]).mcpServers["bud-ide"].url, "http://127.0.0.1:" .. bridge.port() .. "/mcp", "its URL")
+eq(
+  vim.startswith(
+    vim.json.decode(args[2]).mcpServers["bud-ide"].url,
+    "http://127.0.0.1:" .. bridge.port() .. "/mcp?root="
+  ),
+  true,
+  "its URL names the session's root"
+)
 eq(args[4]:match("mcp__bud%-ide__openDiff"), nil, "edits aren't pre-allowed")
 eq(args[4]:match("mcp__bud%-ide__getOpenEditors") ~= nil, true, "looking is")
 

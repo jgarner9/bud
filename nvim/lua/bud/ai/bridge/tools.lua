@@ -111,38 +111,30 @@ local function close_diff(d)
   end
 end
 
--- finish answers a diff once: accepted sends the proposal as it now stands
--- (you may have edited it), which Claude Code then writes itself
+-- finish answers a review once, with the proposal as it now stands (you may
+-- have edited it)
 local function finish(d, accepted)
   if d.done then
     return
   end
   d.done = true
-  local reply
-  if accepted then
-    local lines = vim.api.nvim_buf_get_lines(d.proposed, 0, -1, false)
-    reply = { "FILE_SAVED", table.concat(lines, "\n") .. (d.eol and "\n" or "") }
-  else
-    reply = { "DIFF_REJECTED", d.name }
-  end
+  local lines = vim.api.nvim_buf_get_lines(d.proposed, 0, -1, false)
   -- answered first, so nothing going wrong closing the tab can lose it
-  d.respond(reply)
+  d.on_done(accepted, table.concat(lines, "\n") .. (d.eol and "\n" or ""))
   close_diff(d)
-  if accepted then
-    -- pick up the file once Claude Code has written it
-    vim.defer_fn(function()
-      pcall(vim.cmd.checktime)
-    end, 500)
-  end
 end
 
-local function open_diff(args, respond)
-  local old, new, name = args.old_file_path, args.new_file_path or args.old_file_path, args.tab_name or "proposed"
+-- review shows a proposed version of a file as a diff in its own tab and
+-- calls on_done(accepted, text) once you decide: :w or ga accepts, q or
+-- closing it rejects. opts: path (the file now; may not exist yet),
+-- contents (the proposal), name (one review per name), title (the winbar)
+function M.review(opts, on_done)
+  local old, name = opts.path, opts.name or "proposed"
   if diffs[name] then
     finish(diffs[name], false)
   end
-  local contents = args.new_file_contents or ""
-  local d = { name = name, respond = respond, eol = contents:sub(-1) == "\n" }
+  local contents = opts.contents or ""
+  local d = { name = name, on_done = on_done, eol = contents:sub(-1) == "\n" }
 
   vim.cmd.tabnew()
   d.tab = vim.api.nvim_get_current_tabpage()
@@ -165,9 +157,11 @@ local function open_diff(args, respond)
   vim.bo[d.proposed].bufhidden = "wipe"
   vim.bo[d.proposed].filetype = vim.bo[vim.api.nvim_win_get_buf(old_win)].filetype
   vim.bo[d.proposed].modified = false
-  pcall(vim.api.nvim_buf_set_name, d.proposed, "bud://" .. name .. " (proposed) " .. vim.fs.basename(new))
+  pcall(vim.api.nvim_buf_set_name, d.proposed, "bud://" .. name .. " (proposed) " .. vim.fs.basename(old or name))
   vim.cmd.diffthis()
-  vim.wo.winbar = "%#DiffAdd# Claude's edit %* :w or ga accept   q reject   (you can edit it first)"
+  vim.wo.winbar = "%#DiffAdd# "
+    .. (opts.title or "Claude's edit")
+    .. " %* :w or ga accept   q reject   (you can edit it first)"
 
   local function map(lhs, accepted, desc)
     vim.keymap.set("n", lhs, function()
@@ -192,6 +186,22 @@ local function open_diff(args, respond)
     end,
   })
   diffs[name] = d
+end
+
+-- open_diff is the openDiff tool: accepting sends the proposal back, which
+-- Claude Code then writes itself
+local function open_diff(args, respond)
+  local name = args.tab_name or "proposed"
+  M.review({ path = args.old_file_path, contents = args.new_file_contents, name = name }, function(accepted, proposal)
+    if not accepted then
+      return respond({ "DIFF_REJECTED", name })
+    end
+    respond({ "FILE_SAVED", proposal })
+    -- pick up the file once Claude Code has written it
+    vim.defer_fn(function()
+      pcall(vim.cmd.checktime)
+    end, 500)
+  end)
 end
 
 local severities = { "Error", "Warning", "Information", "Hint" }

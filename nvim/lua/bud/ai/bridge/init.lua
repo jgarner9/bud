@@ -89,8 +89,38 @@ function M.notify(method, params)
   end
 end
 
--- handle answers one JSON-RPC message from a client; reply(msg) sends
-function M.handle(msg, reply)
+-- approve is the tool headless sessions send permission questions to
+-- (--permission-prompt-tool). Only HTTP clients see it: the TUI asks you itself
+local approve = {
+  description = "Answers Claude Code's permission prompts by asking the user in Neovim",
+  schema = {
+    type = "object",
+    properties = { tool_name = { type = "string" }, input = { type = "object" }, tool_use_id = { type = "string" } },
+    required = { "tool_name", "input" },
+  },
+  run = function(args, respond, ctx)
+    require("bud.ai.permissions").request({
+      tool = args.tool_name,
+      input = args.input or {},
+      id = args.tool_use_id,
+      root = ctx and ctx.root,
+      respond = function(result)
+        respond(vim.json.encode(result))
+      end,
+    })
+  end,
+}
+
+local function tool(name, ctx)
+  if name == "approve" then
+    return ctx and ctx.http and approve or nil
+  end
+  return tools.tools[name]
+end
+
+-- handle answers one JSON-RPC message from a client; reply(msg) sends. ctx
+-- says how it came: { http = true, root = the session's } for headless ones
+function M.handle(msg, reply, ctx)
   local id, method, params = msg.id, msg.method, msg.params or {}
   if method == nil then
     return -- a response to something we sent
@@ -121,18 +151,21 @@ function M.handle(msg, reply)
     for name, t in pairs(tools.tools) do
       table.insert(list, { name = name, description = t.description, inputSchema = t.schema })
     end
+    if ctx and ctx.http then
+      table.insert(list, { name = "approve", description = approve.description, inputSchema = approve.schema })
+    end
     table.sort(list, function(a, b)
       return a.name < b.name
     end)
     result({ tools = list })
   elseif method == "tools/call" then
-    local t = tools.tools[params.name]
+    local t = tool(params.name, ctx)
     if not t then
       return err(-32601, "no tool " .. tostring(params.name))
     end
     local ok, run_err = pcall(t.run, params.arguments or {}, function(answer)
       result({ content = tools.content(answer) })
-    end)
+    end, ctx)
     if not ok then
       result({ content = tools.content(tostring(run_err)), isError = true })
     end
@@ -185,19 +218,24 @@ function M.start()
       end,
       -- MCP over streamable HTTP: one JSON-RPC message per POST, answered
       -- in the response (a notification gets 202 and no body)
-      on_http = function(body, respond)
+      on_http = function(body, respond, path)
         local ok_decode, msg = pcall(vim.json.decode, body, { luanil = { object = true, array = true } })
         if not ok_decode or type(msg) ~= "table" then
           return respond("400 Bad Request")
         end
+        -- the session's root rides in the URL, for its permission prompts
+        local ctx = { http = true, root = path and vim.uri_decode(path:match("[?&]root=([^&]+)") or "") or nil }
+        if ctx.root == "" then
+          ctx.root = nil
+        end
         if msg.id == nil then
-          M.handle(msg, function() end)
+          M.handle(msg, function() end, ctx)
           return respond("202 Accepted")
         end
         M.handle(msg, function(reply)
           reply.jsonrpc = "2.0"
           respond("200 OK", vim.json.encode(reply))
-        end)
+        end, ctx)
       end,
       on_message = function(client, text)
         local ok_decode, msg = pcall(vim.json.decode, text, { luanil = { object = true, array = true } })
@@ -264,10 +302,10 @@ M.read_only = {
 -- its tools are mcp__bud-ide__<tool>
 M.server_name = "bud-ide"
 
--- headless_args are the flags that give a headless (-p) Claude Code the
--- bridge's tools: it ignores the IDE lock file, so it gets them as an MCP
+-- headless_args are the flags that give a headless (-p) Claude Code in root
+-- the bridge's tools: it ignores the IDE lock file, so it gets them as an MCP
 -- server over HTTP on the same port, with the same token
-function M.headless_args()
+function M.headless_args(root)
   if not server then
     return {}
   end
@@ -275,7 +313,10 @@ function M.headless_args()
     mcpServers = {
       [M.server_name] = {
         type = "http",
-        url = ("http://127.0.0.1:%d/mcp"):format(server.port),
+        url = ("http://127.0.0.1:%d/mcp?root=%s"):format(
+          server.port,
+          vim.uri_encode(root or vim.fn.getcwd(), "rfc3986")
+        ),
         headers = { ["x-claude-code-ide-authorization"] = token },
       },
     },
@@ -283,7 +324,16 @@ function M.headless_args()
   local allowed = vim.tbl_map(function(t)
     return ("mcp__%s__%s"):format(M.server_name, t)
   end, M.read_only)
-  return { "--mcp-config", vim.json.encode(cfg), "--allowedTools", table.concat(allowed, ",") }
+  return {
+    "--mcp-config",
+    vim.json.encode(cfg),
+    "--allowedTools",
+    table.concat(allowed, ","),
+    -- permission questions come to Neovim (bud.ai.permissions); this asks,
+    -- it doesn't change what's allowed
+    "--permission-prompt-tool",
+    ("mcp__%s__approve"):format(M.server_name),
+  }
 end
 
 -- mention shares a range of a file with Claude Code (lines 0-based)

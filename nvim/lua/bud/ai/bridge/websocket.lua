@@ -206,7 +206,7 @@ function M.serve(opts)
           table.insert(head, "Content-Type: " .. (content_type or "application/json"))
         end
         client.sock:write(table.concat(head, "\r\n") .. "\r\n\r\n" .. out)
-      end)
+      end, req.line:match("^%S+%s+(%S+)"))
     end)
     return true
   end

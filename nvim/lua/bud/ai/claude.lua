@@ -84,6 +84,13 @@ local function set_status(s, status, why)
   vim.cmd.redrawstatus({ bang = true })
 end
 
+-- _emit lets bud's own modules (permissions) raise an event on root's session
+function M._emit(event, data, root)
+  root = root or vim.fn.getcwd()
+  root = vim.uv.fs_realpath(root) or root
+  emit(event, data, sessions[root] or { root = root })
+end
+
 -- on registers fn for event: message, tool_use, permission_request, done,
 -- exit or status. It returns a function that unregisters it
 function M.on(event, fn)
@@ -196,7 +203,7 @@ local function spawn(s)
       return
     end
     local env = M.bridge_env(s.root)
-    local argv = vim.list_extend(M.argv(bin, s, settings()), require("bud.ai.bridge").headless_args())
+    local argv = vim.list_extend(M.argv(bin, s, settings()), require("bud.ai.bridge").headless_args(s.root))
     local job = vim.fn.jobstart(argv, {
       cwd = s.root,
       env = env,

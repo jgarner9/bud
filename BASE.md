@@ -455,7 +455,7 @@ Global flags: `--no-update` (skip boot check), `--verbose`, `--profile`, and `--
 ### 5.3 Over SSH / new machines
 
 - Simplest: `ssh host 'curl -fsSL .../install.sh | sh -s -- --profile minimal --yes'`
-- Convenience: `bud bootstrap user@host` runs exactly that from your local machine and can optionally copy your local `config.json` (never secrets) across.
+- Convenience: `bud bootstrap [--config] user@host` runs exactly that from your local machine (`ssh -t`, so a sudo prompt works), pinned to the same release as the local bud (its tag, `nightly`, or latest for a dev build), with `--profile` defaulting to minimal. `--config` first copies your local `config.json` (never secrets) into the remote's state dir.
 - On the remote, `bud` works the same in whatever terminal you SSH'd from. Pair with tmux/zellij if you want the session to survive disconnects.
 
 ### 5.4 Dashboard (the home screen)
@@ -622,7 +622,7 @@ With no newer release, `bud update` skips step 1 and just re-syncs, which also r
 2. **Editor core:** `vim.pack` + lockfile, navigation set, language engine with 3–4 languages.
 3. **Dashboard (both styles) + project registry + the two-key open.**
 4. **Updater** (release check, verified download, binary swap + re-exec, config sync, lockfile restore, rollback, `bud dev link`).
-5. **One-liner + releases** (GoReleaser and `install.sh` exist; still to do: signing, the nightly workflow, `--profile`/`--yes`, `bootstrap`).
+5. **One-liner + releases** (GoReleaser and `install.sh` exist; signing is built but off until the key is pinned (D41)).
 6. **Launcher + layouts + bundles** (macOS then Linux).
 7. **The per-project Claude Code session and `bud.ai.claude` (4.2)**, then **`bud kit sync`** with Context7, then **full-screen chat + history panel**, then the side-pane chat, then the **tool generator** with lifecycle commands.
 8. Polish: settings UI, more languages, docs.

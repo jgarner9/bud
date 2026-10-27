@@ -151,6 +151,7 @@ local function menu(settings)
   vim.list_extend(items, {
     { key = "L", icon = "plugins", label = "Plugins", short = "plugins" },
     { key = "M", icon = "mason", label = "Mason", short = "mason" },
+    { key = "s", icon = "settings", label = "Settings", short = "settings" },
     { key = "d", icon = "doctor", label = "Doctor", short = "doctor" },
     { key = "u", icon = "update", label = "Update", short = "update" },
     { key = "t", icon = "style", label = "Minimal view", short = "silly" },
@@ -242,6 +243,9 @@ local function keys(buf)
   map("M", function()
     vim.cmd("Mason")
   end, "Mason")
+  map("s", function()
+    require("bud.settings").open()
+  end, "Settings")
   map("d", function()
     terminal({ "doctor" })
   end, "Doctor")

@@ -29,6 +29,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
       vim.schedule(function()
         require("bud.ai.claude").setup()
         require("bud.tools").setup()
+        require("bud.settings").setup()
         require("bud.gen").setup()
         if vim.env.BUD_OPEN == "gen" then
           require("bud.gen").run(vim.env.BUD_GEN)

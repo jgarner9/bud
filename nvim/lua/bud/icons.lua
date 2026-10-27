@@ -30,4 +30,5 @@ return {
   tool = "", -- nf-fa-wrench
   chat = "", -- nf-fa-comments
   search = "", -- nf-fa-search
+  settings = "", -- nf-fa-cog
 }

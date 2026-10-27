@@ -48,6 +48,8 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **`bud config`** (`internal/cli/configcmd.go`, JGA-93): `ls [--changed]`, `get`, `set [--force]` (value parsed as JSON, else a string; unknown keys refused unless `--force` via `config.Known`; the whole file must pass `Settings()` before it's saved), `unset` (`File.Unset`), `edit` (bud's nvim, then checked; tests swap `editFile`), `path`. `File.Effective` is a key's value with defaults filled in.
 
+**Settings screen** (`bud.settings`, JGA-94): `<leader>,`, `:BudSettings` or `s` on the dashboard. `M.sections` lists the rows (bool/choice/number/list); it reads `bud config ls` and changes things only through `bud config set`, `bud lang enable|disable` (in a terminal, since it can ask) and `bud tools enable|disable`. `tests/lua/settings_test.lua` swaps `M.run`.
+
 **Paths and machine config.** `internal/paths.Resolve` is the only place that builds a bud path (XDG on macOS too, D13); don't hardcode one elsewhere. That includes the language spec dirs (`LanguageSpecs`, `UserLanguageSpecs`). Files bud rewrites (`config.json`, `projects.json`, the sync manifest) go through `internal/atomicfile.WriteFile`. `internal/config` keeps `config.json` as a raw JSON tree so unknown keys survive `Save`, and `File.Settings()` decodes it over `Defaults()`.
 
 **Doctor.** `internal/doctor.Run` returns one `Result` per check (`OK`/`Warn`/`Fail`). Only `Fail` makes `bud doctor` exit non-zero, which the updater will use for rollback. New checks are functions added to `Run`.

@@ -115,6 +115,7 @@ bud main.go util.go # open files, from the project root they belong to
 | `bud update`    | Syncs the config from this binary and restores pinned plugins, parsers and language tools |
 | `bud doctor`    | Health checks; exits 1 when something's broken |
 | `bud version`   | Prints the version |
+| `bud lang`      | `ls` lists languages; `enable` / `disable` turn them on and off (enable installs their tools); `add <name>` starts your own spec from the template; `rm <name>` removes one of yours |
 | `bud uninstall` | Lists everything bud put on the machine and removes it once you confirm. `--keep-config` keeps your settings |
 
 Global flags go before the command: `bud [--verbose] [--profile full|minimal] <command> [flags] [args]`.
@@ -140,7 +141,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and which-key shows the rest.
 
 - [x] CLI skeleton, isolated config, installer, doctor, uninstall
 - [x] Plugin set, lazy loading, the language engine and seven languages
-- [ ] `bud lang` to add, enable and disable languages
+- [x] `bud lang` to add, enable and disable languages
 - [ ] A dashboard to land on (silly by default, minimal if you prefer) and a project registry
 - [ ] Self-update in the background, with doctor-based rollback
 - [ ] Signed releases and a nightly channel

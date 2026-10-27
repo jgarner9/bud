@@ -284,8 +284,8 @@ func TestCheckLanguages(t *testing.T) {
 		return p
 	}
 	specs := []lang.Spec{
-		{Name: "go", System: []string{"go"}},
-		{Name: "python", Minimal: true, System: []string{"python3"}},
+		{Name: "go", Builtin: true, System: []string{"go"}},
+		{Name: "python", Builtin: true, Minimal: true, System: []string{"python3"}},
 	}
 
 	t.Run("all good", func(t *testing.T) {

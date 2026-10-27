@@ -163,6 +163,9 @@ lang.dirs = { first, dir }
 lang.reload()
 eq(lang.specs().go.filetypes, { "first" }, "the earlier dir wins")
 eq(lang.specs().bash ~= nil, true, "the later dir's other specs still load")
+-- only the first dir's specs are in a preset; the rest are enabled by name
+eq(names(), { "go" }, "a later dir's specs aren't in the preset")
+eq(lang.specs().bash.builtin, false, "bash came from the second dir")
 lang.dirs = { dir }
 for name, text in pairs(broken) do
   write(dir .. "/" .. name .. ".lua", text)

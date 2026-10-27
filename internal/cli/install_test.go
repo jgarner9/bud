@@ -21,7 +21,7 @@ var allLanguages = []string{"bash", "c", "css", "go", "html", "python", "typescr
 func testSpecs() *lang.Set {
 	set := &lang.Set{Errors: map[string]string{}}
 	for _, name := range allLanguages {
-		set.Specs = append(set.Specs, lang.Spec{Name: name, Minimal: name == "bash" || name == "python"})
+		set.Specs = append(set.Specs, lang.Spec{Name: name, Builtin: true, Minimal: name == "bash" || name == "python"})
 	}
 	return set
 }
@@ -237,8 +237,8 @@ func TestChooseLanguages(t *testing.T) {
 
 func TestLanguageDeps(t *testing.T) {
 	specs := &lang.Set{Specs: []lang.Spec{
-		{Name: "go", System: []string{"go"}},
-		{Name: "python", Minimal: true, System: []string{"python3"}},
+		{Name: "go", Builtin: true, System: []string{"go"}},
+		{Name: "python", Builtin: true, Minimal: true, System: []string{"python3"}},
 	}}
 	_, s := loadConfig(t, `{"profile": "minimal"}`)
 	deps := languageDeps(specs, s)

@@ -6,14 +6,19 @@
 -- A spec is languages/<name>.lua returning a table (see languages/_template.lua).
 -- config.json's "languages" list picks the enabled ones; with no list, the
 -- profile's preset does: every spec for "full", the ones with minimal = true for
--- "minimal" (D30). Names in the list with no spec are left out quietly and kept
+-- "minimal" (D30). Only specs from the first dir (bud's own) are in a preset;
+-- the user's are enabled by name. Names in the list with no spec are left out quietly and kept
 -- in M.unknown, since a spec can be missing until the release that adds it.
 
 local M = {}
 
 -- where specs and the machine config live; tests point these elsewhere. When
--- two dirs have a spec of the same name, the earlier dir's wins
-M.dirs = { vim.fn.stdpath("config") .. "/languages" }
+-- two dirs have a spec of the same name, the earlier dir's wins, so bud's own
+-- (synced into the config dir) come before the user's (in user-tools/)
+M.dirs = {
+  vim.fn.stdpath("config") .. "/languages",
+  vim.fn.stdpath("data") .. "/user-tools/languages",
+}
 M.config_file = vim.fn.stdpath("state") .. "/config.json"
 
 -- specs that failed to load, and enabled names with no spec, by name; errors
@@ -135,17 +140,18 @@ local function load()
 
   local seen = {}
   local files = {}
-  for _, dir in ipairs(M.dirs) do
+  for i, dir in ipairs(M.dirs) do
     -- glob sorts, so each dir's specs load by name
     for _, file in ipairs(vim.fn.glob(dir .. "/*.lua", true, true)) do
       local name = vim.fn.fnamemodify(file, ":t:r")
       if name:sub(1, 1) ~= "_" and not seen[name] then
         seen[name] = true
-        table.insert(files, file)
+        table.insert(files, { path = file, builtin = i == 1 })
       end
     end
   end
-  for _, file in ipairs(files) do
+  for _, entry in ipairs(files) do
+    local file = entry.path
     local name = vim.fn.fnamemodify(file, ":t:r")
     local ok, spec = pcall(dofile, file)
     local err = spec
@@ -158,6 +164,8 @@ local function load()
       vim.notify(("bud: language %s: %s"):format(name, err), vim.log.levels.ERROR)
     else
       spec.name = name
+      -- set here, not by the spec: whether it came from the first dir
+      spec.builtin = entry.builtin
       state.specs[name] = spec
     end
   end
@@ -169,7 +177,7 @@ local function load()
   if type(names) ~= "table" then
     names = {}
     for name, spec in pairs(state.specs) do
-      if cfg.profile ~= "minimal" or spec.minimal then
+      if spec.builtin and (cfg.profile ~= "minimal" or spec.minimal) then
         table.insert(names, name)
       end
     end

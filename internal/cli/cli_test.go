@@ -30,7 +30,7 @@ func (r *recorder) cmd(name string) *Command {
 }
 
 func TestRegistry(t *testing.T) {
-	for _, name := range []string{"open", "chat", "install", "update", "version", "doctor", "uninstall"} {
+	for _, name := range []string{"open", "chat", "install", "update", "version", "doctor", "uninstall", "lang"} {
 		if _, ok := CommandRegistry[name]; !ok {
 			t.Errorf("%s not registered", name)
 		}
@@ -332,5 +332,33 @@ func TestGlobalsLogf(t *testing.T) {
 	(&Globals{Verbose: true, stderr: &buf}).Logf("loud %d", 2)
 	if buf.String() != "bud: loud 2\n" {
 		t.Fatalf("got %q", buf.String())
+	}
+}
+
+func TestAppRunSubcommands(t *testing.T) {
+	var rec recorder
+	group := &Command{Name: "lang", Subs: []*Command{rec.cmd("enable")}}
+	app := func(args ...string) *App {
+		return &App{Cmds: map[string]*Command{"lang": group, "open": (&recorder{}).cmd("open")}, Args: args, Stdout: io.Discard, Stderr: io.Discard}
+	}
+
+	if err := app("lang", "enable", "go", "zig").Run(); err != nil || !rec.called || !slices.Equal(rec.args, []string{"go", "zig"}) {
+		t.Fatalf("enable: err %v, called %v, args %v", err, rec.called, rec.args)
+	}
+
+	var usage *UsageError
+	if err := app("lang").Run(); !errors.As(err, &usage) || !strings.Contains(err.Error(), "needs a command: enable") {
+		t.Errorf("no subcommand: %v", err)
+	}
+	if err := app("lang", "nope").Run(); !errors.As(err, &usage) || !strings.Contains(err.Error(), `unknown lang command "nope"`) {
+		t.Errorf("unknown subcommand: %v", err)
+	}
+
+	// help lists the subcommands
+	var out bytes.Buffer
+	a := app("lang", "-h")
+	a.Stdout = &out
+	if err := a.Run(); !errors.Is(err, flag.ErrHelp) || !strings.Contains(out.String(), "Commands:\n  enable") {
+		t.Errorf("help: %v\n%s", err, out.String())
 	}
 }

@@ -61,13 +61,32 @@ func (a *App) Run() error {
 		return usageErrorf("--layout only applies when opening a project or files: bud --layout %s <path>", g.Layout)
 	}
 
-	fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
+	// a command with Subs takes one next, as in bud lang enable go
+	name := cmd.Name
+	for len(cmd.Subs) > 0 && len(*args) > 0 {
+		i := slices.IndexFunc(cmd.Subs, func(sub *Command) bool { return sub.Name == (*args)[0] })
+		if i < 0 {
+			break
+		}
+		cmd = cmd.Subs[i]
+		name += " " + cmd.Name
+		*args = (*args)[1:]
+	}
+
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	if cmd.Flags != nil {
 		cmd.Flags(fs)
 	}
-	fs.Usage = func() { commandUsage(fs, cmd) }
+	fs.Usage = func() { commandUsage(fs, name, cmd) }
 	if err := a.parse(fs, *args); err != nil {
 		return err
+	}
+	if cmd.Run == nil {
+		// a command that's only a group of subcommands
+		if len(fs.Args()) > 0 {
+			return usageErrorf("unknown %s command %q (one of: %s)", name, fs.Arg(0), subNames(cmd))
+		}
+		return usageErrorf("%s needs a command: %s", name, subNames(cmd))
 	}
 
 	if err := cmd.Run(g, fs.Args()); err != nil {
@@ -139,12 +158,23 @@ func (a *App) globalUsage(fs *flag.FlagSet) {
 	fs.PrintDefaults()
 }
 
-func commandUsage(fs *flag.FlagSet, cmd *Command) {
+func commandUsage(fs *flag.FlagSet, name string, cmd *Command) {
 	w := fs.Output()
-	fmt.Fprintf(w, "Usage: bud [global flags] %s [flags] [args]\n", cmd.Name)
+	if len(cmd.Subs) > 0 && cmd.Run == nil {
+		fmt.Fprintf(w, "Usage: bud [global flags] %s <command> [flags] [args]\n", name)
+	} else {
+		fmt.Fprintf(w, "Usage: bud [global flags] %s [flags] [args]\n", name)
+	}
 	if cmd.Usage != "" {
 		fmt.Fprintln(w)
 		fmt.Fprintln(w, cmd.Usage)
+	}
+	if len(cmd.Subs) > 0 {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "Commands:")
+		for _, sub := range cmd.Subs {
+			fmt.Fprintf(w, "  %-10s %s\n", sub.Name, sub.Usage)
+		}
 	}
 
 	hasFlags := false
@@ -154,6 +184,15 @@ func commandUsage(fs *flag.FlagSet, cmd *Command) {
 		fmt.Fprintln(w, "Flags:")
 		fs.PrintDefaults()
 	}
+}
+
+func subNames(cmd *Command) string {
+	var names []string
+	for _, sub := range cmd.Subs {
+		names = append(names, sub.Name)
+	}
+
+	return strings.Join(names, ", ")
 }
 
 // parse runs fs.Parse and prints the usage itself: on stdout when help was asked

@@ -69,8 +69,15 @@ func TestLoadDirs(t *testing.T) {
 	}
 
 	zig, ok := set.Get("zig")
-	if !ok || !zig.Minimal || !slices.Equal(zig.System, []string{"zig"}) {
+	if !ok || !zig.Minimal || zig.Builtin || !slices.Equal(zig.System, []string{"zig"}) {
 		t.Errorf("zig = %+v, %v", zig, ok)
+	}
+	// a user spec is never in a preset, even marked minimal
+	if got := set.Preset("minimal"); !slices.Equal(got, []string{"bash", "python"}) {
+		t.Errorf("minimal preset = %v", got)
+	}
+	if goSpec, _ := set.Get("go"); !goSpec.Builtin {
+		t.Error("shipped go should be builtin")
 	}
 	if goSpec, _ := set.Get("go"); slices.Contains(goSpec.Filetypes, "nope") {
 		t.Error("the user's go.lua won over the shipped one")
@@ -116,9 +123,10 @@ func TestLoadNoNvim(t *testing.T) {
 func TestEnabled(t *testing.T) {
 	set := &Set{
 		Specs: []Spec{
-			{Name: "bash", Minimal: true, System: []string{"bash"}},
-			{Name: "go", System: []string{"go", "cc"}},
-			{Name: "python", Minimal: true, System: []string{"python3", "cc"}},
+			{Name: "bash", Builtin: true, Minimal: true, System: []string{"bash"}},
+			{Name: "go", Builtin: true, System: []string{"go", "cc"}},
+			{Name: "python", Builtin: true, Minimal: true, System: []string{"python3", "cc"}},
+			{Name: "zig", Minimal: true},
 		},
 		Errors: map[string]string{"broken": "oops"},
 	}
@@ -134,7 +142,8 @@ func TestEnabled(t *testing.T) {
 		{"minimal preset", nil, "minimal", []string{"bash", "python"}, nil},
 		{"configured order", []string{"python", "go"}, "minimal", []string{"python", "go"}, nil},
 		{"empty list", []string{}, "full", nil, nil},
-		{"unknown and broken", []string{"zig", "broken", "go"}, "full", []string{"go"}, []string{"zig"}},
+		{"unknown and broken", []string{"nim", "broken", "go"}, "full", []string{"go"}, []string{"nim"}},
+		{"a user spec by name", []string{"zig"}, "full", []string{"zig"}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

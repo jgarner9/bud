@@ -26,6 +26,7 @@ for _, spec in pairs(lang.specs()) do
     system = spec.system,
     root = spec.root,
     minimal = spec.minimal == true,
+    builtin = spec.builtin,
   })
 end
 table.sort(specs, function(a, b)

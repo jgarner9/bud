@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -77,7 +76,7 @@ func install(g *Globals, args []string, yes bool) error {
 	// the language question needs the specs, which need nvim to read. With nvim
 	// already here, every question comes first and one install covers it all;
 	// on a fresh machine the base deps go in first, nvim among them
-	userSpecs := filepath.Join(p.Config, "languages")
+	userSpecs := specDirs(p)
 	deps := installer.Needed(s.Profile)
 	var specs *lang.Set
 	if nvimInstalled() {
@@ -114,10 +113,10 @@ func install(g *Globals, args []string, yes bool) error {
 	return nil
 }
 
-// askLanguages reads the specs (this binary's, then any of the user's in
-// userSpecs), asks which to enable and saves the answer
-func askLanguages(pr *prompter, f *config.File, s config.Settings, userSpecs string) (*lang.Set, config.Settings, error) {
-	specs, err := loadLanguages(true, userSpecs)
+// askLanguages reads the specs (this binary's, then the user's in userSpecs),
+// asks which to enable and saves the answer
+func askLanguages(pr *prompter, f *config.File, s config.Settings, userSpecs []string) (*lang.Set, config.Settings, error) {
+	specs, err := loadLanguages(true, userSpecs...)
 	if err != nil {
 		return nil, s, err
 	}

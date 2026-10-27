@@ -109,7 +109,8 @@ func checkLanguages(p *paths.Paths, cfg config.Settings) ([]Result, []installer.
 	}
 
 	dir := filepath.Join(p.Config, "languages")
-	specs, err := loadLanguages(false, dir)
+	userDir := filepath.Join(p.UserTools(), "languages")
+	specs, err := loadLanguages(false, dir, userDir)
 	if err != nil {
 		return []Result{{Name: "languages", Status: Fail, Detail: err.Error(), Fix: "bud update"}}, nil
 	}
@@ -126,7 +127,11 @@ func checkLanguages(p *paths.Paths, cfg config.Settings) ([]Result, []installer.
 			r.Fix = "bud update"
 		} else {
 			r.Status = Warn
-			r.Fix = "fix or remove " + filepath.Join(dir, name+".lua")
+			file := filepath.Join(userDir, name+".lua")
+			if _, err := os.Stat(file); err != nil {
+				file = filepath.Join(dir, name+".lua")
+			}
+			r.Fix = "fix or remove " + file
 		}
 		results = append(results, r)
 	}

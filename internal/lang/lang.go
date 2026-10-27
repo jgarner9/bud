@@ -28,6 +28,9 @@ type Spec struct {
 	Root   []string `json:"root"`
 	// in the minimal profile's preset (D30)
 	Minimal bool `json:"minimal"`
+	// from the first dir Load read, which holds bud's own specs; only those
+	// are in a preset, so the user's are enabled by name
+	Builtin bool `json:"builtin"`
 }
 
 // Set is every spec that was found
@@ -129,11 +132,11 @@ func (s *Set) Get(name string) (Spec, bool) {
 }
 
 // Preset is the languages a profile enables when config.json lists none, the
-// same rule bud.lang uses: every spec for full, the minimal ones for minimal
+// same rule bud.lang uses: every builtin spec for full, the minimal ones for minimal
 func (s *Set) Preset(profile string) []string {
 	var names []string
 	for _, spec := range s.Specs {
-		if profile != "minimal" || spec.Minimal {
+		if spec.Builtin && (profile != "minimal" || spec.Minimal) {
 			names = append(names, spec.Name)
 		}
 	}

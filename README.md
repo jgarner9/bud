@@ -70,6 +70,7 @@ Working today:
 | `bud update`  | Syncs the config and restores pinned plugins              |
 | `bud doctor`  | Checks deps, the Neovim version (0.11+), config sync and machine config; exits 1 on a failure |
 | `bud version` | Prints the version                                        |
+| `bud uninstall` | Lists everything bud put on the machine and removes it once you confirm (`--yes` skips). `--keep-config` keeps `config.json` and `user-tools/`. The binary is only removed if `install.sh` installed it |
 
 Global flags: `--verbose`, `--no-update`, `--profile full|minimal`, `--layout <name>`. `--profile` is used by `install`; `--no-update` and `--layout` are accepted but nothing uses them yet.
 

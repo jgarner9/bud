@@ -105,8 +105,19 @@ say "checksum ok"
 
 tar -xzf "$tmp/$archive" -C "$tmp" bud
 mkdir -p "$BIN_DIR"
+BIN_DIR="$(cd "$BIN_DIR" && pwd)"
 install -m 0755 "$tmp/bud" "$BIN_DIR/bud"
 say "installed $BIN_DIR/bud"
+
+# record that this script put the binary there: bud uninstall only removes a
+# binary it finds here, and self-update only replaces one (D20)
+case "${XDG_STATE_HOME:-}" in
+/*) state_dir="$XDG_STATE_HOME/bud" ;;
+*) state_dir="$HOME/.local/state/bud" ;;
+esac
+mkdir -p "$state_dir"
+json_path="$(printf '%s' "$BIN_DIR/bud" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+printf '{\n  "method": "install.sh",\n  "path": "%s"\n}\n' "$json_path" >"$state_dir/install.json"
 
 case ":$PATH:" in
 *":$BIN_DIR:"*) ;;

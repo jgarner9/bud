@@ -1,6 +1,6 @@
 # Bud IDE: BASE plan
 
-> Status: planning draft. `open` (dirs and several files), `install` (asks the setup questions, installs missing system packages), `update` (config sync only), `doctor`, `version`, the global flags, `internal/paths`, `internal/config` and the release pipeline exist; everything else is still a plan. The name `bud` is settled (D6).
+> Status: planning draft. `open` (dirs and several files), `install` (asks the setup questions, installs missing system packages), `update` (config sync only), `doctor`, `uninstall`, `version`, the global flags, `internal/paths`, `internal/config` and the release pipeline exist; everything else is still a plan. The name `bud` is settled (D6).
 > Date: 2026-10-24, updated 2026-10-26
 
 ## 0. The one-paragraph version

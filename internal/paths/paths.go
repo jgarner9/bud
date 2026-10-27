@@ -16,10 +16,11 @@ type Paths struct {
 	Config string // ~/.config/bud: synced copy of the embedded nvim/ (bud-owned, D21)
 	Data   string // ~/.local/share/bud: plugins, Mason, bud-managed binaries, user tools
 	State  string // ~/.local/state/bud: machine config, project registry, kit ledger
+	Cache  string // ~/.cache/bud: Neovim's stdpath("cache"), logs and bytecode
 	BinDir string // ~/.local/bin: where install.sh puts bud unless told otherwise
 }
 
-// Resolve reads XDG_CONFIG_HOME, XDG_DATA_HOME and XDG_STATE_HOME, falling back
+// Resolve reads XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME and XDG_CACHE_HOME, falling back
 // to the XDG defaults under $HOME. Like the spec says, relative values are ignored
 func Resolve() (*Paths, error) {
 	home, err := os.UserHomeDir()
@@ -31,6 +32,7 @@ func Resolve() (*Paths, error) {
 		Config: filepath.Join(xdg("XDG_CONFIG_HOME", home, ".config"), AppName),
 		Data:   filepath.Join(xdg("XDG_DATA_HOME", home, ".local", "share"), AppName),
 		State:  filepath.Join(xdg("XDG_STATE_HOME", home, ".local", "state"), AppName),
+		Cache:  filepath.Join(xdg("XDG_CACHE_HOME", home, ".cache"), AppName),
 		BinDir: filepath.Join(home, ".local", "bin"),
 	}, nil
 }
@@ -52,6 +54,9 @@ func (p *Paths) Projects() string { return filepath.Join(p.State, "projects.json
 
 // KitLedger records everything `bud kit sync` wrote into Claude Code's config
 func (p *Paths) KitLedger() string { return filepath.Join(p.State, "kit-ledger.json") }
+
+// InstallReceipt is written by install.sh and names the binary it installed (D20)
+func (p *Paths) InstallReceipt() string { return filepath.Join(p.State, "install.json") }
 
 // UserTools holds generated tools that haven't been promoted into the repo
 func (p *Paths) UserTools() string { return filepath.Join(p.Data, "user-tools") }

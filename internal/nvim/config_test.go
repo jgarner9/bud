@@ -110,3 +110,78 @@ func TestCheckConfig(t *testing.T) {
 		t.Errorf("manifest rewritten: %v", files)
 	}
 }
+
+func TestRemoveConfig(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "bud")
+	src := fstest.MapFS{
+		"init.lua":              {Data: []byte("1")},
+		"lua/bud/core/a.lua":    {Data: []byte("2")},
+		"lua/bud/plugins/b.lua": {Data: []byte("3")},
+	}
+	if _, err := SyncConfig(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	// something of the user's in a dir sync also writes to
+	mine := filepath.Join(dst, "lua", "bud", "plugins", "mine.lua")
+	if err := os.WriteFile(mine, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RemoveConfig(dst); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(mine); err != nil {
+		t.Fatalf("user file removed: %v", err)
+	}
+	for _, gone := range []string{"init.lua", manifestName, "lua/bud/core"} {
+		if _, err := os.Stat(filepath.Join(dst, filepath.FromSlash(gone))); !os.IsNotExist(err) {
+			t.Errorf("%s still there (err = %v)", gone, err)
+		}
+	}
+
+	// once the user's file is gone too, the whole dir goes
+	if err := os.Remove(mine); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SyncConfig(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveConfig(dst); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dst); !os.IsNotExist(err) {
+		t.Fatalf("config dir still there (err = %v)", err)
+	}
+}
+
+func TestRemoveConfigSymlink(t *testing.T) {
+	root := t.TempDir()
+	checkout := filepath.Join(root, "checkout")
+	if err := os.MkdirAll(checkout, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(checkout, "init.lua"), []byte("1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "bud")
+	if err := os.Symlink(checkout, link); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RemoveConfig(link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Error("symlink still there")
+	}
+	if _, err := os.Stat(filepath.Join(checkout, "init.lua")); err != nil {
+		t.Errorf("checkout was touched: %v", err)
+	}
+}
+
+func TestRemoveConfigMissing(t *testing.T) {
+	if err := RemoveConfig(filepath.Join(t.TempDir(), "nope")); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -1,0 +1,229 @@
+package cli
+
+import (
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"slices"
+
+	"jgarner.dev/bud/internal/installer"
+	"jgarner.dev/bud/internal/nvim"
+	"jgarner.dev/bud/internal/paths"
+)
+
+func init() {
+	RegisterCommand(Uninstall())
+}
+
+func Uninstall() *Command {
+	var yes, keepConfig bool
+	cmd := &Command{
+		Name:  "uninstall",
+		Usage: "Removes everything bud put on this machine, after listing it and asking",
+		Flags: func(fs *flag.FlagSet) {
+			fs.BoolVar(&yes, "yes", false, "remove without asking")
+			fs.BoolVar(&yes, "y", false, "short for -yes")
+			fs.BoolVar(&keepConfig, "keep-config", false, "keep the machine config (config.json) and user-tools/")
+		},
+		Run:  func(g *Globals, args []string) error { return uninstall(g, args, yes, keepConfig) },
+		Subs: nil,
+	}
+
+	return cmd
+}
+
+// removal is one thing uninstall deletes
+type removal struct {
+	path string
+	what string
+	do   func() error
+}
+
+func uninstall(g *Globals, args []string, yes, keepConfig bool) error {
+	if len(args) > 0 {
+		return usageErrorf("uninstall takes no arguments")
+	}
+
+	p, err := paths.Resolve()
+	if err != nil {
+		return err
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	exe, _ = filepath.EvalSymlinks(exe)
+
+	removals, kept, err := planUninstall(p, keepConfig, exe)
+	if err != nil {
+		return err
+	}
+	if len(removals) == 0 {
+		fmt.Println("Nothing of bud's is installed here.")
+		printKept(os.Stdout, kept)
+		return nil
+	}
+
+	fmt.Println("bud uninstall will remove:")
+	for _, r := range removals {
+		fmt.Printf("  %s\n      %s\n", r.path, r.what)
+	}
+	printKept(os.Stdout, kept)
+
+	if !yes {
+		if !isTerminal(os.Stdin) {
+			return errors.New("nothing removed: there's no terminal to confirm on, run 'bud uninstall --yes' to remove without asking")
+		}
+		ok, err := newPrompter(os.Stdin, os.Stdout).confirm("Continue?")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Println("Nothing removed.")
+			return nil
+		}
+	}
+
+	// keep going after a failure, so one stuck path doesn't leave the rest behind
+	var errs []error
+	for _, r := range removals {
+		g.Logf("removing %s", r.path)
+		if err := r.do(); err != nil {
+			errs = append(errs, fmt.Errorf("removing %s: %w", r.path, err))
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
+	fmt.Println("bud is uninstalled.")
+
+	return nil
+}
+
+// planUninstall works out what to remove and what to deliberately leave. exe is
+// the running binary, reported as kept when install.sh didn't put it there
+func planUninstall(p *paths.Paths, keepConfig bool, exe string) (removals []removal, kept []string, err error) {
+	// read before anything is removed: the receipt lives in the state dir
+	receipt, err := installer.ReadReceipt(p.InstallReceipt())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if r, ok, err := configRemoval(p.Config); err != nil {
+		return nil, nil, err
+	} else if ok {
+		removals = append(removals, r)
+	}
+
+	dirs := []struct {
+		dir, what, keep, keptWhat string
+	}{
+		{p.Data, "plugins, Mason packages, bud's own binaries and user tools", "user-tools", "everything except user-tools/"},
+		{p.State, "machine config, project registry, Neovim history and undo", "config.json", "everything except config.json"},
+		{p.Cache, "Neovim cache and logs", "", ""},
+	}
+	for _, d := range dirs {
+		if !exists(d.dir) {
+			continue
+		}
+		if keepConfig && d.keep != "" {
+			dir, keep := d.dir, d.keep
+			removals = append(removals, removal{dir, d.keptWhat, func() error { return removeAllExcept(dir, keep) }})
+			kept = append(kept, filepath.Join(d.dir, d.keep)+"  (--keep-config)")
+			continue
+		}
+		dir := d.dir
+		removals = append(removals, removal{dir, d.what, func() error { return os.RemoveAll(dir) }})
+	}
+
+	if receipt != nil && isFile(receipt.Path) {
+		path := receipt.Path
+		removals = append(removals, removal{path, "the bud binary, installed by install.sh", func() error { return os.Remove(path) }})
+	}
+	// a binary from go install or a package manager belongs to that tool (D20)
+	if exe != "" && (receipt == nil || !samePath(exe, receipt.Path)) {
+		kept = append(kept, exe+"  (not installed by install.sh: remove it with the tool that installed it)")
+	}
+
+	return removals, kept, nil
+}
+
+func configRemoval(dir string) (removal, bool, error) {
+	info, err := os.Lstat(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return removal{}, false, nil
+	}
+	if err != nil {
+		return removal{}, false, err
+	}
+
+	r := removal{path: dir, do: func() error { return nvim.RemoveConfig(dir) }}
+	if info.Mode()&fs.ModeSymlink != 0 {
+		r.what = "symlink to a dev checkout (the checkout itself stays)"
+		return r, true, nil
+	}
+
+	files, err := nvim.ManagedFiles(dir)
+	if err != nil {
+		return removal{}, false, err
+	}
+	noun := "files"
+	if len(files) == 1 {
+		noun = "file"
+	}
+	r.what = fmt.Sprintf("Neovim config: the %d %s bud synced; anything else in it stays", len(files), noun)
+
+	return r, true, nil
+}
+
+// removeAllExcept removes everything in dir but the entry named keep
+func removeAllExcept(dir, keep string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.Name() == keep {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func printKept(w io.Writer, kept []string) {
+	if len(kept) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "kept:")
+	for _, k := range slices.Compact(kept) {
+		fmt.Fprintf(w, "  %s\n", k)
+	}
+}
+
+func exists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+func isFile(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
+func samePath(a, b string) bool {
+	if a == b {
+		return true
+	}
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+
+	return errA == nil && errB == nil && ra == rb
+}

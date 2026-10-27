@@ -295,3 +295,31 @@ func TestDetectTerminals(t *testing.T) {
 		}
 	})
 }
+
+func TestReadReceipt(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "install.json")
+
+	if r, err := ReadReceipt(path); r != nil || err != nil {
+		t.Fatalf("missing: got %+v, %v", r, err)
+	}
+
+	write := func(data string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write(`{"method": "install.sh", "path": "/home/me/.local/bin/bud"}`)
+	if r, err := ReadReceipt(path); err != nil || r.Path != "/home/me/.local/bin/bud" || r.Method != "install.sh" {
+		t.Fatalf("got %+v, %v", r, err)
+	}
+
+	for _, bad := range []string{`{"path": "relative/bud"}`, `{"path": "/etc/passwd"}`, `{"path": ""}`, `not json`} {
+		write(bad)
+		if _, err := ReadReceipt(path); err == nil {
+			t.Errorf("%s: expected an error", bad)
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -183,6 +184,57 @@ func RestorePlugins() error {
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
+}
+
+// ManagedFiles lists the files the last sync wrote into dir, nil when there was none
+func ManagedFiles(dir string) ([]string, error) {
+	return readManifest(dir)
+}
+
+// RemoveConfig deletes what sync wrote into dir: the managed files, the manifest,
+// and any directory that leaves empty, dir included. Anything else stays. A
+// symlink at dir (a dev checkout) is removed itself, never followed
+func RemoveConfig(dir string) error {
+	info, err := os.Lstat(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&fs.ModeSymlink != 0 {
+		return os.Remove(dir)
+	}
+
+	files, err := readManifest(dir)
+	if err != nil {
+		return err
+	}
+
+	dirs := map[string]bool{dir: true}
+	for _, path := range append(files, manifestName) {
+		target := filepath.Join(dir, filepath.FromSlash(path))
+		if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		for d := filepath.Dir(target); d != dir; d = filepath.Dir(d) {
+			dirs[d] = true
+		}
+	}
+
+	// deepest first, so a parent is only tried once its children are gone
+	sorted := slices.Collect(maps.Keys(dirs))
+	slices.SortFunc(sorted, func(a, b string) int { return len(b) - len(a) })
+	for _, d := range sorted {
+		// a dir that still holds something of the user's stays
+		if entries, err := os.ReadDir(d); err == nil && len(entries) == 0 {
+			if err := os.Remove(d); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // HasManifest reports whether dir has been synced at least once

@@ -10,6 +10,7 @@ func TestResolveDefaults(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_DATA_HOME", "")
 	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("XDG_CACHE_HOME", "")
 
 	p, err := Resolve()
 	if err != nil {
@@ -20,6 +21,8 @@ func TestResolveDefaults(t *testing.T) {
 		{"config", p.Config, "/home/me/.config/bud"},
 		{"data", p.Data, "/home/me/.local/share/bud"},
 		{"state", p.State, "/home/me/.local/state/bud"},
+		{"cache", p.Cache, "/home/me/.cache/bud"},
+		{"install receipt", p.InstallReceipt(), "/home/me/.local/state/bud/install.json"},
 		{"bin dir", p.BinDir, "/home/me/.local/bin"},
 		{"machine config", p.MachineConfig(), "/home/me/.local/state/bud/config.json"},
 		{"projects", p.Projects(), "/home/me/.local/state/bud/projects.json"},
@@ -41,13 +44,14 @@ func TestResolveXDGOverrides(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/xdg/config")
 	t.Setenv("XDG_DATA_HOME", "/xdg/data")
 	t.Setenv("XDG_STATE_HOME", "/xdg/state")
+	t.Setenv("XDG_CACHE_HOME", "/xdg/cache")
 
 	p, err := Resolve()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if p.Config != "/xdg/config/bud" || p.Data != "/xdg/data/bud" || p.State != "/xdg/state/bud" {
+	if p.Config != "/xdg/config/bud" || p.Data != "/xdg/data/bud" || p.State != "/xdg/state/bud" || p.Cache != "/xdg/cache/bud" {
 		t.Fatalf("got %+v", p)
 	}
 	// ~/.local/bin isn't an XDG base dir, so the overrides leave it alone

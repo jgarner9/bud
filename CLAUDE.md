@@ -8,6 +8,10 @@ Bud is a Neovim-based IDE driven by a small Go CLI (`bud`). The CLI installs, la
 
 AI scope is **Claude Code only** (D26): one Claude Code session per project, started and owned by Neovim (D25, BASE.md 4.2), with Neovim TUIs built on the `bud.ai.claude` Lua module. Don't add other harnesses, model providers or an API client unless asked.
 
+## Docs
+
+`docs/` holds the user docs: `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), and how-tos for languages, tools, layouts, building a Claude TUI and troubleshooting. Keep them in step when behaviour changes.
+
 ## Commands
 
 ```sh

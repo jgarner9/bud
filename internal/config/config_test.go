@@ -196,3 +196,27 @@ func TestGetSet(t *testing.T) {
 		t.Error("expected an error for an empty key part")
 	}
 }
+
+// TestDocsCoverEveryKey keeps docs/config.md in step: every setting has a row
+func TestDocsCoverEveryKey(t *testing.T) {
+	doc, err := os.ReadFile("../../docs/config.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(Defaults())
+	var tree map[string]any
+	json.Unmarshal(data, &tree)
+	var walk func(m map[string]any, prefix string)
+	walk = func(m map[string]any, prefix string) {
+		for k, v := range m {
+			if child, ok := v.(map[string]any); ok {
+				walk(child, prefix+k+".")
+				continue
+			}
+			if !strings.Contains(string(doc), "`"+prefix+k+"`") {
+				t.Errorf("docs/config.md doesn't document %s", prefix+k)
+			}
+		}
+	}
+	walk(tree, "")
+}

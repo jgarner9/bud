@@ -19,7 +19,7 @@
 
 ---
 
-> **Early days.** Bud is young and still booting up. The editor core works today; the dashboard, layouts, updater and Claude Code integration are on the way. Expect things to move around.
+> **Early days.** Bud is young and moving fast: the editor, dashboard, updater, layouts and the Claude Code layer all work today, and things may still move around.
 
 ## What is it?
 
@@ -119,6 +119,14 @@ bud main.go util.go # open files, from the project root they belong to
 | `bud lang`      | `ls` lists languages; `enable` / `disable` turn them on and off (enable installs their tools); `add <name>` starts your own spec from the template; `rm <name>` removes one of yours |
 | `bud projects`  | `ls` lists the projects bud knows (opening a dir registers it); `add`, `rm`, `pin`, `unpin` manage them |
 | `bud uninstall` | Lists everything bud put on the machine and removes it once you confirm. `--keep-config` keeps your settings |
+| `bud launch` | Opens bud in a new Kitty or Ghostty window (what the app runs). `bud bundle` installs the app |
+| `bud layout` | `ls` lists pane layouts; `set-default`, `set` and `unset` pick what projects open in |
+| `bud claude` | `status` and `setup`: is Claude Code installed and logged in, and fix it if not |
+| `bud chat` | Full-screen chat with Claude Code, with history; `bud agent [path]` opens Claude Code's own TUI |
+| `bud tools` | Your tools and bud's: `ls`, `enable`, `disable`, `rm`, `promote`, and `gen "..."` to have Claude write one |
+| `bud kit` | Syncs bud's Claude Code setup (MCP servers, skills, agents, plugins) into Claude Code: `status`, `sync`, `secret set` |
+| `bud config` | `ls`, `get`, `set`, `unset`, `edit`: machine config by dotted key |
+| `bud completion` | Shell completion: add `eval "$(bud completion zsh)"` to your shell rc |
 
 Global flags go before the command: `bud [--verbose] [--profile full|minimal] <command> [flags] [args]`.
 
@@ -141,19 +149,25 @@ Leader is <kbd>Space</kbd>. Press it and wait, and which-key shows the rest.
 | <kbd>Space</kbd> <kbd>x</kbd> | Diagnostics |
 | <kbd>Space</kbd> <kbd>c</kbd> <kbd>f</kbd> | Format buffer |
 | <kbd>Space</kbd> <kbd>g</kbd> <kbd>d</kbd> | Diff the working tree |
+| <kbd>Space</kbd> <kbd>c</kbd> <kbd>h</kbd> · <kbd>Space</kbd> <kbd>a</kbd> <kbd>a</kbd> | Full-screen chat · chat pane for this project |
+| <kbd>Space</kbd> <kbd>a</kbd> <kbd>e</kbd> / <kbd>f</kbd> / <kbd>t</kbd> | Explain · refactor · write tests for the selection |
+| <kbd>Space</kbd> <kbd>a</kbd> <kbd>c</kbd> | Claude Code's own TUI |
+| <kbd>g</kbd> <kbd>a</kbd> · <kbd>q</kbd> | In a proposed edit: accept · reject |
+| <kbd>Space</kbd> <kbd>,</kbd> | Settings |
 
 ## Roadmap
 
 - [x] CLI skeleton, isolated config, installer, doctor, uninstall
 - [x] Plugin set, lazy loading, the language engine and seven languages
 - [x] `bud lang` to add, enable and disable languages
-- [ ] A dashboard to land on (silly by default, minimal if you prefer) and a project registry
-- [ ] Self-update in the background, with doctor-based rollback
-- [ ] Signed releases and a nightly channel
-- [ ] Pane layouts, a Kitty/Ghostty launcher, and app bundles
-- [ ] **Claude Code built in:** one session per project, shared by side-pane chat, full-screen chat, inline actions and a tool generator
+- [x] A dashboard to land on (silly by default, minimal if you prefer) and a project registry
+- [x] Self-update in the background, with doctor-based rollback
+- [x] Signed releases and a nightly channel
+- [x] Pane layouts, a Kitty/Ghostty launcher, and app bundles
+- [x] **Claude Code built in:** one session per project, shared by side-pane chat, full-screen chat, inline actions and a tool generator, with edits as diffs you accept
+- [ ] Polish: settings screen, `bud config`, completions, docs, more languages, debugging
 
-The full plan and every decision made so far live in [`BASE.md`](BASE.md).
+The full plan and every decision made so far live in [`BASE.md`](BASE.md). How-tos and the config reference are in [`docs/`](docs/): [config](docs/config.md), [languages](docs/languages.md), [tools](docs/tools.md), [layouts](docs/layouts.md), [building a Claude TUI](docs/claude-tui.md) and [troubleshooting](docs/troubleshooting.md).
 
 ## Hacking on Bud
 

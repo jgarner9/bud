@@ -1,11 +1,12 @@
-<div align="center">
-
 ```
    ___     z
   [-.-]  z     >_ bud
   /[_]\        > ...
    ] [         > [o.o] oh! hi. let's go.
 ```
+
+<!-- the art stays outside the centered div: GitHub centers each line of a code block on its own, which breaks the alignment -->
+<div align="center">
 
 **One small Go binary. One isolated Neovim. Seven languages ready to go.**
 

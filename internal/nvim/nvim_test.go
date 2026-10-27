@@ -29,31 +29,6 @@ func TestEnv(t *testing.T) {
 	}
 }
 
-func TestConfigDir(t *testing.T) {
-	t.Run("xdg", func(t *testing.T) {
-		t.Setenv("XDG_CONFIG_HOME", "/xdg")
-		got, err := ConfigDir()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := filepath.Join("/xdg", AppName); got != want {
-			t.Fatalf("got %q, want %q", got, want)
-		}
-	})
-
-	t.Run("home", func(t *testing.T) {
-		t.Setenv("XDG_CONFIG_HOME", "")
-		t.Setenv("HOME", "/home/me")
-		got, err := ConfigDir()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := filepath.Join("/home/me", ".config", AppName); got != want {
-			t.Fatalf("got %q, want %q", got, want)
-		}
-	})
-}
-
 func TestSyncConfigRemovedFileAlreadyGone(t *testing.T) {
 	dst := t.TempDir()
 

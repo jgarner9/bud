@@ -6,9 +6,12 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+
+	"jgarner.dev/bud/internal/paths"
 )
 
-const AppName = "bud"
+// AppName is NVIM_APPNAME, which points Neovim at bud's dirs from internal/paths
+const AppName = paths.AppName
 
 func Launch(root, file string) error {
 	bin, err := exec.LookPath("nvim")

@@ -12,6 +12,7 @@ import (
 	"slices"
 
 	"jgarner.dev/bud"
+	"jgarner.dev/bud/internal/paths"
 )
 
 // manifestName records every file SyncConfig wrote, so a file dropped from the
@@ -32,10 +33,11 @@ func (r *SyncResult) Changed() bool {
 func Apply() error {
 	fmt.Println("Configuring Neovim...")
 
-	dst, err := ConfigDir()
+	p, err := paths.Resolve()
 	if err != nil {
 		return fmt.Errorf("finding config directory: %w", err)
 	}
+	dst := p.Config
 	fmt.Println("Bud config directory: " + dst)
 
 	fmt.Println("Syncing config...")
@@ -79,21 +81,6 @@ func Apply() error {
 	}
 
 	return nil
-}
-
-// ConfigDir is stdpath("config") for NVIM_APPNAME=bud. Neovim uses
-// ~/.config on macOS too, not ~/Library
-func ConfigDir() (string, error) {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, AppName), nil
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(home, ".config", AppName), nil
 }
 
 // SyncConfig makes dst match src for every file bud owns. It serves both

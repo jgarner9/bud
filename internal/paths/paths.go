@@ -1,0 +1,66 @@
+// Package paths resolves every location bud reads or writes on a machine, so
+// nothing else hardcodes one. macOS uses the same XDG layout as Linux (D13),
+// which is also where Neovim looks on both
+package paths
+
+import (
+	"os"
+	"path/filepath"
+)
+
+// AppName names bud's directories. It's also NVIM_APPNAME, so Neovim's
+// stdpath("config"/"data"/"state") land on the same dirs as Config, Data and State
+const AppName = "bud"
+
+type Paths struct {
+	Config string // ~/.config/bud: synced copy of the embedded nvim/ (bud-owned, D21)
+	Data   string // ~/.local/share/bud: plugins, Mason, bud-managed binaries, user tools
+	State  string // ~/.local/state/bud: machine config, project registry, kit ledger
+	BinDir string // ~/.local/bin: where install.sh puts bud unless told otherwise
+}
+
+// Resolve reads XDG_CONFIG_HOME, XDG_DATA_HOME and XDG_STATE_HOME, falling back
+// to the XDG defaults under $HOME. Like the spec says, relative values are ignored
+func Resolve() (*Paths, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Paths{
+		Config: filepath.Join(xdg("XDG_CONFIG_HOME", home, ".config"), AppName),
+		Data:   filepath.Join(xdg("XDG_DATA_HOME", home, ".local", "share"), AppName),
+		State:  filepath.Join(xdg("XDG_STATE_HOME", home, ".local", "state"), AppName),
+		BinDir: filepath.Join(home, ".local", "bin"),
+	}, nil
+}
+
+func xdg(env, home string, def ...string) string {
+	if dir := os.Getenv(env); filepath.IsAbs(dir) {
+		return dir
+	}
+
+	return filepath.Join(append([]string{home}, def...)...)
+}
+
+// MachineConfig is config.json, kept in state so `bud dev link` can turn
+// Config into a symlink without taking local settings with it (D13)
+func (p *Paths) MachineConfig() string { return filepath.Join(p.State, "config.json") }
+
+// Projects is the project registry the dashboard reads
+func (p *Paths) Projects() string { return filepath.Join(p.State, "projects.json") }
+
+// KitLedger records everything `bud kit sync` wrote into Claude Code's config
+func (p *Paths) KitLedger() string { return filepath.Join(p.State, "kit-ledger.json") }
+
+// UserTools holds generated tools that haven't been promoted into the repo
+func (p *Paths) UserTools() string { return filepath.Join(p.Data, "user-tools") }
+
+// Bin holds binaries bud downloads itself, as opposed to the system package manager
+func (p *Paths) Bin() string { return filepath.Join(p.Data, "bin") }
+
+// Mason is Mason's install root, its default under stdpath("data")
+func (p *Paths) Mason() string { return filepath.Join(p.Data, "mason") }
+
+// PrevBinary is the binary a self-update replaced, kept for rollback
+func (p *Paths) PrevBinary() string { return filepath.Join(p.Data, "bud.prev") }

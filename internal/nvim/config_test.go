@@ -63,3 +63,50 @@ func TestSyncConfig(t *testing.T) {
 		t.Fatalf("local config was touched: %v", err)
 	}
 }
+
+func TestCheckConfig(t *testing.T) {
+	dst := t.TempDir()
+	v1 := fstest.MapFS{
+		"init.lua":      {Data: []byte("1")},
+		"edited.lua":    {Data: []byte("2")},
+		"deleted.lua":   {Data: []byte("3")},
+		"dropped.lua":   {Data: []byte("4")},
+		"unchanged.lua": {Data: []byte("5")},
+	}
+	if _, err := SyncConfig(v1, dst); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dst, "edited.lua"), []byte("hand edit"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dst, "deleted.lua")); err != nil {
+		t.Fatal(err)
+	}
+
+	v2 := fstest.MapFS{
+		"init.lua":      {Data: []byte("1")},
+		"edited.lua":    {Data: []byte("2")},
+		"deleted.lua":   {Data: []byte("3")},
+		"unchanged.lua": {Data: []byte("5")},
+	}
+	res, err := CheckConfig(v2, dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(res.Added, []string{"deleted.lua"}) ||
+		!slices.Equal(res.Updated, []string{"edited.lua"}) ||
+		!slices.Equal(res.Removed, []string{"dropped.lua"}) {
+		t.Fatalf("got %+v", res)
+	}
+
+	// nothing on disk may change
+	if got, _ := os.ReadFile(filepath.Join(dst, "edited.lua")); string(got) != "hand edit" {
+		t.Errorf("edited.lua = %q, check wrote to it", got)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "dropped.lua")); err != nil {
+		t.Errorf("dropped.lua was removed: %v", err)
+	}
+	if files, _ := readManifest(dst); len(files) != 5 {
+		t.Errorf("manifest rewritten: %v", files)
+	}
+}

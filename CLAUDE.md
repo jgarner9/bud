@@ -39,6 +39,8 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **Paths and machine config.** `internal/paths.Resolve` is the only place that builds a bud path (XDG on macOS too, D13); don't hardcode one elsewhere. `internal/config` keeps `config.json` as a raw JSON tree so unknown keys survive `Save`, and `File.Settings()` decodes it over `Defaults()`.
 
+**Doctor.** `internal/doctor.Run` returns one `Result` per check (`OK`/`Warn`/`Fail`). Only `Fail` makes `bud doctor` exit non-zero, which the updater will use for rollback. New checks are functions added to `Run`.
+
 **Launching.** `open` resolves the path into a workspace root and optional file, then `nvim.Launch` `chdir`s and replaces the bud process with nvim via `syscall.Exec`. Nothing runs after that, which is why plans for in-editor processes (like the Claude Code session in BASE.md 4.2) live in Lua, not Go.
 
 **Installer.** `internal/installer` only *checks* system deps for now (D16). `Check` returns a `*MissingError` naming the missing deps and the exact install command for the detected package manager: Homebrew on macOS; pacman, then apt, then dnf on Linux. Per-manager package names live in `Dep.Pkgs`. `Dep.Bins` lists alternative binary names (apt's `fdfind`).

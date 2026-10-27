@@ -35,6 +35,15 @@ var Deps = []Dep{
 	}},
 }
 
+// Packages returns what to ask m for to get d
+func (d Dep) Packages(m Manager) []string {
+	if p, ok := d.Pkgs[m.Name]; ok {
+		return p
+	}
+
+	return []string{d.Name}
+}
+
 func (d Dep) Installed() bool {
 	for _, bin := range d.Bins {
 		if _, err := exec.LookPath(bin); err == nil {
@@ -103,11 +112,7 @@ func (e *MissingError) Error() string {
 	var names, pkgs []string
 	for _, dep := range e.Deps {
 		names = append(names, dep.Name)
-		if p, ok := dep.Pkgs[e.Manager.Name]; ok {
-			pkgs = append(pkgs, p...)
-		} else {
-			pkgs = append(pkgs, dep.Name)
-		}
+		pkgs = append(pkgs, dep.Packages(e.Manager)...)
 	}
 
 	var b strings.Builder

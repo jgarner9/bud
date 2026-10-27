@@ -68,6 +68,8 @@ Working today:
 | `bud open`    | Launches Neovim with the Bud config and resolves the path |
 | `bud install` | Checks system dependencies and installs the Bud Neovim config |
 | `bud update`  | Syncs the config and restores pinned plugins              |
+| `bud doctor`  | Checks deps, the Neovim version (0.11+), config sync and machine config; exits 1 on a failure |
+| `bud version` | Prints the version                                        |
 
 Everything else in the list above is still planned. See [`BASE.md`](BASE.md) for the full plan and the decisions made so far.
 

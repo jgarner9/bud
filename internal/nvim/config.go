@@ -86,6 +86,17 @@ func Apply() error {
 // SyncConfig makes dst match src for every file bud owns. It serves both
 // install (empty dst, everything is added) and update (only differences are written)
 func SyncConfig(src fs.FS, dst string) (*SyncResult, error) {
+	return syncConfig(src, dst, true)
+}
+
+// CheckConfig reports what SyncConfig would change without writing anything:
+// Added are managed files that are missing, Updated ones that differ from src,
+// and Removed ones a newer release dropped that are still there
+func CheckConfig(src fs.FS, dst string) (*SyncResult, error) {
+	return syncConfig(src, dst, false)
+}
+
+func syncConfig(src fs.FS, dst string, write bool) (*SyncResult, error) {
 	res := &SyncResult{}
 
 	prev, err := readManifest(dst)
@@ -118,6 +129,9 @@ func SyncConfig(src fs.FS, dst string) (*SyncResult, error) {
 			res.Updated = append(res.Updated, path)
 		}
 
+		if !write {
+			return nil
+		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
@@ -132,13 +146,23 @@ func SyncConfig(src fs.FS, dst string) (*SyncResult, error) {
 		if slices.Contains(files, path) {
 			continue
 		}
-		err := os.Remove(filepath.Join(dst, filepath.FromSlash(path)))
+		target := filepath.Join(dst, filepath.FromSlash(path))
+		if !write {
+			if _, err := os.Lstat(target); err == nil {
+				res.Removed = append(res.Removed, path)
+			}
+			continue
+		}
+		err := os.Remove(target)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
 		}
 		res.Removed = append(res.Removed, path)
 	}
 
+	if !write {
+		return res, nil
+	}
 	if err := writeManifest(dst, files); err != nil {
 		return nil, err
 	}
@@ -159,6 +183,12 @@ func RestorePlugins() error {
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
+}
+
+// HasManifest reports whether dir has been synced at least once
+func HasManifest(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, manifestName))
+	return err == nil
 }
 
 func readManifest(dir string) ([]string, error) {

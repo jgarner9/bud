@@ -35,6 +35,7 @@ func Tools() *Command {
 		Usage: "Lists, enables, disables, removes and promotes bud's tools",
 		Subs: []*Command{
 			{Name: "ls", Usage: "list the tools, yours and bud's, and whether each is on", Run: func(_ *Globals, args []string) error { return toolsLs(args) }},
+			{Name: "gen", Usage: "have Claude write a tool or language spec, in the editor: gen \"<description>\"", Run: func(g *Globals, args []string) error { return toolsGen(g, args) }},
 			{Name: "enable", Usage: "turn a tool on: enable <name>", Run: func(_ *Globals, args []string) error { return toolsEnable(args) }},
 			{
 				Name:  "disable",
@@ -396,4 +397,26 @@ func toolsPromote(args []string, repo string, yes bool) error {
 	fmt.Printf("Promoted %s: it ships with the next release.\n", name)
 
 	return nil
+}
+
+// toolsGen opens bud's Neovim on :BudGen with the description (JGA-91): the
+// generator needs the editor, since you review each file as a diff
+func toolsGen(g *Globals, args []string) error {
+	desc := strings.TrimSpace(strings.Join(args, " "))
+	if desc == "" {
+		return usageErrorf("tools gen needs a description: bud tools gen \"a command that opens the test file\"")
+	}
+	p, err := paths.Resolve()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(p.UserTools(), 0o755); err != nil {
+		return err
+	}
+	// nvim.Launch hands this environment on to nvim
+	os.Setenv("BUD_OPEN", "gen")
+	os.Setenv("BUD_GEN", desc)
+	g.Logf("generating %q", desc)
+
+	return launchNvim(p.UserTools(), nil, "", false)
 }

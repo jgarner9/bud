@@ -126,3 +126,23 @@ func TestToolsPromote(t *testing.T) {
 		t.Fatalf("git %q, want %q", ran, want)
 	}
 }
+
+func TestToolsGen(t *testing.T) {
+	p := toolsHome(t)
+	t.Setenv("BUD_OPEN", "")
+	t.Setenv("BUD_GEN", "")
+	var root string
+	orig := launchNvim
+	launchNvim = func(r string, _ []string, _ string, _ bool) error { root = r; return nil }
+	t.Cleanup(func() { launchNvim = orig })
+
+	if err := toolsGen(&Globals{}, nil); err == nil {
+		t.Fatal("no description accepted")
+	}
+	if err := toolsGen(&Globals{}, []string{"a", "test", "jumper"}); err != nil {
+		t.Fatal(err)
+	}
+	if root != p.UserTools() || os.Getenv("BUD_OPEN") != "gen" || os.Getenv("BUD_GEN") != "a test jumper" {
+		t.Fatalf("launched in %s with BUD_OPEN %q, BUD_GEN %q", root, os.Getenv("BUD_OPEN"), os.Getenv("BUD_GEN"))
+	}
+}

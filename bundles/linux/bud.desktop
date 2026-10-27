@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Bud
+GenericName=Code Editor
+Comment=Neovim IDE with Claude Code
+Exec={{.Exec}} %F
+Icon=bud
+Terminal=false
+StartupNotify=false
+Categories=Development;IDE;TextEditor;
+Keywords=neovim;editor;ide;claude;
+MimeType=inode/directory;text/plain;
+X-Bud-Version={{.Version}}

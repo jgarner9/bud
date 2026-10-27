@@ -6,6 +6,7 @@ package paths
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 // AppName names bud's directories. It's also NVIM_APPNAME, so Neovim's
@@ -88,3 +89,15 @@ func (p *Paths) Mason() string { return filepath.Join(p.Data, "mason") }
 
 // PrevBinary is the binary a self-update replaced, kept for rollback
 func (p *Paths) PrevBinary() string { return filepath.Join(p.Data, "bud.prev") }
+
+// DesktopEntry is the Linux app launcher entry, ~/.local/share/applications/bud.desktop
+func (p *Paths) DesktopEntry() string {
+	return filepath.Join(filepath.Dir(p.Data), "applications", AppName+".desktop")
+}
+
+// DesktopIcon is the entry's icon at one size, in the hicolor theme under
+// ~/.local/share/icons
+func (p *Paths) DesktopIcon(size int) string {
+	px := strconv.Itoa(size)
+	return filepath.Join(filepath.Dir(p.Data), "icons", "hicolor", px+"x"+px, "apps", AppName+".png")
+}

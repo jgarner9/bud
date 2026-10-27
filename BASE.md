@@ -170,7 +170,7 @@ bud/
 │   ├── macos/
 │   │   # main.applescript, the droplet osacompile builds Bud.app from (D47); the icon is drawn in Go
 │   └── linux/
-│       # bud.desktop template, icons, AppImage recipe
+│       # bud.desktop template; the icons are the same Go-drawn robot
 │
 ├── kit/
 │   # Claude Code setup: MCP servers, skills, agents, commands, hooks, instructions (see 4.1)
@@ -575,7 +575,7 @@ A general-purpose chat that isn't tied to code, for bouncing ideas around. You c
 ### 5.6 App bundle + layout
 
 - **macOS:** `Bud.app` is a tiny AppleScript droplet that runs `bud launch` (D47), built and installed by `bud bundle`. The bundle always opens on the dashboard, unless you dropped a folder or file onto the icon, in which case it opens that directly. `bud launch` opens your configured terminal (Kitty or Ghostty, Kitty when none is set, D11) running `nvim` with the layout applied. Dragging a folder onto the dock icon opens it as a project.
-- **Linux:** `bud.desktop` with `Exec=bud launch %F`, plus an icon. AppImage is optional and probably unnecessary since `bud` is already a single binary.
+- **Linux:** `bud bundle` writes `~/.local/share/applications/bud.desktop` (`Exec=env PATH=... /abs/bud launch %F`, the same baked-in bud and `PATH` as Bud.app, D47) and the robot icon into the hicolor theme at 64-512 px. It only replaces an entry with bud's `X-Bud-Version` key. No AppImage: `bud` is already a single binary.
 - **Layout files** describe panes in Neovim terms, e.g. default = file tree (left, 30 cols) | editor (center) | AI chat (right, 60 cols), terminal (bottom, 12 rows, hidden until toggled). Layouts are chosen per project or per launch (`--layout`).
 
 ### 5.7 Update flow

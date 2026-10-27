@@ -1,6 +1,11 @@
 -- Languages (D29): each plugin wires up its part of the enabled language specs,
 -- which bud.lang reads from languages/. Parsers and Mason packages are installed
 -- by the restore hooks, while bud install / bud update runs, never at startup.
+--
+-- Highlighting, servers and linting start on vim.schedule, so a file shows
+-- before they're ready (D35): each can cost 40-120 ms the first time (compiling
+-- TypeScript's queries, tsc's version probe, golangci-lint's), which would
+-- otherwise all land before the first screen.
 
 -- ten minutes for a restore hook's downloads and builds
 local restore_timeout = 600000
@@ -74,10 +79,22 @@ return {
     ft = filetypes,
     config = function()
       -- a server that isn't installed is skipped (and logged) when a buffer opens
-      for server, settings in pairs(require("bud.lang").servers()) do
-        vim.lsp.config(server, settings)
-        vim.lsp.enable(server)
-      end
+      vim.schedule(function()
+        for server, settings in pairs(require("bud.lang").servers()) do
+          vim.lsp.config(server, settings)
+          vim.lsp.enable(server)
+        end
+        -- enable() re-runs its FileType handler on open buffers, but only once
+        -- VimEnter has fired; before that (a -c command), do it here, so the
+        -- buffer that loaded this plugin still gets its servers
+        if vim.v.vim_did_enter == 0 then
+          for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype ~= "" then
+              pcall(vim.api.nvim_exec_autocmds, "FileType", { group = "nvim.lsp.enable", buffer = buf })
+            end
+          end
+        end
+      end)
     end,
   },
   {
@@ -93,8 +110,12 @@ return {
         pattern = filetypes,
         desc = "start tree-sitter highlighting",
         callback = function(ev)
-          -- fails when the parser isn't built yet, which leaves regex highlighting on
-          pcall(vim.treesitter.start, ev.buf)
+          vim.schedule(function()
+            if vim.api.nvim_buf_is_valid(ev.buf) then
+              -- fails when the parser isn't built yet, which leaves regex highlighting on
+              pcall(vim.treesitter.start, ev.buf)
+            end
+          end)
         end,
       })
     end,
@@ -164,8 +185,14 @@ return {
       vim.api.nvim_create_autocmd({ "FileType", "BufWritePost", "InsertLeave" }, {
         group = vim.api.nvim_create_augroup("bud.lang.lint", {}),
         desc = "lint the buffer",
-        callback = function()
-          lint.try_lint(nil, { filter = installed })
+        callback = function(ev)
+          vim.schedule(function()
+            if vim.api.nvim_buf_is_valid(ev.buf) then
+              vim.api.nvim_buf_call(ev.buf, function()
+                lint.try_lint(nil, { filter = installed })
+              end)
+            end
+          end)
         end,
       })
     end,

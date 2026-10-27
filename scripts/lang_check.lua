@@ -152,7 +152,10 @@ local function check(i, case)
   vim.cmd.edit(case.open)
   local buf = vim.api.nvim_get_current_buf()
 
-  if not vim.treesitter.highlighter.active[buf] then
+  -- highlighting starts just after the buffer shows (D35)
+  if not vim.wait(5000, function()
+    return vim.treesitter.highlighter.active[buf] ~= nil
+  end, 50) then
     problem(case, "tree-sitter highlighting didn't start")
   end
 

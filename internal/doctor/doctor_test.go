@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
@@ -291,12 +292,12 @@ func TestCheckLanguages(t *testing.T) {
 	t.Run("all good", func(t *testing.T) {
 		fakePath(t, "nvim")
 		withLanguages(t, &lang.Set{Specs: specs}, nil)
-		results, deps := checkLanguages(synced(t), config.Defaults())
+		results, enabled := checkLanguages(synced(t), config.Defaults())
 		if len(results) != 1 || results[0].Status != OK || results[0].Detail != "go, python" {
 			t.Fatalf("got %+v", results)
 		}
-		if len(deps) != 2 || deps[0].Name != "go" || deps[1].Name != "python3" {
-			t.Fatalf("deps = %+v", deps)
+		if len(enabled) != 2 || enabled[0].Name != "go" || enabled[1].Name != "python" {
+			t.Fatalf("enabled = %+v", enabled)
 		}
 	})
 
@@ -355,4 +356,67 @@ func TestCheckLanguageDeps(t *testing.T) {
 	if len(results) != 2 || results[0].Status != OK || results[1].Status != Warn || results[1].Fix == "" {
 		t.Fatalf("got %+v", results)
 	}
+}
+
+func withStartup(t *testing.T, times map[string]time.Duration) *[]string {
+	t.Helper()
+	var calls []string
+	orig := startupTime
+	startupTime = func(args ...string) (time.Duration, error) {
+		key := strings.Join(args, " ")
+		calls = append(calls, key)
+		return times[key], nil
+	}
+	t.Cleanup(func() { startupTime = orig })
+	return &calls
+}
+
+func TestCheckStartup(t *testing.T) {
+	synced := func(t *testing.T) *paths.Paths {
+		t.Helper()
+		p := tempPaths(t)
+		if _, err := nvim.SyncConfig(fstest.MapFS{"init.lua": {Data: []byte("1")}}, p.Config); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	specs := []lang.Spec{{Name: "go", Filetypes: []string{"go", "gomod"}}, {Name: "html", Filetypes: []string{"html"}}}
+	ms := time.Millisecond
+
+	t.Run("within budget", func(t *testing.T) {
+		fakePath(t, "nvim")
+		calls := withStartup(t, map[string]time.Duration{"": 28 * ms, "-c setfiletype go": 40 * ms, "-c setfiletype html": 45 * ms})
+		r, ok := checkStartup(synced(t), specs)
+		if !ok || r.Status != OK || r.Detail != "28 ms, slowest language html 45 ms" {
+			t.Fatalf("got %+v", r)
+		}
+		// three for the median of an empty start, then one per language
+		if len(*calls) != 5 {
+			t.Errorf("ran nvim %d times: %v", len(*calls), *calls)
+		}
+	})
+
+	t.Run("over budget warns, after measuring again", func(t *testing.T) {
+		fakePath(t, "nvim")
+		calls := withStartup(t, map[string]time.Duration{"": 28 * ms, "-c setfiletype go": 130 * ms})
+		r, _ := checkStartup(synced(t), specs[:1])
+		if r.Status != Warn || !strings.Contains(r.Detail, "go 130 ms, over the 50 ms budget") || r.Fix == "" {
+			t.Fatalf("got %+v", r)
+		}
+		if len(*calls) != 3+1+3 {
+			t.Errorf("ran nvim %d times: %v", len(*calls), *calls)
+		}
+	})
+
+	t.Run("skipped before the first sync or without nvim", func(t *testing.T) {
+		withStartup(t, nil)
+		fakePath(t, "nvim")
+		if _, ok := checkStartup(tempPaths(t), specs); ok {
+			t.Error("not synced: expected a skip")
+		}
+		fakePath(t)
+		if _, ok := checkStartup(synced(t), specs); ok {
+			t.Error("no nvim: expected a skip")
+		}
+	})
 }

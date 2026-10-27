@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/config"
@@ -52,6 +53,10 @@ type Result struct {
 // MinNeovim is the oldest Neovim bud supports (D19)
 var MinNeovim = [2]int{0, 12}
 
+// StartupBudget is how long bud may take to show its first screen, empty or on
+// a file of any enabled language (principle 1, D35)
+var StartupBudget = 50 * time.Millisecond
+
 // MinTreeSitter is the oldest tree-sitter CLI nvim-treesitter's main branch builds parsers with
 var MinTreeSitter = [3]int{0, 26, 1}
 
@@ -67,6 +72,7 @@ var (
 	}
 	embedded      = func() fs.FS { return bud.Config() }
 	loadLanguages = lang.Load
+	startupTime   = nvim.StartupTime
 )
 
 // Run runs every check, in the order they're worth reading
@@ -80,8 +86,8 @@ func Run() []Result {
 	cfg, cfgResult := checkMachineConfig(p)
 
 	results := checkDeps(cfg.Profile)
-	langResults, langDeps := checkLanguages(p, cfg)
-	results = append(results, checkLanguageDeps(langDeps)...)
+	langResults, enabled := checkLanguages(p, cfg)
+	results = append(results, checkLanguageDeps(installer.ForBins(lang.System(enabled)))...)
 	if r, ok := checkNeovim(); ok {
 		results = append(results, r)
 	}
@@ -90,17 +96,85 @@ func Run() []Result {
 	}
 	results = append(results, checkConfigSync(p))
 	results = append(results, langResults...)
+	if r, ok := checkStartup(p, enabled); ok {
+		results = append(results, r)
+	}
 
 	return append(results, cfgResult)
+}
+
+// checkStartup times bud's first screen: empty, and on a buffer of each enabled
+// language. Past StartupBudget only warns, since slow isn't broken. Skipped when
+// nvim is missing or the config isn't synced, which other checks report
+func checkStartup(p *paths.Paths, enabled []lang.Spec) (Result, bool) {
+	if !nvim.HasManifest(p.Config) {
+		return Result{}, false
+	}
+	if _, err := exec.LookPath("nvim"); err != nil {
+		return Result{}, false
+	}
+
+	r := Result{Name: "startup"}
+	// the median of three, so one slow run doesn't count
+	median := func(args ...string) (time.Duration, error) {
+		var runs []time.Duration
+		for range 3 {
+			d, err := startupTime(args...)
+			if err != nil {
+				return 0, err
+			}
+			runs = append(runs, d)
+		}
+		slices.Sort(runs)
+		return runs[1], nil
+	}
+
+	boot, err := median()
+	if err != nil {
+		r.Status = Warn
+		r.Detail = err.Error()
+		return r, true
+	}
+
+	// one run per language is enough unless it's over budget
+	slowName, slow := "", time.Duration(0)
+	for _, spec := range enabled {
+		args := []string{"-c", "setfiletype " + spec.Filetypes[0]}
+		d, err := startupTime(args...)
+		if err == nil && d > StartupBudget {
+			d, err = median(args...)
+		}
+		if err != nil {
+			r.Status = Warn
+			r.Detail = spec.Name + ": " + err.Error()
+			return r, true
+		}
+		if d > slow {
+			slowName, slow = spec.Name, d
+		}
+	}
+
+	ms := func(d time.Duration) string { return fmt.Sprintf("%d ms", d.Round(time.Millisecond).Milliseconds()) }
+	r.Detail = ms(boot)
+	if slowName != "" {
+		r.Detail += ", slowest language " + slowName + " " + ms(slow)
+	}
+	if boot > StartupBudget || slow > StartupBudget {
+		r.Status = Warn
+		r.Detail += ", over the " + ms(StartupBudget) + " budget"
+		r.Fix = "NVIM_APPNAME=bud nvim --startuptime startup.log shows where the time goes"
+	}
+
+	return r, true
 }
 
 // checkLanguages reads the synced specs and reports the ones that don't load and
 // the enabled names with no spec. A broken spec bud shipped is a Fail (a bad
 // release, which an update should roll back); one the user added, or a name
 // with no spec, only warns, since the rest of the editor still works (D33). It
-// also returns the enabled languages' system deps. Skipped, with no results,
-// until the config is synced or when nvim is missing, which other checks report
-func checkLanguages(p *paths.Paths, cfg config.Settings) ([]Result, []installer.Dep) {
+// also returns the enabled specs. Skipped, with no results, until the config is
+// synced or when nvim is missing, which other checks report
+func checkLanguages(p *paths.Paths, cfg config.Settings) ([]Result, []lang.Spec) {
 	if !nvim.HasManifest(p.Config) {
 		return nil, nil
 	}
@@ -156,7 +230,7 @@ func checkLanguages(p *paths.Paths, cfg config.Settings) ([]Result, []installer.
 	}
 	results = append([]Result{{Name: "languages", Detail: detail}}, results...)
 
-	return results, installer.ForBins(lang.System(enabled))
+	return results, enabled
 }
 
 // checkLanguageDeps reports the enabled languages' system deps. A missing one

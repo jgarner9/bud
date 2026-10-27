@@ -2,10 +2,14 @@
 package nvim
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"jgarner.dev/bud/internal/paths"
 )
@@ -54,4 +58,41 @@ func setEnv(vars []string, key, value string) []string {
 	}
 
 	return out
+}
+
+// StartupTime starts nvim headless the way bud does and returns how long it took
+// to start, from --startuptime's "NVIM STARTED" line. args go before +qa, so
+// "-c", "setfiletype go" times opening a Go buffer. Work deferred past startup
+// (vim.schedule) isn't counted: this is the time until the first screen
+func StartupTime(args ...string) (time.Duration, error) {
+	log, err := os.CreateTemp("", "bud-startuptime-*.log")
+	if err != nil {
+		return 0, err
+	}
+	// a fresh, empty file each time, since --startuptime appends
+	log.Close()
+	defer os.Remove(log.Name())
+
+	argv := append([]string{"--headless", "--startuptime", log.Name()}, args...)
+	cmd := exec.Command("nvim", append(argv, "+qa!")...)
+	cmd.Env = env()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return 0, fmt.Errorf("nvim: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	data, err := os.ReadFile(log.Name())
+	if err != nil {
+		return 0, err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.Contains(line, "NVIM STARTED") {
+			ms, err := strconv.ParseFloat(strings.Fields(line)[0], 64)
+			if err != nil {
+				return 0, fmt.Errorf("reading --startuptime: %w", err)
+			}
+			return time.Duration(ms * float64(time.Millisecond)), nil
+		}
+	}
+
+	return 0, errors.New("--startuptime has no NVIM STARTED line")
 }

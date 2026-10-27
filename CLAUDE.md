@@ -37,7 +37,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **Embedded config (D5).** The root package `bud` (`embed.go`) embeds `nvim/` with `//go:embed`. It must stay at the repo root, because embed can't reach parent directories. Later top-level dirs (`languages/`, `layouts/`) get embedded there too. The binary is the release: `internal/nvim.SyncConfig` copies the embedded files into `~/.config/bud` and records them in `.bud-manifest.json`. It overwrites managed files, deletes ones a release dropped, and never touches anything else. After a change it runs `nvim --headless "+Lazy! restore"`, so plugins match the committed `nvim/lazy-lock.json`. The target dir comes from `paths.Resolve().Config`, which is `~/.config/bud` on macOS too, because that's where Neovim looks.
 
-**Paths.** `internal/paths.Resolve` is the only place that builds a bud path (XDG on macOS too, D13); don't hardcode one elsewhere.
+**Paths and machine config.** `internal/paths.Resolve` is the only place that builds a bud path (XDG on macOS too, D13); don't hardcode one elsewhere. `internal/config` keeps `config.json` as a raw JSON tree so unknown keys survive `Save`, and `File.Settings()` decodes it over `Defaults()`.
 
 **Launching.** `open` resolves the path into a workspace root and optional file, then `nvim.Launch` `chdir`s and replaces the bud process with nvim via `syscall.Exec`. Nothing runs after that, which is why plans for in-editor processes (like the Claude Code session in BASE.md 4.2) live in Lua, not Go.
 

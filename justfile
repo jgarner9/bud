@@ -29,13 +29,31 @@ fmt:
 fmt-check:
   @test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
 
-# go vet, gofmt check and shellcheck
-lint: fmt-check
-  go vet ./...
-  shellcheck install.sh
+# format Lua in place
+lua-fmt: (_need "stylua")
+  stylua nvim scripts
 
-# everything CI checks (lint + tests)
-check: lint test
+# stylua check and selene lint over the Lua config
+lua-lint: (_need "stylua") (_need "selene")
+  stylua --check nvim scripts
+  selene nvim scripts
+
+# go vet, gofmt check, Lua lint and shellcheck
+lint: fmt-check lua-lint
+  go vet ./...
+  shellcheck install.sh scripts/smoke.sh
+
+# sync the config into a throwaway dir, restore plugins, start nvim headless (needs network)
+smoke:
+  sh scripts/smoke.sh
+
+# everything CI checks (lint + tests + smoke)
+check: lint test smoke
+
+# fail with an install hint when a tool isn't on PATH
+[private]
+_need tool:
+  @command -v {{tool}} >/dev/null || { echo "{{tool}} is not installed: brew install {{tool}} (or see its GitHub releases)"; exit 1; }
 
 # go mod tidy
 tidy:

@@ -78,7 +78,7 @@ Everything else in the list above is still planned. See [`BASE.md`](BASE.md) for
 
 ## Development
 
-Requires Go and [`just`](https://github.com/casey/just).
+Requires Go and [`just`](https://github.com/casey/just). `just lint` and `just check` also need `stylua` and `selene` (`brew install stylua selene`), and `just check` runs the headless smoke test, which fetches plugins from GitHub.
 
 ```sh
 just run       # go run ./cmd/bud

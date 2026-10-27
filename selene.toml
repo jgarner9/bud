@@ -1,0 +1,6 @@
+# vim.yml next to this file adds Neovim's `vim` global on top of Lua 5.1 (LuaJIT)
+std = "vim"
+
+[lints]
+# every lazy.nvim spec is one: { "owner/repo", opts = ... }
+mixed_table = "allow"

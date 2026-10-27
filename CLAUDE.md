@@ -12,14 +12,18 @@ AI scope is **Claude Code only** (D26): one Claude Code session per project, sta
 
 ```sh
 just                 # list recipes
-just check           # what CI runs: gofmt check, go vet, shellcheck install.sh, go test ./...
+just check           # what CI runs: gofmt check, Lua lint, go vet, shellcheck, go test ./..., smoke test
 just test            # go test ./...
 just test -run TestOpen ./internal/cli   # single test (args pass through to go test)
 just run <args>      # go run ./cmd/bud <args>, e.g. just run update
 just build           # ./bud (gitignored)
 just fmt             # gofmt -w .
+just lua-fmt         # stylua over nvim/ and scripts/
+just smoke           # sync the config into temp XDG dirs, restore plugins, start nvim headless (needs network)
 just snapshot        # local GoReleaser build into dist/, needs goreleaser installed
 ```
+
+`just lint` and `just check` need `stylua` and `selene` (`brew install stylua selene`); they fail with that hint when either is missing. Lua style is in `stylua.toml` (2 spaces, double quotes, 120 columns) and `selene.toml` + `vim.yml` (Lua 5.1 plus the `vim` global). CI pins stylua, selene and Neovim versions in `.github/workflows/ci.yml`, and runs the smoke test on the oldest supported Neovim (0.11, D19) and the newest.
 
 If the Go build cache isn't writable (for example inside a sandbox), prefix commands with `GOCACHE=$TMPDIR/gocache`.
 

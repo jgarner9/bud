@@ -25,7 +25,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: shellcheck install.sh
+      - run: shellcheck install.sh scripts/smoke.sh
+
+  lua:
+    runs-on: ubuntu-latest
+    env:
+      STYLUA_VERSION: v2.6.0
+      SELENE_VERSION: 0.32.0
+    steps:
+      - uses: actions/checkout@v5
+      - name: install stylua and selene
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL -o "$RUNNER_TEMP/stylua.zip" "https://github.com/JohnnyMorganz/StyLua/releases/download/$STYLUA_VERSION/stylua-linux-x86_64.zip"
+          # selene-light leaves out the Roblox standard library, which needs OpenSSL
+          curl -fsSL -o "$RUNNER_TEMP/selene.zip" "https://github.com/Kampfkarren/selene/releases/download/$SELENE_VERSION/selene-light-$SELENE_VERSION-linux.zip"
+          unzip -o "$RUNNER_TEMP/stylua.zip" -d "$RUNNER_TEMP/bin"
+          unzip -o "$RUNNER_TEMP/selene.zip" -d "$RUNNER_TEMP/bin"
+          chmod +x "$RUNNER_TEMP/bin/stylua" "$RUNNER_TEMP/bin/selene"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - run: stylua --check nvim scripts
+      - run: selene nvim scripts
+
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # the oldest Neovim bud supports (D19) and the newest
+        nvim: [v0.11.7, v0.12.6]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: install neovim ${{ matrix.nvim }}
+        run: |
+          curl -fsSL "https://github.com/neovim/neovim/releases/download/${{ matrix.nvim }}/nvim-linux-x86_64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
+      - run: sh scripts/smoke.sh
 
   goreleaser-check:
     runs-on: ubuntu-latest

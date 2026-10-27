@@ -8,7 +8,8 @@ local M = {}
 M.file = vim.fn.stdpath("state") .. "/projects.json"
 
 -- list returns the registered projects, pinned first, then the most recently
--- opened, then by name. Each is { name, path, pinned, last_opened, missing };
+-- opened, then by name. Each is { name, path, pinned, layout, last_opened, missing };
+-- layout is nil unless `bud layout set` gave the project its own;
 -- last_opened is an RFC 3339 string, or nil when never opened. A missing or
 -- unreadable file is an empty list
 function M.list()
@@ -35,6 +36,7 @@ function M.list()
         name = p.name,
         path = p.path,
         pinned = p.pinned == true,
+        layout = type(p.layout) == "string" and p.layout ~= "" and p.layout or nil,
         last_opened = opened,
         missing = vim.fn.isdirectory(p.path) == 0,
       })

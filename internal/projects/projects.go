@@ -25,6 +25,8 @@ type Project struct {
 	Name   string `json:"name"` // unique in the registry; the dir's name unless that's taken
 	Path   string `json:"path"` // absolute, symlinks resolved
 	Pinned bool   `json:"pinned"`
+	// the pane layout it opens in (D45); empty means config.json's
+	Layout string `json:"layout,omitempty"`
 	// zero, and left out of the file, when it was added but never opened through bud
 	LastOpened time.Time `json:"last_opened,omitzero"`
 
@@ -32,7 +34,7 @@ type Project struct {
 	extra map[string]json.RawMessage
 }
 
-var projectKeys = []string{"name", "path", "pinned", "last_opened"}
+var projectKeys = []string{"name", "path", "pinned", "layout", "last_opened"}
 
 func (p *Project) UnmarshalJSON(data []byte) error {
 	type plain Project
@@ -237,6 +239,17 @@ func (r *Registry) SetPinned(nameOrPath string, pinned bool) (Project, error) {
 		return Project{}, fmt.Errorf("no project %q (see 'bud projects ls')", nameOrPath)
 	}
 	r.Projects[i].Pinned = pinned
+
+	return r.Projects[i], nil
+}
+
+// SetLayout picks the layout a project opens in; "" goes back to the default
+func (r *Registry) SetLayout(nameOrPath, layout string) (Project, error) {
+	i := r.index(nameOrPath)
+	if i < 0 {
+		return Project{}, fmt.Errorf("no project %q (see 'bud projects ls')", nameOrPath)
+	}
+	r.Projects[i].Layout = layout
 
 	return r.Projects[i], nil
 }

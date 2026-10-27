@@ -106,12 +106,17 @@ function M.load(name)
   return spec
 end
 
--- default is the layout to open with: --layout (BUD_LAYOUT), then config.json's
--- layout, then "default"
-function M.default()
+-- default is the layout to open dir with (default: the cwd): --layout
+-- (BUD_LAYOUT), then the project's own (`bud layout set`), then config.json's
+-- layout (`bud layout set-default`), then "default"
+function M.default(dir)
   local env = vim.env.BUD_LAYOUT
   if env and env ~= "" then
     return env
+  end
+  local project = require("bud.projects").find(dir or vim.fn.getcwd())
+  if project and project.layout then
+    return project.layout
   end
   return require("bud.config").get("layout", "default")
 end
@@ -135,7 +140,7 @@ end
 
 -- apply lays out the current tab: closes the panes a previous layout opened,
 -- opens this one's around the current window and returns focus to it. name is
--- a layout name (default: M.default()); it returns false and notifies when the
+-- a layout name (default: M.default() for the cwd); it returns false and notifies when the
 -- layout can't be loaded
 function M.apply(name)
   require("bud.layout.panes")
@@ -199,7 +204,7 @@ function M.open_project(path, opts)
     end
     vim.cmd("silent! only")
   end
-  M.apply()
+  M.apply(M.default(path))
   return true
 end
 

@@ -124,9 +124,17 @@ config.file = dir .. "/config.json"
 eq(layout.default(), "default", "default")
 vim.fn.writefile({ '{"layout": "plain"}' }, config.file)
 eq(layout.default(), "plain", "config.json")
+local projects = require("bud.projects")
+projects.file = dir .. "/projects.json"
+local proj = vim.fs.normalize(vim.uv.fs_realpath(dir))
+vim.fn.writefile({ vim.json.encode({ projects = { { name = "p", path = proj, layout = "wide" } } }) }, projects.file)
+eq(layout.default(proj), "wide", "the project's own")
+eq(layout.default(proj .. "/sub"), "wide", "anywhere inside the project")
+eq(layout.default("/"), "plain", "outside it: config.json")
 vim.env.BUD_LAYOUT = "gitty"
-eq(layout.default(), "gitty", "--layout wins")
+eq(layout.default(proj), "gitty", "--layout wins")
 vim.env.BUD_LAYOUT = nil
+vim.fn.writefile({ vim.json.encode({ projects = {} }) }, projects.file)
 
 -- open_project: a saved session wins over the layout, unless --layout was given
 local sessions = require("bud.sessions")

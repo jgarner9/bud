@@ -61,21 +61,12 @@ func open(g *Globals, args []string) error {
 // layouts dir yet (an old sync) there's nothing to check against, and nvim
 // reports it instead
 func checkLayout(p *paths.Paths, name string) error {
-	entries, err := os.ReadDir(p.Layouts())
+	layouts, err := listLayouts(p)
 	if err != nil {
 		return nil
 	}
-	var names []string
-	for _, e := range entries {
-		if n, ok := strings.CutSuffix(e.Name(), ".lua"); ok {
-			if n == name {
-				return nil
-			}
-			names = append(names, n)
-		}
-	}
 
-	return usageErrorf("no layout %q (have %s)", name, strings.Join(names, ", "))
+	return (&layoutEnv{layouts: layouts}).known(name)
 }
 
 // swappable in tests

@@ -55,6 +55,9 @@ func (p *Paths) Projects() string { return filepath.Join(p.State, "projects.json
 // KitLedger records everything `bud kit sync` wrote into Claude Code's config
 func (p *Paths) KitLedger() string { return filepath.Join(p.State, "kit-ledger.json") }
 
+// Migrations records which migrations/ scripts have run
+func (p *Paths) Migrations() string { return filepath.Join(p.State, "migrations.json") }
+
 // InstallReceipt is written by install.sh and names the binary it installed (D20)
 func (p *Paths) InstallReceipt() string { return filepath.Join(p.State, "install.json") }
 

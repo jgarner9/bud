@@ -14,6 +14,7 @@ import (
 
 	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/atomicfile"
+	"jgarner.dev/bud/internal/migrate"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -43,6 +44,7 @@ func Apply() error {
 	fmt.Println("Bud config directory: " + dst)
 
 	fmt.Println("Syncing config...")
+	fresh := !HasManifest(dst)
 	res, err := SyncConfig(bud.Config(), dst)
 	if err != nil {
 		return err
@@ -71,6 +73,23 @@ func Apply() error {
 		for _, file := range res.Removed {
 			fmt.Println(file)
 		}
+	}
+
+	// after the sync, before the restore (BASE.md 5.7 step 3); a fresh
+	// install has nothing to migrate
+	if fresh {
+		if err := migrate.MarkAll(bud.Migrations(), p.Migrations()); err != nil {
+			return err
+		}
+	} else {
+		ran, err := migrate.Run(bud.Migrations(), p.Migrations(), migrate.Nvim(p))
+		for _, name := range ran {
+			fmt.Println("Ran migration " + name)
+		}
+		if err != nil {
+			return err
+		}
+		changes += len(ran)
 	}
 
 	if changes == 0 {

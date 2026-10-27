@@ -591,7 +591,7 @@ bud update  /  Settings → Update  /  [u] on dashboard
        keep the running binary as bud.prev, swap the new one in place (rename, so it's atomic)
        re-exec the NEW binary for the rest (the old one still holds the old embedded config)
   2. sync the embedded nvim/ into ~/.config/bud (overwrite managed files, drop removed ones)
-  3. run new migrations/
+  3. run new migrations/ (each once, recorded in state; a fresh install marks them all done)
   4. nvim headless: `bud.pack.restore()` (lockfile) + Mason install for new language specs
   5. bud kit sync (bring Claude Code's config in line with the kit)
   6. bud doctor; on failure → swap bud.prev back, re-exec it to sync its config, report

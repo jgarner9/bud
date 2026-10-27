@@ -1,0 +1,9 @@
+{
+  "name": "context7",
+  "description": "Up-to-date library and framework docs",
+  "transport": "http",
+  "url": "https://mcp.context7.com/mcp",
+  "headers": { "CONTEXT7_API_KEY": "$secret:CONTEXT7_API_KEY" },
+  "optional_secrets": true,
+  "profiles": ["full", "minimal"]
+}

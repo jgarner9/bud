@@ -115,8 +115,12 @@ func update(g *Globals, args []string, check, background bool, channel string) e
 	if err := selfUpdate(g, p, channel); err != nil {
 		return err
 	}
+	if err := applyConfig(); err != nil {
+		return err
+	}
+	resyncKit(g, p)
 
-	return applyConfig()
+	return nil
 }
 
 // finishUpdate runs in the freshly swapped-in binary: sync its config, then
@@ -135,6 +139,7 @@ func finishUpdate(g *Globals, p *paths.Paths, from string, failingBefore []strin
 		}
 		if len(broke) == 0 {
 			editState(g, p, func(st *updater.State) { st.Available, st.Installed = "", "" })
+			resyncKit(g, p)
 			return nil
 		}
 		why = "bud doctor failed: " + strings.Join(broke, ", ")

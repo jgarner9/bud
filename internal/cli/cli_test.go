@@ -369,8 +369,11 @@ func TestStubAndArgChecks(t *testing.T) {
 		t.Errorf("chat: %v", err)
 	}
 	var usage *UsageError
-	if err := update(&Globals{}, []string{"now"}); !errors.As(err, &usage) {
+	if err := update(&Globals{}, []string{"now"}, false, ""); !errors.As(err, &usage) {
 		t.Errorf("update with an argument: %v, want a UsageError", err)
+	}
+	if err := update(&Globals{}, nil, true, "beta"); !errors.As(err, &usage) {
+		t.Errorf("update --channel beta: %v, want a UsageError", err)
 	}
 }
 

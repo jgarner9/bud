@@ -113,7 +113,7 @@ bud main.go util.go # open files, from the project root they belong to
 | --------------- | ------------ |
 | `bud open`      | Opens Neovim on a directory, or on files from their project root. `bud <path>` is the same thing |
 | `bud install`   | Asks for profile, terminal and languages, installs missing system packages, sets up the config, then runs `bud doctor`. `--yes` takes the defaults |
-| `bud update`    | Syncs the config from this binary and restores pinned plugins, parsers and language tools |
+| `bud update`    | Syncs the config from this binary and restores pinned plugins, parsers and language tools. `--check` says whether a newer release is out (`--channel stable` or `nightly`) |
 | `bud doctor`    | Health checks, including the startup budget (50 ms to the first screen); exits 1 when something's broken |
 | `bud version`   | Prints the version |
 | `bud lang`      | `ls` lists languages; `enable` / `disable` turn them on and off (enable installs their tools); `add <name>` starts your own spec from the template; `rm <name>` removes one of yours |

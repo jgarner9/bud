@@ -19,6 +19,7 @@ just run <args>      # go run ./cmd/bud <args>, e.g. just run update
 just build           # ./bud (gitignored)
 just fmt             # gofmt -w .
 just lua-fmt         # stylua over nvim/ and scripts/
+just lua-test        # headless Lua tests in tests/lua (plain asserts, no framework)
 just smoke           # sync the config into temp XDG dirs, restore plugins, start nvim headless (needs network)
 just snapshot        # local GoReleaser build into dist/, needs goreleaser installed
 ```
@@ -53,7 +54,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **Version.** `internal/version.Version` is set by GoReleaser via `-ldflags -X`. Without it, `String()` falls back to the module version Go stamps into the build.
 
-**Neovim config.** `nvim/init.lua` sets the leader (`<Space>`), then loads `bud.core` (options, keymaps, autocmds) and `bud.pack`, which adds plugins with Neovim's built-in `vim.pack` (D27, needs 0.12). Specs are lists returned by modules under `nvim/lua/bud/plugins/` (`{ src = "owner/repo", version = ..., config = fn }`, see the top of `pack.lua`); `plugins/init.lua` gathers them. Nothing updates plugins in place: versions change only by regenerating `nvim/nvim-pack-lock.json` and shipping a release. Generate that file with `vim.pack` itself and commit it byte for byte, or every sync will look like a change. There is no lazy loading yet (JGA-107).
+**Neovim config.** `nvim/init.lua` sets the leader (`<Space>`), then loads `bud.core` (options, keymaps, autocmds) and `bud.pack`, which adds plugins with Neovim's built-in `vim.pack` (D27, needs 0.12). Specs are lists returned by modules under `nvim/lua/bud/plugins/` (`{ src = "owner/repo", version = ..., config = fn }`, see the top of `pack.lua`); `plugins/init.lua` gathers them. Nothing updates plugins in place: versions change only by regenerating `nvim/nvim-pack-lock.json` and shipping a release. Generate that file with `vim.pack` itself and commit it byte for byte, or every sync will look like a change. There is no general lazy loading yet (JGA-107); a plugin that's slow to load can wrap its `require` in `bud.pack.on_first_use(module, setup)` and call the returned loader from its keymaps (fzf-lua does), and the smoke test loads every such module to check it. Keymaps go in each spec's `config`. `bud.marks` is bud's own pinned-files module (four slots per project, `~/.local/state/bud/marks.json`), tested headless in `tests/lua/`.
 
 ## Release and install
 

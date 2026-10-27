@@ -32,6 +32,8 @@ var Deps = []Dep{
 		"apt": {"fd-find"},
 		"dnf": {"fd-find"},
 	}},
+	// fzf-lua's matcher (D28)
+	{Name: "fzf", Bins: []string{"fzf"}},
 	// only language servers like TypeScript's need node, which a server rarely runs
 	{Name: "node", Bins: []string{"node"}, FullOnly: true, Pkgs: map[string][]string{
 		"pacman": {"nodejs", "npm"},

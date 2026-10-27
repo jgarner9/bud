@@ -47,6 +47,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D26 | **Claude Code only, to begin with.** bud's AI is the per-project Claude Code session (D25) plus the TUIs you build in Neovim on top of it. | 2026-10-26 | Out of scope for now: other harnesses (OpenCode, Hermes), the adapter layer, other model providers, a direct API client, and inline ghost-text completion. Auth is Claude Code's own login (subscription or API key), so bud stores no AI keys. `kit/` is Claude Code setup synced into `~/.claude` (4.1). `bud.ai.claude`'s interface avoids Claude Code specifics, so another backend could be added later without rewriting the TUIs, but nothing is built for that. |
 | D27 | **Plugins are managed by Neovim's built-in `vim.pack`, not lazy.nvim.** | 2026-10-27 | lazy.nvim had no commits in 6 months; `vim.pack` ships with Neovim. Measured: lazy.nvim alone cost ~5.3 ms of a 14.6 ms headless start. `nvim-pack-lock.json` ships in the binary like the old lockfile, and `bud.pack.restore()` (run by install/update) drops plugins a release removed and checks the rest out at their locked revision. `vim.pack` has no lazy loading, so bud gets its own loader later (JGA-107). Requires Neovim 0.12 (D19). |
 | D28 | **fzf-lua is the picker.** | 2026-10-27 | Over snacks.picker, which had 5 commits in 6 months against fzf-lua's 130. Adds `fzf` as a system dependency. |
+| D29 | **The plugin set for milestone 2** (reviewed for maintenance: commits in the 6 months to 2026-10-27). | 2026-10-27 | Nav: fzf-lua (D28), mini.jump2d (`gw` labels every word start with two-character labels like Helix, `s` jumps by one character then label; replaces flash.nvim), bud's own `bud.marks` for pinned files (harpoon, grapple and arrow are all unmaintained), aerial.nvim, neo-tree.nvim (+ plenary, nui, nvim-web-devicons), oil.nvim, which-key.nvim. oil owns directory buffers and `-`; neo-tree's netrw hijack is off, so it only opens as the side pane. Diagnostics list is fzf-lua's diagnostics picker on `<leader>x`, not trouble.nvim. Editor/UI/git: blink.cmp (pinned to a release tag), mini.statusline with bud's own sections, catppuccin (Macchiato), gitsigns.nvim, diffview-plus.nvim (diffview.nvim is unmaintained). Languages: nvim-lspconfig (server settings for `vim.lsp.config`), mason.nvim, conform.nvim, nvim-lint, nvim-treesitter `main` branch, whose `tree-sitter` CLI and C compiler become `installer.Deps` that install and doctor track. mini.nvim comes in as one plugin for jump2d and statusline. Debugging (nvim-dap) is deferred (JGA-108). Dropped: flash, harpoon, trouble, lualine, diffview, snacks, todo-comments. |
 
 ---
 
@@ -76,7 +77,7 @@ bud/
 │   ├── paths/
 │   │   # XDG paths on Linux, ~/Library on macOS, one place to resolve them
 │   ├── installer/
-│   │   # system deps: nvim, git, ripgrep, fd, node, fonts
+│   │   # system deps: nvim, git, ripgrep, fd, fzf, node, fonts
 │   │   ├── brew.go  apt.go  dnf.go  pacman.go
 │   │   └── release.go
 │   │       # fallback: download prebuilt binaries into bud's own bin dir
@@ -179,6 +180,7 @@ Linux and macOS use the same XDG paths (D13), which is also where Neovim looks o
 | Personal generated tools (not in the repo yet)         | `~/.local/share/bud/user-tools/`                         |
 | Bud-managed binaries + Mason packages                  | `~/.local/share/bud/bin`, `~/.local/share/bud/mason`     |
 | Project registry + recent files                        | `~/.local/state/bud/projects.json`                       |
+| Pinned files (`bud.marks`, per project)                | `~/.local/state/bud/marks.json`                          |
 | Chat history                                           | Claude Code's own session store (D23)                    |
 | Secrets (MCP keys)                                     | env vars or OS keychain (`secret-tool` / macOS Keychain) |
 
@@ -193,7 +195,7 @@ Linux and macOS use the same XDG paths (D13), which is also where Neovim looks o
 - **The binary is the release (D5).** Shipping config inside `bud` means the CLI and the editor config can never drift apart, installs need no `git`, and an update is one verified download. The cost is that a config change needs a release, which GoReleaser makes a tag push.
 - **Languages are data, not code.** Each `languages/<lang>.lua` returns a table. The Lua engine wires it up, and the Go CLI can read the same file by running `nvim --headless` to dump it as JSON (so there's no second format to keep in sync).
 - **Mason installs language tooling, Go installs system tooling.** Mason handles LSP servers, linters, formatters and debuggers per language spec. `bud install` handles Neovim itself, git, ripgrep, fd, a Nerd Font, and runtimes like node/python when a language needs them.
-- **Plugin stack (proposed, all swappable):** `vim.pack` (D27), native `vim.lsp.config`, mason.nvim, conform.nvim (format), nvim-lint (lint), nvim-treesitter, blink.cmp (completion), fzf-lua (finding things, D28), oil.nvim (file editing as a buffer), flash.nvim (jump), aerial.nvim (symbols outline), trouble.nvim (diagnostics list), gitsigns + a diff view, codecompanion.nvim or avante.nvim (AI chat/edits).
+- **Plugin stack (D29):** `vim.pack` (D27), native `vim.lsp.config` + nvim-lspconfig, mason.nvim, conform.nvim (format), nvim-lint (lint), nvim-treesitter, blink.cmp (completion), fzf-lua (finding things, D28), mini.nvim (jump2d, statusline), oil.nvim (file editing as a buffer), neo-tree (file tree pane), aerial.nvim (symbols outline), which-key, gitsigns + diffview-plus, catppuccin. AI is Claude Code through `bud.ai.claude` (D26), not a chat plugin.
 - **The pane layout lives inside Neovim**, not in the terminal. That way it works identically in any terminal and over SSH. An optional tmux/zellij wrapper gives persistent sessions on remote boxes.
 
 ---
@@ -225,13 +227,13 @@ Adding a language is: copy `_template.lua`, fill it in, run `bud lang add <name>
 
 | Need                                | Tool                       | Default key idea                      |
 | ----------------------------------- | -------------------------- | ------------------------------------- |
-| Find file / grep / buffers / recent | fzf-lua or snacks.picker   | `<leader>f`, `<leader>/`, `<leader>b` |
-| Jump anywhere on screen             | flash.nvim                 | `s`                                   |
-| Pin hot files                       | harpoon-style marks        | `<leader>1..4`                        |
+| Find file / grep / buffers / recent | fzf-lua                    | `<leader>f`, `<leader>/`, `<leader>b` |
+| Jump anywhere on screen             | mini.jump2d                | `gw` (every word), `s` (by character) |
+| Pin hot files                       | `bud.marks` (bud's own)    | `<leader>1..4`                        |
 | Symbols in file / workspace         | aerial + LSP               | `<leader>o`, `<leader>S`              |
 | Go to def/refs/impl                 | LSP                        | `gd`, `gr`, `gi`                      |
 | File tree vs edit-dir-as-buffer     | neo-tree (pane) + oil.nvim | `<leader>e`, `-`                      |
-| Diagnostics list                    | trouble.nvim               | `<leader>x`                           |
+| Diagnostics list                    | fzf-lua diagnostics picker | `<leader>x`                           |
 | Switch project                      | dashboard picker           | `<leader>p`                           |
 
 A `which-key` popup documents all of it, so the keymap is self-describing.

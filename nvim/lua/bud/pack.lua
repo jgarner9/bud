@@ -50,6 +50,28 @@ function M.setup(specs)
   end
 end
 
+-- deferred holds the loaders on_first_use made, by module name, so the smoke
+-- test can load each one and check it works
+M.deferred = {}
+
+-- on_first_use returns a function that requires module and runs setup on it the
+-- first time it's called, then returns the module. Keymaps call it, so a plugin
+-- that's slow to load costs nothing until it's used. Full lazy loading is JGA-107
+function M.on_first_use(module, setup)
+  local loaded
+  local function get()
+    if not loaded then
+      loaded = require(module)
+      if setup then
+        setup(loaded)
+      end
+    end
+    return loaded
+  end
+  M.deferred[module] = get
+  return get
+end
+
 -- restore runs headless from `bud install` and `bud update`, after the config
 -- sync: it deletes plugins no spec adds any more (a release dropped them), then
 -- checks every plugin out at the revision in nvim-pack-lock.json

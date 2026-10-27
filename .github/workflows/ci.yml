@@ -44,8 +44,8 @@ jobs:
           unzip -o "$RUNNER_TEMP/selene.zip" -d "$RUNNER_TEMP/bin"
           chmod +x "$RUNNER_TEMP/bin/stylua" "$RUNNER_TEMP/bin/selene"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - run: stylua --check nvim scripts
-      - run: selene nvim scripts
+      - run: stylua --check nvim scripts tests
+      - run: selene nvim scripts tests
 
   smoke:
     runs-on: ubuntu-latest
@@ -63,6 +63,8 @@ jobs:
         run: |
           curl -fsSL "https://github.com/neovim/neovim/releases/download/${{ matrix.nvim }}/nvim-linux-x86_64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
+      - name: lua tests
+        run: for t in tests/lua/*_test.lua; do nvim --clean --headless -l "$t" || exit 1; done
       - run: sh scripts/smoke.sh
 
   goreleaser-check:

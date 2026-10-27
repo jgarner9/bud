@@ -31,24 +31,28 @@ fmt-check:
 
 # format Lua in place
 lua-fmt: (_need "stylua")
-  stylua nvim scripts
+  stylua nvim scripts tests
 
 # stylua check and selene lint over the Lua config
 lua-lint: (_need "stylua") (_need "selene")
-  stylua --check nvim scripts
-  selene nvim scripts
+  stylua --check nvim scripts tests
+  selene nvim scripts tests
 
 # go vet, gofmt check, Lua lint and shellcheck
 lint: fmt-check lua-lint
   go vet ./...
   shellcheck install.sh scripts/smoke.sh
 
+# run the headless Lua tests in tests/lua
+lua-test:
+  for t in tests/lua/*_test.lua; do nvim --clean --headless -l "$t" || exit 1; done
+
 # sync the config into a throwaway dir, restore plugins, start nvim headless (needs network)
 smoke:
   sh scripts/smoke.sh
 
 # everything CI checks (lint + tests + smoke)
-check: lint test smoke
+check: lint test lua-test smoke
 
 # fail with an install hint when a tool isn't on PATH
 [private]

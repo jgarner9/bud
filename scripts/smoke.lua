@@ -27,6 +27,13 @@ else
   for _, name in ipairs(pack.failed) do
     table.insert(problems, "plugin config failed: " .. name)
   end
+  -- plugins that load on first use would otherwise never run here
+  for module, load in pairs(pack.deferred) do
+    local loaded, err = pcall(load)
+    if not loaded then
+      table.insert(problems, "deferred plugin failed to load: " .. module .. ": " .. tostring(err))
+    end
+  end
 end
 
 if #problems > 0 then

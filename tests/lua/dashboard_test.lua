@@ -107,12 +107,12 @@ end
 local lines, hls = view.build(data, 100, 40)
 has(lines, "[-.-]  z", "sleepy face")
 has(lines, '"hjkl and chill"', "tagline")
-has(lines, "p  " .. icons.project .. " Open project", "menu with icon")
-has(lines, icons.pinned .. " bud", "pinned project")
-has(lines, icons.branch .. " main " .. icons.changed .. " 3", "git status")
-has(lines, icons.unpinned .. " dollarwise", "unpinned project")
-has(lines, icons.warn .. " 1 doctor warning, press d", "banner")
-has(lines, icons.tip .. " tip: <Space>f  Find file", "tip")
+has(lines, "p   " .. icons.project .. "  Open project", "menu with icon")
+has(lines, icons.pinned .. "  bud", "pinned project")
+has(lines, icons.branch .. "  main   " .. icons.changed .. "  3", "git status")
+has(lines, icons.unpinned .. "  dollarwise", "unpinned project")
+has(lines, icons.warn .. "  1 doctor warning, press d", "banner")
+has(lines, icons.tip .. "  tip: <Space>f  Find file", "tip")
 -- centered both ways
 local first = 1
 while lines[first] == "" do
@@ -127,6 +127,35 @@ for _, h in ipairs(hls) do
     error(("highlight %s out of line %q"):format(vim.inspect(h), line))
   end
 end
+-- a tall window gets the roomy layout; a short one falls back to the tight
+-- one, and at 80x24 the full dashboard (ten menu items) still fits
+local full = vim.deepcopy(data)
+full.menu = {}
+for i = 1, 10 do
+  table.insert(full.menu, { key = tostring(i), icon = "file", label = "item " .. i })
+end
+full.projects = { full.projects[1], full.projects[2], full.projects[1], full.projects[2], full.projects[1] }
+local function content(ls)
+  local n = 0
+  for _, l in ipairs(ls) do
+    n = l ~= "" and n + 1 or n
+  end
+  return n
+end
+local tall, short = view.build(full, 80, 60), view.build(full, 80, 24)
+local function span(ls)
+  local top, bottom
+  for i, l in ipairs(ls) do
+    if l ~= "" then
+      top, bottom = top or i, i
+    end
+  end
+  return bottom - top + 1
+end
+eq(content(tall), content(short), "the same things either way")
+eq(span(tall) > span(short), true, "roomy when there's room")
+eq(span(short) <= 22, true, "fits 80x24 with a line to spare")
+
 -- a narrow window never pads negative
 lines = view.build(data, 10, 5)
 has(lines, "hey bud.", "narrow window")
@@ -173,9 +202,9 @@ f:close()
 
 local buf = dashboard.open({ offline = true })
 local shown = dashboard.lines()
-has(shown, icons.pinned .. " a", "pinned from the registry")
-has(shown, icons.unpinned .. " b", "recent from the registry")
-has(shown, "x  " .. icons.scratchpad .. " Scratchpad", "scratchpad when turned on")
+has(shown, icons.pinned .. "  a", "pinned from the registry")
+has(shown, icons.unpinned .. "  b", "recent from the registry")
+has(shown, "x   " .. icons.scratchpad .. "  Scratchpad", "scratchpad when turned on")
 has(shown, icons.claude .. " ", "claude in the health line")
 for _, line in ipairs(shown) do
   if line:find("gone", 1, true) then
@@ -187,7 +216,7 @@ eq(vim.wo.number, false, "no line numbers on the dashboard")
 eq(vim.fn.maparg("1", "n", false, true).buffer, 1, "project keys are buffer-local")
 
 -- t switches style and back; config.json's dashboard.style is only the default
-has(shown, "t  " .. icons.style .. " Minimal view", "t in the silly menu")
+has(shown, "t   " .. icons.style .. "  Minimal view", "t in the silly menu")
 vim.api.nvim_feedkeys("t", "x", false)
 has(dashboard.lines(), "t  silly", "t in the minimal menu")
 vim.api.nvim_feedkeys("t", "x", false)

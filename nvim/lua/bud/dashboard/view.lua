@@ -13,7 +13,7 @@ M.faces = {
 }
 
 local icons = require("bud.icons")
-local menu_width = 26
+local menu_width = 30
 
 -- a line is a list of { text, group } segments; group may be nil
 local function seg(text, group)
@@ -47,15 +47,20 @@ local function art(data)
   }
 end
 
-local function menu(items)
+-- menu is two columns of key, icon and label; roomy puts a blank line
+-- between the rows
+local function menu(items, roomy)
   local lines = {}
   local half = math.ceil(#items / 2)
   for i = 1, half do
     local line = {}
     for _, item in ipairs({ items[i], items[i + half] }) do
       table.insert(line, seg("  " .. item.key, "BudDashboardKey"))
-      table.insert(line, seg("  " .. (icons[item.icon] or " "), "BudDashboardIcon"))
-      table.insert(line, seg(pad(" " .. item.label, menu_width - 6)))
+      table.insert(line, seg("   " .. (icons[item.icon] or " "), "BudDashboardIcon"))
+      table.insert(line, seg(pad("  " .. item.label, menu_width - 7)))
+    end
+    if roomy and i > 1 then
+      table.insert(lines, {})
     end
     table.insert(lines, line)
   end
@@ -67,23 +72,23 @@ local function git_status(git)
   if not git or not git.branch then
     return {}
   end
-  local out = { seg(icons.branch .. " " .. git.branch .. " ", "BudDashboardDim") }
+  local out = { seg(icons.branch .. "  " .. git.branch .. "   ", "BudDashboardDim") }
   if git.changed > 0 then
-    table.insert(out, seg(icons.changed .. " " .. git.changed, "BudDashboardWarn"))
+    table.insert(out, seg(icons.changed .. "  " .. git.changed, "BudDashboardWarn"))
   else
     table.insert(out, seg(icons.clean, "BudDashboardOk"))
   end
   if git.ahead > 0 then
-    table.insert(out, seg(" " .. icons.ahead .. git.ahead, "BudDashboardDim"))
+    table.insert(out, seg("   " .. icons.ahead .. " " .. git.ahead, "BudDashboardDim"))
   end
   if git.behind > 0 then
-    table.insert(out, seg(" " .. icons.behind .. git.behind, "BudDashboardDim"))
+    table.insert(out, seg("   " .. icons.behind .. " " .. git.behind, "BudDashboardDim"))
   end
   return out
 end
 
 local function projects(list)
-  local lines = { { seg("  " .. icons.projects .. " ", "BudDashboardIcon"), seg("Projects", "BudDashboardHeader") } }
+  local lines = { { seg("  " .. icons.projects .. "  ", "BudDashboardIcon"), seg("Projects", "BudDashboardHeader") } }
   if #list == 0 then
     table.insert(lines, { seg("  none yet: open one with bud <dir>", "BudDashboardDim") })
     return lines
@@ -96,10 +101,10 @@ local function projects(list)
     local line = {
       seg("  " .. p.key, "BudDashboardKey"),
       seg(
-        "  " .. (p.pinned and icons.pinned or icons.unpinned) .. " ",
+        "   " .. (p.pinned and icons.pinned or icons.unpinned) .. "  ",
         p.pinned and "BudDashboardIcon" or "BudDashboardDim"
       ),
-      seg(pad(p.name, name_width + 2)),
+      seg(pad(p.name, name_width + 4)),
     }
     vim.list_extend(line, git_status(p.git))
     table.insert(lines, line)
@@ -112,22 +117,24 @@ local levels =
 
 -- silly is the full dashboard: robot, menu with icons, projects with git,
 -- banners, health line and tip
-local function silly(data)
+-- roomy spaces it out (a gap between menu rows, two blank lines between
+-- sections); build falls back to the tight version when that won't fit
+local function silly(data, roomy)
   local block = {}
   local function add(lines)
     vim.list_extend(block, lines)
   end
-  local blank = { {} }
+  local blank = roomy and { {}, {} } or { {} }
 
   add(art(data))
   add(blank)
-  add(menu(data.menu))
+  add(menu(data.menu, roomy))
   add(blank)
   add(projects(data.projects))
   if #data.banners > 0 then
     add(blank)
     for _, b in ipairs(data.banners) do
-      add({ { seg("  " .. (icons[b.level] or icons.tip) .. " " .. b.text, levels[b.level]) } })
+      add({ { seg("  " .. (icons[b.level] or icons.tip) .. "  " .. b.text, levels[b.level]) } })
     end
   end
   add(blank)
@@ -137,7 +144,7 @@ local function silly(data)
   if data.tip then
     add({
       {
-        seg("  " .. icons.tip .. " ", "BudDashboardIcon"),
+        seg("  " .. icons.tip .. "  ", "BudDashboardIcon"),
         seg("tip: ", "BudDashboardDim"),
         seg(data.tip.lhs, "BudDashboardKey"),
         seg("  " .. data.tip.desc),
@@ -197,7 +204,16 @@ end
 -- and its highlights as { row, start_col, end_col, group }, 0-based bytes.
 -- data.style picks the layout: "silly" (the default) or "minimal"
 function M.build(data, win_width, win_height)
-  local block = data.style == "minimal" and minimal(data) or silly(data)
+  local block
+  if data.style == "minimal" then
+    block = minimal(data)
+  else
+    -- roomy when it fits with a line to spare above and below
+    block = silly(data, true)
+    if #block > win_height - 2 then
+      block = silly(data, false)
+    end
+  end
 
   local block_width = 0
   for _, line in ipairs(block) do

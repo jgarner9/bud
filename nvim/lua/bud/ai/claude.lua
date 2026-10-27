@@ -539,6 +539,7 @@ function M.setup()
     vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
   end, { desc = "Share the selection with Claude Code" })
   require("bud.statusline").add(M.statusline)
+  require("bud.ai.actions").setup()
 
   local group = vim.api.nvim_create_augroup("bud.ai.claude", { clear = true })
   vim.api.nvim_create_autocmd("VimLeavePre", {

@@ -272,7 +272,7 @@ A `which-key` popup documents all of it, so the keymap is self-describing.
 
 Claude Code only, for now (D26). Every part below runs on the project's Claude Code session (4.2) and is drawn by TUIs in Neovim. Three parts:
 
-1. **Assistance:** chat pane (part of the default layout), "explain / refactor / write tests for selection" and commit-message drafting. Claude Code's own login is the only auth.
+1. **Assistance:** chat pane (part of the default layout), "explain / refactor / write tests for selection" (`<leader>ae` / `af` / `at`, edits come as permission diffs) and commit-message drafting (`<leader>am` in a commit message, or `:BudCommitMessage`). Claude Code's own login is the only auth.
 2. **Tool generator (`:BudGen` in nvim, `bud tools gen` in the CLI):** you describe what you want ("a command that opens the test file for the current file", "add Zig support"), the AI writes either a **tool** (`manifest.json` + `init.lua`) or a **language spec**, shows you a diff, and on accept it lands in `user-tools/` and loads immediately, no restart.
 3. **Lifecycle commands** so generated stuff never rots: list, enable, disable, remove, and **promote** (move from your machine-local `user-tools/` into the repo's `tools/`, commit, push, so every machine gets it).
 

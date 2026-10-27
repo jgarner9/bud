@@ -59,6 +59,8 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D38 | **`t` switches dashboard style for the session only.** | 2026-10-27 | `dashboard.style` (`silly` or `minimal`) in `config.json` is the default each time the dashboard opens; `t` flips it until bud closes. Keeping the toggle would mean Lua writing `config.json`, which only the Go CLI writes (D13); `bud config set dashboard.style minimal` (JGA-93) will be the lasting way. The minimal style shows the one-line robot face and `bud`, short key labels four to a row, the projects on one line and the worst doctor banner as a single icon. |
 | D39 | **The two-key open is `bud.open`, shared by the dashboard and the leader keys.** | 2026-10-27 | `p` / `<leader>p` is an fzf-lua picker over registered projects (pinned, then recent), then up to ten repos found from recent files that aren't registered, then "browse for a directory…" (`vim.ui.input` with directory completion). Picking one runs `bud projects add --opened` (the CLI stays the only writer of `projects.json`, and this records it as opened), changes to it, and restores its session when `dashboard.sessions` is on, otherwise opens the file picker there. Layouts don't exist yet (milestone 6), so "opens in the default layout" waits for them. `f` / `<leader>f` lists recent files on the dashboard and the current project's files elsewhere (the registered project holding the buffer's file, else its git repo, else the cwd); typing an absolute or `~` path to an existing file opens it, read from fzf-lua's `last_query`. |
 | D40 | **`<leader>M` is Mason; `<leader>m` toggles a file's pin and `<leader>0` is the unpin menu.** | 2026-10-27 | Mason gets the same letter in the editor as on the dashboard (`M`), so the pinned-files unpin menu moved off `<leader>M`: pressing `<leader>m` on a pinned file unpins it, and `<leader>0` (next to the slot keys `<leader>1`-`4`) lists the pins. `<leader>d` returns to the dashboard. `<leader>,` waits for the settings UI (JGA-94); `<leader>c` and `<leader>h` come with chat. |
+| D41 | **The release key is a new, dedicated Ed25519 key, which Jason creates.** | 2026-10-27 | Answers open question 6 (JGA-103). Signature checks (Go and `install.sh`) and the signing workflow are built and tested against a throwaway test key; signing stays off, and nothing is verified against a pinned key, until the real key's public half is pinned and its private half is an Actions secret. Claude never creates or uploads the secret. |
+| D42 | **Nightly only notifies; stable auto-applies.** | 2026-10-27 | Answers open question 4 (JGA-101) and narrows D9: on `stable`, a newer release is downloaded, verified and swapped in the background; on `nightly`, the boot check only raises a dashboard banner, and `u` or `bud update` applies it, since a nightly can be broken. |
 
 ---
 
@@ -627,13 +629,10 @@ With no newer release, `bud update` skips step 1 and just re-syncs, which also r
 
 ## 7. Open questions for you
 
-Answered questions are now decisions D6–D24 above. What's left:
+Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42). What's left:
 
 1. **AI kit contents.** Beyond Context7, which tools from the candidates table in 4.1, plus anything not listed? (To discuss.)
-2. **Dashboard extras.** Which of the "what else to show" ideas in 5.4 do you want, and any taglines for the rotation?
-3. **Lua in the language preset?** D10 leaves out Lua. Do you want it anyway, for editing bud's own config and tools?
-4. **Auto-apply on nightly.** D9 auto-applies on whichever channel you're on. Is that right for `nightly`, or should nightly only notify?
-5. **First chat UI.** Both run on the 4.2 session, so this is only about order: build the native buffer UI first, or ship `:BudClaude term` (Claude Code's own TUI) first and the native UI after?
-6. **Release signing key.** A new Ed25519 key just for releases (recommended, so your personal git signing key never sits in CI), or reuse an existing one?
-7. **Sessions when switching projects.** Keep the previous project's Claude Code session running so switching back is instant (costs memory, no tokens), or stop it when you leave? I'd keep the last two or three.
-8. **Several bud windows on one project.** Two Neovim instances on the same project each get their own Claude Code process. Fine as is, or should the second one attach to the first one's session?
+2. **Lua in the language preset?** D10 leaves out Lua. Do you want it anyway, for editing bud's own config and tools?
+3. **First chat UI.** Both run on the 4.2 session, so this is only about order: build the native buffer UI first, or ship `:BudClaude term` (Claude Code's own TUI) first and the native UI after?
+4. **Sessions when switching projects.** Keep the previous project's Claude Code session running so switching back is instant (costs memory, no tokens), or stop it when you leave? I'd keep the last two or three.
+5. **Several bud windows on one project.** Two Neovim instances on the same project each get their own Claude Code process. Fine as is, or should the second one attach to the first one's session?

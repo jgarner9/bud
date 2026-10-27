@@ -544,7 +544,7 @@ function M.setup()
       return { "term", "status", "restart", "stop" }
     end,
   })
-  vim.keymap.set("n", "<leader>c", function()
+  vim.keymap.set("n", "<leader>ch", function()
     require("bud.chat").toggle()
   end, { desc = "Chat" })
   vim.keymap.set("n", "<leader>aa", function()

@@ -1,5 +1,5 @@
 -- Full-screen chat (BASE.md 5.5): a chat that isn't tied to code, in its own
--- tab, so your editor layout stays as it was. <leader>c (or q in the
+-- tab, so your editor layout stays as it was. <leader>ch (or q in the
 -- transcript) goes back and forth; <leader>h shows the history panel.
 --
 -- It runs its own Claude Code session in ~/.local/state/bud/chat/, one

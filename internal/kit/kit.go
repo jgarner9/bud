@@ -21,6 +21,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -97,6 +98,19 @@ func (m MCP) For(profile string) bool {
 
 const secretPrefix = "$secret:"
 
+// secretRef finds $secret:NAME anywhere in a value ("Bearer $secret:GITHUB_PAT")
+var secretRef = regexp.MustCompile(`\$secret:([A-Za-z_][A-Za-z0-9_]*)`)
+
+// SecretRefs lists the secret names a value refers to
+func SecretRefs(v string) []string {
+	var out []string
+	for _, m := range secretRef.FindAllStringSubmatch(v, -1) {
+		out = append(out, m[1])
+	}
+
+	return out
+}
+
 // Server is the JSON `claude mcp add-json` takes, with each $secret:NAME
 // turned into ${NAME}. set says whether a secret is available; missing lists
 // the required ones that aren't, and then there's no server to add
@@ -107,18 +121,20 @@ func (m MCP) Server(set func(name string) bool) (server []byte, missing []string
 		}
 		out := map[string]string{}
 		for k, v := range in {
-			name, ok := strings.CutPrefix(v, secretPrefix)
-			if !ok {
-				out[k] = v
-				continue
+			names := SecretRefs(v)
+			var absent []string
+			for _, name := range names {
+				if !set(name) {
+					absent = append(absent, name)
+				}
 			}
-			if !set(name) {
+			if len(absent) > 0 {
 				if !m.OptionalSecrets {
-					missing = append(missing, name)
+					missing = append(missing, absent...)
 				}
 				continue
 			}
-			out[k] = "${" + name + "}"
+			out[k] = secretRef.ReplaceAllString(v, "$${$1}")
 		}
 		return out
 	}
@@ -506,8 +522,11 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 			actions = append(actions, Action{"instructions", "CLAUDE.md", "ok", ""})
 		default:
 			do := "update"
-			if h == "" {
+			switch {
+			case h == "":
 				do = "remove"
+			case ledger.Instructions == "":
+				do = "add"
 			}
 			actions = append(actions, Action{"instructions", "CLAUDE.md", do, ""})
 			if !dryRun {

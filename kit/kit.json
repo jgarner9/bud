@@ -1,6 +1,13 @@
 {
-  "mcp": ["context7"],
-  "skills": [],
-  "agents": [],
+  "mcp": [
+    "context7",
+    "github"
+  ],
+  "skills": [
+    "bud-dev"
+  ],
+  "agents": [
+    "code-reviewer"
+  ],
   "commands": []
 }

@@ -459,14 +459,15 @@ func secretNames(k *kit.Kit, profile string) (all, required []string) {
 		}
 		for _, vals := range []map[string]string{m.Headers, m.Env} {
 			for _, v := range vals {
-				name, ok := strings.CutPrefix(v, "$secret:")
-				if !ok || seen[name] {
-					continue
-				}
-				seen[name] = true
-				all = append(all, name)
-				if !m.OptionalSecrets {
-					required = append(required, name)
+				for _, name := range kit.SecretRefs(v) {
+					if seen[name] {
+						continue
+					}
+					seen[name] = true
+					all = append(all, name)
+					if !m.OptionalSecrets {
+						required = append(required, name)
+					}
 				}
 			}
 		}

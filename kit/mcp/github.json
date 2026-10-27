@@ -1,0 +1,8 @@
+{
+  "name": "github",
+  "description": "GitHub's own MCP server: PRs, issues, code search",
+  "transport": "http",
+  "url": "https://api.githubcopilot.com/mcp",
+  "headers": { "Authorization": "Bearer $secret:GITHUB_PAT" },
+  "profiles": ["full", "minimal"]
+}

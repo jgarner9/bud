@@ -116,7 +116,7 @@ func TestSync(t *testing.T) {
 	}
 	for name, want := range map[string]string{
 		"docs": "add ", "needs-key": "skip set X_KEY", "mine": "skip you have your own mine",
-		"skills/bud-dev/SKILL.md": "add ", "commands/commit.md": "add ", "CLAUDE.md": "update ",
+		"skills/bud-dev/SKILL.md": "add ", "commands/commit.md": "add ", "CLAUDE.md": "add ",
 	} {
 		if got[name] != want {
 			t.Errorf("%s: %q, want %q", name, got[name], want)
@@ -179,4 +179,15 @@ func TestSync(t *testing.T) {
 func exists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
+}
+
+func TestSecretInsideAValue(t *testing.T) {
+	m := MCP{Transport: "http", URL: "https://gh", Headers: map[string]string{"Authorization": "Bearer $secret:GITHUB_PAT"}}
+	if _, missing, _ := m.Server(func(string) bool { return false }); !slices.Equal(missing, []string{"GITHUB_PAT"}) {
+		t.Fatalf("missing %v", missing)
+	}
+	server, _, _ := m.Server(func(string) bool { return true })
+	if !strings.Contains(string(server), `"Authorization":"Bearer ${GITHUB_PAT}"`) {
+		t.Fatalf("server %s", server)
+	}
 }

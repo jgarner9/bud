@@ -189,6 +189,23 @@ local function evict(keep)
   end
 end
 
+-- secret_env fetches the kit's secrets that live in the keychain (D15), for
+-- the MCP servers Claude Code starts; swappable in tests. cb(vars)
+M.secret_env = function(cb)
+  local bin = require("bud.cli").bin()
+  if not bin then
+    return cb({})
+  end
+  vim.system({ bin, "kit", "env" }, { text = true }, function(res)
+    local ok, vars = pcall(vim.json.decode, res.stdout or "")
+    vim.schedule(function()
+      cb(res.code == 0 and ok and type(vars) == "table" and vars or {})
+    end)
+  end)
+end
+
+local start_job
+
 local function spawn(s)
   local bin = M.bin()
   if not bin then
@@ -202,53 +219,65 @@ local function spawn(s)
     if not s.starting then
       return -- stopped while checking
     end
-    s.starting = nil
     if not ok then
+      s.starting = nil
       set_status(s, "missing", why)
       return
     end
-    local env = M.bridge_env(s.root)
-    local argv = vim.list_extend(M.argv(bin, s, settings()), require("bud.ai.bridge").headless_args(s.root))
-    local job = vim.fn.jobstart(argv, {
-      cwd = s.root,
-      env = env,
-      on_stdout = function(_, data)
-        feed(s, data)
-      end,
-      on_stderr = function(_, data)
-        local text = vim.trim(table.concat(data, "\n"))
-        if text ~= "" then
-          s.stderr = text
-        end
-      end,
-      on_exit = function(_, code)
-        local wanted = s.stopping
-        s.job, s.stopping, s.partial = nil, nil, nil
-        s.crashed = not wanted
-        -- a handover stopped it, and the terminal has the session now
-        if not s.term then
-          set_status(
-            s,
-            "stopped",
-            s.crashed and ("Claude Code exited (" .. code .. ")" .. (s.stderr and ": " .. s.stderr or "")) or nil
-          )
-        end
-        emit("exit", { code = code, crashed = s.crashed }, s)
-      end,
-    })
-    if job <= 0 then
-      set_status(s, "stopped", "couldn't start " .. bin)
-      s.crashed = true
-      return
-    end
-    s.job, s.crashed, s.stderr, s.continue_next = job, false, nil, nil
-    -- what was sent while it started
-    for _, line in ipairs(s.queue) do
-      vim.fn.chansend(job, line)
-    end
-    set_status(s, #s.queue > 0 and "busy" or "ready")
-    s.queue = {}
+    M.secret_env(function(secrets)
+      if not s.starting then
+        return -- stopped meanwhile
+      end
+      s.starting = nil
+      start_job(s, bin, secrets)
+    end)
   end)
+end
+
+-- start_job runs the session's claude, with the bridge's environment and the
+-- kit's keychain secrets
+start_job = function(s, bin, secrets)
+  local env = vim.tbl_extend("force", secrets or {}, M.bridge_env(s.root))
+  local argv = vim.list_extend(M.argv(bin, s, settings()), require("bud.ai.bridge").headless_args(s.root))
+  local job = vim.fn.jobstart(argv, {
+    cwd = s.root,
+    env = env,
+    on_stdout = function(_, data)
+      feed(s, data)
+    end,
+    on_stderr = function(_, data)
+      local text = vim.trim(table.concat(data, "\n"))
+      if text ~= "" then
+        s.stderr = text
+      end
+    end,
+    on_exit = function(_, code)
+      local wanted = s.stopping
+      s.job, s.stopping, s.partial = nil, nil, nil
+      s.crashed = not wanted
+      -- a handover stopped it, and the terminal has the session now
+      if not s.term then
+        set_status(
+          s,
+          "stopped",
+          s.crashed and ("Claude Code exited (" .. code .. ")" .. (s.stderr and ": " .. s.stderr or "")) or nil
+        )
+      end
+      emit("exit", { code = code, crashed = s.crashed }, s)
+    end,
+  })
+  if job <= 0 then
+    set_status(s, "stopped", "couldn't start " .. bin)
+    s.crashed = true
+    return
+  end
+  s.job, s.crashed, s.stderr, s.continue_next = job, false, nil, nil
+  -- what was sent while it started
+  for _, line in ipairs(s.queue) do
+    vim.fn.chansend(job, line)
+  end
+  set_status(s, #s.queue > 0 and "busy" or "ready")
+  s.queue = {}
 end
 
 -- bridge_env brings up the IDE bridge (JGA-81) and returns what a Claude

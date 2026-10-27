@@ -51,6 +51,9 @@ claude.bin = function()
   return fake
 end
 local logged_in = true
+claude.secret_env = function(cb)
+  cb({})
+end
 claude.check_login = function(_, cb)
   vim.schedule(function()
     cb(logged_in, not logged_in and "not logged in" or nil)

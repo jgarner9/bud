@@ -63,3 +63,39 @@ func TestKitCommands(t *testing.T) {
 		t.Errorf("status after %q", out)
 	}
 }
+
+func TestKitSecrets(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("NEEDED_KEY", "")
+	t.Setenv("NICE_KEY", "from-env")
+	origFS := kitFS
+	kitFS = func() fs.FS {
+		return fstest.MapFS{
+			"kit.json":   {Data: []byte(`{"mcp": ["a", "b"]}`)},
+			"mcp/a.json": {Data: []byte(`{"transport": "http", "url": "https://a", "headers": {"K": "$secret:NEEDED_KEY"}}`)},
+			"mcp/b.json": {Data: []byte(`{"transport": "http", "url": "https://b", "optional_secrets": true, "headers": {"K": "$secret:NICE_KEY"}}`)},
+		}
+	}
+	t.Cleanup(func() { kitFS = origFS })
+	k, env, err := loadKit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, required := secretNames(k, env.Profile)
+	if strings.Join(all, ",") != "NEEDED_KEY,NICE_KEY" || strings.Join(required, ",") != "NEEDED_KEY" {
+		t.Fatalf("all %v, required %v", all, required)
+	}
+	// an env var is already in the session's environment, so it isn't handed over again
+	vars, err := keychainEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := vars["NICE_KEY"]; ok {
+		t.Fatalf("handed over an env var: %v", vars)
+	}
+	// nobody to ask: nothing asked, nothing fails
+	if err := askKitSecrets(nil); err != nil {
+		t.Fatal(err)
+	}
+}

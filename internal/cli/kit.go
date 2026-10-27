@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"jgarner.dev/bud"
@@ -13,6 +15,7 @@ import (
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/secrets"
 )
 
 func init() {
@@ -37,6 +40,12 @@ func Kit() *Command {
 			},
 			{Name: "status", Usage: "per item: synced, not synced, changed, or skipped and why", Run: func(g *Globals, args []string) error { return kitStatus(args) }},
 			{Name: "ls", Usage: "list what's in the kit", Run: func(_ *Globals, args []string) error { return kitLs(args) }},
+			{
+				Name:  "secret",
+				Usage: "store a kit secret in the keychain (set NAME, asks for the value), or delete it (rm NAME)",
+				Run:   func(_ *Globals, args []string) error { return kitSecret(args) },
+			},
+			{Name: "env", Usage: "print the kit's keychain secrets as JSON, for the Claude Code sessions bud starts", Run: func(_ *Globals, args []string) error { return kitEnvCmd(args) }},
 		},
 	}
 }
@@ -80,7 +89,7 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 		Ledger:     p.KitLedger(),
 		Profile:    s.Profile,
 		Claude:     kitClaude,
-		SecretSet:  func(name string) bool { return os.Getenv(name) != "" },
+		SecretSet:  secrets.Has,
 	}, nil
 }
 
@@ -195,4 +204,164 @@ func resyncKit(g *Globals, p *paths.Paths) {
 		return
 	}
 	g.Logf("synced the Claude Code kit")
+}
+
+// secretNames lists the $secret names the kit's entries for this profile
+// use; required ones are those without optional_secrets
+func secretNames(k *kit.Kit, profile string) (all, required []string) {
+	seen := map[string]bool{}
+	for _, m := range k.MCP {
+		if !m.For(profile) {
+			continue
+		}
+		for _, vals := range []map[string]string{m.Headers, m.Env} {
+			for _, v := range vals {
+				name, ok := strings.CutPrefix(v, "$secret:")
+				if !ok || seen[name] {
+					continue
+				}
+				seen[name] = true
+				all = append(all, name)
+				if !m.OptionalSecrets {
+					required = append(required, name)
+				}
+			}
+		}
+	}
+	slices.Sort(all)
+	slices.Sort(required)
+
+	return all, required
+}
+
+func kitSecret(args []string) error {
+	if len(args) != 2 || (args[0] != "set" && args[0] != "rm") {
+		return usageErrorf("kit secret takes set NAME or rm NAME")
+	}
+	name := args[1]
+	if args[0] == "rm" {
+		if err := secrets.Delete(name); err != nil {
+			return fmt.Errorf("deleting %s from the keychain: %w", name, err)
+		}
+		fmt.Printf("Deleted %s from the keychain.\n", name)
+		return nil
+	}
+	if !isTerminal(os.Stdin) {
+		return fmt.Errorf("bud kit secret set asks for the value, so it needs a terminal")
+	}
+	value, err := readSecret(name)
+	if err != nil {
+		return err
+	}
+	if value == "" {
+		fmt.Println("Nothing stored.")
+		return nil
+	}
+	if err := secrets.Set(name, value); err != nil {
+		return fmt.Errorf("storing %s: %w", name, err)
+	}
+	fmt.Printf("Stored %s in the keychain; bud kit sync picks it up.\n", name)
+
+	return nil
+}
+
+// swappable in tests: asks for a secret on the terminal without echoing it
+var readSecret = func(name string) (string, error) {
+	fmt.Printf("%s (typing won't show): ", name)
+	stty := func(arg string) {
+		cmd := exec.Command("stty", arg)
+		cmd.Stdin = os.Stdin
+		_ = cmd.Run()
+	}
+	stty("-echo")
+	defer func() {
+		stty("echo")
+		fmt.Println()
+	}()
+	var line []byte
+	buf := make([]byte, 1)
+	for {
+		n, err := os.Stdin.Read(buf)
+		if n == 0 || err != nil || buf[0] == '\n' || buf[0] == '\r' {
+			break
+		}
+		line = append(line, buf[0])
+	}
+
+	return strings.TrimSpace(string(line)), nil
+}
+
+// keychainEnv is the kit's secrets that are in the keychain but not the
+// environment: what a Claude Code process bud starts needs handed to it
+func keychainEnv() (map[string]string, error) {
+	k, env, err := loadKit()
+	if err != nil {
+		return nil, err
+	}
+	all, _ := secretNames(k, env.Profile)
+	out := map[string]string{}
+	for _, name := range all {
+		if secrets.FromEnv(name) {
+			continue
+		}
+		if v, ok := secrets.Get(name); ok {
+			out[name] = v
+		}
+	}
+
+	return out, nil
+}
+
+func kitEnvCmd(args []string) error {
+	if len(args) > 0 {
+		return usageErrorf("kit env takes no arguments")
+	}
+	vars, err := keychainEnv()
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(vars)
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(data))
+
+	return nil
+}
+
+// askKitSecrets asks once for each required kit secret that isn't set and
+// stores it in the keychain (bud install). Skipping one is fine: sync skips
+// that server and says why
+func askKitSecrets(pr *prompter) error {
+	if pr == nil {
+		return nil
+	}
+	k, env, err := loadKit()
+	if err != nil {
+		return err
+	}
+	_, required := secretNames(k, env.Profile)
+	for _, name := range required {
+		if secrets.Has(name) {
+			continue
+		}
+		ok, err := pr.confirm(fmt.Sprintf("The kit needs %s. Store it in the keychain now?", name))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		value, err := readSecret(name)
+		if err != nil {
+			return err
+		}
+		if value != "" {
+			if err := secrets.Set(name, value); err != nil {
+				fmt.Printf("Couldn't store %s: %v\n", name, err)
+			}
+		}
+	}
+
+	return nil
 }

@@ -109,6 +109,9 @@ func install(g *Globals, args []string, yes bool) error {
 		if err := installClaude(pr, yes); err != nil {
 			fmt.Printf("Claude Code isn't set up (%v); 'bud claude setup' tries again.\n", err)
 		}
+		if err := askKitSecrets(pr); err != nil {
+			fmt.Printf("Kit secrets: %v; 'bud kit secret set NAME' stores one.\n", err)
+		}
 	}
 
 	fmt.Println()

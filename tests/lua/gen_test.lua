@@ -60,6 +60,9 @@ local claude = require("bud.ai.claude")
 claude.bin = function()
   return fake
 end
+claude.secret_env = function(cb)
+  cb({})
+end
 claude.check_login = function(_, cb)
   vim.schedule(function()
     cb(true)

@@ -29,7 +29,14 @@ var execClaude = func(dir string, argv []string) error {
 	if err := os.Chdir(dir); err != nil {
 		return err
 	}
-	return syscall.Exec(argv[0], argv, os.Environ())
+	vars := os.Environ()
+	// the kit's MCP servers read their secrets from the environment (D15)
+	if extra, err := keychainEnv(); err == nil {
+		for k, v := range extra {
+			vars = append(vars, k+"="+v)
+		}
+	}
+	return syscall.Exec(argv[0], argv, vars)
 }
 
 func agent(g *Globals, args []string) error {

@@ -420,3 +420,29 @@ func TestCheckStartup(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckProjects(t *testing.T) {
+	p := tempPaths(t)
+	if r := checkProjects(p); r.Status != OK || r.Detail != "0 projects registered" {
+		t.Fatalf("empty: %+v", r)
+	}
+
+	dir := t.TempDir()
+	doc := `{"projects": [{"name": "here", "path": "` + dir + `"}, {"name": "gone", "path": "` + filepath.Join(dir, "gone") + `"}]}`
+	if err := os.MkdirAll(p.State, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.Projects(), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := checkProjects(p); r.Status != OK || !strings.Contains(r.Detail, "2 projects registered, 1 missing") {
+		t.Fatalf("got %+v", r)
+	}
+
+	if err := os.WriteFile(p.Projects(), []byte("{nope"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := checkProjects(p); r.Status != Warn || r.Fix == "" {
+		t.Fatalf("corrupt: %+v", r)
+	}
+}

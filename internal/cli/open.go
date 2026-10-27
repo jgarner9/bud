@@ -7,8 +7,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"jgarner.dev/bud/internal/nvim"
+	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/projects"
 )
 
 func init() {
@@ -34,7 +37,35 @@ func open(g *Globals, args []string) error {
 	}
 	g.Logf("workspace root %s, files %q", ws.Root, ws.Files)
 
+	if ws.Project {
+		// a registry that can't be written never stops the editor opening;
+		// bud doctor reports a broken projects.json
+		if err := registerProject(ws.Root, now()); err != nil {
+			g.Logf("registering %s: %v", ws.Root, err)
+		}
+	}
+
 	return nvim.Launch(ws.Root, ws.Files, g.Layout)
+}
+
+// swappable in tests
+var now = time.Now
+
+// registerProject adds dir to the registry, or updates when it was last opened
+func registerProject(dir string, opened time.Time) error {
+	p, err := paths.Resolve()
+	if err != nil {
+		return err
+	}
+	r, err := projects.Load(p.Projects())
+	if err != nil {
+		return err
+	}
+	if _, err := r.Add(dir, opened); err != nil {
+		return err
+	}
+
+	return r.Save()
 }
 
 // resolveWorkspace turns open's args into where nvim runs and what it opens.
@@ -78,13 +109,14 @@ func resolveWorkspace(args []string) (*Workspace, error) {
 
 	switch {
 	case len(dirs) == 1 && len(files) == 0:
-		return &Workspace{Root: dirs[0]}, nil
+		return &Workspace{Root: dirs[0], Project: true}, nil
 	case len(dirs) > 0:
 		return nil, usageErrorf("open takes one directory, or one or more files")
 	}
 
 	// the first file picks the project, the same rule the Claude Code session uses (BASE.md 4.2)
-	return &Workspace{Root: findRoot(filepath.Dir(files[0])), Files: files}, nil
+	root, found := findRoot(filepath.Dir(files[0]))
+	return &Workspace{Root: root, Files: files, Project: found}, nil
 }
 
 // rootMarkers mark a project root. Language specs add their own `root` markers
@@ -92,19 +124,19 @@ func resolveWorkspace(args []string) (*Workspace, error) {
 var rootMarkers = []string{".git"}
 
 // findRoot walks up from dir to the nearest dir holding a root marker, or
-// returns dir itself when there is none
-func findRoot(dir string) string {
+// returns dir itself, and false, when there is none
+func findRoot(dir string) (string, bool) {
 	for cur := dir; ; {
 		for _, marker := range rootMarkers {
 			// .git is a file, not a dir, in worktrees and submodules, so any entry counts
 			if _, err := os.Lstat(filepath.Join(cur, marker)); err == nil {
-				return cur
+				return cur, true
 			}
 		}
 
 		parent := filepath.Dir(cur)
 		if parent == cur {
-			return dir
+			return dir, false
 		}
 		cur = parent
 	}

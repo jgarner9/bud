@@ -117,6 +117,7 @@ bud main.go util.go # open files, from the project root they belong to
 | `bud doctor`    | Health checks, including the startup budget (50 ms to the first screen); exits 1 when something's broken |
 | `bud version`   | Prints the version |
 | `bud lang`      | `ls` lists languages; `enable` / `disable` turn them on and off (enable installs their tools); `add <name>` starts your own spec from the template; `rm <name>` removes one of yours |
+| `bud projects`  | `ls` lists the projects bud knows (opening a dir registers it); `add`, `rm`, `pin`, `unpin` manage them |
 | `bud uninstall` | Lists everything bud put on the machine and removes it once you confirm. `--keep-config` keeps your settings |
 
 Global flags go before the command: `bud [--verbose] [--profile full|minimal] <command> [flags] [args]`.

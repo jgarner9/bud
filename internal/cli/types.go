@@ -9,6 +9,10 @@ import (
 type Workspace struct {
 	Root  string   // project root, nvim's working directory
 	Files []string // absolute paths, one buffer each; none opens the root itself
+	// Project is true when Root is a project worth registering: a dir that was
+	// asked for, or the repo files were found in, not the cwd of a bare bud or
+	// a loose file's folder (D18, D36)
+	Project bool
 }
 
 type Command struct {

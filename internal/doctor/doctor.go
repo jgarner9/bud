@@ -22,6 +22,7 @@ import (
 	"jgarner.dev/bud/internal/lang"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/projects"
 )
 
 type Status int
@@ -100,7 +101,33 @@ func Run() []Result {
 		results = append(results, r)
 	}
 
-	return append(results, cfgResult)
+	return append(results, cfgResult, checkProjects(p))
+}
+
+// checkProjects reads the project registry. A broken one only warns: bud still
+// opens, it just can't list or register projects
+func checkProjects(p *paths.Paths) Result {
+	r := Result{Name: "projects"}
+	reg, err := projects.Load(p.Projects())
+	if err != nil {
+		r.Status = Warn
+		r.Detail = err.Error()
+		r.Fix = "fix or remove " + p.Projects()
+		return r
+	}
+
+	missing := 0
+	for _, proj := range reg.Projects {
+		if proj.Missing() {
+			missing++
+		}
+	}
+	r.Detail = plural(len(reg.Projects), "project") + " registered"
+	if missing > 0 {
+		r.Detail += fmt.Sprintf(", %d missing (bud projects rm forgets one)", missing)
+	}
+
+	return r
 }
 
 // checkStartup times bud's first screen: empty, and on a buffer of each enabled

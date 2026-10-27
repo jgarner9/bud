@@ -55,6 +55,8 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **`bud lang`** (`internal/cli/lang.go`, D34) lists specs and edits `config.json`'s `languages`; `enable` also installs system deps and runs the plugin restore. The user's specs live in `user-tools/languages/` (`userSpecDir`), read after bud's own and never part of a preset (`Spec.Builtin`, set from which dir a spec came from).
 
+**Projects.** `internal/projects` owns `projects.json` (D36): `Load`/`Save` keep unknown keys and save atomically, `Add` canonicalizes paths and picks unique names, `Sorted` is pinned, then last opened, then name. `open` registers `ws.Root` when `Workspace.Project` is set (a dir arg, or files inside a `.git` repo) and only logs a failure, so a bad registry never blocks opening. `bud projects` (`internal/cli/projects.go`) edits it; Lua reads it through `bud.projects` (read-only).
+
 **Languages from Go.** `internal/lang.Load(shipped, dirs...)` reads specs by running `nvim --clean --headless -l` on this binary's `lua/bud/lang/dump.lua` (extracted to a temp dir with the engine, so a synced copy never matters), which loads them with `bud.lang` and writes JSON. `shipped` puts the embedded specs first; an earlier dir wins on a name clash. `Set.Preset`/`Enabled` apply the same preset rule as Lua. `bud install` reads shipped plus `~/.config/bud/languages`; `bud doctor` reads the synced dir and fails only for a broken spec the manifest says bud shipped (D33). Its tests need nvim and skip without it, so CI runs them in the smoke job.
 
 **Version.** `internal/version.Version` is set by GoReleaser via `-ldflags -X`. Without it, `String()` falls back to the module version Go stamps into the build.

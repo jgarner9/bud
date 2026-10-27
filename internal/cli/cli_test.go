@@ -30,7 +30,7 @@ func (r *recorder) cmd(name string) *Command {
 }
 
 func TestRegistry(t *testing.T) {
-	for _, name := range []string{"open", "chat", "install", "update", "version", "doctor", "uninstall", "lang"} {
+	for _, name := range []string{"open", "chat", "install", "update", "version", "doctor", "uninstall", "lang", "projects"} {
 		if _, ok := CommandRegistry[name]; !ok {
 			t.Errorf("%s not registered", name)
 		}
@@ -164,7 +164,7 @@ func TestResolveWorkspace(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want, _ := filepath.EvalSymlinks(loose); evalSymlinks(t, ws.Root) != want || len(ws.Files) != 0 {
+		if want, _ := filepath.EvalSymlinks(loose); evalSymlinks(t, ws.Root) != want || len(ws.Files) != 0 || ws.Project {
 			t.Fatalf("got %+v", ws)
 		}
 	})
@@ -174,7 +174,7 @@ func TestResolveWorkspace(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ws.Root != project || len(ws.Files) != 0 {
+		if ws.Root != project || len(ws.Files) != 0 || !ws.Project {
 			t.Fatalf("got %+v", ws)
 		}
 	})
@@ -184,7 +184,7 @@ func TestResolveWorkspace(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ws.Root != project || !slices.Equal(ws.Files, files[1:2]) {
+		if ws.Root != project || !slices.Equal(ws.Files, files[1:2]) || !ws.Project {
 			t.Fatalf("got %+v", ws)
 		}
 	})
@@ -218,8 +218,8 @@ func TestResolveWorkspace(t *testing.T) {
 			t.Fatal(err)
 		}
 		// t.TempDir is never inside a repo, so the walk reaches / and gives up
-		if ws.Root != loose {
-			t.Fatalf("root = %q, want %q", ws.Root, loose)
+		if ws.Root != loose || ws.Project {
+			t.Fatalf("got %+v, want root %q and no project", ws, loose)
 		}
 	})
 

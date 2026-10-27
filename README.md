@@ -7,7 +7,7 @@ Bud is a fast, reproducible Neovim-based IDE driven by a small Go CLI. It runs i
 ## What it will feature
 
 - **One CLI, `bud`.** Installs, launches, updates and extends the environment. Pure Go standard library, no third-party modules.
-- **An isolated Neovim config.** Built on lazy.nvim with plugin versions pinned in a committed lockfile, so every machine gets the same setup.
+- **An isolated Neovim config.** Plugins are managed by Neovim's built-in `vim.pack`, with versions pinned in a committed lockfile, so every machine gets the same setup.
 - **Languages as data.** One file per language in `languages/` sets up LSP, linting, formatting and treesitter. To add a language, copy the template and fill it in.
 - **Easy navigation.** Fuzzy finding, jump-anywhere motions, symbol outlines, a file tree, and project switching.
 - **Claude Code built in.** Opening a project also starts a Claude Code session there. Side-pane and full-screen chat, inline help, a generator that writes new editor tools, and your own Neovim TUIs all share that session. Your MCP servers, skills and commands sync into Claude Code on every machine.
@@ -68,7 +68,7 @@ Working today:
 | `bud open`    | Launches Neovim with the Bud config on a directory, or on one or more files (`bud a.go b.go`) from their project root |
 | `bud install` | Asks for profile, terminal and languages, installs missing system packages (after showing the command and asking), installs the Bud Neovim config, then runs `bud doctor`. `--yes` takes the defaults without asking |
 | `bud update`  | Syncs the config and restores pinned plugins              |
-| `bud doctor`  | Checks deps, the Neovim version (0.11+), config sync and machine config; exits 1 on a failure |
+| `bud doctor`  | Checks deps, the Neovim version (0.12+), config sync and machine config; exits 1 on a failure |
 | `bud version` | Prints the version                                        |
 | `bud uninstall` | Lists everything bud put on the machine and removes it once you confirm (`--yes` skips). `--keep-config` keeps `config.json` and `user-tools/`. The binary is only removed if `install.sh` installed it |
 

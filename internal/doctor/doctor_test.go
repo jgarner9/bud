@@ -93,9 +93,9 @@ func TestCheckNeovim(t *testing.T) {
 		err    error
 		status Status
 	}{
-		{"current", "NVIM v0.11.4\n", nil, OK},
-		{"newer", "NVIM v0.12.1\n", nil, OK},
-		{"too old", "NVIM v0.10.4\n", nil, Fail},
+		{"oldest supported", "NVIM v0.12.0\n", nil, OK},
+		{"newer", "NVIM v0.13.1\n", nil, OK},
+		{"too old", "NVIM v0.11.7\n", nil, Fail},
 		{"unreadable", "something else\n", nil, Fail},
 		{"won't run", "", errors.New("exit status 1"), Fail},
 	}

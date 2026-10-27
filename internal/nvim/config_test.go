@@ -42,7 +42,7 @@ func TestSyncConfig(t *testing.T) {
 	}
 
 	v2 := fstest.MapFS{
-		"init.lua":         {Data: []byte("require('bud.core')\nrequire('bud.lazy')")},
+		"init.lua":         {Data: []byte("require('bud.core')\nrequire('bud.pack')")},
 		"lua/bud/keep.lua": {Data: []byte("return 1")},
 		"lua/bud/new.lua":  {Data: []byte("return 2")},
 	}

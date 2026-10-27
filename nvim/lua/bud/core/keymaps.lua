@@ -1,3 +1,6 @@
 local map = vim.keymap.set
 
-map("n", "<leader>L", "<cmd>Lazy<cr>", { desc = "Lazy (plugins)" })
+-- vim.pack's plugin view, read-only: target the lockfile so it never offers updates
+map("n", "<leader>L", function()
+  vim.pack.update(nil, { offline = true, target = "lockfile" })
+end, { desc = "Plugins" })

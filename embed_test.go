@@ -8,7 +8,7 @@ import (
 func TestNvimConfig(t *testing.T) {
 	cfg := NvimConfig()
 
-	for _, path := range []string{"init.lua", "lazy-lock.json", "lua/bud/lazy.lua"} {
+	for _, path := range []string{"init.lua", "nvim-pack-lock.json", "lua/bud/pack.lua"} {
 		if _, err := fs.Stat(cfg, path); err != nil {
 			t.Errorf("%s missing from embedded config: %v", path, err)
 		}

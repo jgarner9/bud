@@ -1,6 +1,6 @@
 #!/bin/sh
 # Headless smoke test: syncs the embedded config into a throwaway XDG tree with
-# `bud update` (which also restores the plugins pinned in lazy-lock.json), then
+# `bud update` (which also restores the plugins pinned in nvim-pack-lock.json), then
 # starts Neovim on it and fails on any startup error. Needs go, git, nvim and
 # network access to fetch the plugins. Run from the repo root: sh scripts/smoke.sh
 

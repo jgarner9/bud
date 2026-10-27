@@ -23,7 +23,7 @@ just smoke           # sync the config into temp XDG dirs, restore plugins, star
 just snapshot        # local GoReleaser build into dist/, needs goreleaser installed
 ```
 
-`just lint` and `just check` need `stylua` and `selene` (`brew install stylua selene`); they fail with that hint when either is missing. Lua style is in `stylua.toml` (2 spaces, double quotes, 120 columns) and `selene.toml` + `vim.yml` (Lua 5.1 plus the `vim` global). CI pins stylua, selene and Neovim versions in `.github/workflows/ci.yml`, and runs the smoke test on the oldest supported Neovim (0.11, D19) and the newest.
+`just lint` and `just check` need `stylua` and `selene` (`brew install stylua selene`); they fail with that hint when either is missing. Lua style is in `stylua.toml` (2 spaces, double quotes, 120 columns) and `selene.toml` + `vim.yml` (Lua 5.1 plus the `vim` global). CI pins stylua, selene and Neovim versions in `.github/workflows/ci.yml`, and runs the smoke test on the oldest supported Neovim (0.12, D19) and the newest.
 
 If the Go build cache isn't writable (for example inside a sandbox), prefix commands with `GOCACHE=$TMPDIR/gocache`.
 
@@ -39,7 +39,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **Errors and output.** Commands return errors and never print errors or call `os.Exit`. `cli.ExitCode` (`internal/cli/errors.go`) is the only place that prints errors (one `bud: ...` line on stderr) and picks the exit code: 0 for success or `-h`, 2 for a `*UsageError` (build one with `usageErrorf`), 1 for anything else. `App.parse` silences the flag package and prints requested help to stdout, and the error plus usage to stderr. `App.Stdout`/`App.Stderr` let tests capture that output.
 
-**Embedded config (D5).** The root package `bud` (`embed.go`) embeds `nvim/` with `//go:embed`. It must stay at the repo root, because embed can't reach parent directories. Later top-level dirs (`languages/`, `layouts/`) get embedded there too. The binary is the release: `internal/nvim.SyncConfig` copies the embedded files into `~/.config/bud` and records them in `.bud-manifest.json`. It overwrites managed files, deletes ones a release dropped, and never touches anything else. After a change it runs `nvim --headless "+Lazy! restore"`, so plugins match the committed `nvim/lazy-lock.json`. The target dir comes from `paths.Resolve().Config`, which is `~/.config/bud` on macOS too, because that's where Neovim looks.
+**Embedded config (D5).** The root package `bud` (`embed.go`) embeds `nvim/` with `//go:embed`. It must stay at the repo root, because embed can't reach parent directories. Later top-level dirs (`languages/`, `layouts/`) get embedded there too. The binary is the release: `internal/nvim.SyncConfig` copies the embedded files into `~/.config/bud` and records them in `.bud-manifest.json`. It overwrites managed files, deletes ones a release dropped, and never touches anything else. After a change it runs `bud.pack.restore()` in headless nvim, so plugins match the committed `nvim/nvim-pack-lock.json`. The target dir comes from `paths.Resolve().Config`, which is `~/.config/bud` on macOS too, because that's where Neovim looks.
 
 **Paths and machine config.** `internal/paths.Resolve` is the only place that builds a bud path (XDG on macOS too, D13); don't hardcode one elsewhere. `internal/config` keeps `config.json` as a raw JSON tree so unknown keys survive `Save`, and `File.Settings()` decodes it over `Defaults()`.
 
@@ -53,7 +53,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **Version.** `internal/version.Version` is set by GoReleaser via `-ldflags -X`. Without it, `String()` falls back to the module version Go stamps into the build.
 
-**Neovim config.** `nvim/init.lua` sets the leader (`<Space>`), then loads `bud.core` (options, keymaps, autocmds) and `bud.lazy`. Plugin specs are files under `nvim/lua/bud/plugins/` that lazy.nvim imports. Lazy's own update checker is off: plugin versions change only by committing `lazy-lock.json` and shipping a release.
+**Neovim config.** `nvim/init.lua` sets the leader (`<Space>`), then loads `bud.core` (options, keymaps, autocmds) and `bud.pack`, which adds plugins with Neovim's built-in `vim.pack` (D27, needs 0.12). Specs are lists returned by modules under `nvim/lua/bud/plugins/` (`{ src = "owner/repo", version = ..., config = fn }`, see the top of `pack.lua`); `plugins/init.lua` gathers them. Nothing updates plugins in place: versions change only by regenerating `nvim/nvim-pack-lock.json` and shipping a release. Generate that file with `vim.pack` itself and commit it byte for byte, or every sync will look like a change. There is no lazy loading yet (JGA-107).
 
 ## Release and install
 

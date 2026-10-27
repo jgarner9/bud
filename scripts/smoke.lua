@@ -7,14 +7,25 @@ if vim.v.errmsg ~= "" then
   table.insert(problems, "error during startup: " .. vim.v.errmsg)
 end
 
-local ok, lazy = pcall(require, "lazy")
+local ok, pack = pcall(require, "bud.pack")
 if not ok then
-  table.insert(problems, "lazy.nvim didn't load: " .. tostring(lazy))
+  table.insert(problems, "bud.pack didn't load: " .. tostring(pack))
 else
-  for _, plugin in ipairs(lazy.plugins()) do
-    if not plugin._.installed then
-      table.insert(problems, "plugin not installed: " .. plugin.name)
+  local active = {}
+  for _, plugin in ipairs(vim.pack.get(nil, { info = false })) do
+    if plugin.active then
+      active[plugin.spec.name] = true
+    else
+      table.insert(problems, "plugin on disk but in no spec: " .. plugin.spec.name)
     end
+  end
+  for _, name in ipairs(pack.names) do
+    if not active[name] then
+      table.insert(problems, "plugin not installed: " .. name)
+    end
+  end
+  for _, name in ipairs(pack.failed) do
+    table.insert(problems, "plugin config failed: " .. name)
   end
 end
 

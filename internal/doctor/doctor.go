@@ -46,7 +46,7 @@ type Result struct {
 }
 
 // MinNeovim is the oldest Neovim bud supports (D19)
-var MinNeovim = [2]int{0, 11}
+var MinNeovim = [2]int{0, 12}
 
 // swappable in tests
 var (

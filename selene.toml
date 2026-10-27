@@ -2,5 +2,5 @@
 std = "vim"
 
 [lints]
-# every lazy.nvim spec is one: { "owner/repo", opts = ... }
+# plugin specs and option tables often mix list and named fields
 mixed_table = "allow"

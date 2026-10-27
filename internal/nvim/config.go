@@ -75,7 +75,7 @@ func Apply() error {
 	if changes == 0 {
 		fmt.Println("Already up to date.")
 	} else {
-		fmt.Println("Restoring lazy.nvim plugins for changes...")
+		fmt.Println("Restoring plugins for changes...")
 		if err := RestorePlugins(); err != nil {
 			return err
 		}
@@ -171,14 +171,15 @@ func syncConfig(src fs.FS, dst string, write bool) (*SyncResult, error) {
 	return res, nil
 }
 
-// RestorePlugins checks out every plugin at the commit pinned in lazy-lock.json
+// RestorePlugins removes plugins a release dropped and checks out every other
+// plugin at the revision pinned in nvim-pack-lock.json (bud.pack.restore)
 func RestorePlugins() error {
 	bin, err := exec.LookPath("nvim")
 	if err != nil {
 		return err
 	}
 
-	cmd := exec.Command(bin, "--headless", "+Lazy! restore", "+qa")
+	cmd := exec.Command(bin, "--headless", "+lua require('bud.pack').restore()", "+qa")
 	cmd.Env = env()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

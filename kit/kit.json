@@ -6,10 +6,16 @@
     "cocoindex-code"
   ],
   "skills": [
-    "bud-dev"
+    "bud-dev",
+    "plan-to-linear"
   ],
   "agents": [
     "code-reviewer"
   ],
-  "commands": []
+  "commands": [
+    "plan-to-linear"
+  ],
+  "plugins": [
+    "superpowers@claude-plugins-official"
+  ]
 }

@@ -13,9 +13,9 @@ import (
 )
 
 // Kinds are the kinds of kit entry, as kit.json names their lists
-var Kinds = map[string]string{"mcp": "mcp", "skill": "skills", "agent": "agents", "command": "commands"}
+var Kinds = map[string]string{"mcp": "mcp", "skill": "skills", "agent": "agents", "command": "commands", "plugin": "plugins"}
 
-var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*(@[a-z0-9][a-z0-9._-]*)?$`)
 
 // Repo is a kit/ dir in a bud checkout, which add, rm and adopt edit
 type Repo struct {
@@ -79,9 +79,12 @@ func (r Repo) Find(name string) (string, error) {
 	return "", nil
 }
 
-// paths are an entry's files, relative to the kit dir
+// paths are an entry's files, relative to the kit dir (a plugin has none:
+// it's just its name in kit.json)
 func entryPath(kind, name string) string {
 	switch kind {
+	case "plugin":
+		return ""
 	case "mcp":
 		return "mcp/" + name + ".json"
 	case "skill":
@@ -147,6 +150,15 @@ func (r Repo) AddMCP(name, url, cmd string) (string, error) {
 	return r.add("mcp", name, map[string][]byte{entryPath("mcp", name): append(data, '\n')})
 }
 
+// AddPlugin lists a Claude Code plugin (name@marketplace) in the kit
+func (r Repo) AddPlugin(id string) error {
+	if !strings.Contains(id, "@") {
+		return fmt.Errorf("give the plugin as name@marketplace, e.g. superpowers@claude-plugins-official")
+	}
+	_, err := r.add("plugin", id, nil)
+	return err
+}
+
 // Scaffold makes a skill, agent or command entry to fill in
 func (r Repo) Scaffold(kind, name string) (string, error) {
 	var rel, body string
@@ -188,6 +200,10 @@ func (r Repo) Remove(name string) (string, error) {
 	setList(idx, Kinds[kind], slices.DeleteFunc(list(idx, Kinds[kind]), func(n string) bool { return n == name }))
 	if err := r.saveIndex(idx); err != nil {
 		return "", err
+	}
+
+	if kind == "plugin" {
+		return kind, nil
 	}
 
 	return kind, os.RemoveAll(filepath.Join(r.Dir, filepath.FromSlash(entryPath(kind, name))))

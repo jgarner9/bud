@@ -211,3 +211,38 @@ func TestSyncSkipsMissingBinary(t *testing.T) {
 		t.Fatalf("with the binary: ran %q, %v", ran, err)
 	}
 }
+
+func TestSyncPlugins(t *testing.T) {
+	dir := t.TempDir()
+	installed := []string{"mine@somewhere"}
+	var ran []string
+	env := Env{
+		ClaudeDir: filepath.Join(dir, ".claude"), ClaudeJSON: filepath.Join(dir, ".claude.json"), Ledger: filepath.Join(dir, "l.json"),
+		SecretSet: func(string) bool { return false },
+		Claude: func(a ...string) error {
+			ran = append(ran, strings.Join(a, " "))
+			if a[1] == "install" {
+				installed = append(installed, a[4])
+			} else {
+				installed = slices.DeleteFunc(installed, func(s string) bool { return s == a[4] })
+			}
+			return nil
+		},
+		InstalledPlugins: func() ([]string, error) { return slices.Clone(installed), nil },
+	}
+	k := &Kit{Plugins: []string{"superpowers@claude-plugins-official", "mine@somewhere"}}
+	actions, err := Sync(k, env, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ran, []string{"plugin install --scope user superpowers@claude-plugins-official"}) {
+		t.Fatalf("ran %q (%v)", ran, actions)
+	}
+	// dropped from the kit: uninstalled, but never the one you installed yourself
+	k.Plugins = nil
+	ran = nil
+	Sync(k, env, false)
+	if !slices.Equal(ran, []string{"plugin uninstall --scope user superpowers@claude-plugins-official"}) || !slices.Contains(installed, "mine@somewhere") {
+		t.Fatalf("ran %q, installed %v", ran, installed)
+	}
+}

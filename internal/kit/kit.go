@@ -34,6 +34,7 @@ import (
 type Kit struct {
 	MCP          []MCP
 	Skills       []string
+	Plugins      []string // Claude Code plugins, name@marketplace
 	Agents       []string
 	Commands     []string
 	Instructions string
@@ -72,13 +73,14 @@ func Load(fsys fs.FS) (*Kit, error) {
 	var index struct {
 		MCP      []string `json:"mcp"`
 		Skills   []string `json:"skills"`
+		Plugins  []string `json:"plugins"`
 		Agents   []string `json:"agents"`
 		Commands []string `json:"commands"`
 	}
 	if err := json.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("kit.json: %w", err)
 	}
-	k := &Kit{Skills: index.Skills, Agents: index.Agents, Commands: index.Commands, fsys: fsys}
+	k := &Kit{Skills: index.Skills, Plugins: index.Plugins, Agents: index.Agents, Commands: index.Commands, fsys: fsys}
 	for _, name := range index.MCP {
 		data, err := fs.ReadFile(fsys, "mcp/"+name+".json")
 		if err != nil {
@@ -173,13 +175,14 @@ func (m MCP) Server(set func(name string) bool) (server []byte, missing []string
 // Ledger is what bud wrote into Claude Code's config, with a hash of each
 type Ledger struct {
 	MCP          map[string]string `json:"mcp"`
+	Plugins      map[string]string `json:"plugins,omitempty"`
 	Files        map[string]string `json:"files"` // path under the Claude dir -> hash
 	Instructions string            `json:"instructions,omitempty"`
 }
 
 // ReadLedger reads path; a missing ledger is an empty one, and false
 func ReadLedger(path string) (*Ledger, bool, error) {
-	l := &Ledger{MCP: map[string]string{}, Files: map[string]string{}}
+	l := &Ledger{MCP: map[string]string{}, Plugins: map[string]string{}, Files: map[string]string{}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return l, false, nil
@@ -189,6 +192,9 @@ func ReadLedger(path string) (*Ledger, bool, error) {
 	}
 	if err := json.Unmarshal(data, l); err != nil {
 		return nil, false, fmt.Errorf("%s: %w", path, err)
+	}
+	if l.Plugins == nil {
+		l.Plugins = map[string]string{}
 	}
 	if l.MCP == nil {
 		l.MCP = map[string]string{}
@@ -251,9 +257,11 @@ type Env struct {
 	Ledger     string
 	Profile    string
 	Claude     func(args ...string) error // runs claude
-	SecretSet  func(name string) bool
-	HasBin     func(name string) bool // nil means look on PATH
-	Disabled   []string               // entries turned off on this machine (bud kit disable)
+	// lists the installed plugins (claude plugin list --json); nil means none
+	InstalledPlugins func() ([]string, error)
+	SecretSet        func(name string) bool
+	HasBin           func(name string) bool // nil means look on PATH
+	Disabled         []string               // entries turned off on this machine (bud kit disable)
 }
 
 // without is k minus the named entries
@@ -266,7 +274,7 @@ func (k *Kit) without(names []string) *Kit {
 	}
 	out := *k
 	out.MCP = slices.DeleteFunc(slices.Clone(k.MCP), func(m MCP) bool { return slices.Contains(names, m.Name) })
-	out.Skills, out.Agents, out.Commands = keep(k.Skills), keep(k.Agents), keep(k.Commands)
+	out.Skills, out.Agents, out.Commands, out.Plugins = keep(k.Skills), keep(k.Agents), keep(k.Commands), keep(k.Plugins)
 
 	return &out
 }
@@ -461,6 +469,51 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 		delete(ledger.MCP, name)
 	}
 
+	// plugins: through claude plugin, user scope
+	if len(k.Plugins) > 0 || len(ledger.Plugins) > 0 {
+		var installed []string
+		if env.InstalledPlugins != nil {
+			if installed, err = env.InstalledPlugins(); err != nil {
+				errs = append(errs, fmt.Errorf("listing plugins: %w", err))
+			}
+		}
+		for _, id := range k.Plugins {
+			_, owned := ledger.Plugins[id]
+			switch {
+			case slices.Contains(installed, id) && owned:
+				actions = append(actions, Action{"plugin", id, "ok", ""})
+			case slices.Contains(installed, id):
+				actions = append(actions, Action{"plugin", id, "skip", "you installed it yourself"})
+			default:
+				actions = append(actions, Action{"plugin", id, "add", ""})
+				if dryRun {
+					continue
+				}
+				if err := env.Claude("plugin", "install", "--scope", "user", id); err != nil {
+					errs = append(errs, fmt.Errorf("installing %s: %w", id, err))
+					continue
+				}
+				ledger.Plugins[id] = "installed"
+			}
+		}
+		for _, id := range sortedKeys(ledger.Plugins) {
+			if slices.Contains(k.Plugins, id) {
+				continue
+			}
+			actions = append(actions, Action{"plugin", id, "remove", "no longer in the kit"})
+			if dryRun {
+				continue
+			}
+			if slices.Contains(installed, id) {
+				if err := env.Claude("plugin", "uninstall", "--scope", "user", id); err != nil {
+					errs = append(errs, fmt.Errorf("uninstalling %s: %w", id, err))
+					continue
+				}
+			}
+			delete(ledger.Plugins, id)
+		}
+	}
+
 	// skills, agents and commands: files under the Claude dir
 	files, err := k.files()
 	if err != nil {
@@ -603,6 +656,9 @@ func (k *Kit) Entries() [][3]string {
 	}
 	for _, s := range k.Skills {
 		out = append(out, [3]string{"skill", s, ""})
+	}
+	for _, p := range k.Plugins {
+		out = append(out, [3]string{"plugin", p, ""})
 	}
 	for _, a := range k.Agents {
 		out = append(out, [3]string{"agent", a, ""})

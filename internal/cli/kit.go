@@ -144,17 +144,24 @@ func kitRepo(repo string) (kit.Repo, error) {
 
 func kitAdd(args []string, url, cmd, repo string) error {
 	if len(args) != 2 {
-		return usageErrorf("kit add takes a kind and a name: add mcp|skill|agent|command <name>")
+		return usageErrorf("kit add takes a kind and a name: add mcp|skill|agent|command|plugin <name>")
 	}
 	kind, name := args[0], args[1]
 	if _, ok := kit.Kinds[kind]; !ok {
-		return usageErrorf("kit add: %q isn't mcp, skill, agent or command", kind)
+		return usageErrorf("kit add: %q isn't mcp, skill, agent, command or plugin", kind)
 	}
 	r, err := kitRepo(repo)
 	if err != nil {
 		return err
 	}
 	var path string
+	if kind == "plugin" {
+		if err := r.AddPlugin(name); err != nil {
+			return err
+		}
+		fmt.Printf("Added the plugin %s; bud kit sync installs it.\n", name)
+		return nil
+	}
 	if kind == "mcp" {
 		path, err = r.AddMCP(name, url, cmd)
 	} else {
@@ -306,6 +313,30 @@ func kitDisabled(f *config.File) []string {
 	return out
 }
 
+// installedPlugins asks claude which plugins are installed
+var installedPlugins = func() ([]string, error) {
+	bin := claude.Find()
+	if bin == "" {
+		return nil, nil
+	}
+	out, err := exec.Command(bin, "plugin", "list", "--json").Output()
+	if err != nil {
+		return nil, err
+	}
+	var list []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(out, &list); err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(list))
+	for i, p := range list {
+		ids[i] = p.ID
+	}
+
+	return ids, nil
+}
+
 // kitEnv is where the kit goes on this machine
 func kitEnv(p *paths.Paths) (kit.Env, error) {
 	home, err := os.UserHomeDir()
@@ -326,13 +357,14 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 	}
 
 	return kit.Env{
-		ClaudeDir:  dir,
-		ClaudeJSON: claudeJSON,
-		Ledger:     p.KitLedger(),
-		Profile:    s.Profile,
-		Claude:     kitClaude,
-		SecretSet:  secrets.Has,
-		Disabled:   disabled,
+		ClaudeDir:        dir,
+		ClaudeJSON:       claudeJSON,
+		Ledger:           p.KitLedger(),
+		Profile:          s.Profile,
+		Claude:           kitClaude,
+		SecretSet:        secrets.Has,
+		InstalledPlugins: installedPlugins,
+		Disabled:         disabled,
 	}, nil
 }
 

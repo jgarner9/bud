@@ -133,3 +133,10 @@ func TestSyncConfigManifestEscape(t *testing.T) {
 		})
 	}
 }
+
+func TestSetEnv(t *testing.T) {
+	got := setEnv([]string{"A=1", "BUD_LAYOUT=old", "B=2"}, "BUD_LAYOUT", "focus")
+	if !slices.Equal(got, []string{"BUD_LAYOUT=focus", "A=1", "B=2"}) {
+		t.Fatalf("got %q", got)
+	}
+}

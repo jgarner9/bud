@@ -13,7 +13,9 @@ import (
 // AppName is NVIM_APPNAME, which points Neovim at bud's dirs from internal/paths
 const AppName = paths.AppName
 
-func Launch(root, file string) error {
+// Launch replaces the bud process with nvim, running in root with each file in
+// its own buffer. layout is handed to the config as BUD_LAYOUT when it's set
+func Launch(root string, files []string, layout string) error {
 	bin, err := exec.LookPath("nvim")
 	if err != nil {
 		return err
@@ -23,21 +25,33 @@ func Launch(root, file string) error {
 		return err
 	}
 
+	// "--" so a file named like a flag is still opened as a file
 	argv := []string{"nvim"}
-	if file != "" {
-		argv = append(argv, file)
+	if len(files) > 0 {
+		argv = append(argv, "--")
+		argv = append(argv, files...)
 	}
 
-	return syscall.Exec(bin, argv, env())
+	vars := env()
+	if layout != "" {
+		vars = setEnv(vars, "BUD_LAYOUT", layout)
+	}
+
+	return syscall.Exec(bin, argv, vars)
 }
 
 func env() []string {
-	vars := []string{"NVIM_APPNAME=" + AppName}
-	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "NVIM_APPNAME=") {
-			vars = append(vars, kv)
+	return setEnv(os.Environ(), "NVIM_APPNAME", AppName)
+}
+
+// setEnv returns vars with key set to value, dropping any earlier value
+func setEnv(vars []string, key, value string) []string {
+	out := []string{key + "=" + value}
+	for _, kv := range vars {
+		if !strings.HasPrefix(kv, key+"=") {
+			out = append(out, kv)
 		}
 	}
 
-	return vars
+	return out
 }

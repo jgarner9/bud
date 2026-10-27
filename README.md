@@ -65,7 +65,7 @@ Working today:
 
 | Command       | What it does                                              |
 | ------------- | --------------------------------------------------------- |
-| `bud open`    | Launches Neovim with the Bud config and resolves the path |
+| `bud open`    | Launches Neovim with the Bud config on a directory, or on one or more files (`bud a.go b.go`) from their project root |
 | `bud install` | Checks system dependencies and installs the Bud Neovim config |
 | `bud update`  | Syncs the config and restores pinned plugins              |
 | `bud doctor`  | Checks deps, the Neovim version (0.11+), config sync and machine config; exits 1 on a failure |

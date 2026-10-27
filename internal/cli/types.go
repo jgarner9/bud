@@ -5,9 +5,10 @@ import (
 	"io"
 )
 
+// Workspace is where nvim runs and what it opens
 type Workspace struct {
-	Root string
-	File string
+	Root  string   // project root, nvim's working directory
+	Files []string // absolute paths, one buffer each; none opens the root itself
 }
 
 type Command struct {

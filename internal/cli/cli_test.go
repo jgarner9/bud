@@ -123,55 +123,214 @@ func TestAppRunErrors(t *testing.T) {
 	}
 }
 
-func TestOpenTooManyArgs(t *testing.T) {
+func TestOpenMissingPaths(t *testing.T) {
 	if err := open(&Globals{}, []string{"a", "b"}); err == nil {
-		t.Fatal("expected error for two paths")
+		t.Fatal("expected error for paths that don't exist")
 	}
 }
 
-func TestResolveWorkspace(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "main.go")
-	if err := os.WriteFile(file, nil, 0o644); err != nil {
-		t.Fatal(err)
+// touch creates each file under dir, with parent dirs, and returns their paths
+func touch(t *testing.T, dir string, names ...string) []string {
+	t.Helper()
+	var out []string
+	for _, name := range names {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, path)
 	}
 
-	t.Run("dir", func(t *testing.T) {
-		ws, err := resolveWorkspace(dir)
+	return out
+}
+
+func TestResolveWorkspace(t *testing.T) {
+	// a project with a .git dir, and a loose dir outside any project
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	loose := filepath.Join(root, "loose")
+	if err := os.MkdirAll(filepath.Join(project, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := touch(t, project, "main.go", "pkg/a/a.go", "pkg/b/b.go")
+	looseFile := touch(t, loose, "notes.txt")[0]
+
+	t.Run("no args is the current dir", func(t *testing.T) {
+		t.Chdir(loose)
+		ws, err := resolveWorkspace(nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ws.Root != dir || ws.File != "" {
+		if want, _ := filepath.EvalSymlinks(loose); evalSymlinks(t, ws.Root) != want || len(ws.Files) != 0 {
 			t.Fatalf("got %+v", ws)
 		}
 	})
 
-	t.Run("file", func(t *testing.T) {
-		ws, err := resolveWorkspace(file)
+	t.Run("dir", func(t *testing.T) {
+		ws, err := resolveWorkspace([]string{project})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ws.Root != dir || ws.File != file {
+		if ws.Root != project || len(ws.Files) != 0 {
 			t.Fatalf("got %+v", ws)
+		}
+	})
+
+	t.Run("file finds the git root", func(t *testing.T) {
+		ws, err := resolveWorkspace([]string{files[1]})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ws.Root != project || !slices.Equal(ws.Files, files[1:2]) {
+			t.Fatalf("got %+v", ws)
+		}
+	})
+
+	t.Run("several files keep their order", func(t *testing.T) {
+		args := []string{files[2], files[0], files[1]}
+		ws, err := resolveWorkspace(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ws.Root != project || !slices.Equal(ws.Files, args) {
+			t.Fatalf("got %+v", ws)
+		}
+	})
+
+	t.Run("git file in a worktree counts", func(t *testing.T) {
+		wt := filepath.Join(root, "worktree")
+		f := touch(t, wt, ".git", "src/x.go")[1]
+		ws, err := resolveWorkspace([]string{f})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ws.Root != wt {
+			t.Fatalf("root = %q, want %q", ws.Root, wt)
+		}
+	})
+
+	t.Run("no project falls back to the file's dir", func(t *testing.T) {
+		ws, err := resolveWorkspace([]string{looseFile})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// t.TempDir is never inside a repo, so the walk reaches / and gives up
+		if ws.Root != loose {
+			t.Fatalf("root = %q, want %q", ws.Root, loose)
 		}
 	})
 
 	t.Run("relative", func(t *testing.T) {
-		t.Chdir(dir)
-		ws, err := resolveWorkspace("main.go")
+		t.Chdir(project)
+		ws, err := resolveWorkspace([]string{"main.go"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if filepath.Base(ws.File) != "main.go" || !filepath.IsAbs(ws.Root) {
+		if len(ws.Files) != 1 || !filepath.IsAbs(ws.Files[0]) || filepath.Base(ws.Files[0]) != "main.go" {
 			t.Fatalf("got %+v", ws)
 		}
 	})
 
+	t.Run("dir and files together", func(t *testing.T) {
+		var usage *UsageError
+		if _, err := resolveWorkspace([]string{project, files[0]}); !errors.As(err, &usage) {
+			t.Fatalf("err = %v, want UsageError", err)
+		}
+		if _, err := resolveWorkspace([]string{project, loose}); !errors.As(err, &usage) {
+			t.Fatalf("two dirs: err = %v, want UsageError", err)
+		}
+	})
+
 	t.Run("missing", func(t *testing.T) {
-		_, err := resolveWorkspace(filepath.Join(dir, "nope"))
+		_, err := resolveWorkspace([]string{filepath.Join(root, "nope")})
 		if err == nil || !strings.Contains(err.Error(), "not a command or an existing path") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("flag after the path", func(t *testing.T) {
+		t.Chdir(project)
+		_, err := resolveWorkspace([]string{".", "--layout", "focus"})
+		if err == nil || !strings.Contains(err.Error(), "flags go before the path: bud --layout focus .") {
 			t.Fatalf("err = %v", err)
 		}
 	})
 }
 
+func evalSymlinks(t *testing.T, path string) string {
+	t.Helper()
+	// macOS temp dirs live behind the /var -> /private/var symlink, and Getwd reports the real path
+	out, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return out
+}
+
+func TestAppRunGlobals(t *testing.T) {
+	var got *Globals
+	cmds := map[string]*Command{
+		"open":   {Name: "open", Run: func(g *Globals, _ []string) error { got = g; return nil }},
+		"update": {Name: "update", Run: func(g *Globals, _ []string) error { got = g; return nil }},
+	}
+
+	app := &App{Cmds: cmds, Args: []string{"--verbose", "--no-update", "--profile", "minimal", "--layout", "focus", "."}}
+	if err := app.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if !got.Verbose || !got.NoUpdate || got.Profile != "minimal" || got.Layout != "focus" {
+		t.Fatalf("globals = %+v", got)
+	}
+}
+
+func TestAppRunGlobalsErrors(t *testing.T) {
+	cmds := map[string]*Command{
+		"open":   (&recorder{}).cmd("open"),
+		"update": (&recorder{}).cmd("update"),
+	}
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"unknown profile", []string{"--profile", "huge", "update"}},
+		{"layout on another command", []string{"--layout", "focus", "update"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := (&App{Cmds: cmds, Args: tt.args, Stderr: io.Discard}).Run()
+			var usage *UsageError
+			if !errors.As(err, &usage) {
+				t.Fatalf("err = %v, want UsageError", err)
+			}
+		})
+	}
+}
+
+func TestFlagOrderHint(t *testing.T) {
+	var stderr bytes.Buffer
+	cmds := map[string]*Command{
+		"open":   (&recorder{}).cmd("open"),
+		"update": (&recorder{}).cmd("update"),
+	}
+	err := (&App{Cmds: cmds, Args: []string{"update", "--verbose"}, Stderr: &stderr}).Run()
+	if err == nil {
+		t.Fatal("expected a usage error")
+	}
+	if want := "--verbose is a global flag, so it goes before the command: bud --verbose update ...\n"; !strings.Contains(stderr.String(), want) {
+		t.Fatalf("stderr = %q, want it to contain %q", stderr.String(), want)
+	}
+}
+
+func TestGlobalsLogf(t *testing.T) {
+	var buf bytes.Buffer
+	(&Globals{stderr: &buf}).Logf("quiet %d", 1)
+	(&Globals{Verbose: true, stderr: &buf}).Logf("loud %d", 2)
+	if buf.String() != "bud: loud 2\n" {
+		t.Fatalf("got %q", buf.String())
+	}
+}

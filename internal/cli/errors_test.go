@@ -102,7 +102,7 @@ func TestOpenUsageErrors(t *testing.T) {
 	if err := open(&Globals{}, []string{"a", "b"}); !errors.As(err, &usage) {
 		t.Errorf("two paths: err = %v, want UsageError", err)
 	}
-	if _, err := resolveWorkspace(filepath.Join(t.TempDir(), "nope")); !errors.As(err, &usage) {
+	if _, err := resolveWorkspace([]string{filepath.Join(t.TempDir(), "nope")}); !errors.As(err, &usage) {
 		t.Errorf("missing path: err = %v, want UsageError", err)
 	}
 }

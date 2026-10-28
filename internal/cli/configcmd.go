@@ -148,6 +148,10 @@ func configUnset(args []string) error {
 	if err != nil {
 		return err
 	}
+	// a key set with --force can be unset, but not a typo that was never set
+	if _, set := f.Get(args[0]); !set && !config.Known(args[0]) {
+		return usageErrorf("no setting %q (bud config ls shows them all)", args[0])
+	}
 	f.Unset(args[0])
 	if err := f.Save(); err != nil {
 		return err

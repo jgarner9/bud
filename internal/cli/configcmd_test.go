@@ -46,6 +46,11 @@ func TestConfigCommands(t *testing.T) {
 	if after, _ := os.ReadFile(p.MachineConfig()); string(after) != string(before) {
 		t.Fatal("a refused set changed the file")
 	}
+	// a wrong type is said in a user's words, not Go's
+	if err := configSet([]string{"dashboard.git", "notabool"}, false); err == nil ||
+		!strings.Contains(err.Error(), "dashboard.git must be true or false, not a string") {
+		t.Errorf("wrong type: %v", err)
+	}
 
 	// unset goes back to the default; keys bud doesn't know stay put
 	captureStdout(t, func() { configUnset([]string{"update.channel"}) })
@@ -56,6 +61,15 @@ func TestConfigCommands(t *testing.T) {
 	if !strings.Contains(string(data), `"keep": 1`) || strings.Contains(string(data), "channel") {
 		t.Fatalf("file %s", data)
 	}
+	// a typo that was never set is refused; a key set with --force can go
+	if err := configUnset([]string{"update.chanel"}); err == nil {
+		t.Error("unset of an unknown key accepted")
+	}
+	captureStdout(t, func() {
+		if err := configUnset([]string{"mine.keep"}); err != nil {
+			t.Errorf("unset of a forced key: %v", err)
+		}
+	})
 
 	// edit checks the result
 	orig := editFile

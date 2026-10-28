@@ -112,6 +112,8 @@ function M.inside(root, path)
   end
   local real = vim.uv.fs_realpath(dir) or dir
   local full = #rest > 0 and (real .. "/" .. table.concat(rest, "/")) or real
+  -- the root resolved too, or a worktree under a symlinked dir never matches
+  root = vim.uv.fs_realpath(root) or root
   return full == root or full:sub(1, #root + 1) == root .. "/"
 end
 

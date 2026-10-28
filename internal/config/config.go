@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -188,10 +189,42 @@ func (f *File) Settings() (Settings, error) {
 		return s, err
 	}
 	if err := json.Unmarshal(data, &s); err != nil {
+		var te *json.UnmarshalTypeError
+		if errors.As(err, &te) && te.Field != "" {
+			return s, fmt.Errorf("%s: %s must be %s, not %s", f.Path, te.Field, kindName(te.Type), article(te.Value))
+		}
 		return s, fmt.Errorf("%s: %w", f.Path, err)
 	}
 
 	return s, s.Validate()
+}
+
+// kindName says what a setting's Go type is in a user's words
+func kindName(t reflect.Type) string {
+	switch t.Kind() {
+	case reflect.Bool:
+		return "true or false"
+	case reflect.Int, reflect.Int64, reflect.Float64:
+		return "a number"
+	case reflect.String:
+		return "a string"
+	case reflect.Slice:
+		return "a list"
+	case reflect.Map, reflect.Struct:
+		return "an object"
+	}
+	return "a " + t.String()
+}
+
+// article puts a or an before a JSON kind ("string", "array", ...)
+func article(kind string) string {
+	if kind == "array" {
+		return "a list"
+	}
+	if kind != "" && strings.ContainsAny(kind[:1], "aeiou") {
+		return "an " + kind
+	}
+	return "a " + kind
 }
 
 // Get returns the value at a dotted key like "update.channel", as written in the file

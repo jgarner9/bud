@@ -47,7 +47,8 @@ M.bin = function()
 end
 
 M.check_login = function(bin, cb)
-  vim.system({ bin, "auth", "status", "--json" }, { text = true }, function(res)
+  -- a timeout, like bud claude status, so a hung check never stalls the session
+  vim.system({ bin, "auth", "status", "--json" }, { text = true, timeout = 10000 }, function(res)
     local ok, st = pcall(vim.json.decode, res.stdout or "")
     vim.schedule(function()
       if ok and type(st) == "table" and st.loggedIn then

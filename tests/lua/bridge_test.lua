@@ -255,11 +255,13 @@ eq(vim.json.decode(answer.result.content[1].text).folders[1].path, vim.uv.fs_rea
 
 local args = bridge.headless_args()
 eq(args[1], "--mcp-config", "headless sessions get the bridge as an MCP server")
+local cfg_file = args[2]
+eq(args[2]:find("authorization", 1, true), nil, "no token on the command line")
+eq(vim.uv.fs_stat(cfg_file).mode % 512, tonumber("600", 8), "config readable only by you")
+local cfg = vim.json.decode(table.concat(vim.fn.readfile(cfg_file), "\n"))
+eq(cfg.mcpServers["bud-ide"].headers["x-claude-code-ide-authorization"], bridge.token(), "token in the file")
 eq(
-  vim.startswith(
-    vim.json.decode(args[2]).mcpServers["bud-ide"].url,
-    "http://127.0.0.1:" .. bridge.port() .. "/mcp?root="
-  ),
+  vim.startswith(cfg.mcpServers["bud-ide"].url, "http://127.0.0.1:" .. bridge.port() .. "/mcp?root="),
   true,
   "its URL names the session's root"
 )
@@ -269,5 +271,6 @@ eq(args[4]:match("mcp__bud%-ide__getOpenEditors") ~= nil, true, "looking is")
 local lock_file = bridge.lock_file()
 bridge.stop()
 eq(vim.uv.fs_stat(lock_file), nil, "lock file removed")
+eq(vim.uv.fs_stat(cfg_file), nil, "config file removed")
 vim.fn.delete(tmp, "rf")
 print("bridge_test: ok")

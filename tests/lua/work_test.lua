@@ -102,6 +102,12 @@ eq(work.inside(wt.path, wt.path .. "-other/x"), false, "a prefix isn't inside")
 vim.uv.fs_symlink(repo, wt.path .. "/escape")
 eq(work.inside(wt.path, wt.path .. "/escape/README"), false, "a symlink out")
 eq(work.inside(wt.path, nil), false, "no path")
+-- a root reached through a symlink still holds its files
+local via = tmp .. "/via-link"
+vim.uv.fs_symlink(vim.fs.dirname(wt.path), via)
+local linked = via .. "/" .. vim.fs.basename(wt.path)
+eq(work.inside(linked, wt.path .. "/README"), true, "a symlinked root")
+eq(work.inside(linked, linked .. "/README"), true, "a path through the link")
 
 -- the whole run: a question, an answer, then done
 local run = assert(work.start("jga-7", "Esc drops the proposal", repo))

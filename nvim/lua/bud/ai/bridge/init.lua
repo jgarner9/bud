@@ -15,6 +15,7 @@ local tools = require("bud.ai.bridge.tools")
 local M = {}
 
 local server, token, lock
+local configs = {} -- headless sessions' --mcp-config files, removed on stop
 local folders = {}
 local clients = {}
 
@@ -304,7 +305,8 @@ M.server_name = "bud-ide"
 
 -- headless_args are the flags that give a headless (-p) Claude Code in root
 -- the bridge's tools: it ignores the IDE lock file, so it gets them as an MCP
--- server over HTTP on the same port, with the same token
+-- server over HTTP on the same port, with the same token. The config goes in a
+-- file only you can read, since a command line shows in ps to every user
 function M.headless_args(root)
   if not server then
     return {}
@@ -321,12 +323,20 @@ function M.headless_args(root)
       },
     },
   }
+  local path = vim.fn.tempname() .. ".json"
+  local fd = vim.uv.fs_open(path, "w", tonumber("600", 8))
+  if not fd then
+    return {}
+  end
+  vim.uv.fs_write(fd, vim.json.encode(cfg))
+  vim.uv.fs_close(fd)
+  table.insert(configs, path)
   local allowed = vim.tbl_map(function(t)
     return ("mcp__%s__%s"):format(M.server_name, t)
   end, M.read_only)
   return {
     "--mcp-config",
-    vim.json.encode(cfg),
+    path,
     "--allowedTools",
     table.concat(allowed, ","),
     -- permission questions come to Neovim (bud.ai.permissions); this asks,
@@ -364,6 +374,10 @@ function M.stop()
     os.remove(lock)
     lock = nil
   end
+  for _, path in ipairs(configs) do
+    os.remove(path)
+  end
+  configs = {}
   if server then
     server.close()
     server = nil

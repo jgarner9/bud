@@ -114,4 +114,16 @@ assert(vim.wait(2000, function()
 end))
 eq(ran[1], "tools enable off-tool", "a tool turned on")
 
+-- unset keys come back as JSON null, and the screen still redraws
+config.tools.disabled = vim.NIL
+config.ai.claude.command = vim.NIL
+settings.refresh()
+assert(
+  vim.wait(2000, function()
+    local shown = table.concat(vim.api.nvim_buf_get_lines(settings.buf(), 0, -1, false), "\n")
+    return shown:find("%[x%] off%-tool") ~= nil
+  end),
+  "redraws with nulls"
+)
+
 print("settings_test: ok")

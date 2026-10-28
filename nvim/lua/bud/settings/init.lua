@@ -185,7 +185,8 @@ end
 function M.refresh(cb)
   M.run({ "config", "ls" }, function(ok, out)
     if ok then
-      local decoded, settings = pcall(vim.json.decode, out)
+      -- unset keys come back as null: nil, not vim.NIL, so `or {}` defaults work
+      local decoded, settings = pcall(vim.json.decode, out, { luanil = { object = true, array = true } })
       if decoded then
         state.settings = settings
       end

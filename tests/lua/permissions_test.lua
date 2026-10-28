@@ -2,6 +2,7 @@
 -- Claude Code's permission questions: edits as diffs, the rest as a prompt
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
+dofile("tests/lua/lib/nui.lua")
 
 local function eq(got, want, what)
   if not vim.deep_equal(got, want) then
@@ -66,7 +67,7 @@ local function ask(tool, input, root)
   })
 end
 ask("Bash", { command = "make test" })
-eq(vim.api.nvim_win_get_config(0).relative, "editor", "a float")
+eq(vim.api.nvim_win_get_config(0).relative ~= "", true, "a float")
 local shown = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
 eq(shown:find("make test", 1, true) ~= nil, true, "the command is shown")
 vim.api.nvim_feedkeys("y", "x", false)
@@ -104,7 +105,7 @@ end
 eq(perms.pending(), 2, "both waiting")
 vim.api.nvim_feedkeys("y", "x", false)
 wait(function()
-  return #answers == 1 and vim.api.nvim_win_get_config(0).relative == "editor"
+  return #answers == 1 and vim.api.nvim_win_get_config(0).relative ~= ""
 end, "the second prompt")
 vim.api.nvim_feedkeys("n", "x", false)
 wait(function()

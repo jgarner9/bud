@@ -11,7 +11,6 @@
 -- said y; reads are allowed throughout (bud.ai.permissions.policies).
 
 local claude = require("bud.ai.claude")
-local icons = require("bud.icons")
 
 local M = {}
 
@@ -216,34 +215,19 @@ function M.review_lines(p, expanded)
   return lines, rows
 end
 
+-- float is a bud.ui float the caller fills in with its own keys
 local function float(lines, opts)
-  local width = opts.width
-  if not width then
-    width = 40
-    for _, l in ipairs(lines) do
-      width = math.max(width, vim.fn.strdisplaywidth(l) + 2)
-    end
-  end
-  width = math.min(width, vim.o.columns - 4)
-  local height = math.min(math.max(#lines, opts.height or 1), vim.o.lines - 6)
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].bufhidden = "wipe"
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor",
-    width = width,
-    height = height,
-    row = math.floor((vim.o.lines - height) / 2) - 1,
-    col = math.floor((vim.o.columns - width) / 2),
-    style = "minimal",
-    border = "rounded",
-    title = " " .. icons.claude .. " " .. opts.title .. " ",
-    title_pos = "center",
-    footer = opts.footer and (" " .. opts.footer .. " ") or nil,
-    footer_pos = opts.footer and "center" or nil,
+  local h = require("bud.ui").float({
+    title = opts.title,
+    footer = opts.footer,
+    lines = lines,
+    width = opts.width,
+    min_width = 40,
+    height = opts.height,
+    modifiable = true,
+    close_keys = false,
   })
-  vim.wo[win].wrap = true
-  return buf, win
+  return h.buf, h.win
 end
 
 local function close(win)

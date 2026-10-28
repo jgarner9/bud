@@ -117,84 +117,58 @@ end
 
 local show_next
 
--- prompt shows one non-edit question in a float and answers through done
+-- prompt shows one non-edit question in a dialog (bud.ui) and answers
+-- through done; closing it any other way is a no, so Claude Code never waits
 local function prompt(req, done)
-  local icons = require("bud.icons")
   local lines = {
     "",
     "  [o.o]  Claude Code wants to use " .. req.tool,
     "",
     "    " .. M.summary(req.tool, req.input),
     "",
-    "  y allow   a allow for this session   n deny   r deny and say why",
-    "",
   }
   if req.root then
     table.insert(lines, 3, "         in " .. vim.fn.fnamemodify(req.root, ":~"))
   end
-  local width = 0
-  for _, l in ipairs(lines) do
-    width = math.max(width, vim.fn.strdisplaywidth(l) + 2)
-  end
-  width = math.min(width, vim.o.columns - 4)
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modifiable = false
-  vim.bo[buf].bufhidden = "wipe"
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor",
-    width = width,
-    height = #lines,
-    row = math.floor((vim.o.lines - #lines) / 2) - 1,
-    col = math.floor((vim.o.columns - width) / 2),
-    style = "minimal",
-    border = "rounded",
-    title = " " .. icons.claude .. " permission ",
-    title_pos = "center",
-  })
-  vim.wo[win].wrap = true
-
-  local answered = false
-  local function answer(result)
-    if answered then
-      return
-    end
-    answered = true
-    if vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_close(win, true)
-    end
-    done(result)
-  end
-  local function map(lhs, fn)
-    vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true })
-  end
-  map("y", function()
-    answer(allow(req.input))
-  end)
-  map("a", function()
-    remembered[req.root or ""] = remembered[req.root or ""] or {}
-    remembered[req.root or ""][M.key(req.tool, req.input)] = true
-    answer(allow(req.input))
-  end)
-  for _, lhs in ipairs({ "n", "q", "<Esc>" }) do
-    map(lhs, function()
-      answer(deny())
-    end)
-  end
-  map("r", function()
-    answered = true
-    vim.api.nvim_win_close(win, true)
-    vim.ui.input({ prompt = "Tell Claude why not: " }, function(why)
-      done(deny(why and why ~= "" and ("The user said no: " .. why) or nil))
-    end)
-  end)
-  -- leaving it some other way is a no, so Claude Code never waits forever
-  vim.api.nvim_create_autocmd("BufWipeout", {
-    buffer = buf,
-    callback = function()
-      vim.schedule(function()
-        answer(deny())
-      end)
+  require("bud.ui").dialog({
+    title = "permission",
+    lines = lines,
+    actions = {
+      {
+        key = "y",
+        label = "allow",
+        fn = function()
+          done(allow(req.input))
+        end,
+      },
+      {
+        key = "a",
+        label = "allow for this session",
+        fn = function()
+          remembered[req.root or ""] = remembered[req.root or ""] or {}
+          remembered[req.root or ""][M.key(req.tool, req.input)] = true
+          done(allow(req.input))
+        end,
+      },
+      {
+        key = { "n", "q", "<Esc>" },
+        label = "deny",
+        fn = function()
+          done(deny())
+        end,
+      },
+      {
+        key = "r",
+        label = "deny and say why",
+        fn = function()
+          vim.ui.input({ prompt = "Tell Claude why not: " }, function(why)
+            done(deny(why and why ~= "" and ("The user said no: " .. why) or nil))
+          end)
+        end,
+      },
+    },
+    cancel = function()
+      done(deny())
     end,
   })
 end

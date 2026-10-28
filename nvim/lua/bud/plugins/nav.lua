@@ -43,7 +43,14 @@ return {
 
   -- neo-tree is the side pane only; oil owns directory buffers (`nvim somedir`, `:e .`)
   { src = "nvim-lua/plenary.nvim" },
-  { src = "MunifTanjim/nui.nvim" },
+  {
+    -- neo-tree's, and bud's own dialogs, menus and panels (bud.ui, JGA-136):
+    -- vim.ui.select and vim.ui.input go through them from the start
+    src = "MunifTanjim/nui.nvim",
+    config = function()
+      require("bud.ui.hook")
+    end,
+  },
   { src = "nvim-tree/nvim-web-devicons" },
   {
     src = "nvim-neo-tree/neo-tree.nvim",

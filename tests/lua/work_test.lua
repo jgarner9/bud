@@ -2,6 +2,7 @@
 -- Claude working a filed issue in a worktree (JGA-126), on a fake claude
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
+dofile("tests/lua/lib/nui.lua")
 
 local function eq(got, want, what)
   if not vim.deep_equal(got, want) then

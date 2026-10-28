@@ -26,6 +26,38 @@ Each event carries plain fields and, as `raw`, Claude Code's own stream-json eve
 - **Edits are reviewed.** When Claude wants to change a file, it opens as a diff to accept (`ga`, `:w`) or reject (`q`), and other tools ask in a small prompt. You don't handle permissions.
 - **A view to start from.** `require("bud.chat.view").new({ key = ..., root = ... })` is the transcript-plus-input that the chat and the side pane use; `:show(win)` puts it in a window.
 
+## Dialogs, menus and panels
+
+`bud.ui` (on nui.nvim) is what bud's own screens use, so yours look the same: rounded borders, a title with bud's accent, the keys in the footer, `q` or `<Esc>` to close.
+
+```lua
+local ui = require("bud.ui")
+
+ui.dialog({
+  title = "deploy",
+  lines = { "", "  Push main to production?", "" },
+  actions = {
+    { key = "y", label = "push", fn = function() ... end },
+    { key = { "n", "q", "<Esc>" }, label = "cancel" },
+  },
+  cancel = function() end,                -- closed any other way
+})
+
+ui.menu({ "explain", "refactor", "tests" }, { title = "ask Claude" }, function(choice, i) end)
+ui.input({ prompt = "Message" }, function(text) end)   -- nil when cancelled
+
+local p = ui.panel({                      -- several boxes in one float
+  dir = "col",
+  boxes = {
+    { name = "transcript", size = "75%", title = "chat", modifiable = false },
+    { name = "prompt", size = "25%", title = "you", enter = true },
+  },
+})
+p.boxes.prompt.map("<CR>", function() ... end)        -- <Tab> moves between boxes
+```
+
+`ui.float` is the plain version a dialog is built on. `vim.ui.select` and `vim.ui.input` go through `ui.menu` and `ui.input` too, so any picker you open with them matches.
+
 ## Your own session
 
 A TUI that shouldn't share the project's conversation can have its own: `claude.session(dir, { key = "my-tui", resume = "new" })`, then `claude.send(text, { key = "my-tui" })`. Chat (`key = "chat"`) and `:BudGen` (`key = "gen"`) work this way.

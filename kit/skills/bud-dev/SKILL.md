@@ -29,3 +29,5 @@ Read `CLAUDE.md` at the repo root first: it maps the architecture. `BASE.md` is 
 ## Checking
 
 `just check` is what CI runs: gofmt, stylua + selene, go vet, shellcheck, `go test ./...`, the headless Lua tests in `tests/lua/` and the smoke test. Tests swap package-level vars and restore them with `t.Cleanup`. Commits are lowercase conventional (`feat:`, `fix:`, `chore:`, `docs:`) with the Linear issue id.
+
+Report finished work as a task log (the `bud` output style's format): one line per file changed, check run and issue moved.

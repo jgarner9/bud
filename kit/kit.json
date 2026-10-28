@@ -13,7 +13,8 @@
   "skills": [
     "bud-dev",
     "plan-to-linear",
-    "file-issue"
+    "file-issue",
+    "lookup"
   ],
   "agents": [
     "code-reviewer"

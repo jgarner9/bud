@@ -39,7 +39,17 @@ return {
       local lang = require("bud.lang")
       -- the debug adapters too (JGA-108)
       local names = vim.list_extend(lang.collect("mason"), lang.collect("dap"))
-      if #names == 0 then
+      local trim = require("bud.lang.trim")
+      -- every package some spec names, so a disabled language's can be removed
+      local known = {}
+      for _, spec in pairs(lang.specs()) do
+        vim.list_extend(known, spec.mason or {})
+        table.insert(known, spec.dap)
+      end
+      local root = vim.env.MASON .. "/packages"
+      local installed = vim.fn.isdirectory(root) == 1 and vim.fn.readdir(root) or {}
+      local orphans = trim.orphans(installed, names, known)
+      if #names == 0 and #orphans == 0 then
         return
       end
       require("mason").setup({ PATH = "skip" })
@@ -65,11 +75,30 @@ return {
           end)
         end
       end
+      for _, name in ipairs(orphans) do
+        local found, pkg = pcall(registry.get_package, name)
+        if found and pkg:is_installed() then
+          pending = pending + 1
+          vim.api.nvim_echo({ { "bud: removing " .. name .. " (no enabled language uses it)\n" } }, true, {})
+          pkg:uninstall({}, function(success, result)
+            if not success then
+              table.insert(failed, ("removing %s (%s)"):format(name, tostring(result)))
+            end
+            pending = pending - 1
+          end)
+        end
+      end
       if not vim.wait(restore_timeout, function()
         return pending == 0
       end, 200) then
         error("timed out installing Mason packages", 0)
       end
+
+      -- after a failed install too, so what did install is trimmed
+      for _, name in ipairs(vim.fn.isdirectory(root) == 1 and vim.fn.readdir(root) or {}) do
+        trim.prune_package(name, root .. "/" .. name)
+      end
+      trim.dedupe(root)
       if #failed > 0 then
         error("installing Mason packages failed: " .. table.concat(failed, ", "), 0)
       end

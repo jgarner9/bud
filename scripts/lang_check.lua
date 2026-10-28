@@ -61,13 +61,15 @@ local cases = {
     name = "c with .clang-format",
     files = {
       [".clang-format"] = "BasedOnStyle: LLVM\n",
-      ["main.c"] = "int main(void){return y;}\n",
+      -- stddef.h is one of clangd's builtin headers, which trimming keeps (JGA-121)
+      ["main.c"] = "#include <stddef.h>\nint main(void){size_t n = 0;return y;}\n",
     },
     open = "main.c",
     servers = { "clangd" },
     -- y is undeclared
     lint = "clang",
-    formatted = { 1, "int main(void) { return y; }" },
+    unwanted = "not found",
+    formatted = { 2, "int main(void) {" },
   },
   {
     lang = "c",
@@ -200,6 +202,14 @@ local function check(i, case)
     end
     if not vim.wait(60000, found, 200) then
       problem(case, ("no diagnostic from %q; got %s"):format(case.lint, vim.inspect(vim.diagnostic.get(buf))))
+    end
+  end
+  -- a diagnostic whose message has this text means the tooling is broken
+  if case.unwanted then
+    for _, d in ipairs(vim.diagnostic.get(buf)) do
+      if d.message:find(case.unwanted, 1, true) then
+        problem(case, "unwanted diagnostic: " .. d.message)
+      end
     end
   end
 

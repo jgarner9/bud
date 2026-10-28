@@ -26,6 +26,13 @@ bud config edit                           # open it in bud's editor, then check 
 | `languages` | unset | The enabled language specs, by name. Unset means the profile's preset: all of bud's for `full`, the `minimal = true` ones for `minimal`. `[]` enables none. `bud lang enable/disable` edits it. |
 | `format_on_save` | `true` | Format a buffer of an enabled language when it's written. `<leader>cf` formats either way. |
 
+## Editor
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `ui.messages` | `true` | The command line and messages in floats instead of the bottom line (Neovim's built-in `ui2`, still experimental in 0.12). `g<` shows messages that were cut short. Turn it off if it misbehaves; takes effect on the next start. |
+| `ui.breadcrumbs` | `true` | Path and symbol breadcrumbs at the top of file windows (dropbar.nvim); `<leader>;` picks one and opens its menu. |
+
 ## Updates
 
 | Key | Default | What it does |

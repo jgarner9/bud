@@ -30,6 +30,7 @@ type Settings struct {
 	// bud.lang formats a buffer of an enabled language when it's written (D30)
 	FormatOnSave bool      `json:"format_on_save"`
 	Dashboard    Dashboard `json:"dashboard"`
+	UI           UI        `json:"ui"`
 	AI           AI        `json:"ai"`
 	Tools        Disabled  `json:"tools"` // bud tools enable/disable (D54)
 	Kit          Kit       `json:"kit"`
@@ -67,6 +68,15 @@ type Dashboard struct {
 	Todos      bool `json:"todos"`      // TODO/FIXME count per project, via rg
 	Chats      bool `json:"chats"`      // the last few chats, a b e to resume
 	Clock      bool `json:"clock"`      // the date and time under the robot
+}
+
+// UI is how the editor looks beyond the colorscheme
+type UI struct {
+	// the command line and messages in floats: Neovim's own ui2 (JGA-137),
+	// experimental, so it can be turned off
+	Messages bool `json:"messages"`
+	// path and symbol breadcrumbs at the top of file windows (dropbar, JGA-139)
+	Breadcrumbs bool `json:"breadcrumbs"`
 }
 
 type AI struct {
@@ -123,6 +133,7 @@ func Defaults() Settings {
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true},
+		UI:           UI{Messages: true, Breadcrumbs: true},
 		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "bud"}, Chat: Chat{Pane: "native"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
 		Kit: Kit{LargeFiles: 10000, LargeLOC: 1000000},

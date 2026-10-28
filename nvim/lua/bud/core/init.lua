@@ -1,5 +1,6 @@
 require("bud.core.options")
 require("bud.core.keymaps")
 require("bud.core.autocmds")
+require("bud.messages").setup()
 require("bud.marks").setup()
 require("bud.terminal").setup()

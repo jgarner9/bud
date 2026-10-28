@@ -22,6 +22,13 @@ M.sections = {
     },
   },
   {
+    title = "Editor",
+    rows = {
+      { key = "ui.messages", label = "Messages in floats (restart)", kind = "bool" },
+      { key = "ui.breadcrumbs", label = "Breadcrumbs", kind = "bool" },
+    },
+  },
+  {
     title = "Updates",
     rows = {
       { key = "update.channel", label = "Channel", kind = "choice", choices = { "stable", "nightly" } },

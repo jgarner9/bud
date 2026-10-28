@@ -51,7 +51,7 @@ var LanguageDeps = []Dep{
 		"apt": {"golang-go"},
 		"dnf": {"golang"},
 	}},
-	// venv too, which Mason installs PyPI packages (basedpyright) into; apt splits it out
+	// venv too, which Mason installs PyPI packages (ty, ruff) into; apt splits it out
 	{Name: "python3", Bins: []string{"python3"}, Pkgs: map[string][]string{
 		"brew":   {"python"},
 		"pacman": {"python"},

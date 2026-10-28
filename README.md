@@ -43,7 +43,7 @@ It lives in its own namespace (`NVIM_APPNAME=bud`), so your existing `~/.config/
 | Language | Server | Lint | Format on save |
 | --- | --- | --- | --- |
 | **Go** | gopls | golangci-lint | goimports |
-| **Python** | basedpyright + ruff | ruff | ruff (imports, then format) |
+| **Python** | ty + ruff | ruff | ruff (imports, then format) |
 | **TypeScript / JavaScript** | tsc (TS 7 native) + ESLint | via the servers | prettier with a Prettier config, otherwise tsc |
 | **C** | clangd | clangd (+ clang-tidy) | clangd, in projects with a `.clang-format` |
 | **Bash / sh** | | shellcheck | shfmt |

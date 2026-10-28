@@ -20,14 +20,14 @@ local cases = {
     lang = "python",
     files = {
       ["pyproject.toml"] = '[project]\nname = "sample"\nversion = "0"\n',
-      ["main.py"] = "import os\nx=1\n",
+      ["main.py"] = 'import os\nx: int="a"\n',
     },
     open = "main.py",
-    servers = { "basedpyright", "ruff" },
-    -- F401: os is never used
-    lint = "Ruff",
+    servers = { "ty", "ruff" },
+    -- F401: os is never used; ty: a str assigned to an int
+    lint = { "Ruff", "ty" },
     -- ruff puts a blank line after the imports
-    formatted = { 3, "x = 1" },
+    formatted = { 3, 'x: int = "a"' },
   },
   {
     lang = "typescript",
@@ -193,15 +193,16 @@ local function check(i, case)
     end
   end
 
-  if case.lint then
+  -- one source or a list of them, each of which must report something
+  for _, source in ipairs(type(case.lint) == "table" and case.lint or { case.lint }) do
     -- an empty pattern takes any diagnostic, for a server whose source varies
     local function found()
       return vim.iter(vim.diagnostic.get(buf)):any(function(d)
-        return (d.source or ""):find(case.lint, 1, true) ~= nil
+        return (d.source or ""):find(source, 1, true) ~= nil
       end)
     end
     if not vim.wait(60000, found, 200) then
-      problem(case, ("no diagnostic from %q; got %s"):format(case.lint, vim.inspect(vim.diagnostic.get(buf))))
+      problem(case, ("no diagnostic from %q; got %s"):format(source, vim.inspect(vim.diagnostic.get(buf))))
     end
   end
   -- a diagnostic whose message has this text means the tooling is broken

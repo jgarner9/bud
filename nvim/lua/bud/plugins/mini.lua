@@ -1,11 +1,11 @@
--- mini.nvim is one plugin holding many small modules; bud sets up the ones it
--- uses here (D29), so other plugin files never add mini.nvim a second time.
+-- The two mini.nvim modules bud uses (D29), each from its own standalone repo:
+-- the whole of mini.nvim is ~26 MB, most of it tests, for two modules (D68).
 
 local map = vim.keymap.set
 
 return {
   {
-    src = "echasnovski/mini.nvim",
+    src = "nvim-mini/mini.jump2d",
     version = vim.version.range("0"),
     config = function()
       local jump2d = require("mini.jump2d")
@@ -23,7 +23,12 @@ return {
       map(modes, "s", function()
         jump2d.start(jump2d.builtin_opts.single_character)
       end, { desc = "Jump to character" })
-
+    end,
+  },
+  {
+    src = "nvim-mini/mini.statusline",
+    version = vim.version.range("0"),
+    config = function()
       require("mini.statusline").setup({
         content = { active = require("bud.statusline").active },
       })

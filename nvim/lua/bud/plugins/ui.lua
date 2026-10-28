@@ -1,4 +1,4 @@
--- Looks (D29). The statusline is mini.statusline, set up with mini.nvim in mini.lua.
+-- Looks (D29). The statusline is mini.statusline, set up in mini.lua.
 
 return {
   {

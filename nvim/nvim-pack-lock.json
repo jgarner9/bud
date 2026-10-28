@@ -38,9 +38,14 @@
       "src": "https://github.com/mason-org/mason.nvim",
       "version": "2.0.0 - 3.0.0"
     },
-    "mini.nvim": {
-      "rev": "1345d191bb3da9c7b0e977f4387c5761f9bff68d",
-      "src": "https://github.com/echasnovski/mini.nvim",
+    "mini.jump2d": {
+      "rev": "ef08ddb40e04657b9439427f276b0546a8837c04",
+      "src": "https://github.com/nvim-mini/mini.jump2d",
+      "version": "0.0.0 - 1.0.0"
+    },
+    "mini.statusline": {
+      "rev": "b5547f44560dae3ccd81f914256fa6f705837022",
+      "src": "https://github.com/nvim-mini/mini.statusline",
       "version": "0.0.0 - 1.0.0"
     },
     "neo-tree.nvim": {

@@ -1,27 +1,18 @@
--- Python (D10). basedpyright checks types; ruff's server lints (with fixes as
--- code actions), and ruff formats and sorts imports on write
+-- Python (D10). ty checks types (D68: a Rust binary of ~30 MB, where basedpyright
+-- brought its own Node and took ~290 MB); ruff's server lints (with fixes as code
+-- actions), and ruff formats and sorts imports on write
 return {
   filetypes = { "python" },
   treesitter = { "python" },
   lsp = {
-    basedpyright = {
-      settings = {
-        basedpyright = {
-          -- ruff sorts imports
-          disableOrganizeImports = true,
-          -- basedpyright's own default, "recommended", flags too much in code
-          -- that wasn't written for it; a project's pyproject.toml still wins
-          analysis = { typeCheckingMode = "standard" },
-        },
-      },
-    },
+    ty = {},
     ruff = {},
   },
   format = { "ruff_organize_imports", "ruff_format" },
-  mason = { "basedpyright", "ruff" },
-  -- Mason installs basedpyright from PyPI, into a venv
+  mason = { "ty", "ruff" },
+  -- Mason installs ty and ruff from PyPI, into a venv
   system = { "python3" },
-  root = { "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", ".git" },
+  root = { "pyproject.toml", "ty.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", ".git" },
   minimal = true,
   dap = "debugpy",
 }

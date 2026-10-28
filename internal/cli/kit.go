@@ -34,7 +34,7 @@ func Kit() *Command {
 	var url, cmd, repo, profiles string
 	return &Command{
 		Name:  "kit",
-		Usage: "Syncs bud's Claude Code setup (MCP servers, skills, agents, commands) into Claude Code",
+		Usage: "Syncs bud's Claude Code setup (MCP servers, skills, agents, commands, output styles) into Claude Code",
 		Subs: []*Command{
 			{
 				Name:  "sync",
@@ -154,11 +154,11 @@ func kitRepo(repo string) (kit.Repo, error) {
 
 func kitAdd(args []string, url, cmd, repo string) error {
 	if len(args) != 2 {
-		return usageErrorf("kit add takes a kind and a name: add mcp|skill|agent|command|plugin <name>")
+		return usageErrorf("kit add takes a kind and a name: add mcp|skill|agent|command|output-style|plugin <name>")
 	}
 	kind, name := args[0], args[1]
 	if _, ok := kit.Kinds[kind]; !ok {
-		return usageErrorf("kit add: %q isn't mcp, skill, agent, command or plugin", kind)
+		return usageErrorf("kit add: %q isn't mcp, skill, agent, command, output-style or plugin", kind)
 	}
 	r, err := kitRepo(repo)
 	if err != nil {

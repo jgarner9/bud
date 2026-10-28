@@ -23,7 +23,7 @@ Read `CLAUDE.md` at the repo root first: it maps the architecture. `BASE.md` is 
 - **A language:** copy `languages/_template.lua` (unknown fields are errors), then add a case to `scripts/lang_check.lua` and run `just lang-check <name>`.
 - **A tool:** `tools/<name>/manifest.json` + `init.lua` returning `{ setup = function(manifest) end }` (D54). Personal ones go in `~/.local/share/bud/user-tools/<name>/`; `:BudGen` drafts one.
 - **A layout:** `layouts/<name>.lua` listing panes by kind (`tree`, `git`, `chat`), side and size (D45).
-- **A kit entry:** `bud kit add mcp|skill|agent|command <name>` in a checkout (D58); secrets are `$secret:NAME`, never values.
+- **A kit entry:** `bud kit add mcp|skill|agent|command|output-style <name>` in a checkout (D58); secrets are `$secret:NAME`, never values.
 - **A command:** one file in `internal/cli/` calling `RegisterCommand` from `init()`.
 
 ## Checking

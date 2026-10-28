@@ -125,3 +125,22 @@ func TestSyncSkipsDisabled(t *testing.T) {
 		t.Fatalf("synced a disabled entry: %q %v", ran, err)
 	}
 }
+
+func TestScaffoldOutputStyle(t *testing.T) {
+	r := repoKit(t)
+	p, err := r.Scaffold("output-style", "terse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p != filepath.Join(r.Dir, "output-styles", "terse.md") {
+		t.Errorf("path %s", p)
+	}
+	data, _ := os.ReadFile(p)
+	if !strings.Contains(string(data), "name: terse") || !strings.Contains(string(data), "keep-coding-instructions: true") {
+		t.Errorf("scaffold:\n%s", data)
+	}
+	idx, _ := r.index()
+	if got := list(idx, "output-styles"); !slices.Equal(got, []string{"terse"}) {
+		t.Errorf("kit.json output-styles %v", got)
+	}
+}

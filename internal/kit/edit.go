@@ -13,7 +13,7 @@ import (
 )
 
 // Kinds are the kinds of kit entry, as kit.json names their lists
-var Kinds = map[string]string{"mcp": "mcp", "skill": "skills", "agent": "agents", "command": "commands", "plugin": "plugins"}
+var Kinds = map[string]string{"mcp": "mcp", "skill": "skills", "agent": "agents", "command": "commands", "plugin": "plugins", "output-style": "output-styles"}
 
 var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*(@[a-z0-9][a-z0-9._-]*)?$`)
 
@@ -91,6 +91,8 @@ func entryPath(kind, name string) string {
 		return "skills/" + name
 	case "agent":
 		return "agents/" + name + ".md"
+	case "output-style":
+		return "output-styles/" + name + ".md"
 	}
 
 	return "commands/" + name + ".md"
@@ -172,6 +174,9 @@ func (r Repo) Scaffold(kind, name string) (string, error) {
 	case "command":
 		rel = entryPath(kind, name)
 		body = "---\ndescription: TODO: what /" + name + " does\n---\n\nTODO: the prompt. $ARGUMENTS is what follows the command.\n"
+	case "output-style":
+		rel = entryPath(kind, name)
+		body = "---\nname: " + name + "\ndescription: TODO: what this style does\nkeep-coding-instructions: true\n---\n\nTODO: how replies should look.\n"
 	default:
 		return "", fmt.Errorf("can't scaffold a %s", kind)
 	}

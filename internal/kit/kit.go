@@ -38,6 +38,8 @@ type Kit struct {
 	Plugins      []string // Claude Code plugins, name@marketplace
 	Agents       []string
 	Commands     []string
+	OutputStyles []string
+	OutputStyle  string // the one sync turns on in settings.json
 	Instructions string
 
 	fsys fs.FS
@@ -191,16 +193,18 @@ func Load(fsys fs.FS) (*Kit, error) {
 		return nil, err
 	}
 	var index struct {
-		MCP      []string `json:"mcp"`
-		Skills   []string `json:"skills"`
-		Plugins  []string `json:"plugins"`
-		Agents   []string `json:"agents"`
-		Commands []string `json:"commands"`
+		MCP          []string `json:"mcp"`
+		Skills       []string `json:"skills"`
+		Plugins      []string `json:"plugins"`
+		Agents       []string `json:"agents"`
+		Commands     []string `json:"commands"`
+		OutputStyles []string `json:"output-styles"`
+		OutputStyle  string   `json:"output_style"`
 	}
 	if err := json.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("kit.json: %w", err)
 	}
-	k := &Kit{Skills: index.Skills, Plugins: index.Plugins, Agents: index.Agents, Commands: index.Commands, fsys: fsys}
+	k := &Kit{Skills: index.Skills, Plugins: index.Plugins, Agents: index.Agents, Commands: index.Commands, OutputStyles: index.OutputStyles, OutputStyle: index.OutputStyle, fsys: fsys}
 	for _, name := range index.MCP {
 		data, err := fs.ReadFile(fsys, "mcp/"+name+".json")
 		if err != nil {
@@ -305,6 +309,8 @@ type Ledger struct {
 	Plugins      map[string]string `json:"plugins,omitempty"`
 	Files        map[string]string `json:"files"` // path under the Claude dir -> hash
 	Instructions string            `json:"instructions,omitempty"`
+	// the outputStyle bud set in settings.json; "" when it didn't set one
+	OutputStyle string `json:"output_style,omitempty"`
 	// the Claude Code config dir all this is in; "" from before bud kept its
 	// own (JGA-135) means ~/.claude
 	Dir string `json:"dir,omitempty"`
@@ -462,13 +468,17 @@ func (k *Kit) without(names []string) *Kit {
 	out := *k
 	out.MCP = slices.DeleteFunc(slices.Clone(k.MCP), func(m MCP) bool { return slices.Contains(names, m.Name) })
 	out.Skills, out.Agents, out.Commands, out.Plugins = keep(k.Skills), keep(k.Agents), keep(k.Commands), keep(k.Plugins)
+	out.OutputStyles = keep(k.OutputStyles)
+	if slices.Contains(names, k.OutputStyle) {
+		out.OutputStyle = ""
+	}
 
 	return &out
 }
 
 // Action is one thing sync does, or would do with --dry-run
 type Action struct {
-	Kind string // "mcp", "skill", "agent", "command", "instructions"
+	Kind string // "mcp", "skill", "agent", "command", "output-style", "instructions"
 	Name string
 	Do   string // "add", "update", "remove", "skip", "ok"
 	Why  string
@@ -526,7 +536,7 @@ func (k *Kit) files() ([]file, error) {
 	for _, g := range []struct {
 		kind, dir string
 		names     []string
-	}{{"agent", "agents", k.Agents}, {"command", "commands", k.Commands}} {
+	}{{"agent", "agents", k.Agents}, {"command", "commands", k.Commands}, {"output-style", "output-styles", k.OutputStyles}} {
 		for _, name := range g.names {
 			p := g.dir + "/" + name + ".md"
 			out = append(out, file{g.kind, name, p, p})
@@ -819,6 +829,13 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 		}
 	}
 
+	// outputStyle in settings.json, after the style's file is in place
+	if a, err := syncOutputStyle(k.OutputStyle, env, ledger, dryRun); err != nil {
+		errs = append(errs, err)
+	} else if a != nil {
+		actions = append(actions, *a)
+	}
+
 	if !dryRun {
 		ledger.Dir = env.ClaudeDir
 		if err := ledger.save(env.Ledger); err != nil {
@@ -882,6 +899,9 @@ func (k *Kit) Entries() [][3]string {
 	}
 	for _, c := range k.Commands {
 		out = append(out, [3]string{"command", c, ""})
+	}
+	for _, s := range k.OutputStyles {
+		out = append(out, [3]string{"output-style", s, ""})
 	}
 	if k.Instructions != "" {
 		out = append(out, [3]string{"instructions", "CLAUDE.md", ""})

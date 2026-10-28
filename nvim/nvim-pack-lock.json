@@ -43,6 +43,11 @@
       "src": "https://github.com/nvim-mini/mini.jump2d",
       "version": "0.0.0 - 1.0.0"
     },
+    "mini.notify": {
+      "rev": "821db7d464f7a9bb8666b4ba3be7d2ed637cfcfc",
+      "src": "https://github.com/nvim-mini/mini.notify",
+      "version": "0.0.0 - 1.0.0"
+    },
     "mini.statusline": {
       "rev": "b5547f44560dae3ccd81f914256fa6f705837022",
       "src": "https://github.com/nvim-mini/mini.statusline",

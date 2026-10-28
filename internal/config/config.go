@@ -71,6 +71,21 @@ type Dashboard struct {
 type AI struct {
 	Claude Claude `json:"claude"`
 	Chat   Chat   `json:"chat"`
+	Issues Issues `json:"issues"`
+}
+
+// Issues is where issues filed from the editor go (JGA-123): Linear's team and
+// project, for every project without its own in projects.json
+type Issues struct {
+	Team    string `json:"team"`
+	Project string `json:"project"`
+	// issues about bud itself (<leader>aB): bud's own tracker
+	Bud IssueTarget `json:"bud"`
+}
+
+type IssueTarget struct {
+	Team    string `json:"team"`
+	Project string `json:"project"`
 }
 
 type Chat struct {
@@ -104,8 +119,9 @@ func Defaults() Settings {
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true},
-		AI:           AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}}, Chat: Chat{Pane: "native"}},
-		Kit:          Kit{LargeFiles: 10000, LargeLOC: 1000000},
+		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}}, Chat: Chat{Pane: "native"},
+			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
+		Kit: Kit{LargeFiles: 10000, LargeLOC: 1000000},
 	}
 }
 

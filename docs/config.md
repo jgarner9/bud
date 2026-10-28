@@ -59,6 +59,10 @@ bud config edit                           # open it in bud's editor, then check 
 | `ai.claude.args` | `[]` | Extra flags for every session, e.g. `["--model", "opus"]`. |
 | `ai.claude.command` | unset | What runs Claude Code when it isn't `claude` itself: a wrapper that passes the rest on, e.g. `["headroom", "wrap", "claude", "--code-memory", "none", "--"]`. |
 | `ai.chat.pane` | `"native"` | The default layout's chat pane: bud's own chat, or `"term"` for Claude Code's own TUI. |
+| `ai.issues.team` | unset | The Linear team issues filed with `<leader>ai` go to, for projects without their own (`bud issue set --team T [--project P] [project]`). `bud issue set --global` sets it. |
+| `ai.issues.project` | unset | The Linear project in that team, if any. |
+| `ai.issues.bud.team` | `"JGA"` | Where issues about bud itself (`<leader>aB`) go: bud's own tracker. |
+| `ai.issues.bud.project` | `"Bud IDE"` | The Linear project in that team. |
 
 ## Tools and the kit
 

@@ -31,12 +31,20 @@ type Project struct {
 	LastOpened time.Time `json:"last_opened,omitzero"`
 	// how big it is, measured in the background when it opens (JGA-117); nil until then
 	Size *Size `json:"size,omitempty"`
+	// where issues filed from it go (JGA-123); nil means config.json's ai.issues
+	Issues *IssueTarget `json:"issues,omitempty"`
 
 	// keys this binary doesn't know, kept as they were (D2)
 	extra map[string]json.RawMessage
 }
 
-var projectKeys = []string{"name", "path", "pinned", "layout", "last_opened", "size"}
+var projectKeys = []string{"name", "path", "pinned", "layout", "last_opened", "size", "issues"}
+
+// IssueTarget is the Linear team and project issues are filed in
+type IssueTarget struct {
+	Team    string `json:"team"`
+	Project string `json:"project,omitempty"`
+}
 
 // Size is a project's tracked source: files, and lines estimated from bytes
 type Size struct {
@@ -263,8 +271,6 @@ func (r *Registry) SetLayout(nameOrPath, layout string) (Project, error) {
 	return r.Projects[i], nil
 }
 
-// Sorted returns the projects the way they're listed: pinned first, then the
-// most recently opened, then by name
 // SetSize records how big a project is
 func (r *Registry) SetSize(nameOrPath string, size Size) (Project, error) {
 	i := r.index(nameOrPath)
@@ -275,6 +281,20 @@ func (r *Registry) SetSize(nameOrPath string, size Size) (Project, error) {
 
 	return r.Projects[i], nil
 }
+
+// SetIssues picks where a project's issues are filed; nil goes back to config.json's
+func (r *Registry) SetIssues(nameOrPath string, target *IssueTarget) (Project, error) {
+	i := r.index(nameOrPath)
+	if i < 0 {
+		return Project{}, fmt.Errorf("no project %q (see 'bud projects ls')", nameOrPath)
+	}
+	r.Projects[i].Issues = target
+
+	return r.Projects[i], nil
+}
+
+// Sorted returns the projects the way they're listed: pinned first, then the
+// most recently opened, then by name
 
 func (r *Registry) Sorted() []Project {
 	out := slices.Clone(r.Projects)

@@ -198,7 +198,7 @@ func argValues(cmd string, before []string) []string {
 		if len(before) == 0 {
 			return configKeys()
 		}
-	case "projects rm", "projects pin", "projects unpin":
+	case "projects rm", "projects pin", "projects unpin", "issue set", "issue unset":
 		return projectNames()
 	case "completion":
 		return []string{"bash", "zsh", "fish"}

@@ -1,0 +1,13 @@
+{
+  "name": "playwright",
+  "description": "Drives a real browser (Playwright) to check web pages, only in web projects",
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "@playwright/mcp@0.0.83", "--headless"],
+  "requires": { "bin": "npx", "install": "install Node.js (bud lang enable typescript does it)" },
+  "when": {
+    "files": ["playwright.config.ts", "playwright.config.js", "playwright.config.mjs"],
+    "packages": ["@playwright/test", "playwright", "react", "vue", "svelte", "@sveltejs/kit", "next", "nuxt", "@angular/core", "astro", "solid-js", "vite"]
+  },
+  "profiles": ["full"]
+}

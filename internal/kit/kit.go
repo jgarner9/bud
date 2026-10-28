@@ -67,12 +67,75 @@ type MCP struct {
 	Connector string `json:"connector,omitempty"`
 }
 
-// When is how big a project has to be for an entry; either threshold is
-// enough. Zero means config.json's default (kit.large_files, kit.large_loc)
+// When is which projects an entry loads in, instead of every session. Large:
+// big enough, by either threshold (zero means config.json's kit.large_files,
+// kit.large_loc). Files and Packages: the project uses it, when one of Files is
+// at its root or its package.json depends on one of Packages. Both kinds of
+// condition, when set, have to hold
 type When struct {
-	Large    bool  `json:"large"`
-	MinFiles int   `json:"min_files,omitempty"`
-	MinLOC   int64 `json:"min_loc,omitempty"`
+	Large    bool     `json:"large"`
+	MinFiles int      `json:"min_files,omitempty"`
+	MinLOC   int64    `json:"min_loc,omitempty"`
+	Files    []string `json:"files,omitempty"`
+	Packages []string `json:"packages,omitempty"`
+}
+
+// Project is what When looks at: the root, and its size (projects.Measure)
+type Project struct {
+	Root  string
+	Files int
+	LOC   int64
+}
+
+// Fits says whether p is a project for w, with defFiles and defLOC standing
+// in for the size thresholds w leaves out
+func (w When) Fits(p Project, defFiles int, defLOC int64) bool {
+	if w.Large && !w.Big(p.Files, p.LOC, defFiles, defLOC) {
+		return false
+	}
+	if len(w.Files) == 0 && len(w.Packages) == 0 {
+		return true
+	}
+	hasFile := slices.ContainsFunc(w.Files, func(name string) bool {
+		_, err := os.Stat(filepath.Join(p.Root, name))
+		return err == nil
+	})
+
+	return hasFile || slices.ContainsFunc(w.Packages, packageDeps(p.Root))
+}
+
+// packageDeps reads root's package.json and returns whether a package is one
+// of its dependencies (dev ones too)
+func packageDeps(root string) func(string) bool {
+	var pkg struct {
+		Dependencies    map[string]any `json:"dependencies"`
+		DevDependencies map[string]any `json:"devDependencies"`
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "package.json")); err == nil {
+		_ = json.Unmarshal(data, &pkg)
+	}
+
+	return func(name string) bool {
+		_, dep := pkg.Dependencies[name]
+		_, dev := pkg.DevDependencies[name]
+		return dep || dev
+	}
+}
+
+// Describe says which projects w is for, for sync's skip message
+func (w When) Describe() string {
+	switch {
+	case w.Large:
+		return "large projects"
+	case len(w.Packages) > 0 || len(w.Files) > 0:
+		names := append(slices.Clone(w.Files), w.Packages...)
+		if len(names) > 3 {
+			names = append(names[:3], "...")
+		}
+		return "projects that use it (" + strings.Join(names, ", ") + ")"
+	}
+
+	return "some projects"
 }
 
 // Big says whether a project of files and loc is big enough for w, with the
@@ -89,13 +152,13 @@ func (w When) Big(files int, loc int64, defFiles int, defLOC int64) bool {
 	return (minFiles > 0 && files >= minFiles) || (minLOC > 0 && loc >= minLOC)
 }
 
-// SessionServers is the --mcp-config bud adds to a session in a project of
-// files and loc: the conditional entries it qualifies for, that are on, have
-// their binary and secrets. nil when there are none
-func (k *Kit) SessionServers(profile string, files int, loc int64, defFiles int, defLOC int64, disabled []string, set func(string) bool, hasBinary func(string) bool) ([]byte, error) {
+// SessionServers is the --mcp-config bud adds to a session in project p: the
+// conditional entries it fits (When), that are on, have their binary and
+// secrets. nil when there are none
+func (k *Kit) SessionServers(profile string, p Project, defFiles int, defLOC int64, disabled []string, set func(string) bool, hasBinary func(string) bool) ([]byte, error) {
 	servers := map[string]json.RawMessage{}
 	for _, m := range k.MCP {
-		if m.When == nil || !m.For(profile) || slices.Contains(disabled, m.Name) || !m.When.Big(files, loc, defFiles, defLOC) {
+		if m.When == nil || !m.For(profile) || slices.Contains(disabled, m.Name) || !m.When.Fits(p, defFiles, defLOC) {
 			continue
 		}
 		if m.Requires != nil && m.Requires.Bin != "" && !hasBinary(m.Requires.Bin) {
@@ -539,7 +602,7 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 		}
 		if m.When != nil {
 			// not for every session: bud adds it per project (SessionServers)
-			actions = append(actions, Action{"mcp", m.Name, "skip", "only for large projects; bud adds it to their sessions"})
+			actions = append(actions, Action{"mcp", m.Name, "skip", "only for " + m.When.Describe() + "; bud adds it to their sessions"})
 			continue
 		}
 		if c, ok := m.ProvidedBy(connectors); ok {

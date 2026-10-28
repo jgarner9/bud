@@ -671,8 +671,9 @@ func projectSize(root string) projects.Size {
 	return size
 }
 
-// sessionMCP is the --mcp-config for kit entries that only load in large
-// projects, when root is one (JGA-117); nil when there are none
+// sessionMCP is the --mcp-config for kit entries that only load in some
+// projects (large ones, JGA-117; web ones, JGA-131) when root is one; nil
+// when there are none
 func sessionMCP(root string) ([]byte, error) {
 	k, env, err := loadKit()
 	if err != nil {
@@ -695,7 +696,7 @@ func sessionMCP(root string) ([]byte, error) {
 	}
 	size := projectSize(root)
 
-	return k.SessionServers(env.Profile, size.Files, size.LOC, s.Kit.LargeFiles, s.Kit.LargeLOC, env.Disabled, secrets.Has, func(bin string) bool {
+	return k.SessionServers(env.Profile, kit.Project{Root: root, Files: size.Files, LOC: size.LOC}, s.Kit.LargeFiles, s.Kit.LargeLOC, env.Disabled, secrets.Has, func(bin string) bool {
 		_, err := exec.LookPath(bin)
 		return err == nil
 	})

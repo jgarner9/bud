@@ -277,7 +277,7 @@ func TestLargeOnly(t *testing.T) {
 		{100, 1000000, all, true},
 		{20000, 0, none, false},
 	} {
-		cfg, err := k.SessionServers("full", c.files, c.loc, 10000, 1000000, nil, none, c.bin)
+		cfg, err := k.SessionServers("full", Project{Files: c.files, LOC: c.loc}, 10000, 1000000, nil, none, c.bin)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -287,10 +287,10 @@ func TestLargeOnly(t *testing.T) {
 	}
 	// its own thresholds win over the defaults; disabled is off
 	k.MCP[0].When = &When{MinFiles: 50}
-	if cfg, _ := k.SessionServers("full", 60, 0, 10000, 1000000, nil, none, all); cfg == nil {
+	if cfg, _ := k.SessionServers("full", Project{Files: 60}, 10000, 1000000, nil, none, all); cfg == nil {
 		t.Error("min_files ignored")
 	}
-	if cfg, _ := k.SessionServers("full", 60, 0, 10000, 1000000, []string{"code-index"}, none, all); cfg != nil {
+	if cfg, _ := k.SessionServers("full", Project{Files: 60}, 10000, 1000000, []string{"code-index"}, none, all); cfg != nil {
 		t.Error("a disabled entry loaded")
 	}
 }
@@ -401,5 +401,33 @@ func TestServerURLSecret(t *testing.T) {
 	// a secret URL has no host to match a connector by
 	if _, ok := m.ProvidedBy([]Connector{{"Other", "https://x.y/mcp"}, {"Odd", ""}}); ok {
 		t.Fatal("matched a connector by an empty host")
+	}
+}
+
+func TestWhenFits(t *testing.T) {
+	web, plain, configured := t.TempDir(), t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(web, "package.json"), []byte(`{"devDependencies": {"vite": "^6"}}`), 0o644)
+	os.WriteFile(filepath.Join(plain, "package.json"), []byte(`{"dependencies": {"lodash": "^4"}}`), 0o644)
+	os.WriteFile(filepath.Join(configured, "playwright.config.ts"), nil, 0o644)
+	w := When{Files: []string{"playwright.config.ts"}, Packages: []string{"react", "vite"}}
+	for _, c := range []struct {
+		root string
+		want bool
+	}{{web, true}, {configured, true}, {plain, false}, {t.TempDir(), false}} {
+		if got := w.Fits(Project{Root: c.root}, 0, 0); got != c.want {
+			t.Errorf("%s: got %v", c.root, got)
+		}
+	}
+	// size and use both have to hold
+	big := When{Large: true, Packages: []string{"vite"}}
+	if big.Fits(Project{Root: web, Files: 5}, 100, 0) || !big.Fits(Project{Root: web, Files: 500}, 100, 0) {
+		t.Error("large and web")
+	}
+	// no conditions: every project
+	if !(When{}).Fits(Project{Root: plain}, 0, 0) {
+		t.Error("empty when")
+	}
+	if !strings.Contains(w.Describe(), "playwright.config.ts, react, vite") {
+		t.Errorf("describe %q", w.Describe())
 	}
 }

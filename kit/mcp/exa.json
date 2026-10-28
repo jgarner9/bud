@@ -1,0 +1,10 @@
+{
+  "name": "exa",
+  "description": "Web search and page fetching, for anything current or outside the repo",
+  "transport": "http",
+  "url": "https://mcp.exa.ai/mcp",
+  "headers": { "x-api-key": "$secret:EXA_API_KEY" },
+  "optional_secrets": true,
+  "connector": "Exa",
+  "profiles": ["full", "minimal"]
+}

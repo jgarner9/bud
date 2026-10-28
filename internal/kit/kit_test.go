@@ -388,3 +388,18 @@ func TestSyncSkipsConnectors(t *testing.T) {
 		t.Fatalf("without the listing: %+v", actions)
 	}
 }
+
+func TestServerURLSecret(t *testing.T) {
+	m := MCP{Name: "basic-memory", Transport: "http", URL: "$secret:BASIC_MEMORY_URL", OptionalSecrets: true}
+	if _, missing, _ := m.Server(func(string) bool { return false }); !slices.Equal(missing, []string{"BASIC_MEMORY_URL"}) {
+		t.Fatalf("missing URL secret: %v", missing)
+	}
+	server, missing, err := m.Server(func(string) bool { return true })
+	if err != nil || len(missing) > 0 || !strings.Contains(string(server), `"url":"${BASIC_MEMORY_URL}"`) {
+		t.Fatalf("got %s %v %v", server, missing, err)
+	}
+	// a secret URL has no host to match a connector by
+	if _, ok := m.ProvidedBy([]Connector{{"Other", "https://x.y/mcp"}, {"Odd", ""}}); ok {
+		t.Fatal("matched a connector by an empty host")
+	}
+}

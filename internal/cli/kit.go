@@ -518,18 +518,23 @@ func secretNames(k *kit.Kit, profile string) (all, required []string) {
 		if !m.For(profile) {
 			continue
 		}
+		add := func(v string, needed bool) {
+			for _, name := range kit.SecretRefs(v) {
+				if seen[name] {
+					continue
+				}
+				seen[name] = true
+				all = append(all, name)
+				if needed {
+					required = append(required, name)
+				}
+			}
+		}
+		// a secret in the URL is needed even when the entry's others are optional
+		add(m.URL, true)
 		for _, vals := range []map[string]string{m.Headers, m.Env} {
 			for _, v := range vals {
-				for _, name := range kit.SecretRefs(v) {
-					if seen[name] {
-						continue
-					}
-					seen[name] = true
-					all = append(all, name)
-					if !m.OptionalSecrets {
-						required = append(required, name)
-					}
-				}
+				add(v, !m.OptionalSecrets)
 			}
 		}
 	}
@@ -706,6 +711,15 @@ func askKitSecrets(pr *prompter) error {
 	k, env, err := loadKit()
 	if err != nil {
 		return err
+	}
+	// a claude.ai connector already gives Claude Code those entries
+	if env.Connectors != nil {
+		if connectors, err := env.Connectors(); err == nil {
+			k.MCP = slices.DeleteFunc(slices.Clone(k.MCP), func(m kit.MCP) bool {
+				_, provided := m.ProvidedBy(connectors)
+				return provided
+			})
+		}
 	}
 	_, required := secretNames(k, env.Profile)
 	for _, name := range required {

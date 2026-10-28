@@ -79,9 +79,10 @@ func TestKitSecrets(t *testing.T) {
 	origFS := kitFS
 	kitFS = func() fs.FS {
 		return fstest.MapFS{
-			"kit.json":   {Data: []byte(`{"mcp": ["a", "b"]}`)},
+			"kit.json":   {Data: []byte(`{"mcp": ["a", "b", "c"]}`)},
 			"mcp/a.json": {Data: []byte(`{"transport": "http", "url": "https://a", "headers": {"K": "$secret:NEEDED_KEY"}}`)},
 			"mcp/b.json": {Data: []byte(`{"transport": "http", "url": "https://b", "optional_secrets": true, "headers": {"K": "$secret:NICE_KEY"}}`)},
+			"mcp/c.json": {Data: []byte(`{"transport": "http", "url": "$secret:HOST_URL", "optional_secrets": true}`)},
 		}
 	}
 	t.Cleanup(func() { kitFS = origFS })
@@ -90,7 +91,8 @@ func TestKitSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	all, required := secretNames(k, env.Profile)
-	if strings.Join(all, ",") != "NEEDED_KEY,NICE_KEY" || strings.Join(required, ",") != "NEEDED_KEY" {
+	// a URL secret is needed even in an entry whose others are optional
+	if strings.Join(all, ",") != "HOST_URL,NEEDED_KEY,NICE_KEY" || strings.Join(required, ",") != "HOST_URL,NEEDED_KEY" {
 		t.Fatalf("all %v, required %v", all, required)
 	}
 	// an env var is already in the session's environment, so it isn't handed over again

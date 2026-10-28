@@ -1,0 +1,8 @@
+{
+  "name": "basic-memory",
+  "description": "Notes that last across sessions, from your own Basic Memory server",
+  "transport": "http",
+  "url": "$secret:BASIC_MEMORY_URL",
+  "connector": "Basic Memory",
+  "profiles": ["full", "minimal"]
+}

@@ -208,7 +208,14 @@ func (m MCP) Server(set func(name string) bool) (server []byte, missing []string
 	}
 	s := map[string]any{"type": m.Transport}
 	if m.URL != "" {
-		s["url"] = m.URL
+		// a URL that differs per machine (a self-hosted server) is a secret
+		// too; without it there's nothing to connect to, optional or not
+		for _, name := range SecretRefs(m.URL) {
+			if !set(name) {
+				missing = append(missing, name)
+			}
+		}
+		s["url"] = secretRef.ReplaceAllString(m.URL, "$${$1}")
 	}
 	if m.Command != "" {
 		s["command"] = m.Command
@@ -340,7 +347,7 @@ func (m MCP) ProvidedBy(connectors []Connector) (Connector, bool) {
 		if strings.EqualFold(c.Name, name) {
 			return c, true
 		}
-		if m.URL != "" && c.URL != "" && host(c.URL) == host(m.URL) {
+		if h := host(m.URL); h != "" && h == host(c.URL) {
 			return c, true
 		}
 	}

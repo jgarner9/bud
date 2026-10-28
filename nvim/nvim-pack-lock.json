@@ -43,6 +43,11 @@
       "src": "https://github.com/mason-org/mason.nvim",
       "version": "2.0.0 - 3.0.0"
     },
+    "mini.clue": {
+      "rev": "62e9e38c3dc4b7d429f1b6e28d96f96cdff71132",
+      "src": "https://github.com/nvim-mini/mini.clue",
+      "version": "0.0.0 - 1.0.0"
+    },
     "mini.jump2d": {
       "rev": "ef08ddb40e04657b9439427f276b0546a8837c04",
       "src": "https://github.com/nvim-mini/mini.jump2d",
@@ -102,10 +107,6 @@
     "plenary.nvim": {
       "rev": "74b06c6c75e4eeb3108ec01852001636d85a932b",
       "src": "https://github.com/nvim-lua/plenary.nvim"
-    },
-    "which-key.nvim": {
-      "rev": "3aab2147e74890957785941f0c1ad87d0a44c15a",
-      "src": "https://github.com/folke/which-key.nvim"
     }
   }
 }

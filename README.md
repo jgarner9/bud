@@ -34,7 +34,7 @@ It lives in its own namespace (`NVIM_APPNAME=bud`), so your existing `~/.config/
 | **An isolated Neovim** | Plugins come from Neovim's built-in `vim.pack`, pinned in a committed lockfile and lazy-loaded where it counts. Headless startup is around 28 ms. |
 | **Languages as data** | One file per language in [`languages/`](languages/) wires up the LSP server, linter, formatter and tree-sitter parsers. Copy [`_template.lua`](languages/_template.lua) to add your own. |
 | **Easy navigation** | fzf-lua for files, grep, buffers and symbols; two-key jumps with `gw` and `s`; a symbols outline; oil.nvim and a neo-tree side pane; four pinned files per project. |
-| **Batteries included** | blink.cmp completion, gitsigns and diffview, which-key hints, format on save, Catppuccin Macchiato. |
+| **Batteries included** | blink.cmp completion, gitsigns and diffview, mini.clue key hints, format on save, Catppuccin Macchiato. |
 | **A doctor** | `bud doctor` checks system deps, tool versions, config sync and machine config, and tells you the exact fix. |
 | **Honest installs** | `bud install` shows the package manager command and asks before running it. Nothing gets upgraded behind your back. |
 
@@ -132,7 +132,7 @@ Global flags go before the command: `bud [--verbose] [--profile full|minimal] <c
 
 ### A few keys to start with
 
-Leader is <kbd>Space</kbd>. Press it and wait, and which-key shows the rest.
+Leader is <kbd>Space</kbd>. Press it and wait, and the keys that follow show up.
 
 | Keys | Does |
 | --- | --- |

@@ -76,9 +76,50 @@ return {
   },
 
   {
-    src = "folke/which-key.nvim",
+    -- key hints (JGA-140): press a prefix and wait, and the keys that follow
+    -- show up. Replaced which-key, which stopped getting commits
+    src = "nvim-mini/mini.clue",
+    version = vim.version.range("0"),
+    -- just after the first screen (D35); it adds its triggers to open buffers
+    event = "UIEnter",
     config = function()
-      require("which-key").setup({})
+      local clue = require("mini.clue")
+      local triggers = {}
+      for _, t in ipairs({
+        { { "n", "x" }, "<Leader>" },
+        { { "n", "x" }, "g" },
+        { { "n", "x" }, "z" },
+        { { "n", "x" }, "'" },
+        { { "n", "x" }, "`" },
+        { { "n", "x" }, '"' },
+        { { "i", "c" }, "<C-r>" },
+        { "n", "<C-w>" },
+        { "n", "[" },
+        { "n", "]" },
+      }) do
+        for _, mode in ipairs(type(t[1]) == "table" and t[1] or { t[1] }) do
+          table.insert(triggers, { mode = mode, keys = t[2] })
+        end
+      end
+      clue.setup({
+        triggers = triggers,
+        clues = {
+          { mode = "n", keys = "<Leader>a", desc = "+Claude" },
+          { mode = "x", keys = "<Leader>a", desc = "+Claude" },
+          { mode = "n", keys = "<Leader>c", desc = "+code" },
+          { mode = "n", keys = "<Leader>g", desc = "+git" },
+          { mode = "n", keys = "<Leader>h", desc = "+hunks" },
+          { mode = "n", keys = "<Leader>u", desc = "+interface" },
+          clue.gen_clues.builtin_completion(),
+          clue.gen_clues.g(),
+          clue.gen_clues.marks(),
+          clue.gen_clues.registers(),
+          -- <C-w> then +, -, <, > keeps resizing until another key
+          clue.gen_clues.windows({ submode_resize = true }),
+          clue.gen_clues.z(),
+        },
+        window = { delay = 300, config = { width = "auto", border = "rounded" } },
+      })
     end,
   },
 }

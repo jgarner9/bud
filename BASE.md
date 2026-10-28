@@ -92,6 +92,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D71 | **Claude fixes a filed issue in a worktree beside the repo.** | 2026-10-28 | JGA-126. `bud.ai.work` makes `<repo>.worktrees/<id>` on branch `<id>-<title slug>` from the remote's default branch (else the current one), never under bud's data dir, which `bud uninstall` deletes. bud names the branch itself rather than asking Linear (no API client, D26); Linear links it by the id. A session of its own (`work:<id>`, a new conversation) gets the issue id and the steps (In Progress, fix, the project's own checks, commit with the id, In Review, a `bud-work` block); a reply without the block is a question, answered from `:BudIssues`. Per D69 a permission policy accepts edits whose path resolves inside the worktree (symlinks and `..` checked) and the run's Linear updates, and asks for everything else. There's no per-project check setting: Claude reads the project's CLAUDE.md or build files for its checks. Runs live for the Neovim session; worktrees stay until you remove them. |
 | D72 | **`bud install` syncs the kit.** | 2026-10-28 | JGA-132. A fresh install comes up with the kit in place: after the kit secrets (and the Headroom offer), `bud install` runs `bud kit sync` when `ai.claude.autostart` is on and Claude Code is installed and logged in. Logged out it only says to run `bud kit sync` later, because the claude.ai connectors that stand in for some entries are listed only for a logged-in account, and syncing without them would add duplicates. Sync still never overwrites what you wrote yourself (D56). `bud bootstrap` runs `bud install`, so it's covered. |
 | D73 | **bud has its own Claude Code config, by default.** | 2026-10-28 | JGA-135. `ai.claude.config` is `"bud"` (default) or `"home"`. With `"bud"`, `main` sets `CLAUDE_CONFIG_DIR` to `~/.local/share/bud/claude` (`paths.ClaudeConfig`) before any command runs, so everything bud starts (claude checks and login, kit sync, nvim and its sessions, the TUI, the IDE bridge's lock dir, the chat history reader, `bud agent`) uses it; a `CLAUDE_CONFIG_DIR` you set yourself wins. The kit, plugins, settings, history and login stay apart from the `claude` you run by hand, which keeps `~/.claude`; bud's dir needs its own `claude auth login` (`bud claude setup`), and the Keychain entry is per dir. A separate wrapper binary wasn't needed: `bud agent` already runs Claude Code's TUI with bud's environment. The kit ledger records the dir it synced into (`Ledger.Dir`; empty means `~/.claude`). When that differs from the current one, `bud kit sync` waits for a login in the new dir, lists what the kit added to the old one, and on a yes removes it there (`kit.Unsync`, running claude against the old dir) before syncing into the new one; a no leaves them as yours. With nobody to ask (`bud update`), nothing moves until `bud kit sync` runs on a terminal. Conversations from before stay in `~/.claude`, so a project's first session in bud's dir starts fresh. |
+| D74 | **IDE-style interface pieces, all inside the startup budget.** | 2026-10-28 | JGA-136..140, checked for commits in the 6 months to 2026-10-28. `bud.ui` on nui.nvim (already there for neo-tree) is the one way to build dialogs, menus, inputs and panels, and `vim.ui.select`/`input` go through it. Neovim's own ui2 puts the command line and messages in floats (`ui.messages`, experimental, so it can be turned off). mini.notify for notifications, dropbar.nvim for breadcrumbs (`ui.breadcrumbs`), mini.clue instead of which-key (no commits since early 2025) for key hints and submodes. noice, trouble, edgy, hydra, nvim-notify and bufferline failed the maintenance check, dressing.nvim is archived, and snacks.nvim mostly repeats what bud has. Startup already sat near 50 ms, so mini.notify, dropbar and mini.clue load on `UIEnter` and `bud.ui` on first use. |
 
 ---
 
@@ -284,7 +285,7 @@ Adding a language is: `bud lang add <name>` copies `_template.lua` into `~/.loca
 | Diagnostics list                    | fzf-lua diagnostics picker | `<leader>x`                           |
 | Switch project                      | dashboard picker           | `<leader>p`                           |
 
-A `which-key` popup documents all of it, so the keymap is self-describing.
+A key-hint popup (mini.clue, D74) documents all of it, so the keymap is self-describing.
 
 ---
 
@@ -567,7 +568,7 @@ You asked for help thinking this through. These are all optional, and each can b
 - ✅ **Recent chats:** the last 2–3 sessions, so you can jump right back into a thought.
 - ✅ **Health line:** startup time, plugin count, whether Claude Code is installed and logged in.
 - ✅ **Update and doctor banners**, each with a one-key fix.
-- ✅ **Tip of the day:** a random keybind from which-key, to help you learn your own setup.
+- ✅ **Tip of the day:** a random leader keybind, to help you learn your own setup.
 - **Open PRs / review requests** on GitHub through the `gh` CLI (off by default, it's a network call).
 - **TODO/FIXME count** for the current or last project.
 - **Recently generated AI tools**, with quick enable/disable.

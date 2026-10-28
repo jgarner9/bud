@@ -8,13 +8,15 @@
   ],
   "skills": [
     "bud-dev",
-    "plan-to-linear"
+    "plan-to-linear",
+    "file-issue"
   ],
   "agents": [
     "code-reviewer"
   ],
   "commands": [
-    "plan-to-linear"
+    "plan-to-linear",
+    "file-issue"
   ],
   "plugins": [
     "superpowers@claude-plugins-official"

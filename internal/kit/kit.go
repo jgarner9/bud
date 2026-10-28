@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,6 +61,10 @@ type MCP struct {
 	// adds it to the sessions it starts in a project that's big enough (JGA-117)
 	When     *When    `json:"when,omitempty"`
 	Profiles []string `json:"profiles,omitempty"` // empty means every profile
+	// the claude.ai connector that provides the same service ("Context7"):
+	// where Claude Code has it, sync leaves the kit's entry out (JGA-128).
+	// Empty matches a connector by the entry's name or its URL's host
+	Connector string `json:"connector,omitempty"`
 }
 
 // When is how big a project has to be for an entry; either threshold is
@@ -314,6 +319,63 @@ type Env struct {
 	SecretSet        func(name string) bool
 	HasBin           func(name string) bool // nil means look on PATH
 	Disabled         []string               // entries turned off on this machine (bud kit disable)
+	// the claude.ai connectors Claude Code has (claude mcp list); nil means none
+	Connectors func() ([]Connector, error)
+}
+
+// Connector is one claude.ai connector, as claude mcp list shows it
+type Connector struct {
+	Name string // "Context7", without the "claude.ai " prefix
+	URL  string
+}
+
+// ProvidedBy returns the connector that already gives Claude Code what m
+// does: one named like m.Connector (or m's own name), or at m's URL's host
+func (m MCP) ProvidedBy(connectors []Connector) (Connector, bool) {
+	name := m.Connector
+	if name == "" {
+		name = m.Name
+	}
+	for _, c := range connectors {
+		if strings.EqualFold(c.Name, name) {
+			return c, true
+		}
+		if m.URL != "" && c.URL != "" && host(c.URL) == host(m.URL) {
+			return c, true
+		}
+	}
+
+	return Connector{}, false
+}
+
+func host(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+
+	return strings.ToLower(u.Hostname())
+}
+
+// ParseConnectors reads the claude.ai connectors out of claude mcp list's
+// output ("claude.ai Context7: https://mcp.context7.com/mcp - ✔ Connected").
+// Other lines (local servers, a wrapper's banner) are skipped
+func ParseConnectors(out string) []Connector {
+	var list []Connector
+	for _, line := range strings.Split(out, "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "claude.ai ")
+		if !ok {
+			continue
+		}
+		name, after, ok := strings.Cut(rest, ": ")
+		if !ok {
+			continue
+		}
+		u, _, _ := strings.Cut(after, " - ")
+		list = append(list, Connector{Name: strings.TrimSpace(name), URL: strings.TrimSpace(u)})
+	}
+
+	return list
 }
 
 // without is k minus the named entries
@@ -455,6 +517,12 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 	var actions []Action
 	var errs []error
 	have := userServers(env.ClaudeJSON)
+	var connectors []Connector
+	if env.Connectors != nil {
+		// without the list, sync goes on as if there were none
+		connectors, _ = env.Connectors()
+	}
+	provided := map[string]string{}
 
 	// MCP servers
 	wanted := map[string]bool{}
@@ -465,6 +533,13 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 		if m.When != nil {
 			// not for every session: bud adds it per project (SessionServers)
 			actions = append(actions, Action{"mcp", m.Name, "skip", "only for large projects; bud adds it to their sessions"})
+			continue
+		}
+		if c, ok := m.ProvidedBy(connectors); ok {
+			provided[m.Name] = c.Name
+			if _, inLedger := ledger.MCP[m.Name]; !inLedger {
+				actions = append(actions, Action{"mcp", m.Name, "skip", "provided by the claude.ai " + c.Name + " connector"})
+			}
 			continue
 		}
 		wanted[m.Name] = true
@@ -513,7 +588,11 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 		if wanted[name] {
 			continue
 		}
-		actions = append(actions, Action{"mcp", name, "remove", "no longer in the kit"})
+		why := "no longer in the kit"
+		if c, ok := provided[name]; ok {
+			why = "provided by the claude.ai " + c + " connector"
+		}
+		actions = append(actions, Action{"mcp", name, "remove", why})
 		if dryRun {
 			continue
 		}

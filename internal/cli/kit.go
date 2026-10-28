@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -323,6 +324,24 @@ func kitDisabled(f *config.File) []string {
 }
 
 // installedPlugins asks claude which plugins are installed
+// kitConnectors lists the claude.ai connectors Claude Code has, so sync can
+// leave out the kit's entries they already provide (JGA-128). claude mcp list
+// checks each server's health, so it takes a few seconds
+var kitConnectors = func() ([]kit.Connector, error) {
+	bin := claude.Find()
+	if bin == "" {
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, bin, "mcp", "list").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	return kit.ParseConnectors(string(out)), nil
+}
+
 var installedPlugins = func() ([]string, error) {
 	bin := claude.Find()
 	if bin == "" {
@@ -374,6 +393,7 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 		SecretSet:        secrets.Has,
 		InstalledPlugins: installedPlugins,
 		Disabled:         disabled,
+		Connectors:       kitConnectors,
 	}, nil
 }
 

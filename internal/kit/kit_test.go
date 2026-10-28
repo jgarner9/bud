@@ -2,6 +2,7 @@ package kit
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -291,5 +292,99 @@ func TestLargeOnly(t *testing.T) {
 	}
 	if cfg, _ := k.SessionServers("full", 60, 0, 10000, 1000000, []string{"code-index"}, none, all); cfg != nil {
 		t.Error("a disabled entry loaded")
+	}
+}
+
+func TestParseConnectors(t *testing.T) {
+	out := `  ║            HEADROOM WRAP: CLAUDE              ║
+Checking MCP server health…
+
+claude.ai Context7: https://mcp.context7.com/mcp - ✔ Connected
+claude.ai Basic Memory: https://memory.example.ts.net/mcp - ✔ Connected
+claude.ai Resend: https://mcp.resend.com - ! Needs authentication
+headroom: /Users/x/.local/bin/headroom mcp serve - ✔ Connected
+plugin:engineering:slack: https://mcp.slack.com/mcp (HTTP) - ! Needs authentication
+`
+	got := ParseConnectors(out)
+	want := []Connector{
+		{"Context7", "https://mcp.context7.com/mcp"},
+		{"Basic Memory", "https://memory.example.ts.net/mcp"},
+		{"Resend", "https://mcp.resend.com"},
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestProvidedBy(t *testing.T) {
+	connectors := []Connector{{"Context7", "https://mcp.context7.com/mcp"}, {"Basic Memory", "https://memory.example.ts.net/mcp"}}
+	for _, tc := range []struct {
+		m    MCP
+		want string
+	}{
+		{MCP{Name: "context7"}, "Context7"},                                    // by name, any case
+		{MCP{Name: "docs", URL: "https://MCP.context7.com/other"}, "Context7"}, // by host
+		{MCP{Name: "basic-memory", Connector: "Basic Memory"}, "Basic Memory"}, // named
+		{MCP{Name: "github", URL: "https://api.githubcopilot.com/mcp/"}, ""},   // none
+		{MCP{Name: "serena", Transport: "stdio", Command: "serena"}, ""},       // stdio, no host
+	} {
+		c, ok := tc.m.ProvidedBy(connectors)
+		if (tc.want == "" && ok) || (tc.want != "" && c.Name != tc.want) {
+			t.Errorf("%s: got %+v %v, want %q", tc.m.Name, c, ok, tc.want)
+		}
+	}
+}
+
+func TestSyncSkipsConnectors(t *testing.T) {
+	dir := t.TempDir()
+	var ran []string
+	var connectors []Connector
+	env := Env{
+		ClaudeDir: filepath.Join(dir, ".claude"), ClaudeJSON: filepath.Join(dir, ".claude.json"), Ledger: filepath.Join(dir, "l.json"),
+		SecretSet: func(string) bool { return false },
+		Claude: func(a ...string) error {
+			ran = append(ran, strings.Join(a[:2], " ")+" "+a[len(a)-1])
+			return nil
+		},
+		Connectors: func() ([]Connector, error) { return connectors, nil },
+	}
+	k := &Kit{MCP: []MCP{{Name: "context7", Transport: "http", URL: "https://mcp.context7.com/mcp"}}}
+
+	// no connector: the kit adds its own
+	if _, err := Sync(k, env, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(ran) != 1 || !strings.HasPrefix(ran[0], "mcp add-json") {
+		t.Fatalf("first sync ran %q", ran)
+	}
+	os.WriteFile(env.ClaudeJSON, []byte(`{"mcpServers":{"context7":{"type":"http","url":"https://mcp.context7.com/mcp"}}}`), 0o644)
+
+	// the connector turns up: the kit's copy goes, saying why
+	connectors = []Connector{{"Context7", "https://mcp.context7.com/mcp"}}
+	ran = nil
+	actions, err := Sync(k, env, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ran, []string{"mcp remove context7"}) {
+		t.Fatalf("ran %q", ran)
+	}
+	if len(actions) != 1 || actions[0].Do != "remove" || !strings.Contains(actions[0].Why, "claude.ai Context7 connector") {
+		t.Fatalf("actions %+v", actions)
+	}
+
+	// from then on it's a skip, and nothing runs
+	os.WriteFile(env.ClaudeJSON, []byte(`{}`), 0o644)
+	ran = nil
+	actions, _ = Sync(k, env, true)
+	if len(ran) != 0 || len(actions) != 1 || actions[0].Do != "skip" || actions[0].Why != "provided by the claude.ai Context7 connector" {
+		t.Fatalf("ran %q, actions %+v", ran, actions)
+	}
+
+	// a failed listing is the same as none
+	env.Connectors = func() ([]Connector, error) { return nil, errors.New("no claude") }
+	actions, _ = Sync(k, env, true)
+	if actions[0].Do != "add" {
+		t.Fatalf("without the listing: %+v", actions)
 	}
 }

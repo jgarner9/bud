@@ -8,6 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -29,7 +30,13 @@ func TestKitCommands(t *testing.T) {
 		ran = append(ran, strings.Join(args, " "))
 		return os.WriteFile(filepath.Join(home, ".claude.json"), []byte(`{"mcpServers": {"docs": {}}}`), 0o644)
 	}
-	t.Cleanup(func() { kitFS, kitClaude = origFS, origClaude })
+	origPlugins, origConnectors := installedPlugins, kitConnectors
+	installedPlugins = func() ([]string, error) { return nil, nil }
+	kitConnectors = func() ([]kit.Connector, error) { return nil, nil }
+	t.Cleanup(func() {
+		kitFS, kitClaude = origFS, origClaude
+		installedPlugins, kitConnectors = origPlugins, origConnectors
+	})
 
 	out := captureStdout(t, func() {
 		if err := kitLs(nil); err != nil {

@@ -199,3 +199,72 @@ func TestSyncOutputStyleDryRun(t *testing.T) {
 		t.Error("dry run wrote settings.json")
 	}
 }
+
+func TestSyncSettingsRoundTrip(t *testing.T) {
+	k, env := styleKit(t), styleEnv(t)
+	writeSettings(t, env, `{"big": 12345678901234567890, "hooks": {"x": [{"command": "a && b > c"}]}}`)
+	if _, err := Sync(k, env, false); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(env.ClaudeDir, "settings.json"))
+	for _, want := range []string{"12345678901234567890", `"a && b > c"`, `"outputStyle": "bud"`} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("settings.json lost %s:\n%s", want, data)
+		}
+	}
+}
+
+func TestSyncNullSettings(t *testing.T) {
+	for _, body := range []string{"null", "", " \n"} {
+		k, env := styleKit(t), styleEnv(t)
+		writeSettings(t, env, body)
+		if _, err := Sync(k, env, false); err != nil {
+			t.Fatalf("%q: %v", body, err)
+		}
+		if got := readSettings(t, env)["outputStyle"]; got != "bud" {
+			t.Errorf("%q: outputStyle %v", body, got)
+		}
+	}
+}
+
+func TestSyncSettingsSymlinkAndMode(t *testing.T) {
+	k, env := styleKit(t), styleEnv(t)
+	os.MkdirAll(env.ClaudeDir, 0o755)
+	real := filepath.Join(t.TempDir(), "dotfiles-settings.json")
+	os.WriteFile(real, []byte(`{"theme": "dark"}`), 0o600)
+	link := filepath.Join(env.ClaudeDir, "settings.json")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(k, env, false); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("settings.json is no longer a symlink: %v", err)
+	}
+	data, _ := os.ReadFile(real)
+	if !strings.Contains(string(data), `"outputStyle": "bud"`) {
+		t.Errorf("the link's target wasn't updated:\n%s", data)
+	}
+	if fi, _ := os.Stat(real); fi.Mode().Perm() != 0o600 {
+		t.Errorf("mode %v, want 0600", fi.Mode().Perm())
+	}
+}
+
+func TestSyncOwnStyleFileNotTurnedOn(t *testing.T) {
+	k, env := styleKit(t), styleEnv(t)
+	os.MkdirAll(filepath.Join(env.ClaudeDir, "output-styles"), 0o755)
+	os.WriteFile(filepath.Join(env.ClaudeDir, "output-styles", "bud.md"), []byte("mine"), 0o644)
+	for _, dry := range []bool{true, false} {
+		actions, err := Sync(k, env, dry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := styleAction(actions); got != "skip you have your own output-styles/bud.md" {
+			t.Errorf("dry %v: %q", dry, got)
+		}
+	}
+	if exists(filepath.Join(env.ClaudeDir, "settings.json")) {
+		t.Error("turned on the user's own bud style")
+	}
+}

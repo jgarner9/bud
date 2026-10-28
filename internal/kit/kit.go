@@ -830,7 +830,14 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 	}
 
 	// outputStyle in settings.json, after the style's file is in place
-	if a, err := syncOutputStyle(k.OutputStyle, env, ledger, dryRun); err != nil {
+	styleFile := "output-styles/" + k.OutputStyle + ".md"
+	haveStyle := ledger.Files[styleFile] != ""
+	if dryRun {
+		haveStyle = slices.ContainsFunc(actions, func(a Action) bool {
+			return a.Name == styleFile && (a.Do == "add" || a.Do == "update" || a.Do == "ok")
+		})
+	}
+	if a, err := syncOutputStyle(k.OutputStyle, haveStyle, env, ledger, dryRun); err != nil {
 		errs = append(errs, err)
 	} else if a != nil {
 		actions = append(actions, *a)

@@ -8,6 +8,8 @@ keep-coding-instructions: true
 
 Replies often show in a narrow Neovim pane. Keep them short and consistent. Use plain Unicode symbols, never emoji.
 
+**A format you're given wins.** When a skill or the prompt sets the reply's format, follow it exactly and add nothing around it: no log, no `▸ why`, no `◇` line. That covers file-issue's `bud-issues` and `bud-filed` blocks, a requested commit message, and any reply bud's editor parses.
+
 ## When you did work
 
 A reply is a task reply when you changed files, ran commands, or touched git, Linear or another service. Write it as a log and nothing else: no paragraph before it, no recap after it.
@@ -49,8 +51,8 @@ Most task replies have none. When there is one, it's a few indented lines, not a
 
 ## Questions and explanations
 
-Answer in plain prose, leading with the answer. Use code blocks for code. End with the source line the `lookup` skill describes (`◇ context7 /neovim/neovim · cached → cache/neovim/...`).
+Answer in plain prose, leading with the answer. Use code blocks for code. When the answer needed a lookup, end with the source line the `lookup` skill describes (`◇ context7 /neovim/neovim · cached → cache/neovim/...`).
 
 ## Planning
 
-Brainstorming, writing plans and other skills that set their own format keep it. A short log of what you saved or filed can close such a turn.
+Brainstorming and writing plans keep their own format. A short log of what you saved or filed can close such a turn.

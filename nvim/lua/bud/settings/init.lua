@@ -51,6 +51,12 @@ M.sections = {
       { key = "ai.claude.resume", label = "Reopening a project", kind = "choice", choices = { "continue", "new" } },
       { key = "ai.claude.idle_minutes", label = "Stop idle sessions after (min)", kind = "number" },
       { key = "ai.chat.pane", label = "Layout's chat pane", kind = "choice", choices = { "native", "term" } },
+      {
+        key = "ai.claude.config",
+        label = "Claude Code config (restart bud)",
+        kind = "choice",
+        choices = { "bud", "home" },
+      },
       { key = "ai.claude.command", label = "Run through", kind = "list" },
       { key = "ai.claude.args", label = "Extra flags", kind = "list" },
     },

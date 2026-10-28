@@ -135,14 +135,14 @@ func TestClaudeStatus(t *testing.T) {
 func TestInstallKit(t *testing.T) {
 	synced := 0
 	orig := syncKit
-	syncKit = func(*Globals, []string, bool) error { synced++; return nil }
+	syncKit = func(*Globals, *prompter, bool) error { synced++; return nil }
 	t.Cleanup(func() { syncKit = orig })
 
 	// not installed, or logged out: only the hint, since connectors need a login
 	for _, s := range []claude.Status{claudeMissing, claudeLoggedOut} {
 		fakeClaude(t, s)
 		out := captureStdout(t, func() {
-			if err := installKit(&Globals{}); err != nil {
+			if err := installKit(&Globals{}, nil); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -152,7 +152,7 @@ func TestInstallKit(t *testing.T) {
 	}
 
 	fakeClaude(t, claudeReady)
-	if err := installKit(&Globals{}); err != nil || synced != 1 {
+	if err := installKit(&Globals{}, nil); err != nil || synced != 1 {
 		t.Fatalf("err %v, synced %d", err, synced)
 	}
 }

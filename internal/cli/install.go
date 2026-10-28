@@ -118,7 +118,7 @@ func install(g *Globals, args []string, yes bool) error {
 				fmt.Printf("Headroom: %v; 'bud config set ai.claude.command' sets it.\n", err)
 			}
 		}
-		if err := installKit(g); err != nil {
+		if err := installKit(g, pr); err != nil {
 			fmt.Printf("The Claude Code kit didn't sync (%v); 'bud kit sync' tries again.\n", err)
 		}
 	}
@@ -164,14 +164,14 @@ var installClaude = func(pr *prompter, yes bool) error {
 	return claudeSetup(pr, true)
 }
 
-// syncKit is kitSync; swappable in tests
-var syncKit = kitSync
+// syncKit is syncKitWith; swappable in tests
+var syncKit = syncKitWith
 
 // installKit syncs the Claude Code kit after the secrets were asked
 // (JGA-132). It waits for a login: the claude.ai connectors that stand in for
 // some entries are only listed for a logged-in account, so syncing before
 // that would add duplicates
-func installKit(g *Globals) error {
+func installKit(g *Globals, pr *prompter) error {
 	s, err := checkClaude()
 	if err != nil {
 		return err
@@ -181,7 +181,7 @@ func installKit(g *Globals) error {
 		return nil
 	}
 
-	return syncKit(g, nil, false)
+	return syncKit(g, pr, false)
 }
 
 // lookPath finds a binary on PATH; swappable in tests

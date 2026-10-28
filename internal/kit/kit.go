@@ -305,6 +305,9 @@ type Ledger struct {
 	Plugins      map[string]string `json:"plugins,omitempty"`
 	Files        map[string]string `json:"files"` // path under the Claude dir -> hash
 	Instructions string            `json:"instructions,omitempty"`
+	// the Claude Code config dir all this is in; "" from before bud kept its
+	// own (JGA-135) means ~/.claude
+	Dir string `json:"dir,omitempty"`
 }
 
 // ReadLedger reads path; a missing ledger is an empty one, and false
@@ -817,12 +820,20 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 	}
 
 	if !dryRun {
+		ledger.Dir = env.ClaudeDir
 		if err := ledger.save(env.Ledger); err != nil {
 			errs = append(errs, err)
 		}
 	}
 
 	return actions, errors.Join(errs...)
+}
+
+// Unsync takes out of env's Claude Code config everything the ledger says
+// bud put there, leaving an empty ledger: a sync with nothing in the kit
+func Unsync(env Env, dryRun bool) ([]Action, error) {
+	env.Connectors = nil
+	return Sync(&Kit{}, env, dryRun)
 }
 
 func hasBin(env Env, name string) bool {

@@ -103,6 +103,9 @@ type Claude struct {
 	// what runs claude, when it isn't claude itself: a wrapper that passes
 	// what follows on, such as ["headroom", "wrap", "claude", "--"]
 	Command []string `json:"command"`
+	// whose Claude Code config bud's sessions use: bud's own dir ("bud") or
+	// Claude Code's usual ~/.claude ("home"), JGA-135
+	Config string `json:"config"`
 }
 
 // Profiles are the install profiles
@@ -120,7 +123,7 @@ func Defaults() Settings {
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true},
-		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}}, Chat: Chat{Pane: "native"},
+		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "bud"}, Chat: Chat{Pane: "native"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
 		Kit: Kit{LargeFiles: 10000, LargeLOC: 1000000},
 	}
@@ -137,6 +140,7 @@ func (s Settings) Validate() error {
 		{"update.channel", s.Update.Channel, []string{"stable", "nightly"}},
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
 		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},
+		{"ai.claude.config", s.AI.Claude.Config, []string{"bud", "home"}},
 		{"ai.chat.pane", s.AI.Chat.Pane, []string{"native", "term"}},
 	}
 	for _, c := range checks {

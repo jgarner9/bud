@@ -367,13 +367,12 @@ var installedPlugins = func() ([]string, error) {
 
 // kitEnv is where the kit goes on this machine
 func kitEnv(p *paths.Paths) (kit.Env, error) {
-	home, err := os.UserHomeDir()
+	dir, err := homeClaudeDir()
 	if err != nil {
 		return kit.Env{}, err
 	}
-	dir, claudeJSON := filepath.Join(home, ".claude"), filepath.Join(home, ".claude.json")
 	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
-		dir, claudeJSON = d, filepath.Join(d, ".claude.json")
+		dir = d
 	}
 	s := config.Defaults()
 	var disabled []string
@@ -386,7 +385,7 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 
 	return kit.Env{
 		ClaudeDir:        dir,
-		ClaudeJSON:       claudeJSON,
+		ClaudeJSON:       claudeJSONFor(dir),
 		Ledger:           p.KitLedger(),
 		Profile:          s.Profile,
 		Claude:           kitClaude,
@@ -415,8 +414,17 @@ func kitSync(g *Globals, args []string, dryRun bool) error {
 	if len(args) > 0 {
 		return usageErrorf("kit sync takes no arguments")
 	}
+	return syncKitWith(g, terminalPrompter(false), dryRun)
+}
+
+// syncKitWith syncs the kit, first taking it out of the Claude Code config
+// dir it was last synced into when that's another one (moveKit)
+func syncKitWith(g *Globals, pr *prompter, dryRun bool) error {
 	k, env, err := loadKit()
 	if err != nil {
+		return err
+	}
+	if ok, err := moveKit(pr, env, dryRun); err != nil || !ok {
 		return err
 	}
 	actions, err := kit.Sync(k, env, dryRun)
@@ -500,6 +508,13 @@ func resyncKit(g *Globals, p *paths.Paths) {
 		return
 	}
 	k, env, err := loadKit()
+	if err == nil {
+		// moving it to another config dir asks, so that waits for bud kit sync
+		var ok bool
+		if ok, err = moveKit(nil, env, false); err == nil && !ok {
+			return
+		}
+	}
 	if err == nil {
 		_, err = kit.Sync(k, env, false)
 	}

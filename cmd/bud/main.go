@@ -7,6 +7,7 @@ import (
 )
 
 func main() {
+	cli.UseClaudeConfig()
 	app := cli.NewApp()
 	os.Exit(cli.ExitCode(app.Run(), os.Stderr))
 }

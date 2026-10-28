@@ -58,6 +58,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `ai.claude.idle_minutes` | `30` | Stop a session nothing has used for this long; the next use starts it again on the same conversation. `0` never stops one. |
 | `ai.claude.args` | `[]` | Extra flags for every session, e.g. `["--model", "opus"]`. |
 | `ai.claude.command` | unset | What runs Claude Code when it isn't `claude` itself: a wrapper that passes the rest on, e.g. `["headroom", "wrap", "claude", "--code-memory", "none", "--"]`. `bud install` offers exactly that when Headroom is installed, and `bud doctor` warns if the wrapper isn't on PATH. |
+| `ai.claude.config` | `"bud"` | Whose Claude Code config bud uses. `"bud"` is its own, in `~/.local/share/bud/claude` (set as `CLAUDE_CONFIG_DIR` for everything bud starts): the kit, plugins, settings, history and login stay apart from the `claude` you run yourself, so it needs its own login (`bud claude setup`). `"home"` shares `~/.claude`. When this changes, `bud kit sync` offers to take what the kit added out of the old one. A `CLAUDE_CONFIG_DIR` you set yourself wins. |
 | `ai.chat.pane` | `"native"` | The default layout's chat pane: bud's own chat, or `"term"` for Claude Code's own TUI. |
 | `ai.issues.team` | unset | The Linear team issues filed with `<leader>ai` go to, for projects without their own (`bud issue set --team T [--project P] [project]`). `bud issue set --global` sets it. |
 | `ai.issues.project` | unset | The Linear project in that team, if any. |

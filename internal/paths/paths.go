@@ -68,6 +68,10 @@ func (p *Paths) Migrations() string { return filepath.Join(p.State, "migrations.
 // InstallReceipt is written by install.sh and names the binary it installed (D20)
 func (p *Paths) InstallReceipt() string { return filepath.Join(p.State, "install.json") }
 
+// ClaudeConfig is bud's own Claude Code config dir (JGA-135): its
+// CLAUDE_CONFIG_DIR unless ai.claude.config is "home"
+func (p *Paths) ClaudeConfig() string { return filepath.Join(p.Data, "claude") }
+
 // UserTools holds generated tools that haven't been promoted into the repo
 func (p *Paths) UserTools() string { return filepath.Join(p.Data, "user-tools") }
 

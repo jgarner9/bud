@@ -68,6 +68,11 @@ func claudeStatus(args []string) error {
 	default:
 		fmt.Printf("Claude Code %s (%s), logged in with %s\n", s.Version, s.Bin, s.Method)
 	}
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		fmt.Printf("Config: %s\n", dir)
+	} else {
+		fmt.Println("Config: ~/.claude")
+	}
 
 	return nil
 }

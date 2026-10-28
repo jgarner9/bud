@@ -38,6 +38,7 @@ Edit the plan file: put each issue's identifier next to its task, e.g. `### Task
 - Take the next task in plan order whose blockers are done. Move its issue to In Progress when you start.
 - When it's done (its checks pass), tick it in the plan and move the issue on, following the repo's own workflow (for example In Review after the commit, Done after a release). If the repo says nothing, use Done.
 - Something new turns up mid-task: add it to the plan *and* file it, rather than doing it silently. A task that turns out to be unnecessary: say why in the issue and cancel it, and strike it in the plan.
+- Report filing and progress as a log: `+ JGA-123 <title>` for each issue filed, `→ JGA-123 → In Review` for each state change.
 - If the plan changes (the user changes their mind, a design doesn't work out), update the plan first, then bring Linear in line: retitle, reprioritize or cancel issues. Don't leave the two disagreeing.
 
 ## Don't

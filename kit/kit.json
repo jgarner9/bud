@@ -25,5 +25,9 @@
   ],
   "plugins": [
     "superpowers@claude-plugins-official"
-  ]
+  ],
+  "output-styles": [
+    "bud"
+  ],
+  "output_style": "bud"
 }

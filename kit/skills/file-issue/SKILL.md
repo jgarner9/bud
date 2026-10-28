@@ -47,7 +47,7 @@ Use the Linear MCP tools (the claude.ai Linear connector). If they aren't availa
 
 ## Round 2: file
 
-Only when the next message starts with "File these". It carries the block back, possibly edited by the reporter: file what it says, not your first draft. Create the issues in `blocked_by` order (state: the team's backlog or triage default), set the relations, post the comments for duplicates, then reply with one line and exactly one fenced block:
+Only when the next message starts with "File these". It carries the block back, possibly edited by the reporter: file what it says, not your first draft. Create the issues in `blocked_by` order (state: the team's backlog or triage default), set the relations, post the comments for duplicates, then reply with one `→` line per issue (`→ JGA-130 filed: <title>`, or `commented`/`failed`) and exactly one fenced block:
 
 ```bud-filed
 [{"key": "a", "id": "JGA-130", "url": "https://linear.app/...", "title": "...", "action": "filed"}]

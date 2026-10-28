@@ -76,6 +76,7 @@ var (
 	loadLanguages = lang.Load
 	startupTime   = nvim.StartupTime
 	claudeCheck   = claude.Check
+	lookPath      = exec.LookPath
 )
 
 // Options picks which checks Run does
@@ -112,7 +113,32 @@ func Run(opts Options) []Result {
 		}
 	}
 
-	return append(results, checkClaude(cfg), cfgResult, checkProjects(p))
+	results = append(results, checkClaude(cfg))
+	if r, ok := checkClaudeCommand(cfg); ok {
+		results = append(results, r)
+	}
+
+	return append(results, cfgResult, checkProjects(p))
+}
+
+// checkClaudeCommand looks for the wrapper ai.claude.command runs Claude Code
+// through (D60, Headroom's): without it every session fails to start. Only
+// when one is set; it only warns, like the Claude Code check
+func checkClaudeCommand(cfg config.Settings) (Result, bool) {
+	cmd := cfg.AI.Claude.Command
+	if len(cmd) == 0 {
+		return Result{}, false
+	}
+	r := Result{Name: "claude command"}
+	if _, err := lookPath(cmd[0]); err != nil {
+		r.Status = Warn
+		r.Detail = "ai.claude.command runs " + cmd[0] + ", which isn't on PATH, so Claude Code sessions can't start"
+		r.Fix = "bud config unset ai.claude.command"
+		return r, true
+	}
+	r.Detail = "sessions run through " + strings.Join(cmd, " ")
+
+	return r, true
 }
 
 // ClaudeCheck names the Claude Code check, which the dashboard gives its own banner

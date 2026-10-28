@@ -479,3 +479,22 @@ func TestCheckClaude(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckClaudeCommand(t *testing.T) {
+	orig := lookPath
+	t.Cleanup(func() { lookPath = orig })
+	cfg := config.Defaults()
+	if _, ok := checkClaudeCommand(cfg); ok {
+		t.Fatal("checked with no command set")
+	}
+
+	cfg.AI.Claude.Command = []string{"headroom", "wrap", "claude", "--"}
+	lookPath = func(string) (string, error) { return "/bin/headroom", nil }
+	if r, ok := checkClaudeCommand(cfg); !ok || r.Status != OK || !strings.Contains(r.Detail, "headroom wrap claude") {
+		t.Fatalf("present: %+v", r)
+	}
+	lookPath = func(string) (string, error) { return "", errors.New("not found") }
+	if r, _ := checkClaudeCommand(cfg); r.Status != Warn || r.Fix != "bud config unset ai.claude.command" {
+		t.Fatalf("missing: %+v", r)
+	}
+}

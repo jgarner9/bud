@@ -6,7 +6,8 @@
     "cocoindex-code",
     "code-index",
     "exa",
-    "basic-memory"
+    "basic-memory",
+    "headroom"
   ],
   "skills": [
     "bud-dev",

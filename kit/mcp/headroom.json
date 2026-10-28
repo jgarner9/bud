@@ -1,0 +1,9 @@
+{
+  "name": "headroom",
+  "description": "Headroom's compress and retrieve tools, for results it compressed",
+  "transport": "stdio",
+  "command": "headroom",
+  "args": ["mcp", "serve"],
+  "requires": { "bin": "headroom", "install": "uv tool install --python 3.13 \"headroom-ai[all]\", then bud install offers to run sessions through it" },
+  "profiles": ["full"]
+}

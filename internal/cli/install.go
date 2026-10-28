@@ -113,6 +113,11 @@ func install(g *Globals, args []string, yes bool) error {
 		if err := askKitSecrets(pr); err != nil {
 			fmt.Printf("Kit secrets: %v; 'bud kit secret set NAME' stores one.\n", err)
 		}
+		if s.Profile == "full" {
+			if err := offerHeadroom(pr, f, s); err != nil {
+				fmt.Printf("Headroom: %v; 'bud config set ai.claude.command' sets it.\n", err)
+			}
+		}
 	}
 
 	fmt.Println()
@@ -154,6 +159,39 @@ var installClaude = func(pr *prompter, yes bool) error {
 	}
 
 	return claudeSetup(pr, true)
+}
+
+// lookPath finds a binary on PATH; swappable in tests
+var lookPath = exec.LookPath
+
+// headroomCommand runs Claude Code through Headroom (D60). Serena comes from
+// the kit, so Headroom's own (--code-memory) stays off
+var headroomCommand = []string{"headroom", "wrap", "claude", "--code-memory", "none", "--"}
+
+// offerHeadroom offers to run bud's Claude Code sessions through Headroom when
+// it's installed and nothing else is set (JGA-130). It routes every request
+// through Headroom's local proxy, so it's asked, never assumed; --yes and
+// nobody to ask both leave it off
+func offerHeadroom(pr *prompter, f *config.File, s config.Settings) error {
+	if len(s.AI.Claude.Command) > 0 || pr == nil {
+		return nil
+	}
+	if _, err := lookPath("headroom"); err != nil {
+		return nil
+	}
+	ok, err := pr.confirm("Headroom is installed. Run bud's Claude Code sessions through it (compressed context, fewer tokens)?")
+	if err != nil || !ok {
+		return err
+	}
+	if err := f.Set("ai.claude.command", headroomCommand); err != nil {
+		return err
+	}
+	if err := f.Save(); err != nil {
+		return err
+	}
+	fmt.Println("Claude Code sessions now run through Headroom; 'bud config unset ai.claude.command' undoes it.")
+
+	return nil
 }
 
 // askLanguages reads the specs (this binary's, then the user's in userSpecs),

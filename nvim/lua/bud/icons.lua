@@ -37,4 +37,7 @@ return {
   clock = "", -- nf-fa-clock_o
   breakpoint = "", -- nf-fa-circle
   stopped = "", -- nf-fa-arrow_right
+  modified = "", -- nf-fa-circle
+  locked = "", -- nf-fa-lock
+  lsp = "", -- nf-fa-cogs
 }

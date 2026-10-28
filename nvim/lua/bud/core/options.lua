@@ -24,6 +24,8 @@ opt.smartcase = true
 opt.splitright = true
 opt.splitbelow = true
 opt.scrolloff = 8
+-- one statusline for the whole screen, like an IDE (JGA-133)
+opt.laststatus = 3
 -- no ~ on the empty lines past the end of a buffer, in files or the tree (JGA-134)
 opt.fillchars:append({ eob = " " })
 

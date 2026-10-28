@@ -29,9 +29,7 @@ return {
     src = "nvim-mini/mini.statusline",
     version = vim.version.range("0"),
     config = function()
-      require("mini.statusline").setup({
-        content = { active = require("bud.statusline").active },
-      })
+      require("bud.statusline").setup()
     end,
   },
 }

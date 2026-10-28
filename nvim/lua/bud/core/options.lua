@@ -24,6 +24,8 @@ opt.smartcase = true
 opt.splitright = true
 opt.splitbelow = true
 opt.scrolloff = 8
+-- no ~ on the empty lines past the end of a buffer, in files or the tree (JGA-134)
+opt.fillchars:append({ eob = " " })
 
 opt.undofile = true
 opt.swapfile = false

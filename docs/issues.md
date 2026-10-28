@@ -1,6 +1,6 @@
 # Filing issues from the editor
 
-Spot a problem while you work, press a key, say what's wrong, and Claude turns it into Linear issues you approve before anything is filed.
+Spot a problem or think of a feature while you work, press a key, say what's wrong or what you want, and Claude turns it into Linear issues you approve before anything is filed. A feature request goes through the same keys and comes back labelled as a feature.
 
 | Key | What |
 | --- | --- |
@@ -11,7 +11,7 @@ Spot a problem while you work, press a key, say what's wrong, and Claude turns i
 
 ## How it goes
 
-1. A float opens for your report: the first line is the summary, the rest whatever detail you have. `<C-s>` sends it, `q` closes it and keeps the draft for next time, and `<Tab>` shows what bud attaches by itself: the file and lines you were on (or your selection), diagnostics there, recent `:messages`, and the bud, Neovim and layout versions.
+1. A float opens for your report: the first line is the summary, the rest whatever detail you have. Leave insert mode and press `<CR>` to send it (`<C-s>` works too, unless a terminal multiplexer like zellij takes it), `q` closes it and keeps the draft for next time, and `<Tab>` shows what bud attaches by itself: the file and lines you were on (or your selection), diagnostics there, recent `:messages`, and the bud, Neovim and layout versions.
 2. A Claude Code session of its own (never your project's conversation) runs the kit's `file-issue` skill: it reads the code around the report, checks Linear for duplicates and proposes one or more issues, or a comment on an existing one.
 3. The proposal shows in a review float. `<CR>` opens an issue's description, `<Esc>` folds it again, `e` opens the proposal as JSON to edit (`:w` brings it back), `y` files it, and `n` or `q` drops it.
 4. On `y`, Claude files exactly what you approved and bud tells you the ids.

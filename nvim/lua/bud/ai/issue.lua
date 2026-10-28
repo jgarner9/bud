@@ -530,14 +530,15 @@ function M.open(kind)
 end
 
 -- capture is the report float: the first line is the summary, the rest
--- details; <C-s> sends, q cancels and keeps the draft, <Tab> shows the context
+-- details; <CR> in normal mode sends (<C-s> too, where the terminal passes it
+-- through), q cancels and keeps the draft, <Tab> shows the context
 function M.capture(kind, target, root, ctx)
   local draft = M.drafts[kind] or { "" }
   local buf, win = float(draft, {
     title = "issue for " .. describe(target),
     width = math.min(80, vim.o.columns - 4),
     height = 8,
-    footer = "<C-s> send · q cancel · <Tab> context",
+    footer = "<CR> send · q cancel · <Tab> context",
   })
   vim.bo[buf].filetype = "markdown"
   local ns = vim.api.nvim_create_namespace("bud.ai.issue")
@@ -573,6 +574,7 @@ function M.capture(kind, target, root, ctx)
     M.drafts[kind] = vim.trim(table.concat(lines, "\n")) ~= "" and lines or nil
     close(win)
   end
+  vim.keymap.set("n", "<CR>", send, { buffer = buf })
   vim.keymap.set({ "n", "i" }, "<C-s>", send, { buffer = buf })
   vim.keymap.set("n", "<Tab>", toggle, { buffer = buf })
   for _, lhs in ipairs({ "q", "<Esc>" }) do

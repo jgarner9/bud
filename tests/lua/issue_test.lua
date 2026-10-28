@@ -208,7 +208,7 @@ vim.api.nvim_feedkeys("n", "x", false)
 eq(issue.runs[run.key], nil, "dropped")
 eq(#sent(), 1, "only round 1 sent")
 
--- capture: q keeps the draft, <C-s> sends it with the context
+-- capture: q keeps the draft, <CR> sends it with the context
 local real_start, started = issue.start, nil
 issue.start = function(report, target, root, c)
   started = { report = report, target = target, root = root, ctx = c }
@@ -223,7 +223,7 @@ eq(issue.drafts.project, { "Tree flickers", "when saving" }, "draft kept")
 issue.capture("project", target, repo, ctx)
 vim.cmd.stopinsert()
 eq(vim.api.nvim_buf_get_lines(0, 0, -1, false), { "Tree flickers", "when saving" }, "draft back")
-vim.api.nvim_feedkeys(vim.keycode("<C-s>"), "x", false)
+vim.api.nvim_feedkeys(vim.keycode("<CR>"), "x", false)
 eq(started.report, "Tree flickers\nwhen saving", "sent report")
 eq(started.ctx, ctx, "sent context")
 eq(issue.drafts.project, nil, "draft cleared")

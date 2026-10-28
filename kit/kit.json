@@ -24,7 +24,7 @@
     "file-issue"
   ],
   "plugins": [
-    "superpowers@claude-plugins-official"
+    "superpowers@anthropic-plugin-directory"
   ],
   "output-styles": [
     "bud"

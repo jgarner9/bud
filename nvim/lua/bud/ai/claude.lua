@@ -68,6 +68,7 @@ local function settings()
     idle_minutes = cfg.get("ai.claude.idle_minutes", 30),
     args = cfg.get("ai.claude.args", {}),
     command = cfg.get("ai.claude.command", {}),
+    output_style = M.output_style(),
   }
 end
 
@@ -115,8 +116,31 @@ function M.argv(bin, s, cfg)
     M.prefix(bin, cfg),
     { "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose" }
   )
+  if cfg.output_style then
+    vim.list_extend(argv, { "--settings", vim.json.encode({ outputStyle = cfg.output_style }) })
+  end
   vim.list_extend(argv, M.resume_args(s, cfg))
   return vim.list_extend(vim.list_extend(argv, cfg.args or {}), s.args or {})
+end
+
+-- output_style is outputStyle from the Claude Code config dir's settings.json
+-- (the kit's, or one you picked), which print mode ignores unless it's passed
+-- with --settings; nil when there's none
+function M.output_style()
+  local dir = vim.env.CLAUDE_CONFIG_DIR
+  if not dir or dir == "" then
+    dir = vim.fs.joinpath(vim.env.HOME, ".claude")
+  end
+  local f = io.open(vim.fs.joinpath(dir, "settings.json"))
+  if not f then
+    return nil
+  end
+  local ok, parsed = pcall(vim.json.decode, f:read("*a"))
+  f:close()
+  if ok and type(parsed) == "table" and type(parsed.outputStyle) == "string" then
+    return parsed.outputStyle
+  end
+  return nil
 end
 
 -- prefix is what runs claude: ai.claude.command when it's set (a wrapper

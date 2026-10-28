@@ -155,7 +155,7 @@ func (r Repo) AddMCP(name, url, cmd string) (string, error) {
 // AddPlugin lists a Claude Code plugin (name@marketplace) in the kit
 func (r Repo) AddPlugin(id string) error {
 	if !strings.Contains(id, "@") {
-		return fmt.Errorf("give the plugin as name@marketplace, e.g. superpowers@claude-plugins-official")
+		return fmt.Errorf("give the plugin as name@marketplace, e.g. superpowers@anthropic-plugin-directory")
 	}
 	_, err := r.add("plugin", id, nil)
 	return err

@@ -269,9 +269,12 @@ local function on_filed(run, d)
   end
   local lines = {}
   for _, f in ipairs(filed) do
+    -- the repo it's about, for working it later (bud.ai.work)
+    f.repo = run.root
     table.insert(M.filed, f)
     table.insert(lines, ("%s %s  %s"):format(f.action or "filed", f.id or "?", f.title or f.error or ""))
   end
+  table.insert(lines, "w in :BudIssues has Claude fix one")
   vim.notify("bud: " .. table.concat(lines, "\n"), vim.log.levels.INFO)
 end
 
@@ -578,31 +581,122 @@ function M.capture(kind, target, root, ctx)
   vim.cmd.startinsert({ bang = true })
 end
 
--- list shows what was filed this session; <CR> opens one in the browser
+-- list_lines draws :BudIssues: what was filed this session, and the issues
+-- Claude is working or has worked (bud.ai.work); rows[line] is the id there
+function M.list_lines(filed, runs)
+  local lines, rows, seen = { "" }, {}, {}
+  local function row(id, what, title, run)
+    local state = run and run.state or what
+    table.insert(lines, ("  %-10s %-9s %s"):format(id, state, title or ""))
+    rows[#lines] = id
+    if run then
+      table.insert(lines, ("  %-10s %s"):format("", run.branch .. "  " .. vim.fn.fnamemodify(run.worktree, ":~")))
+      rows[#lines] = id
+      if run.summary then
+        table.insert(lines, ("  %-10s %s"):format("", run.summary))
+        rows[#lines] = id
+      end
+    end
+  end
+  for _, f in ipairs(filed) do
+    if f.id then
+      seen[f.id] = true
+      row(f.id, f.action or "filed", f.title or f.error, runs[f.id])
+    end
+  end
+  local ids = vim.tbl_keys(runs)
+  table.sort(ids)
+  for _, id in ipairs(ids) do
+    if not seen[id] then
+      row(id, "", runs[id].title, runs[id])
+    end
+  end
+  table.insert(lines, "")
+  return lines, rows
+end
+
+-- work hands id to Claude to fix (bud.ai.work), in the repo it was filed
+-- for, else the current one
+function M.work(id, title)
+  local repo
+  for _, f in ipairs(M.filed) do
+    if f.id == id then
+      repo, title = f.repo, title or f.title
+    end
+  end
+  return require("bud.ai.work").start(id, title, repo or vim.fn.getcwd())
+end
+
+-- list shows :BudIssues: <CR> opens an issue, w has Claude fix it, d shows
+-- the fix's diff, a answers Claude's question
 function M.list()
-  if #M.filed == 0 then
+  local work = require("bud.ai.work")
+  if #M.filed == 0 and next(work.runs) == nil then
     vim.notify("bud: nothing filed yet this session (<leader>ai)")
     return
   end
-  local lines, urls = { "" }, {}
-  for _, f in ipairs(M.filed) do
-    table.insert(lines, ("  %-9s %-10s %s"):format(f.action or "filed", f.id or "?", f.title or f.error or ""))
-    urls[#lines] = f.url
-  end
-  table.insert(lines, "")
-  local buf, win = float(lines, { title = "issues filed", footer = "<CR> open · q close" })
+  local lines, rows = M.list_lines(M.filed, work.runs)
+  local buf, win = float(lines, {
+    title = "issues",
+    footer = "<CR> open · w fix it · d diff · a answer · q close",
+  })
   vim.bo[buf].modifiable = false
-  vim.keymap.set("n", "<CR>", function()
-    local url = urls[vim.fn.line(".")]
-    if url then
-      vim.ui.open(url)
+  local function here()
+    return rows[vim.fn.line(".")]
+  end
+  local function map(lhs, fn)
+    vim.keymap.set("n", lhs, function()
+      local id = here()
+      if id then
+        fn(id)
+      end
+    end, { buffer = buf, nowait = true })
+  end
+  map("<CR>", function(id)
+    for _, f in ipairs(M.filed) do
+      if f.id == id and f.url then
+        return vim.ui.open(f.url)
+      end
     end
-  end, { buffer = buf })
+  end)
+  map("w", function(id)
+    close(win)
+    M.work(id)
+  end)
+  map("d", function(id)
+    close(win)
+    work.diff(id)
+  end)
+  map("a", function(id)
+    local run = work.runs[id]
+    if not run or run.state ~= "waiting" then
+      return vim.notify("bud: Claude isn't waiting on an answer for " .. id)
+    end
+    close(win)
+    vim.ui.input({ prompt = "Answer Claude about " .. id .. ": " }, function(text)
+      if text and text ~= "" then
+        work.answer(id, text)
+      end
+    end)
+  end)
   for _, lhs in ipairs({ "q", "<Esc>" }) do
     vim.keymap.set("n", lhs, function()
       close(win)
     end, { buffer = buf, nowait = true })
   end
+end
+
+-- work_prompt asks which issue to work, the last filed by default
+local function work_prompt(id)
+  if id and id ~= "" then
+    return M.work(id:upper())
+  end
+  local last = M.filed[#M.filed]
+  vim.ui.input({ prompt = "Issue for Claude to fix: ", default = last and last.id or "" }, function(text)
+    if text and text ~= "" then
+      M.work(vim.trim(text):upper())
+    end
+  end)
 end
 
 function M.setup()
@@ -613,16 +707,23 @@ function M.setup()
   vim.keymap.set({ "n", "x" }, "<leader>aB", function()
     M.open("bud")
   end, { desc = "File an issue about bud" })
+  vim.keymap.set("n", "<leader>aw", function()
+    work_prompt()
+  end, { desc = "Have Claude fix an issue" })
   vim.api.nvim_create_user_command("BudIssue", function(o)
-    M.open(o.args == "bud" and "bud" or "project")
+    if o.fargs[1] == "work" then
+      return work_prompt(o.fargs[2])
+    end
+    M.open(o.fargs[1] == "bud" and "bud" or "project")
   end, {
-    nargs = "?",
-    desc = "File an issue with Claude: about this project, or bud",
+    nargs = "*",
+    desc = "File an issue with Claude (about this project, or bud), or have Claude fix one (work ID)",
     complete = function()
-      return { "bud" }
+      return { "bud", "work" }
     end,
   })
-  vim.api.nvim_create_user_command("BudIssues", M.list, { desc = "Issues filed this session" })
+  vim.api.nvim_create_user_command("BudIssues", M.list, { desc = "Issues filed and being fixed this session" })
+  require("bud.ai.work").setup()
 end
 
 return M

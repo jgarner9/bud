@@ -6,7 +6,8 @@ Spot a problem while you work, press a key, say what's wrong, and Claude turns i
 | --- | --- |
 | `<leader>ai` | An issue about this project (`:BudIssue`) |
 | `<leader>aB` | An issue about bud itself (`:BudIssue bud`) |
-| `:BudIssues` | What you filed this session; `<CR>` opens one |
+| `<leader>aw` | Have Claude fix an issue (`:BudIssue work JGA-12`); the last one filed by default |
+| `:BudIssues` | What you filed and what Claude is fixing; `<CR>` opens one, `w` fixes it, `d` shows the fix, `a` answers Claude |
 
 ## How it goes
 
@@ -16,6 +17,14 @@ Spot a problem while you work, press a key, say what's wrong, and Claude turns i
 4. On `y`, Claude files exactly what you approved and bud tells you the ids.
 
 Until you press `y`, Claude can read Linear but not write to it: bud refuses its writes, so nothing is filed by accident.
+
+## Having Claude fix one
+
+`w` on an issue in `:BudIssues` (or `<leader>aw`) hands it to Claude in a git worktree of its own, next to your repo: `<repo>.worktrees/<id>`, on a branch named after the issue (`jga-12-dashboard-drops-a-row`) from your default branch. Your checkout and open buffers never change.
+
+Claude reads the issue, moves it to In Progress, makes the fix, runs the project's checks, commits on that branch with the issue id and moves the issue to In Review. Its edits inside the worktree go through without asking; shell commands (the checks, git) still ask you, and so would an edit anywhere else. The statusline shows how many are in progress, and a question from Claude shows up as a notification: answer it with `a` in `:BudIssues`.
+
+When it's done, `d` opens the diff against the base in diffview. Merging, pushing and removing the worktree (`git worktree remove <path>`) are yours. For bud's own issues, Claude needs a checkout: `bud dev link ~/dev/bud`.
 
 ## Where issues go
 

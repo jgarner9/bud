@@ -24,6 +24,11 @@
       "rev": "b297353e82c0390a2ca0c549b1c1acb6802e0c4c",
       "src": "https://github.com/dlyongemallo/diffview-plus.nvim"
     },
+    "dropbar.nvim": {
+      "rev": "418897fe7828b2749ca78056ec8d8ad43136b695",
+      "src": "https://github.com/Bekaboo/dropbar.nvim",
+      "version": "14.0.0 - 15.0.0"
+    },
     "fzf-lua": {
       "rev": "5b88d6f0af7fcb41d4a8bb340bf70d7e3824ee9d",
       "src": "https://github.com/ibhagwan/fzf-lua"

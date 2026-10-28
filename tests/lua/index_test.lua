@@ -14,7 +14,7 @@ vim.fn.mkdir(tmp .. "/ready/.cocoindex_code", "p")
 vim.fn.mkdir(tmp .. "/fresh", "p")
 -- the fake ccc takes a moment, logs where it ran, and leaves everything else alone
 local fake = tmp .. "/ccc"
-vim.fn.writefile({ "#!/bin/sh", "sleep 0.3", 'pwd >> "$(dirname "$0")/ran.log"' }, fake)
+vim.fn.writefile({ "#!/bin/sh", "sleep 1", 'pwd >> "$(dirname "$0")/ran.log"' }, fake)
 vim.fn.setfperm(fake, "rwxr-xr-x")
 
 local index = require("bud.ai.index")
@@ -24,7 +24,8 @@ end
 
 local start = vim.uv.hrtime()
 eq(index.warm(tmp .. "/ready"), true, "started")
-eq((vim.uv.hrtime() - start) / 1e6 < 100, true, "without waiting for it")
+-- well under the fake's second: spawning alone can take 100 ms on a busy CI runner
+eq((vim.uv.hrtime() - start) / 1e6 < 700, true, "without waiting for it")
 eq(index.state(tmp .. "/ready"), "indexing", "indexing meanwhile")
 eq(index.warm(tmp .. "/ready"), false, "once per project")
 eq(index.warm(tmp .. "/fresh"), false, "not a project ccc init hasn't seen")

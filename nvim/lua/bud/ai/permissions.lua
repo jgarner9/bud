@@ -239,10 +239,23 @@ show_next = function()
   end)
 end
 
+-- policies answer some requests without asking: each is fn(req) returning
+-- "allow", "deny" (and a message for Claude), or nil to pass. A module adds
+-- one for the requests it owns, such as bud.ai.issue's Linear writes
+M.policies = {}
+
 -- request asks about one tool use: req = { tool, input, root, id,
 -- respond(result) }, where result is Claude Code's { behavior, ... }.
 -- Requests wait their turn, one on screen at a time
 function M.request(req)
+  for _, policy in ipairs(M.policies) do
+    local verdict, message = policy(req)
+    if verdict == "allow" then
+      return req.respond(allow(req.input))
+    elseif verdict == "deny" then
+      return req.respond(deny(message))
+    end
+  end
   local mine = remembered[req.root or ""]
   if mine and mine[M.key(req.tool, req.input)] then
     return req.respond(allow(req.input))

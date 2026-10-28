@@ -31,3 +31,8 @@ Each event carries plain fields and, as `raw`, Claude Code's own stream-json eve
 A TUI that shouldn't share the project's conversation can have its own: `claude.session(dir, { key = "my-tui", resume = "new" })`, then `claude.send(text, { key = "my-tui" })`. Chat (`key = "chat"`) and `:BudGen` (`key = "gen"`) work this way.
 
 Put it in `nvim/lua/bud/` to ship it with bud, or make it a tool (see tools.md) to keep it on your machine.
+
+## Answering permission requests yourself
+
+A module that owns some tool calls can answer them without a prompt: add a function to `require("bud.ai.permissions").policies` that takes the request (`tool`, `input`, `root`) and returns `"allow"`, `"deny"` and a message for Claude, or `nil` to let the usual prompt ask. `bud.ai.issue` uses one so Linear writes only happen after you approve the issues.
+

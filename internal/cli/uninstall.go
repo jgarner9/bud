@@ -12,6 +12,7 @@ import (
 
 	"jgarner.dev/bud/internal/bundle"
 	"jgarner.dev/bud/internal/installer"
+	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -109,6 +110,14 @@ func planUninstall(p *paths.Paths, keepConfig bool, exe string) (removals []remo
 		return nil, nil, err
 	}
 
+	// before the state dir goes, with the kit's ledger in it. A kit that can't
+	// be listed doesn't block the rest
+	if r, ok, err := kitRemoval(p); err != nil {
+		kept = append(kept, fmt.Sprintf("what bud's kit added to Claude Code (couldn't list it: %v; 'bud kit unsync' takes it out)", err))
+	} else if ok {
+		removals = append(removals, r)
+	}
+
 	if r, ok, err := configRemoval(p.Config); err != nil {
 		return nil, nil, err
 	} else if ok {
@@ -150,6 +159,54 @@ func planUninstall(p *paths.Paths, keepConfig bool, exe string) (removals []remo
 	}
 
 	return removals, kept, nil
+}
+
+// kitRemoval takes out of Claude Code's config what the kit put there
+// (JGA-151), the same as bud kit unsync. bud's own config dir goes with the
+// data dir anyway; a shared ~/.claude (D76), or a CLAUDE_CONFIG_DIR you set,
+// keeps everything of yours
+func kitRemoval(p *paths.Paths) (removal, bool, error) {
+	ledger, ok, err := kit.ReadLedger(p.KitLedger())
+	if err != nil || !ok {
+		return removal{}, false, err
+	}
+	dir := ledger.Dir
+	if dir == "" {
+		if dir, err = homeClaudeDir(); err != nil {
+			return removal{}, false, err
+		}
+	}
+	if rel, err := filepath.Rel(p.Data, dir); err == nil && filepath.IsLocal(rel) {
+		return removal{}, false, nil
+	}
+	env, err := kitEnv(p)
+	if err != nil {
+		return removal{}, false, err
+	}
+	env.ClaudeDir, env.ClaudeJSON = dir, claudeJSONFor(dir)
+	var actions []kit.Action
+	err = withClaudeDir(dir, func() (err error) {
+		actions, err = kit.Unsync(env, true)
+		return err
+	})
+	if err != nil || len(actions) == 0 {
+		return removal{}, false, err
+	}
+	noun := "things"
+	if len(actions) == 1 {
+		noun = "thing"
+	}
+
+	return removal{
+		path: dir,
+		what: fmt.Sprintf("the %d %s bud's kit added to Claude Code ('bud kit unsync --dry-run' lists them); everything of yours stays", len(actions), noun),
+		do: func() error {
+			return withClaudeDir(dir, func() error {
+				_, err := kit.Unsync(env, false)
+				return err
+			})
+		},
+	}, true, nil
 }
 
 func configRemoval(dir string) (removal, bool, error) {

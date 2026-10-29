@@ -22,4 +22,4 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 ## Starting over
 
-`bud uninstall` lists everything bud put on the machine and removes it after asking (`--keep-config` keeps `config.json` and your tools). Then reinstall with the one-liner from the README.
+`bud uninstall` lists everything bud put on the machine and removes it after asking (`--keep-config` keeps `config.json` and your tools). With a shared `~/.claude` that includes what the kit added there, the same as `bud kit unsync`; everything of yours stays. Then reinstall with the one-liner from the README.

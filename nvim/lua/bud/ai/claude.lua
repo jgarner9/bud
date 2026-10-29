@@ -289,6 +289,7 @@ end
 -- (JGA-150): an SSO login that expired, temporary keys past their time, or
 -- no credentials at all
 local aws_errors = {
+  "aws authentication failed",
   "expiredtoken",
   "security token included in the request is expired",
   "security token included in the request is invalid",
@@ -382,7 +383,8 @@ function M.handle(s, ev)
     local ok = ev.subtype == "success" and not ev.is_error
     -- auth already: the turn stopped after a retry said the login expired
     if s.status ~= "auth" then
-      if not ok and M.aws_expired(ev.result) then
+      -- Claude Code marks a rejected cloud login provider_credentials
+      if not ok and (ev.api_error == "provider_credentials" or M.aws_expired(ev.result)) then
         auth_expired(s)
       else
         set_status(s, "ready")

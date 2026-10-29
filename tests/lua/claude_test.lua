@@ -152,6 +152,14 @@ eq(claude.aws_expired("ExpiredTokenException: The security token included in the
 eq(claude.aws_expired("Error: The SSO session associated with this profile has expired"), true, "sso")
 eq(claude.aws_expired("Could not load credentials from any providers"), true, "none")
 eq(claude.aws_expired("API Error: 529 overloaded"), false, "not AWS")
+-- what Claude Code 2.1.312 says after its retries, with fake AWS keys
+eq(
+  claude.aws_expired(
+    "AWS authentication failed · refresh your AWS credentials (SSO sign-in, access keys, API key or proxy token) and retry · API Error: 403 The security token included in the request is invalid."
+  ),
+  true,
+  "Claude Code's own message"
+)
 eq(claude.aws_expired(nil), false, "nothing")
 do
   local dir = vim.fn.tempname()

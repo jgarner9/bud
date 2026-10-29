@@ -18,6 +18,7 @@ func TestOfferHeadroom(t *testing.T) {
 	}
 	orig := lookPath
 	t.Cleanup(func() { lookPath = orig })
+	fakeClaude(t, claudeReady)
 	installed := func(string) (string, error) { return "/bin/headroom", nil }
 	command := func() []string {
 		f, _ := config.Load(p.MachineConfig())
@@ -52,6 +53,16 @@ func TestOfferHeadroom(t *testing.T) {
 	if command() != nil {
 		t.Fatal("set without a yes")
 	}
+
+	// Bedrock goes past Headroom's proxy: not offered (JGA-149)
+	bedrock := claudeReady
+	bedrock.Method = "Amazon Bedrock"
+	fakeClaude(t, bedrock)
+	offer(yesPrompter("y\n"))
+	if command() != nil {
+		t.Fatal("offered on Bedrock")
+	}
+	fakeClaude(t, claudeReady)
 
 	// yes: sessions run through it
 	offer(yesPrompter("y\n"))

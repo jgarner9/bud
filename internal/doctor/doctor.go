@@ -113,8 +113,9 @@ func Run(opts Options) []Result {
 		}
 	}
 
-	results = append(results, checkClaude(cfg))
-	if r, ok := checkClaudeCommand(cfg); ok {
+	cr, status := checkClaude(cfg)
+	results = append(results, cr)
+	if r, ok := checkClaudeCommand(cfg, status); ok {
 		results = append(results, r)
 	}
 
@@ -124,7 +125,7 @@ func Run(opts Options) []Result {
 // checkClaudeCommand looks for the wrapper ai.claude.command runs Claude Code
 // through (D60, Headroom's): without it every session fails to start. Only
 // when one is set; it only warns, like the Claude Code check
-func checkClaudeCommand(cfg config.Settings) (Result, bool) {
+func checkClaudeCommand(cfg config.Settings, s claude.Status) (Result, bool) {
 	cmd := cfg.AI.Claude.Command
 	if len(cmd) == 0 {
 		return Result{}, false
@@ -133,6 +134,14 @@ func checkClaudeCommand(cfg config.Settings) (Result, bool) {
 	if _, err := lookPath(cmd[0]); err != nil {
 		r.Status = Warn
 		r.Detail = "ai.claude.command runs " + cmd[0] + ", which isn't on PATH, so Claude Code sessions can't start"
+		r.Fix = "bud config unset ai.claude.command"
+		return r, true
+	}
+	// Bedrock and the rest go to their cloud directly, past Headroom's proxy
+	// (JGA-149): it starts, but compresses nothing
+	if filepath.Base(cmd[0]) == "headroom" && s.Cloud() {
+		r.Status = Warn
+		r.Detail = "Claude Code on " + s.Method + " talks to it directly, past Headroom's proxy, so Headroom compresses nothing"
 		r.Fix = "bud config unset ai.claude.command"
 		return r, true
 	}
@@ -146,7 +155,7 @@ const ClaudeCheck = "claude code"
 
 // checkClaude reports Claude Code. It only ever warns: bud works without it,
 // there's just no AI (BASE.md 4.2)
-func checkClaude(cfg config.Settings) Result {
+func checkClaude(cfg config.Settings) (Result, claude.Status) {
 	r := Result{Name: ClaudeCheck}
 	s, err := claudeCheck()
 	switch {
@@ -164,7 +173,7 @@ func checkClaude(cfg config.Settings) Result {
 		r.Detail = s.Version + ", logged in with " + s.Method
 	}
 
-	return r
+	return r, s
 }
 
 // checkProjects reads the project registry. A broken one only warns: bud still

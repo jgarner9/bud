@@ -206,6 +206,10 @@ func offerHeadroom(pr *prompter, f *config.File, s config.Settings) error {
 	if _, err := lookPath("headroom"); err != nil {
 		return nil
 	}
+	// a cloud provider goes past Headroom's proxy, so it would do nothing (JGA-149)
+	if c, err := checkClaude(); err == nil && c.Cloud() {
+		return nil
+	}
 	ok, err := pr.confirm("Headroom is installed. Run bud's Claude Code sessions through it (compressed context, fewer tokens)?")
 	if err != nil || !ok {
 		return err

@@ -36,6 +36,8 @@ vim.fn.writefile({
   [[  printf '%s\n' "$line" >> "$(dirname "$0")/stdin.log"]],
   '  case "$line" in *crash*) exit 3;; *control_request*) continue;; esac',
   -- what a Bedrock session says once its AWS login ran out (JGA-150)
+  -- and how Claude Code says it first: retrying a 403 for minutes
+  [[  case "$line" in *retry*) printf '{"type":"system","subtype":"api_retry","attempt":1,"error_status":403,"error":"authentication_failed","session_id":"sess-1"}\n'; continue;; esac]],
   [[  case "$line" in *expire*) printf '{"type":"result","subtype":"success","is_error":true,"session_id":"sess-1","result":"API Error: 403 The security token included in the request is expired"}\n'; continue;; esac]],
   "  n=$((n+1))",
   [[  printf '{"type":"system","subtype":"init","session_id":"sess-1","model":"m"}\n']],
@@ -286,6 +288,30 @@ do
   wait(function()
     return claude.status(a) == "ready" and s.job ~= nil and s.job ~= old
   end, "a new process after the login")
+
+  -- on Bedrock, the first retry of a rejected login says so and stops the turn
+  vim.notify = function() end
+  claude.send("retry", { root = a })
+  wait(function()
+    return claude.status(a) == "busy"
+  end, "busy")
+  eq(claude.bedrock(s), false, "model m, no env: not Bedrock")
+  vim.env.CLAUDE_CODE_USE_BEDROCK = "1"
+  claude.send("retry", { root = a })
+  wait(function()
+    return claude.status(a) == "auth"
+  end, "auth after a retry")
+  vim.env.CLAUDE_CODE_USE_BEDROCK = nil
+  vim.notify = orig_notify
+  wait(function()
+    local got = lines("stdin.log")
+    return got[#got]:find('"interrupt"', 1, true) ~= nil
+  end, "the turn stopped")
+  eq(claude.bedrock({ model = "us.anthropic.claude-opus-5-5" }), true, "a Bedrock model id")
+  claude.send("again", { root = a })
+  wait(function()
+    return claude.status(a) == "ready"
+  end, "back after the retry")
 end
 
 -- the last three projects keep their sessions; a fourth stops the oldest (D49)

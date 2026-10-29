@@ -120,6 +120,17 @@ func Check() (Status, error) {
 	return s, nil
 }
 
+// Cloud says whether Claude Code is logged in on a cloud provider (Bedrock,
+// Vertex, Foundry), which it talks to directly, not through ANTHROPIC_BASE_URL
+func (s Status) Cloud() bool {
+	for _, p := range providerVars {
+		if s.LoggedIn && s.Method == p.name {
+			return true
+		}
+	}
+	return false
+}
+
 // homeProvider is the cloud provider ~/.claude/settings.json's env turns on,
 // when CLAUDE_CONFIG_DIR points somewhere else; "" otherwise
 func homeProvider() string {

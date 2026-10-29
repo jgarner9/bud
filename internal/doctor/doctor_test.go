@@ -471,7 +471,7 @@ func TestCheckClaude(t *testing.T) {
 		{"broken", on, claude.Status{Bin: "/c"}, errors.New("boom"), Warn, "boom"},
 	} {
 		claudeCheck = func() (claude.Status, error) { return c.status, c.err }
-		r := checkClaude(c.cfg)
+		r, _ := checkClaude(c.cfg)
 		if r.Status != c.want || !strings.Contains(r.Detail, c.detail) {
 			t.Errorf("%s: got %v %q", c.name, r.Status, r.Detail)
 		}
@@ -485,17 +485,31 @@ func TestCheckClaudeCommand(t *testing.T) {
 	orig := lookPath
 	t.Cleanup(func() { lookPath = orig })
 	cfg := config.Defaults()
-	if _, ok := checkClaudeCommand(cfg); ok {
+	if _, ok := checkClaudeCommand(cfg, claude.Status{}); ok {
 		t.Fatal("checked with no command set")
 	}
 
 	cfg.AI.Claude.Command = []string{"headroom", "wrap", "claude", "--"}
 	lookPath = func(string) (string, error) { return "/bin/headroom", nil }
-	if r, ok := checkClaudeCommand(cfg); !ok || r.Status != OK || !strings.Contains(r.Detail, "headroom wrap claude") {
+	if r, ok := checkClaudeCommand(cfg, claude.Status{}); !ok || r.Status != OK || !strings.Contains(r.Detail, "headroom wrap claude") {
 		t.Fatalf("present: %+v", r)
 	}
 	lookPath = func(string) (string, error) { return "", errors.New("not found") }
-	if r, _ := checkClaudeCommand(cfg); r.Status != Warn || r.Fix != "bud config unset ai.claude.command" {
+	if r, _ := checkClaudeCommand(cfg, claude.Status{}); r.Status != Warn || r.Fix != "bud config unset ai.claude.command" {
 		t.Fatalf("missing: %+v", r)
+	}
+
+	// Bedrock goes past Headroom's proxy (JGA-149)
+	lookPath = func(string) (string, error) { return "/bin/headroom", nil }
+	bedrock := claude.Status{Bin: "/c", LoggedIn: true, Method: "Amazon Bedrock"}
+	if !bedrock.Cloud() {
+		t.Fatal("Bedrock isn't a cloud provider")
+	}
+	if r, _ := checkClaudeCommand(cfg, bedrock); r.Status != Warn || !strings.Contains(r.Detail, "compresses nothing") {
+		t.Fatalf("bedrock: %+v", r)
+	}
+	cfg.AI.Claude.Command = []string{"mywrap", "--"}
+	if r, _ := checkClaudeCommand(cfg, bedrock); r.Status != OK {
+		t.Fatalf("another wrapper on bedrock: %+v", r)
 	}
 }

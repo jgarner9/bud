@@ -327,6 +327,18 @@ function M.aws_fix()
   return "aws sso login" .. (type(profile) == "string" and profile ~= "" and (" --profile " .. profile) or "")
 end
 
+-- bedrock says whether s runs on Amazon Bedrock: its model is a Bedrock id
+-- ("us.anthropic.claude-..."), which holds however that was set up, or the
+-- environment or settings.json turns it on
+function M.bedrock(s)
+  if type(s.model) == "string" and s.model:find("anthropic.", 1, true) then
+    return true
+  end
+  local env = claude_settings().env
+  local v = vim.env.CLAUDE_CODE_USE_BEDROCK or (type(env) == "table" and env.CLAUDE_CODE_USE_BEDROCK)
+  return v == true or (type(v) == "string" and vim.tbl_contains({ "1", "true", "yes", "on" }, vim.trim(v):lower()))
+end
+
 -- auth_expired marks s as needing an AWS login; the next send starts a new
 -- process, which reads the new credentials
 local function auth_expired(s)
@@ -345,6 +357,17 @@ function M.handle(s, ev)
   end
   if ev.type == "system" and ev.subtype == "init" then
     s.model = ev.model
+  elseif ev.type == "system" and ev.subtype == "api_retry" then
+    -- Claude Code retries a rejected login for minutes; on Bedrock that's an
+    -- expired AWS login, so say so now and stop the turn
+    if ev.error == "authentication_failed" and s.status ~= "auth" and M.bedrock(s) then
+      auth_expired(s)
+      if s.job then
+        s.requests = (s.requests or 0) + 1
+        local req = { type = "control_request", request_id = "bud-" .. s.requests, request = { subtype = "interrupt" } }
+        vim.fn.chansend(s.job, vim.json.encode(req) .. "\n")
+      end
+    end
   elseif ev.type == "assistant" and type(ev.message) == "table" then
     for _, block in ipairs(ev.message.content or {}) do
       if block.type == "text" then
@@ -357,10 +380,13 @@ function M.handle(s, ev)
     s.cost = (s.cost or 0) + (ev.total_cost_usd or 0)
     s.last_used = now()
     local ok = ev.subtype == "success" and not ev.is_error
-    if not ok and M.aws_expired(ev.result) then
-      auth_expired(s)
-    else
-      set_status(s, "ready")
+    -- auth already: the turn stopped after a retry said the login expired
+    if s.status ~= "auth" then
+      if not ok and M.aws_expired(ev.result) then
+        auth_expired(s)
+      else
+        set_status(s, "ready")
+      end
     end
     emit("done", {
       ok = ok,

@@ -18,7 +18,7 @@
 --   claude.send("explain this", { context = { "lua/x.lua" } })
 --   claude.on("message", function(ev, session) ... end)
 --   claude.interrupt()
---   claude.status()                        -- starting|ready|busy|stopped|missing|term
+--   claude.status()                        -- starting|ready|busy|stopped|missing|term|auth
 
 local M = {}
 
@@ -170,24 +170,28 @@ function M.argv(bin, s, cfg)
   return vim.list_extend(vim.list_extend(argv, cfg.args or {}), s.args or {})
 end
 
--- output_style is outputStyle from the Claude Code config dir's settings.json
--- (the kit's, or one you picked), which print mode ignores unless it's passed
--- with --settings; nil when there's none
-function M.output_style()
+-- claude_settings is the Claude Code config dir's settings.json, {} when
+-- there's none or it's broken
+local function claude_settings()
   local dir = vim.env.CLAUDE_CONFIG_DIR
   if not dir or dir == "" then
     dir = vim.fs.joinpath(vim.env.HOME, ".claude")
   end
   local f = io.open(vim.fs.joinpath(dir, "settings.json"))
   if not f then
-    return nil
+    return {}
   end
   local ok, parsed = pcall(vim.json.decode, f:read("*a"))
   f:close()
-  if ok and type(parsed) == "table" and type(parsed.outputStyle) == "string" then
-    return parsed.outputStyle
-  end
-  return nil
+  return ok and type(parsed) == "table" and parsed or {}
+end
+
+-- output_style is outputStyle from the Claude Code config dir's settings.json
+-- (the kit's, or one you picked), which print mode ignores unless it's passed
+-- with --settings; nil when there's none
+function M.output_style()
+  local style = claude_settings().outputStyle
+  return type(style) == "string" and style or nil
 end
 
 -- prefix is what runs claude: ai.claude.command when it's set (a wrapper
@@ -281,6 +285,56 @@ function M.resume_args(s, cfg)
   return {}
 end
 
+-- what AWS says when a Bedrock session's credentials ran out or aren't there
+-- (JGA-150): an SSO login that expired, temporary keys past their time, or
+-- no credentials at all
+local aws_errors = {
+  "expiredtoken",
+  "security token included in the request is expired",
+  "security token included in the request is invalid",
+  "token has expired",
+  "token is expired",
+  "sso session",
+  "credentials have expired",
+  "could not load credentials",
+  "unable to locate credentials",
+  "unrecognizedclientexception",
+}
+
+-- aws_expired says whether text is one of those errors
+function M.aws_expired(text)
+  if type(text) ~= "string" then
+    return false
+  end
+  text = text:lower()
+  for _, pattern in ipairs(aws_errors) do
+    if text:find(pattern, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+-- aws_fix is how to log in again: the awsAuthRefresh command settings.json
+-- names, else aws sso login for the profile in use
+function M.aws_fix()
+  local cfg = claude_settings()
+  if type(cfg.awsAuthRefresh) == "string" and cfg.awsAuthRefresh ~= "" then
+    return cfg.awsAuthRefresh
+  end
+  local env = type(cfg.env) == "table" and cfg.env or {}
+  local profile = vim.env.AWS_PROFILE or env.AWS_PROFILE
+  return "aws sso login" .. (type(profile) == "string" and profile ~= "" and (" --profile " .. profile) or "")
+end
+
+-- auth_expired marks s as needing an AWS login; the next send starts a new
+-- process, which reads the new credentials
+local function auth_expired(s)
+  local why = "AWS credentials expired: run " .. M.aws_fix() .. ", then send again"
+  set_status(s, "auth", why)
+  vim.notify("bud: " .. why, vim.log.levels.WARN)
+end
+
 -- handle turns one stream-json event into bud's events
 function M.handle(s, ev)
   if ev.session_id then
@@ -302,9 +356,14 @@ function M.handle(s, ev)
   elseif ev.type == "result" then
     s.cost = (s.cost or 0) + (ev.total_cost_usd or 0)
     s.last_used = now()
-    set_status(s, "ready")
+    local ok = ev.subtype == "success" and not ev.is_error
+    if not ok and M.aws_expired(ev.result) then
+      auth_expired(s)
+    else
+      set_status(s, "ready")
+    end
     emit("done", {
-      ok = ev.subtype == "success" and not ev.is_error,
+      ok = ok,
       text = ev.result,
       cost = ev.total_cost_usd,
       denials = ev.permission_denials,
@@ -420,12 +479,22 @@ start_job = function(s, bin, secrets, mcp)
         s.stderr = text
       end
     end,
-    on_exit = function(_, code)
+    on_exit = function(id, code)
+      -- one send let go of after an expired login: a new one has the session
+      if s.job ~= id then
+        return
+      end
       local wanted = s.stopping
       s.job, s.stopping, s.partial = nil, nil, nil
       s.crashed = not wanted
-      -- a handover stopped it, and the terminal has the session now
-      if not s.term then
+      -- dying of expired AWS credentials isn't a crash: a login fixes it
+      if s.crashed and M.aws_expired(s.stderr) then
+        s.crashed = false
+        auth_expired(s)
+      end
+      -- a handover stopped it, and the terminal has the session now; an
+      -- expired login keeps saying so
+      if not s.term and s.status ~= "auth" then
         set_status(
           s,
           "stopped",
@@ -586,6 +655,13 @@ end
 function M.send(text, opts)
   opts = opts or {}
   local keyed = opts.key and sessions[opts.key]
+  -- after an expired AWS login, a new process, like restart
+  local old = keyed or sessions[root_of(opts.root)]
+  if old and old.status == "auth" and old.job then
+    local job = old.job
+    old.job = nil
+    vim.fn.jobstop(job)
+  end
   local s = keyed and M.session(keyed.root, { key = opts.key }) or M.session(opts.root)
   if s.term then
     vim.notify("bud: Claude Code is open in its terminal (<leader>ac)", vim.log.levels.INFO)
@@ -706,6 +782,7 @@ function M.statusline()
     stopped = "idle",
     missing = "not set up",
     term = "in terminal",
+    auth = "AWS login expired",
   })[s.status]
   return label == "" and icon or (icon .. " " .. label)
 end

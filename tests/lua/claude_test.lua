@@ -35,6 +35,8 @@ vim.fn.writefile({
   "while IFS= read -r line; do",
   [[  printf '%s\n' "$line" >> "$(dirname "$0")/stdin.log"]],
   '  case "$line" in *crash*) exit 3;; *control_request*) continue;; esac',
+  -- what a Bedrock session says once its AWS login ran out (JGA-150)
+  [[  case "$line" in *expire*) printf '{"type":"result","subtype":"success","is_error":true,"session_id":"sess-1","result":"API Error: 403 The security token included in the request is expired"}\n'; continue;; esac]],
   "  n=$((n+1))",
   [[  printf '{"type":"system","subtype":"init","session_id":"sess-1","model":"m"}\n']],
   [[  printf '{"type":"assistant","session_id":"sess-1","message":{"content":[{"type":"text","text":"reply %s"},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"x"}}]}}\n' "$n"]],
@@ -143,6 +145,28 @@ do
   vim.env.CLAUDE_CONFIG_DIR = old
 end
 
+-- the AWS errors a Bedrock session can hit, and how to log in again
+eq(claude.aws_expired("ExpiredTokenException: The security token included in the request is expired"), true, "expired")
+eq(claude.aws_expired("Error: The SSO session associated with this profile has expired"), true, "sso")
+eq(claude.aws_expired("Could not load credentials from any providers"), true, "none")
+eq(claude.aws_expired("API Error: 529 overloaded"), false, "not AWS")
+eq(claude.aws_expired(nil), false, "nothing")
+do
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, "p")
+  local old_dir, old_profile = vim.env.CLAUDE_CONFIG_DIR, vim.env.AWS_PROFILE
+  vim.env.CLAUDE_CONFIG_DIR, vim.env.AWS_PROFILE = dir, nil
+  eq(claude.aws_fix(), "aws sso login", "the default")
+  vim.fn.writefile({ '{"env": {"AWS_PROFILE": "work"}}' }, dir .. "/settings.json")
+  eq(claude.aws_fix(), "aws sso login --profile work", "the profile from settings.json")
+  vim.fn.writefile(
+    { '{"awsAuthRefresh": "aws sso login --sso-session corp", "env": {"AWS_PROFILE": "work"}}' },
+    dir .. "/settings.json"
+  )
+  eq(claude.aws_fix(), "aws sso login --sso-session corp", "awsAuthRefresh wins")
+  vim.env.CLAUDE_CONFIG_DIR, vim.env.AWS_PROFILE = old_dir, old_profile
+end
+
 -- a cloud provider in ~/.claude, which bud's own config dir doesn't see
 do
   local old_home, old_dir = vim.env.HOME, vim.env.CLAUDE_CONFIG_DIR
@@ -239,6 +263,30 @@ wait(function()
   return claude.status(a) == "ready"
 end, "restart")
 eq(s.crashed, false, "restarted")
+
+-- expired AWS credentials say how to log in again, and the next send starts
+-- a new process that reads the new ones
+do
+  local notes = {}
+  local orig_notify = vim.notify
+  vim.notify = function(note)
+    table.insert(notes, note)
+  end
+  claude.send("expire", { root = a })
+  wait(function()
+    return claude.status(a) == "auth"
+  end, "auth status")
+  vim.notify = orig_notify
+  eq(s.crashed, false, "an expired login isn't a crash")
+  eq(s.why:match("run aws sso login") ~= nil, true, "names the fix")
+  eq(notes[1]:match("AWS credentials expired") ~= nil, true, "tells you")
+  eq(claude.statusline():match("AWS login expired") ~= nil, true, "statusline says so")
+  local old = s.job
+  claude.send("again", { root = a })
+  wait(function()
+    return claude.status(a) == "ready" and s.job ~= nil and s.job ~= old
+  end, "a new process after the login")
+end
 
 -- the last three projects keep their sessions; a fourth stops the oldest (D49)
 local b, c, d = project("b"), project("c"), project("d")

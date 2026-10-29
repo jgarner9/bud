@@ -136,6 +136,7 @@ eq(ask("Edit", { file_path = run.worktree .. "/README" }).behavior, "allow", "ed
 eq(work.policy({ tool = "Edit", input = { file_path = repo .. "/README" }, root = run.worktree }), nil, "edit outside")
 eq(work.policy({ tool = "Bash", input = { command = "just check" }, root = run.worktree }), nil, "commands asked")
 eq(ask("mcp__claude_ai_Linear__save_issue", {}).behavior, "allow", "moving the issue")
+eq(ask("mcp__linear__save_issue", {}).behavior, "allow", "through the kit's linear server too")
 eq(work.policy({ tool = "Edit", input = { file_path = repo .. "/README" }, root = repo }), nil, "another root")
 
 eq(work.answer("JGA-7", "Fold it."), true, "answered")

@@ -146,6 +146,8 @@ local function ask(tool, root)
 end
 eq(ask("mcp__claude_ai_Linear__list_issues").behavior, "allow", "read while proposing")
 eq(ask("mcp__claude_ai_Linear__save_issue").behavior, "deny", "write while proposing")
+eq(ask("mcp__linear__save_issue").behavior, "deny", "the kit's linear server too")
+eq(ask("mcp__linear__list_issues").behavior, "allow", "its reads too")
 eq(issue.policy({ tool = "mcp__claude_ai_Linear__save_issue", root = "/elsewhere" }), nil, "another root")
 eq(issue.policy({ tool = "Bash", root = repo }), nil, "not Linear")
 run.state = "filing"

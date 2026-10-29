@@ -32,6 +32,20 @@ func TestShippedKit(t *testing.T) {
 	if !strings.Contains(string(server), `"CONTEXT7_API_KEY":"${CONTEXT7_API_KEY}"`) {
 		t.Errorf("secret reference: %s", server)
 	}
+
+	// Linear comes from the kit only where the claude.ai connector doesn't
+	// give it (Bedrock, JGA-148), as claude mcp list shows that connector
+	i := slices.IndexFunc(k.MCP, func(m MCP) bool { return m.Name == "linear" })
+	if i < 0 {
+		t.Fatal("no linear entry")
+	}
+	connectors := ParseConnectors("claude.ai Linear: https://mcp.linear.app/mcp - ✔ Connected\n")
+	if _, ok := k.MCP[i].ProvidedBy(connectors); !ok {
+		t.Errorf("the Linear connector doesn't stand in for the kit's linear: %+v", connectors)
+	}
+	if _, ok := k.MCP[i].ProvidedBy(nil); ok {
+		t.Error("provided without a connector")
+	}
 }
 
 func TestServerRequiredSecret(t *testing.T) {

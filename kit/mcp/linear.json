@@ -1,0 +1,8 @@
+{
+  "name": "linear",
+  "description": "Linear issues and projects, for filing and working on issues where Claude Code has no claude.ai Linear connector (Bedrock, Vertex)",
+  "transport": "http",
+  "url": "https://mcp.linear.app/mcp",
+  "connector": "Linear",
+  "profiles": ["full", "minimal"]
+}

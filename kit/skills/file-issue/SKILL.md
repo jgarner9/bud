@@ -7,7 +7,7 @@ description: Turns a problem report or feature request (often sent from bud's <l
 
 A report arrives as a short note from someone in the middle of other work: a problem, or a feature they want. It comes with context: the file and lines they were on, diagnostics there, recent editor errors, versions. Your job is to turn it into issues someone can pick up cold. Work in two rounds, and never file in the first.
 
-Use the Linear MCP tools (the claude.ai Linear connector). If they aren't available, say so in one line and stop.
+Use the Linear MCP tools (the claude.ai Linear connector, or the kit's `linear` server where there's no connector). If they aren't available, say so in one line and stop. If the `linear` server isn't logged in yet, say to run `bud agent` and log in with `/mcp`, and stop.
 
 ## Round 1: propose
 

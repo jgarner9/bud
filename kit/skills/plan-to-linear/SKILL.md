@@ -10,7 +10,7 @@ Superpowers and Linear each do one job here:
 - **Superpowers builds the thinking, in the repo.** `brainstorming` works out the concept with the user and saves the spec; `writing-plans` turns the approved spec into a plan of small tasks. Both stay as files in the repo, next to the code they describe, and they're the source of truth for *what* and *why*.
 - **Linear holds the work.** Each task becomes an issue with a priority and its dependencies, so it can be scheduled, picked up and tracked. Linear is the source of truth for *status*.
 
-Use the Linear MCP tools (the claude.ai Linear connector) for every Linear step. If they aren't available, say so and stop; don't track the plan anywhere else instead.
+Use the Linear MCP tools (the claude.ai Linear connector, or the kit's `linear` server where there's no connector) for every Linear step. If they aren't available, say so and stop; don't track the plan anywhere else instead.
 
 ## 1. Before filing: find where it goes
 

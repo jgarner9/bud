@@ -40,6 +40,8 @@ vim.fn.writefile({
   [[  case "$line" in *retry*) printf '{"type":"system","subtype":"api_retry","attempt":1,"error_status":403,"error":"authentication_failed","session_id":"sess-1"}\n'; continue;; esac]],
   [[  case "$line" in *expire*) printf '{"type":"result","subtype":"success","is_error":true,"session_id":"sess-1","result":"API Error: 403 The security token included in the request is expired"}\n'; continue;; esac]],
   "  n=$((n+1))",
+  -- Claude Code saves the conversation once it answers
+  [=[  d="$CLAUDE_CONFIG_DIR/projects/$(pwd -P | sed 's/[^[:alnum:]]/-/g')"; mkdir -p "$d"; echo '{}' > "$d/sess-1.jsonl"]=],
   [[  printf '{"type":"system","subtype":"init","session_id":"sess-1","model":"m"}\n']],
   [[  printf '{"type":"assistant","session_id":"sess-1","message":{"content":[{"type":"text","text":"reply %s"},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"x"}}]}}\n' "$n"]],
   [[  printf '{"type":"result","subtype":"success","session_id":"sess-1","result":"reply %s","total_cost_usd":0.5}\n' "$n"]],
@@ -82,8 +84,19 @@ for _, ev in ipairs({ "message", "tool_use", "done", "exit" }) do
   end)
 end
 
--- argv: --continue the first time, the session's own id after
-eq(claude.argv("claude", {}, { resume = "continue", args = { "--model", "x" } }), {
+-- argv: --continue the first time, the session's own id after, once Claude
+-- Code has them; the TUI exits on a conversation it can't find
+local here = { root = project("here") }
+eq(claude.argv("claude", here, { resume = "continue" })[8], nil, "nothing to continue yet")
+eq(
+  claude.argv("claude", { root = here.root, session_id = "abc" }, { resume = "new" })[8],
+  nil,
+  "nor an id not saved yet"
+)
+local here_store = require("bud.chat.store").project_dir(here.root)
+vim.fn.mkdir(here_store, "p")
+vim.fn.writefile({ "{}" }, here_store .. "/abc.jsonl")
+eq(claude.argv("claude", here, { resume = "continue", args = { "--model", "x" } }), {
   "claude",
   "-p",
   "--input-format",
@@ -95,8 +108,12 @@ eq(claude.argv("claude", {}, { resume = "continue", args = { "--model", "x" } })
   "--model",
   "x",
 }, "argv continues")
-eq(claude.argv("claude", {}, { resume = "new" })[8], nil, "argv new")
-eq(claude.argv("claude", { session_id = "abc" }, { resume = "new" })[9], "abc", "argv resumes its own")
+eq(claude.argv("claude", here, { resume = "new" })[8], nil, "argv new")
+eq(
+  claude.argv("claude", { root = here.root, session_id = "abc" }, { resume = "new" })[9],
+  "abc",
+  "argv resumes its own"
+)
 
 -- a project resumes its conversation from an earlier session, while Claude
 -- Code still has it (JGA-147)
@@ -104,9 +121,10 @@ do
   local root = tmp .. "/saved"
   local proj = { key = root, root = root }
   vim.fn.writefile({ vim.json.encode({ [root] = "old" }) }, tmp .. "/claude-sessions.json")
-  eq(claude.resume_args(proj, { resume = "continue" }), { "--continue" }, "a saved id Claude Code lost")
   local store = require("bud.chat.store").project_dir(root)
   vim.fn.mkdir(store, "p")
+  vim.fn.writefile({ "{}" }, store .. "/other.jsonl")
+  eq(claude.resume_args(proj, { resume = "continue" }), { "--continue" }, "a saved id Claude Code lost")
   vim.fn.writefile({ "{}" }, store .. "/old.jsonl")
   eq(claude.resume_args(proj, { resume = "continue" }), { "--resume", "old" }, "the saved id")
   eq(claude.resume_args(proj, { resume = "new" }), {}, "resume new ignores it")

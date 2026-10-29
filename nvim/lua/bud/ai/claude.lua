@@ -265,12 +265,25 @@ function M.shared()
   return not dir or dir == "" or vim.fs.normalize(dir) == vim.fs.joinpath(vim.env.HOME, ".claude")
 end
 
--- resume_args picks the conversation: the session's own once it has one;
--- with resume "continue", the project's from an earlier session, else the
--- newest in the dir, but never in a shared ~/.claude, where that may be one
--- you started yourself; else a new one
+-- any_conversation says whether Claude Code has a conversation in root, so
+-- --continue has one to pick
+local function any_conversation(root)
+  for name, kind in vim.fs.dir(require("bud.chat.store").project_dir(root or vim.fn.getcwd())) do
+    if kind == "file" and name:match("%.jsonl$") then
+      return true
+    end
+  end
+  return false
+end
+
+-- resume_args picks the conversation: the session's own once Claude Code
+-- has written it (a session's id comes with its first event, before any
+-- message is saved, and the TUI exits on an id it can't find); with resume
+-- "continue", the project's from an earlier session, else the newest in the
+-- dir, but never in a shared ~/.claude, where that may be one you started
+-- yourself; else a new one
 function M.resume_args(s, cfg)
-  if s.session_id then
+  if s.session_id and vim.uv.fs_stat(conversation(s.root or vim.fn.getcwd(), s.session_id)) then
     return { "--resume", s.session_id }
   end
   if (s.resume or cfg.resume) ~= "continue" then
@@ -279,7 +292,7 @@ function M.resume_args(s, cfg)
   local saved = project(s) and M.saved_id(s.root)
   if saved then
     return { "--resume", saved }
-  elseif not M.shared() then
+  elseif not M.shared() and any_conversation(s.root) then
     return { "--continue" }
   end
   return {}

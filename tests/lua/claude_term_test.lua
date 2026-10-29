@@ -39,6 +39,7 @@ vim.fn.writefile({
   "  exit 0",
   "fi",
   "while IFS= read -r line; do",
+  "  echo '{}' > '" .. tui_store .. "/sess-1.jsonl'",
   [[  printf '{"type":"result","subtype":"success","session_id":"sess-1","result":"ok"}\n']],
   "done",
 }, fake)
@@ -125,6 +126,18 @@ wait(function()
   return not term.running()
 end, "the idle TUI to stop")
 eq(claude.status(), "stopped", "handed back after the reap")
+
+-- a session whose conversation Claude Code hasn't saved yet (its id comes
+-- with the first event) opens a new one: the TUI exits on an id it can't find
+vim.fn.mkdir(tmp .. "/fresh", "p")
+local fresh = vim.uv.fs_realpath(tmp .. "/fresh")
+claude.session(fresh).session_id = "unsaved"
+term.open({ root = fresh, focus = false })
+wait(function()
+  return #argv_log() == 5
+end, "a TUI in a project with no conversation")
+eq(argv_log()[5], "", "nothing to resume or continue")
+eq(term.running(fresh), true, "still open")
 
 -- the layout's chat pane is the TUI
 require("bud.layout.panes")

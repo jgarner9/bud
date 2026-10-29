@@ -147,8 +147,8 @@ var installClaude = func(pr *prompter, yes bool) error {
 		return nil
 	}
 	if s.Bin != "" && s.Elsewhere != "" {
-		fmt.Printf("Claude Code isn't set up for bud: %s.\n", elsewhereHint(s))
-		return nil
+		// sharing ~/.claude is the setup here, not claude.ai's login
+		return claudeSetup(pr, yes)
 	}
 	if !yes {
 		if pr == nil {

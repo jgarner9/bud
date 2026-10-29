@@ -45,6 +45,55 @@ func UseClaudeConfig() {
 	os.Setenv("CLAUDE_CONFIG_DIR", dir)
 }
 
+// budClaudeDir says whether CLAUDE_CONFIG_DIR is bud's own dir, which
+// UseClaudeConfig set, rather than one you set yourself
+func budClaudeDir() bool {
+	p, err := paths.Resolve()
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	return err == nil && dir != "" && filepath.Clean(dir) == filepath.Clean(p.ClaudeConfig())
+}
+
+// shareClaudeDir offers to switch bud to ~/.claude when that runs Claude Code
+// on a cloud provider bud's own dir doesn't see (JGA-146): the kit's ledger
+// keeps bud's things apart from yours there. On a yes it saves
+// ai.claude.config "home" and points this process at ~/.claude, so the rest
+// of the command sees it. A CLAUDE_CONFIG_DIR you set yourself is left alone
+var shareClaudeDir = func(pr *prompter, yes bool, provider string) (bool, error) {
+	// with nobody to ask, the caller's hint says it all
+	if !budClaudeDir() || (!yes && pr == nil) {
+		return false, nil
+	}
+	fmt.Printf("~/.claude/settings.json runs Claude Code on %s, which bud's own config dir doesn't see.\n", provider)
+	fmt.Println("bud can share ~/.claude instead: the kit only adds what you don't already have, and 'bud kit unsync' takes out just bud's.")
+	if !yes {
+		ok, err := pr.confirmYes("Share ~/.claude with bud?")
+		if err != nil || !ok {
+			return false, err
+		}
+	}
+	p, err := paths.Resolve()
+	if err != nil {
+		return false, err
+	}
+	f, err := config.Load(p.MachineConfig())
+	if err != nil {
+		return false, err
+	}
+	if err := f.Set("ai.claude.config", "home"); err != nil {
+		return false, err
+	}
+	if _, err := f.Settings(); err != nil {
+		return false, err
+	}
+	if err := f.Save(); err != nil {
+		return false, err
+	}
+	os.Unsetenv("CLAUDE_CONFIG_DIR")
+	fmt.Println("bud now shares ~/.claude; 'bud config unset ai.claude.config' gives it its own again.")
+
+	return true, nil
+}
+
 // homeClaudeDir is where Claude Code keeps its config without
 // CLAUDE_CONFIG_DIR
 func homeClaudeDir() (string, error) {

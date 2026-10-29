@@ -2,10 +2,13 @@ package cli
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
 	"jgarner.dev/bud/internal/claude"
+	"jgarner.dev/bud/internal/config"
+	"jgarner.dev/bud/internal/paths"
 )
 
 // fakeClaude answers checks from states in turn (the last one repeats) and
@@ -101,21 +104,78 @@ func TestClaudeSetup(t *testing.T) {
 	})
 }
 
-func TestClaudeSetupElsewhere(t *testing.T) {
-	ran := fakeClaude(t, claudeElsewhere)
-	var err error
-	captureStdout(t, func() { err = claudeSetup(yesPrompter("y\n"), false) })
-	if err == nil || !strings.Contains(err.Error(), "Amazon Bedrock") || len(*ran) != 0 {
-		t.Fatalf("err %v, ran %q", err, *ran)
+// fakeShare answers shareClaudeDir, recording the provider it was asked about
+func fakeShare(t *testing.T, share bool) *[]string {
+	t.Helper()
+	var asked []string
+	orig := shareClaudeDir
+	shareClaudeDir = func(_ *prompter, _ bool, provider string) (bool, error) {
+		asked = append(asked, provider)
+		return share, nil
 	}
+	t.Cleanup(func() { shareClaudeDir = orig })
 
-	out := captureStdout(t, func() {
-		if err := installClaude(yesPrompter("y\n"), false); err != nil {
-			t.Fatal(err)
+	return &asked
+}
+
+func TestClaudeSetupElsewhere(t *testing.T) {
+	t.Run("a no leaves it, never claude.ai's login", func(t *testing.T) {
+		ran := fakeClaude(t, claudeElsewhere)
+		asked := fakeShare(t, false)
+		var err error
+		captureStdout(t, func() { err = claudeSetup(yesPrompter("n\n"), false) })
+		if err == nil || !strings.Contains(err.Error(), "ai.claude.config home") || len(*ran) != 0 || len(*asked) != 1 {
+			t.Fatalf("err %v, ran %q, asked %q", err, *ran, *asked)
 		}
 	})
-	if len(*ran) != 0 || !strings.Contains(out, "ai.claude.config home") {
-		t.Fatalf("ran %q, out %q", *ran, out)
+
+	t.Run("sharing ~/.claude is the setup", func(t *testing.T) {
+		ready := claudeReady
+		ready.Method = "Amazon Bedrock"
+		ran := fakeClaude(t, claudeElsewhere, claudeElsewhere, ready)
+		asked := fakeShare(t, true)
+		out := captureStdout(t, func() {
+			if err := installClaude(yesPrompter("y\n"), false); err != nil {
+				t.Fatal(err)
+			}
+		})
+		if len(*ran) != 0 || len(*asked) != 1 || (*asked)[0] != "Amazon Bedrock" || !strings.Contains(out, "logged in with Amazon Bedrock") {
+			t.Fatalf("ran %q, asked %q, out %q", *ran, *asked, out)
+		}
+	})
+}
+
+// shareClaudeDir saves ai.claude.config "home" and points this process at
+// ~/.claude, but only when the dir in use is bud's own
+func TestShareClaudeDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	p, _ := paths.Resolve()
+
+	t.Setenv("CLAUDE_CONFIG_DIR", "/elsewhere")
+	if ok, err := shareClaudeDir(yesPrompter("y\n"), false, "Amazon Bedrock"); ok || err != nil {
+		t.Fatalf("your own CLAUDE_CONFIG_DIR: %v, %v", ok, err)
+	}
+
+	t.Setenv("CLAUDE_CONFIG_DIR", p.ClaudeConfig())
+	captureStdout(t, func() {
+		if ok, err := shareClaudeDir(yesPrompter("n\n"), false, "Amazon Bedrock"); ok || err != nil {
+			t.Fatalf("no: %v, %v", ok, err)
+		}
+		if ok, err := shareClaudeDir(nil, false, "Amazon Bedrock"); ok || err != nil {
+			t.Fatalf("nobody to ask: %v, %v", ok, err)
+		}
+		if ok, err := shareClaudeDir(yesPrompter("\n"), false, "Amazon Bedrock"); !ok || err != nil {
+			t.Fatalf("enter is yes: %v, %v", ok, err)
+		}
+	})
+	if d, set := os.LookupEnv("CLAUDE_CONFIG_DIR"); set {
+		t.Errorf("CLAUDE_CONFIG_DIR still %q", d)
+	}
+	f, _ := config.Load(p.MachineConfig())
+	if v, _ := f.Get("ai.claude.config"); v != "home" {
+		t.Errorf("ai.claude.config = %v", v)
 	}
 }
 

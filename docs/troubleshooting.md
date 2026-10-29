@@ -10,6 +10,8 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 **Claude Code isn't there in the editor.** `bud claude status` says whether it's installed and logged in; `bud claude setup` fixes either. In the editor, `:BudClaude status` shows the session and the IDE bridge, and `<leader>ar` restarts a session that crashed.
 
+**Claude Code runs on Bedrock, Vertex or Foundry.** Bud keeps its own Claude Code config by default, which can't see the provider settings in `~/.claude/settings.json`, so `bud claude status` says "not logged in here". `bud claude setup` offers to share `~/.claude` instead (`ai.claude.config = home`), and claude.ai's login isn't needed. The first `bud kit sync` into `~/.claude` lists what it would add and leaves anything you already have alone; `bud kit disable NAME` keeps one out, and `bud kit unsync` takes them all out again. Settings IT manages in `/Library/Application Support/ClaudeCode/` work either way.
+
 **Claude can't edit anything.** Edits come as diffs to accept with `ga` or `:w`; a prompt that was closed counts as no. Allowing something for the rest of the session (`a`) only lasts until you quit.
 
 **A kit item didn't sync.** `bud kit status` says why: a missing secret (`bud kit secret set NAME`), a program that isn't installed (it gives the install command), or something with the same name you set up yourself, which bud never touches.

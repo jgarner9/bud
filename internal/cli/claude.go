@@ -122,7 +122,16 @@ func claudeSetup(pr *prompter, yes bool) error {
 	}
 
 	if !s.LoggedIn && s.Elsewhere != "" {
-		return errors.New(elsewhereHint(s))
+		shared, err := shareClaudeDir(pr, yes, s.Elsewhere)
+		if err != nil {
+			return err
+		}
+		if !shared {
+			return errors.New(elsewhereHint(s))
+		}
+		if s, err = checkClaude(); err != nil {
+			return err
+		}
 	}
 	if !s.LoggedIn {
 		login := claude.LoginCommand(s.Bin)

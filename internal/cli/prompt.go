@@ -165,3 +165,18 @@ func (p *prompter) confirm(question string) (bool, error) {
 		return false, nil
 	}
 }
+
+// confirmYes asks a yes/no question that defaults to yes
+func (p *prompter) confirmYes(question string) (bool, error) {
+	answer, err := p.ask(question+" [Y/n]", "")
+	if err != nil {
+		return false, err
+	}
+
+	switch strings.ToLower(answer) {
+	case "n", "no":
+		return false, nil
+	default:
+		return true, nil
+	}
+}

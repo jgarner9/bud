@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -30,7 +31,7 @@ func init() {
 // Kit writes bud's Claude Code setup into Claude Code's user config (BASE.md
 // 4.1): MCP servers, skills, subagents, slash commands and instructions
 func Kit() *Command {
-	var dryRun bool
+	var dryRun, yes bool
 	var url, cmd, repo, profiles string
 	return &Command{
 		Name:  "kit",
@@ -43,6 +44,16 @@ func Kit() *Command {
 					fs.BoolVar(&dryRun, "dry-run", false, "say what would change, change nothing")
 				},
 				Run: func(g *Globals, args []string) error { return kitSync(g, args, dryRun) },
+			},
+			{
+				Name:  "unsync",
+				Usage: "take everything the kit added back out of Claude Code's config, leaving what's yours",
+				Flags: func(fs *flag.FlagSet) {
+					fs.BoolVar(&dryRun, "dry-run", false, "say what would be removed, change nothing")
+					fs.BoolVar(&yes, "yes", false, "remove without asking")
+					fs.BoolVar(&yes, "y", false, "short for -yes")
+				},
+				Run: func(_ *Globals, args []string) error { return kitUnsync(args, dryRun, yes) },
 			},
 			{Name: "status", Usage: "per item: synced, not synced, changed, or skipped and why", Run: func(g *Globals, args []string) error { return kitStatus(args) }},
 			{Name: "ls", Usage: "list what's in the kit", Run: func(_ *Globals, args []string) error { return kitLs(args) }},
@@ -427,6 +438,11 @@ func syncKitWith(g *Globals, pr *prompter, dryRun bool) error {
 	if ok, err := moveKit(pr, env, dryRun); err != nil || !ok {
 		return err
 	}
+	if !dryRun {
+		if ok, err := confirmShared(pr, k, env); err != nil || !ok {
+			return err
+		}
+	}
 	actions, err := kit.Sync(k, env, dryRun)
 	for _, a := range actions {
 		if a.Do != "ok" || g.Verbose {
@@ -454,6 +470,106 @@ func syncKitWith(g *Globals, pr *prompter, dryRun bool) error {
 	}
 
 	return nil
+}
+
+// kitUnsync takes out of the current Claude Code config dir everything the
+// ledger says bud put there, then forgets the ledger, so neither a later
+// update nor a sync puts it back unasked (a sync into ~/.claude asks again)
+func kitUnsync(args []string, dryRun, yes bool) error {
+	if len(args) > 0 {
+		return usageErrorf("kit unsync takes no arguments")
+	}
+	_, env, err := loadKit()
+	if err != nil {
+		return err
+	}
+	actions, err := kit.Unsync(env, true)
+	if err != nil {
+		return err
+	}
+	if len(actions) == 0 {
+		fmt.Printf("The kit has nothing in %s.\n", env.ClaudeDir)
+		return nil
+	}
+	fmt.Printf("The kit added these to %s:\n", env.ClaudeDir)
+	for _, a := range actions {
+		fmt.Printf("  %s %s\n", a.Kind, a.Name)
+	}
+	if dryRun {
+		fmt.Println("bud kit unsync removes them.")
+		return nil
+	}
+	if err := confirmOnTerminal("Remove them?", yes, "bud kit unsync --yes"); err != nil {
+		return err
+	}
+	if _, err := kit.Unsync(env, false); err != nil {
+		return err
+	}
+	if err := os.Remove(env.Ledger); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	fmt.Printf("Took the kit out of %s.\n", env.ClaudeDir)
+
+	return nil
+}
+
+// confirmShared shows what the first sync into ~/.claude would do and asks
+// first (JGA-146): that's the config the claude you run yourself uses too, so
+// bud doesn't add to it unseen. Later syncs only keep up what you said yes to.
+// With nobody to ask it changes nothing
+func confirmShared(pr *prompter, k *kit.Kit, env kit.Env) (bool, error) {
+	home, err := homeClaudeDir()
+	if err != nil || env.ClaudeDir != home {
+		return err == nil, err
+	}
+	ledger, ok, err := kit.ReadLedger(env.Ledger)
+	if err != nil {
+		return false, err
+	}
+	// a ledger from before bud had its own dir ("") was already in ~/.claude
+	if ok && (ledger.Dir == "" || ledger.Dir == home) {
+		return true, nil
+	}
+	actions, err := kit.Sync(k, env, true)
+	if err != nil {
+		return false, err
+	}
+	var adds, yours []kit.Action
+	for _, a := range actions {
+		switch a.Do {
+		case "add", "update":
+			adds = append(adds, a)
+		case "skip":
+			yours = append(yours, a)
+		}
+	}
+	if len(adds) == 0 {
+		return true, nil
+	}
+	fmt.Println("bud shares ~/.claude, so the claude you run yourself gets the kit too. It would add:")
+	for _, a := range adds {
+		fmt.Printf("  %s %s\n", a.Kind, a.Name)
+	}
+	if len(yours) > 0 {
+		fmt.Println("and skip:")
+		for _, a := range yours {
+			fmt.Printf("  %s %s (%s)\n", a.Kind, a.Name, a.Why)
+		}
+	}
+	fmt.Println("'bud kit disable NAME' keeps one out; 'bud kit unsync' takes them all out again.")
+	if pr == nil {
+		fmt.Println("Run 'bud kit sync' on a terminal to add them.")
+		return false, nil
+	}
+	yes, err := pr.confirm("Add them to ~/.claude?")
+	if err != nil || !yes {
+		if err == nil {
+			fmt.Println("Nothing changed.")
+		}
+		return false, err
+	}
+
+	return true, nil
 }
 
 // statusWords say what a dry run's action means for an item

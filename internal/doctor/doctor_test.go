@@ -475,11 +475,7 @@ func TestCheckClaude(t *testing.T) {
 		if r.Status != c.want || !strings.Contains(r.Detail, c.detail) {
 			t.Errorf("%s: got %v %q", c.name, r.Status, r.Detail)
 		}
-		want := "bud claude setup"
-		if c.status.Elsewhere != "" {
-			want = "bud config set ai.claude.config home"
-		}
-		if r.Status == Warn && c.err == nil && r.Fix != want {
+		if r.Status == Warn && c.err == nil && r.Fix != "bud claude setup" {
 			t.Errorf("%s: fix %q", c.name, r.Fix)
 		}
 	}

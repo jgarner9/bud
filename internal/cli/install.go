@@ -146,6 +146,10 @@ var installClaude = func(pr *prompter, yes bool) error {
 		fmt.Printf("Claude Code %s is ready.\n", s.Version)
 		return nil
 	}
+	if s.Bin != "" && s.Elsewhere != "" {
+		fmt.Printf("Claude Code isn't set up for bud: %s.\n", elsewhereHint(s))
+		return nil
+	}
 	if !yes {
 		if pr == nil {
 			fmt.Println("Claude Code isn't set up; run 'bud claude setup' for the AI parts.")

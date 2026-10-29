@@ -156,6 +156,8 @@ func checkClaude(cfg config.Settings) Result {
 		r.Detail = "not installed (ai.claude.autostart is off)"
 	case s.Bin == "":
 		r.Status, r.Detail, r.Fix = Warn, "not installed, so there's no AI in the editor", "bud claude setup"
+	case !s.LoggedIn && s.Elsewhere != "":
+		r.Status, r.Detail, r.Fix = Warn, s.Version+", not logged in here; ~/.claude runs it on "+s.Elsewhere+", which bud's own config dir doesn't see", "bud config set ai.claude.config home"
 	case !s.LoggedIn:
 		r.Status, r.Detail, r.Fix = Warn, s.Version+", not logged in", "bud claude setup"
 	default:

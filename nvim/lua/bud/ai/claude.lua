@@ -46,6 +46,37 @@ M.bin = function()
   return vim.fn.executable(native) == 1 and native or nil
 end
 
+local providers = {
+  { "CLAUDE_CODE_USE_BEDROCK", "Amazon Bedrock" },
+  { "CLAUDE_CODE_USE_VERTEX", "Google Vertex AI" },
+  { "CLAUDE_CODE_USE_FOUNDRY", "Microsoft Foundry" },
+}
+
+-- home_provider is the cloud provider ~/.claude/settings.json turns on when
+-- CLAUDE_CONFIG_DIR is another dir, which then doesn't see it (like
+-- claude.Check's Elsewhere); nil otherwise
+function M.home_provider()
+  local home = vim.fs.joinpath(vim.env.HOME, ".claude")
+  local dir = vim.env.CLAUDE_CONFIG_DIR
+  if not dir or dir == "" or vim.fs.normalize(dir) == home then
+    return nil
+  end
+  local f = io.open(vim.fs.joinpath(home, "settings.json"))
+  if not f then
+    return nil
+  end
+  local ok, parsed = pcall(vim.json.decode, f:read("*a"))
+  f:close()
+  local env = ok and type(parsed) == "table" and type(parsed.env) == "table" and parsed.env or {}
+  for _, p in ipairs(providers) do
+    local v = env[p[1]]
+    if v == true or (type(v) == "string" and vim.tbl_contains({ "1", "true", "yes", "on" }, vim.trim(v):lower())) then
+      return p[2]
+    end
+  end
+  return nil
+end
+
 M.check_login = function(bin, cb)
   -- a timeout, like bud claude status, so a hung check never stalls the session
   vim.system({ bin, "auth", "status", "--json" }, { text = true, timeout = 10000 }, function(res)
@@ -53,6 +84,16 @@ M.check_login = function(bin, cb)
     vim.schedule(function()
       if ok and type(st) == "table" and st.loggedIn then
         cb(true)
+        return
+      end
+      local provider = M.home_provider()
+      if provider then
+        cb(
+          false,
+          "~/.claude runs Claude Code on "
+            .. provider
+            .. ", which bud's own config dir doesn't see: bud config set ai.claude.config home"
+        )
       else
         cb(false, "Claude Code isn't logged in: run bud claude setup")
       end

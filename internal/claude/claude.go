@@ -21,7 +21,19 @@ type Status struct {
 	Bin      string // "" when Claude Code isn't installed
 	Version  string
 	LoggedIn bool
-	Method   string // how it's logged in: "claude.ai", "api key", ...
+	Method   string // how it's logged in: "claude.ai", "api key", "Amazon Bedrock", ...
+	// Elsewhere is the cloud provider ~/.claude/settings.json sets up when
+	// the config dir in use (CLAUDE_CONFIG_DIR) is another one and isn't
+	// logged in: claude.ai's login is the wrong fix then
+	Elsewhere string
+}
+
+// providerVars are the settings that put Claude Code on a cloud provider,
+// with the name each shows as
+var providerVars = []struct{ env, api, name string }{
+	{"CLAUDE_CODE_USE_BEDROCK", "bedrock", "Amazon Bedrock"},
+	{"CLAUDE_CODE_USE_VERTEX", "vertex", "Google Vertex AI"},
+	{"CLAUDE_CODE_USE_FOUNDRY", "foundry", "Microsoft Foundry"},
 }
 
 // InstallScript is Anthropic's native installer, which puts claude in
@@ -82,8 +94,9 @@ func Check() (Status, error) {
 		}
 	}
 	var auth struct {
-		LoggedIn   bool   `json:"loggedIn"`
-		AuthMethod string `json:"authMethod"`
+		LoggedIn    bool   `json:"loggedIn"`
+		AuthMethod  string `json:"authMethod"`
+		APIProvider string `json:"apiProvider"`
 	}
 	if err := json.Unmarshal(out, &auth); err != nil {
 		return s, fmt.Errorf("%s auth status: %w", s.Bin, err)
@@ -91,9 +104,56 @@ func Check() (Status, error) {
 	s.LoggedIn = auth.LoggedIn
 	if auth.LoggedIn {
 		s.Method = strings.ReplaceAll(auth.AuthMethod, "_", " ")
+		// a cloud provider reports third_party; name the provider instead
+		if auth.APIProvider != "" && auth.APIProvider != "firstParty" {
+			s.Method = auth.APIProvider
+			for _, p := range providerVars {
+				if p.api == auth.APIProvider {
+					s.Method = p.name
+				}
+			}
+		}
+	} else {
+		s.Elsewhere = homeProvider()
 	}
 
 	return s, nil
+}
+
+// homeProvider is the cloud provider ~/.claude/settings.json's env turns on,
+// when CLAUDE_CONFIG_DIR points somewhere else; "" otherwise
+func homeProvider() string {
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	h, err := home()
+	if dir == "" || err != nil || filepath.Clean(dir) == filepath.Join(h, ".claude") {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(h, ".claude", "settings.json"))
+	if err != nil {
+		return ""
+	}
+	var settings struct {
+		Env map[string]any `json:"env"`
+	}
+	if json.Unmarshal(data, &settings) != nil {
+		return ""
+	}
+	for _, p := range providerVars {
+		switch v := settings.Env[p.env].(type) {
+		case bool:
+			if v {
+				return p.name
+			}
+		case string:
+			// the values Claude Code takes as on
+			switch strings.ToLower(strings.TrimSpace(v)) {
+			case "1", "true", "yes", "on":
+				return p.name
+			}
+		}
+	}
+
+	return ""
 }
 
 // InstallCommand is the command line that installs Claude Code

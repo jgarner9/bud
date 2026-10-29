@@ -109,6 +109,25 @@ do
   vim.env.CLAUDE_CONFIG_DIR = old
 end
 
+-- a cloud provider in ~/.claude, which bud's own config dir doesn't see
+do
+  local old_home, old_dir = vim.env.HOME, vim.env.CLAUDE_CONFIG_DIR
+  vim.env.HOME = vim.fn.tempname()
+  vim.fn.mkdir(vim.env.HOME .. "/.claude", "p")
+  vim.env.CLAUDE_CONFIG_DIR = vim.env.HOME .. "/bud"
+  eq(claude.home_provider(), nil, "no settings.json, no provider")
+  local settings = vim.env.HOME .. "/.claude/settings.json"
+  vim.fn.writefile({ '{"env": {"CLAUDE_CODE_USE_BEDROCK": "1", "AWS_REGION": "us-east-1"}}' }, settings)
+  eq(claude.home_provider(), "Amazon Bedrock", "Bedrock in ~/.claude")
+  vim.fn.writefile({ '{"env": {"CLAUDE_CODE_USE_BEDROCK": "0"}}' }, settings)
+  eq(claude.home_provider(), nil, "switched off")
+  vim.fn.writefile({ '{"env": {"CLAUDE_CODE_USE_VERTEX": true}}' }, settings)
+  eq(claude.home_provider(), "Google Vertex AI", "Vertex in ~/.claude")
+  vim.env.CLAUDE_CONFIG_DIR = vim.env.HOME .. "/.claude"
+  eq(claude.home_provider(), nil, "~/.claude itself sees its own settings")
+  vim.env.HOME, vim.env.CLAUDE_CONFIG_DIR = old_home, old_dir
+end
+
 -- ai.claude.command wraps claude (Headroom), passing the rest on
 eq(
   vim.list_slice(claude.argv("claude", {}, { resume = "new", command = { "headroom", "wrap", "claude", "--" } }), 1, 5),

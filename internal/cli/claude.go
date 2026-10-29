@@ -63,6 +63,8 @@ func claudeStatus(args []string) error {
 	switch {
 	case s.Bin == "":
 		fmt.Println("Claude Code isn't installed: run bud claude setup")
+	case !s.LoggedIn && s.Elsewhere != "":
+		fmt.Printf("Claude Code %s (%s), not logged in here; %s\n", s.Version, s.Bin, elsewhereHint(s))
 	case !s.LoggedIn:
 		fmt.Printf("Claude Code %s (%s), not logged in: run bud claude setup\n", s.Version, s.Bin)
 	default:
@@ -75,6 +77,13 @@ func claudeStatus(args []string) error {
 	}
 
 	return nil
+}
+
+// elsewhereHint says what to do when ~/.claude runs Claude Code on a cloud
+// provider that bud's own config dir doesn't see: share ~/.claude, since
+// claude.ai's login is the wrong fix
+func elsewhereHint(s claude.Status) string {
+	return fmt.Sprintf("~/.claude/settings.json runs Claude Code on %s, which bud's own config dir doesn't see: share it with 'bud config set ai.claude.config home'", s.Elsewhere)
 }
 
 // claudeSetup installs Claude Code when it's missing and logs it in when it
@@ -112,6 +121,9 @@ func claudeSetup(pr *prompter, yes bool) error {
 		}
 	}
 
+	if !s.LoggedIn && s.Elsewhere != "" {
+		return errors.New(elsewhereHint(s))
+	}
 	if !s.LoggedIn {
 		login := claude.LoginCommand(s.Bin)
 		if pr == nil {

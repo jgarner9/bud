@@ -31,6 +31,8 @@ var (
 	claudeMissing   = claude.Status{}
 	claudeLoggedOut = claude.Status{Bin: "/c", Version: "2.1.0"}
 	claudeReady     = claude.Status{Bin: "/c", Version: "2.1.0", LoggedIn: true, Method: "claude.ai"}
+	// ~/.claude is on Bedrock, which bud's own config dir doesn't see
+	claudeElsewhere = claude.Status{Bin: "/c", Version: "2.1.0", Elsewhere: "Amazon Bedrock"}
 )
 
 func yesPrompter(answers string) *prompter {
@@ -99,6 +101,24 @@ func TestClaudeSetup(t *testing.T) {
 	})
 }
 
+func TestClaudeSetupElsewhere(t *testing.T) {
+	ran := fakeClaude(t, claudeElsewhere)
+	var err error
+	captureStdout(t, func() { err = claudeSetup(yesPrompter("y\n"), false) })
+	if err == nil || !strings.Contains(err.Error(), "Amazon Bedrock") || len(*ran) != 0 {
+		t.Fatalf("err %v, ran %q", err, *ran)
+	}
+
+	out := captureStdout(t, func() {
+		if err := installClaude(yesPrompter("y\n"), false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if len(*ran) != 0 || !strings.Contains(out, "ai.claude.config home") {
+		t.Fatalf("ran %q, out %q", *ran, out)
+	}
+}
+
 func TestInstallClaude(t *testing.T) {
 	ran := fakeClaude(t, claudeMissing)
 	out := captureStdout(t, func() {
@@ -119,6 +139,7 @@ func TestClaudeStatus(t *testing.T) {
 		claudeMissing:   "isn't installed",
 		claudeLoggedOut: "not logged in",
 		claudeReady:     "logged in with claude.ai",
+		claudeElsewhere: "ai.claude.config home",
 	} {
 		fakeClaude(t, s)
 		out := captureStdout(t, func() {

@@ -466,6 +466,7 @@ func TestCheckClaude(t *testing.T) {
 		{"logged in", on, claude.Status{Bin: "/c", Version: "2.1.0", LoggedIn: true, Method: "claude.ai"}, nil, OK, "2.1.0, logged in with claude.ai"},
 		{"logged out", on, claude.Status{Bin: "/c", Version: "2.1.0"}, nil, Warn, "not logged in"},
 		{"missing", on, claude.Status{}, nil, Warn, "not installed"},
+		{"provider elsewhere", on, claude.Status{Bin: "/c", Version: "2.1.0", Elsewhere: "Amazon Bedrock"}, nil, Warn, "runs it on Amazon Bedrock"},
 		{"missing and not wanted", off, claude.Status{}, nil, OK, "autostart is off"},
 		{"broken", on, claude.Status{Bin: "/c"}, errors.New("boom"), Warn, "boom"},
 	} {
@@ -474,7 +475,11 @@ func TestCheckClaude(t *testing.T) {
 		if r.Status != c.want || !strings.Contains(r.Detail, c.detail) {
 			t.Errorf("%s: got %v %q", c.name, r.Status, r.Detail)
 		}
-		if r.Status == Warn && c.err == nil && r.Fix != "bud claude setup" {
+		want := "bud claude setup"
+		if c.status.Elsewhere != "" {
+			want = "bud config set ai.claude.config home"
+		}
+		if r.Status == Warn && c.err == nil && r.Fix != want {
 			t.Errorf("%s: fix %q", c.name, r.Fix)
 		}
 	}

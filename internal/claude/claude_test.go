@@ -56,6 +56,43 @@ func TestCheckLoggedOut(t *testing.T) {
 	}
 }
 
+func TestCheckBedrock(t *testing.T) {
+	fake(t, true, map[string]string{
+		"--version":          "2.1.312 (Claude Code)",
+		"auth status --json": `{"loggedIn":true,"authMethod":"third_party","apiProvider":"bedrock"}`,
+	})
+	if s, err := Check(); err != nil || !s.LoggedIn || s.Method != "Amazon Bedrock" {
+		t.Fatalf("got %+v, %v", s, err)
+	}
+}
+
+func TestCheckElsewhere(t *testing.T) {
+	fake(t, true, map[string]string{
+		"--version":          "2.1.312 (Claude Code)",
+		"auth status --json": `{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty"}`,
+	})
+	h, _ := home()
+	os.MkdirAll(filepath.Join(h, ".claude"), 0o755)
+	write := func(env string) {
+		os.WriteFile(filepath.Join(h, ".claude", "settings.json"), []byte(`{"env":`+env+`}`), 0o644)
+	}
+	for _, c := range []struct{ dir, env, want string }{
+		{filepath.Join(h, "bud"), `{"CLAUDE_CODE_USE_BEDROCK":"1","AWS_REGION":"us-east-1"}`, "Amazon Bedrock"},
+		{filepath.Join(h, "bud"), `{"CLAUDE_CODE_USE_VERTEX":true}`, "Google Vertex AI"},
+		{filepath.Join(h, "bud"), `{"CLAUDE_CODE_USE_BEDROCK":"0"}`, ""},
+		{filepath.Join(h, "bud"), `{}`, ""},
+		// the home dir itself: it would be logged in if the provider worked
+		{filepath.Join(h, ".claude") + "/", `{"CLAUDE_CODE_USE_BEDROCK":"1"}`, ""},
+		{"", `{"CLAUDE_CODE_USE_BEDROCK":"1"}`, ""},
+	} {
+		t.Setenv("CLAUDE_CONFIG_DIR", c.dir)
+		write(c.env)
+		if s, err := Check(); err != nil || s.Elsewhere != c.want {
+			t.Errorf("%s %s: got %+v, %v", c.dir, c.env, s, err)
+		}
+	}
+}
+
 func TestCheckMissing(t *testing.T) {
 	fake(t, false, nil)
 	if s, err := Check(); err != nil || s.Bin != "" {

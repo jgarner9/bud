@@ -18,6 +18,8 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp, "p")
 require("bud.config").file = tmp .. "/config.json"
+-- bud's own Claude Code dir, and never the real conversation ids
+vim.env.CLAUDE_CONFIG_DIR = tmp .. "/cc"
 -- never the real ~/.claude/ide
 require("bud.ai.bridge").lock_dir = function()
   return tmp .. "/ide"
@@ -47,6 +49,9 @@ local function lines(name)
 end
 
 local claude = require("bud.ai.claude")
+claude.ids_file = function()
+  return tmp .. "/claude-sessions.json"
+end
 claude.bin = function()
   return fake
 end
@@ -88,6 +93,35 @@ eq(claude.argv("claude", {}, { resume = "continue", args = { "--model", "x" } })
 }, "argv continues")
 eq(claude.argv("claude", {}, { resume = "new" })[8], nil, "argv new")
 eq(claude.argv("claude", { session_id = "abc" }, { resume = "new" })[9], "abc", "argv resumes its own")
+
+-- a project resumes its conversation from an earlier session, while Claude
+-- Code still has it (JGA-147)
+do
+  local root = tmp .. "/saved"
+  local proj = { key = root, root = root }
+  vim.fn.writefile({ vim.json.encode({ [root] = "old" }) }, tmp .. "/claude-sessions.json")
+  eq(claude.resume_args(proj, { resume = "continue" }), { "--continue" }, "a saved id Claude Code lost")
+  local store = require("bud.chat.store").project_dir(root)
+  vim.fn.mkdir(store, "p")
+  vim.fn.writefile({ "{}" }, store .. "/old.jsonl")
+  eq(claude.resume_args(proj, { resume = "continue" }), { "--resume", "old" }, "the saved id")
+  eq(claude.resume_args(proj, { resume = "new" }), {}, "resume new ignores it")
+  eq(
+    claude.resume_args({ key = "chat", root = root, chat = true }, { resume = "continue" }),
+    { "--continue" },
+    "keyed sessions keep their own"
+  )
+  -- a shared ~/.claude never continues the newest, which may be yours
+  local old_dir = vim.env.CLAUDE_CONFIG_DIR
+  vim.env.CLAUDE_CONFIG_DIR = vim.env.HOME .. "/.claude"
+  eq(claude.shared(), true, "~/.claude is shared")
+  eq(claude.resume_args({}, { resume = "continue" }), {}, "shared starts a new one")
+  vim.env.CLAUDE_CONFIG_DIR = ""
+  eq(claude.shared(), true, "no CLAUDE_CONFIG_DIR is ~/.claude")
+  vim.env.CLAUDE_CONFIG_DIR = old_dir
+  eq(claude.shared(), false, "bud's own dir")
+  vim.fn.delete(tmp .. "/claude-sessions.json")
+end
 
 -- print mode ignores outputStyle in settings.json, so the session passes it
 eq(
@@ -191,6 +225,7 @@ wait(function()
   return claude.status(a) == "ready" and #lines("argv.log") == 2
 end, "restarted")
 eq(lines("argv.log")[2]:match("%-%-resume (%S+)"), "sess-1", "resumed its own conversation")
+eq(vim.json.decode(lines("claude-sessions.json")[1])[a], "sess-1", "the project's conversation is saved")
 
 -- a crash shows in the status line, and restart brings it back
 vim.fn.chdir(a)

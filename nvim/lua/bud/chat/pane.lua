@@ -17,7 +17,9 @@ local function root_of(root)
 end
 
 -- scrollback is what the session has said so far: its own conversation once
--- it has one, else the newest in the project, which --continue picks up
+-- it has one, else the one the session will resume (claude.resume_args): the
+-- project's from an earlier session, else the newest in the project, but not
+-- in a shared ~/.claude
 local function scrollback(root)
   local s = claude.get(root)
   local dir = store.project_dir(root)
@@ -25,6 +27,12 @@ local function scrollback(root)
     return store.read(dir .. "/" .. s.session_id .. ".jsonl")
   end
   if require("bud.config").get("ai.claude.resume", "continue") ~= "continue" then
+    return {}
+  end
+  local saved = claude.saved_id(root)
+  if saved then
+    return store.read(dir .. "/" .. saved .. ".jsonl")
+  elseif claude.shared() then
     return {}
   end
   local newest

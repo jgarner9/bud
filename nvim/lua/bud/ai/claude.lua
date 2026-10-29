@@ -35,6 +35,12 @@ local function now()
   return vim.uv.hrtime() / 1e6
 end
 
+-- realtime is the wall clock in seconds, to compare with file times
+local function realtime()
+  local t = vim.uv.clock_gettime("realtime")
+  return t.sec + t.nsec / 1e9
+end
+
 -- swappable in tests: the command a session runs, and whether claude is
 -- logged in (cb(ok, why))
 M.bin = function()
@@ -194,13 +200,82 @@ function M.prefix(bin, cfg)
   return { bin }
 end
 
--- resume_args picks the conversation: the session's own once it has one, the
--- most recent after the terminal had it (its id may have moved on) or when
--- resume is "continue", else a new one
+-- ids_file keeps each project's conversation (JGA-147), so the next Neovim
+-- resumes bud's own instead of the newest in the dir; swappable in tests
+M.ids_file = function()
+  return vim.fn.stdpath("state") .. "/claude-sessions.json"
+end
+
+local function read_ids()
+  local f = io.open(M.ids_file())
+  if not f then
+    return {}
+  end
+  local ok, ids = pcall(vim.json.decode, f:read("*a"))
+  f:close()
+  return ok and type(ids) == "table" and ids or {}
+end
+
+-- project says whether s is a project's own session, not a keyed one
+-- (chat, issues, gen), which keep their conversations themselves
+local function project(s)
+  return s.root ~= nil and s.key == s.root and not s.chat
+end
+
+local function conversation(root, id)
+  return require("bud.chat.store").project_dir(root) .. "/" .. id .. ".jsonl"
+end
+
+-- saved_id is root's conversation from an earlier session, when Claude Code
+-- still has it
+function M.saved_id(root)
+  local id = read_ids()[root]
+  if type(id) == "string" and vim.uv.fs_stat(conversation(root, id)) then
+    return id
+  end
+  return nil
+end
+
+local function save_id(root, id)
+  local ids = read_ids()
+  if ids[root] == id then
+    return
+  end
+  ids[root] = id
+  local file = M.ids_file()
+  vim.fn.mkdir(vim.fs.dirname(file), "p")
+  -- a temp file renamed over it, so a crash never leaves half a file
+  local tmp = file .. ".tmp"
+  local f = io.open(tmp, "w")
+  if f then
+    f:write(vim.json.encode(ids))
+    f:close()
+    vim.uv.fs_rename(tmp, file)
+  end
+end
+
+-- shared says whether bud uses ~/.claude, the config the claude you run
+-- yourself has too (ai.claude.config = "home", D76)
+function M.shared()
+  local dir = vim.env.CLAUDE_CONFIG_DIR
+  return not dir or dir == "" or vim.fs.normalize(dir) == vim.fs.joinpath(vim.env.HOME, ".claude")
+end
+
+-- resume_args picks the conversation: the session's own once it has one;
+-- with resume "continue", the project's from an earlier session, else the
+-- newest in the dir, but never in a shared ~/.claude, where that may be one
+-- you started yourself; else a new one
 function M.resume_args(s, cfg)
-  if s.session_id and not s.continue_next then
+  if s.session_id then
     return { "--resume", s.session_id }
-  elseif s.continue_next or (s.resume or cfg.resume) == "continue" then
+  end
+  if (s.resume or cfg.resume) ~= "continue" then
+    return {}
+  end
+  local saved = project(s) and M.saved_id(s.root)
+  if saved then
+    return { "--resume", saved }
+  elseif not M.shared() then
     return { "--continue" }
   end
   return {}
@@ -210,6 +285,9 @@ end
 function M.handle(s, ev)
   if ev.session_id then
     s.session_id = ev.session_id
+    if project(s) then
+      save_id(s.root, ev.session_id)
+    end
   end
   if ev.type == "system" and ev.subtype == "init" then
     s.model = ev.model
@@ -362,7 +440,7 @@ start_job = function(s, bin, secrets, mcp)
     s.crashed = true
     return
   end
-  s.job, s.crashed, s.stderr, s.continue_next = job, false, nil, nil
+  s.job, s.crashed, s.stderr = job, false, nil
   -- what was sent while it started
   for _, line in ipairs(s.queue) do
     vim.fn.chansend(job, line)
@@ -448,6 +526,7 @@ function M.handover(root)
     vim.fn.jobstop(s.job)
   end
   s.starting, s.queue, s.term, s.last_used = nil, {}, true, now()
+  s.handed_at = realtime()
   set_status(s, "term")
   local cfg = settings()
   local argv = vim.list_extend(vim.list_extend(M.prefix(bin, cfg), M.resume_args(s, cfg)), cfg.args or {})
@@ -457,12 +536,36 @@ function M.handover(root)
   return argv
 end
 
+-- tui_conversation is the conversation the TUI wrote to since it took root's
+-- session: the newest written since then, nil when it wrote nothing
+local function tui_conversation(root, since)
+  local dir = require("bud.chat.store").project_dir(root)
+  local best, best_t
+  for name, kind in vim.fs.dir(dir) do
+    local id = kind == "file" and name:match("^(.+)%.jsonl$")
+    local st = id and vim.uv.fs_stat(dir .. "/" .. name)
+    local t = st and st.mtime.sec + st.mtime.nsec / 1e9
+    if t and t >= since and (not best_t or t > best_t) then
+      best, best_t = id, t
+    end
+  end
+  return best
+end
+
 -- handback returns root's session from the TUI. The TUI may have moved to
--- another conversation, so the next start continues the most recent one
+-- another conversation (/clear, /resume), so the next start resumes the one
+-- it wrote to last, else the one it was given
 function M.handback(root)
   local s = sessions[lookup(root)]
   if s and s.term then
-    s.term, s.continue_next = nil, true
+    s.term = nil
+    local id = s.handed_at and tui_conversation(s.root, s.handed_at)
+    if id then
+      s.session_id = id
+      if project(s) then
+        save_id(s.root, id)
+      end
+    end
     set_status(s, "stopped")
   end
 end

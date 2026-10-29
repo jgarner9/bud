@@ -19,6 +19,10 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp .. "/proj", "p")
 require("bud.config").file = tmp .. "/config.json"
+vim.env.CLAUDE_CONFIG_DIR = tmp .. "/cc"
+-- where the TUI writes its conversation: a new one, as after /clear
+local tui_store = require("bud.chat.store").project_dir(tmp .. "/proj")
+vim.fn.mkdir(tui_store, "p")
 -- never the real ~/.claude/ide
 require("bud.ai.bridge").lock_dir = function()
   return tmp .. "/ide"
@@ -30,6 +34,7 @@ vim.fn.writefile({
   "#!/bin/sh",
   'echo "$@" >> "$(dirname "$0")/argv.log"',
   'if [ "$1" != "-p" ]; then',
+  "  echo '{}' > '" .. tui_store .. "/sess-tui.jsonl'",
   '  while IFS= read -r line; do [ "$line" = q ] && exit 0; done',
   "  exit 0",
   "fi",
@@ -44,6 +49,9 @@ local function argv_log()
 end
 
 local claude = require("bud.ai.claude")
+claude.ids_file = function()
+  return tmp .. "/claude-sessions.json"
+end
 claude.bin = function()
   return fake
 end
@@ -101,7 +109,7 @@ claude.send("back")
 wait(function()
   return #argv_log() == 3 and claude.status() == "ready"
 end, "the headless job again")
-eq(argv_log()[3]:match("%-%-continue") ~= nil, true, "continues the most recent conversation")
+eq(argv_log()[3]:match("%-%-resume (%S+)"), "sess-tui", "resumes the conversation the TUI moved to")
 
 -- a hidden TUI nobody uses is stopped (D49); one on screen isn't
 vim.api.nvim_set_current_win(editor)

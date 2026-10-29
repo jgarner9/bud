@@ -61,7 +61,7 @@ bud config edit                           # open it in bud's editor, then check 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `ai.claude.autostart` | `true` | Start a Claude Code session when a project opens. Off, bud only starts one when you use an AI feature. |
-| `ai.claude.resume` | `"continue"` | Reopening a project carries on its last conversation; `"new"` starts fresh each time. |
+| `ai.claude.resume` | `"continue"` | Reopening a project carries on bud's last conversation there (kept in `~/.local/state/bud/claude-sessions.json`, so never one you started yourself, or an issue or chat session); `"new"` starts fresh each time. |
 | `ai.claude.idle_minutes` | `30` | Stop a session nothing has used for this long; the next use starts it again on the same conversation. `0` never stops one. |
 | `ai.claude.args` | `[]` | Extra flags for every session, e.g. `["--model", "opus"]`. |
 | `ai.claude.command` | unset | What runs Claude Code when it isn't `claude` itself: a wrapper that passes the rest on, e.g. `["headroom", "wrap", "claude", "--code-memory", "none", "--"]`. `bud install` offers exactly that when Headroom is installed, and `bud doctor` warns if the wrapper isn't on PATH. |

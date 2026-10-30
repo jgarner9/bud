@@ -8,6 +8,9 @@
 --   ui.input({ title, default }, on_confirm)
 --   ui.panel({ title, dir, boxes = {{ name, size, title, lines, enter }} }) -> handle
 --
+-- Each one dims the editor behind it (a backdrop, JGA-160), so the float is
+-- what you look at; backdrop = false in opts leaves the editor as it is.
+--
 -- setup() makes vim.ui.select and vim.ui.input use menu and input, so every
 -- picker in bud (and in plugins) gets the same look. A handle has buf, win,
 -- map(lhs, fn) and close(); a panel's has boxes[name] instead of buf and win.
@@ -53,6 +56,59 @@ local function fit_width(lines, opts)
   return math.min(opts.width or width, vim.o.columns - 4)
 end
 
+-- backdrop dims the whole editor under a float (zindex 50, nui's) until every
+-- window in wins() has closed. It returns nothing when opts.backdrop is false
+M.backdrop_blend = 40
+local function backdrop(opts, wins)
+  if opts.backdrop == false then
+    return
+  end
+  vim.api.nvim_set_hl(0, "BudBackdrop", { bg = "#000000", default = true })
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].bufhidden = "wipe"
+  local win = vim.api.nvim_open_win(buf, false, {
+    relative = "editor",
+    row = 0,
+    col = 0,
+    width = vim.o.columns,
+    height = vim.o.lines,
+    focusable = false,
+    style = "minimal",
+    border = "none",
+    zindex = 40,
+    noautocmd = true,
+  })
+  vim.w[win].bud_backdrop = true
+  vim.wo[win].winblend = M.backdrop_blend
+  vim.wo[win].winhighlight = "Normal:BudBackdrop"
+  local watched = {}
+  for _, w in ipairs(wins()) do
+    watched[w] = true
+  end
+  local group = vim.api.nvim_create_augroup("bud.ui.backdrop." .. win, { clear = true })
+  local function close()
+    pcall(vim.api.nvim_del_augroup_by_id, group)
+    if vim.api.nvim_win_is_valid(win) then
+      pcall(vim.api.nvim_win_close, win, true)
+    end
+  end
+  if next(watched) == nil then
+    return close()
+  end
+  vim.api.nvim_create_autocmd("WinClosed", {
+    group = group,
+    callback = function(ev)
+      local closed = tonumber(ev.match)
+      if watched[closed] then
+        watched[closed] = nil
+        if next(watched) == nil then
+          vim.schedule(close)
+        end
+      end
+    end,
+  })
+end
+
 local function handle(popup)
   local h = { popup = popup }
   h.buf, h.win = popup.bufnr, popup.winid
@@ -82,6 +138,9 @@ function M.float(opts)
     win_options = { wrap = opts.wrap ~= false, cursorline = opts.cursorline or false },
   })
   popup:mount()
+  backdrop(opts, function()
+    return { popup.winid }
+  end)
   vim.api.nvim_buf_set_lines(popup.bufnr, 0, -1, false, lines)
   if opts.modifiable ~= true then
     vim.bo[popup.bufnr].modifiable = false
@@ -215,6 +274,9 @@ function M.menu(items, opts, on_choice)
     end,
   })
   menu:mount()
+  backdrop(opts, function()
+    return { menu.winid }
+  end)
   -- leaving it is closing it, so the caller always hears back
   menu:on("BufLeave", function()
     menu:unmount()
@@ -264,6 +326,9 @@ function M.input(opts, on_confirm)
     end,
   })
   input:mount()
+  backdrop(opts, function()
+    return { input.winid }
+  end)
   input:on("BufLeave", function()
     input:unmount()
   end, { once = true })
@@ -303,6 +368,13 @@ function M.panel(opts)
     size = { width = opts.width or "80%", height = opts.height or "80%" },
   }, Layout.Box(entries, { dir = opts.dir or "col" }))
   layout:mount()
+  backdrop(opts, function()
+    local wins = {}
+    for _, popup in ipairs(popups) do
+      table.insert(wins, popup.winid)
+    end
+    return wins
+  end)
 
   local closed = false
   function h.close()

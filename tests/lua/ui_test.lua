@@ -20,7 +20,7 @@ end
 local function floats()
   local n = 0
   for _, w in ipairs(vim.api.nvim_list_wins()) do
-    if vim.api.nvim_win_get_config(w).relative ~= "" then
+    if vim.api.nvim_win_get_config(w).relative ~= "" and not vim.w[w].bud_backdrop then
       n = n + 1
     end
   end
@@ -43,9 +43,29 @@ eq(vim.bo[h.buf].modifiable, false, "read-only")
 -- nui draws the border, title and footer in a window of their own
 local frame = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(h.popup.border.winid), 0, -1, false)
 assert(frame[1]:find("hello", 1, true) and frame[#frame]:find("q close", 1, true), vim.inspect(frame))
+-- the editor behind it is dimmed until it closes
+local function backdrops()
+  local n = 0
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.w[w].bud_backdrop then
+      n = n + 1
+    end
+  end
+  return n
+end
+eq(backdrops(), 1, "backdrop behind the float")
+local bd = vim.tbl_filter(function(w)
+  return vim.w[w].bud_backdrop == true
+end, vim.api.nvim_list_wins())[1]
+eq(vim.api.nvim_win_get_config(bd).focusable, false, "the backdrop can't take the cursor")
+eq(vim.api.nvim_win_get_config(bd).zindex < vim.api.nvim_win_get_config(h.win).zindex, true, "under the float")
 press("q")
 vim.wait(50)
 eq({ floats(), closed }, { 0, 1 }, "closed by q")
+eq(backdrops(), 0, "backdrop gone with it")
+ui.float({ lines = { "plain" }, backdrop = false }).close()
+vim.wait(50)
+eq(backdrops(), 0, "backdrop = false leaves the editor alone")
 
 -- a dialog runs the action whose key was pressed, once
 local got = {}
@@ -180,5 +200,7 @@ vim.wait(100, function()
   return panel_closed
 end)
 eq({ panel_closed, floats() }, { true, 0 }, "panel closed")
+vim.wait(50)
+eq(backdrops(), 0, "every backdrop went with its float, menu, input and panel")
 
 print("ui_test: ok")

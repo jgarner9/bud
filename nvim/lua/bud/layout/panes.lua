@@ -20,7 +20,12 @@ local function in_git()
   return vim.fs.root(vim.fn.getcwd(), ".git") ~= nil
 end
 
-layout.register("tree", { open = neo_tree("filesystem") })
+-- tree is the explorer: oil in a narrow split (JGA-162)
+layout.register("tree", {
+  open = function(pane)
+    return require("bud.explorer").open({ side = pane.side, size = pane.size })
+  end,
+})
 layout.register("git", { available = in_git, open = neo_tree("git_status") })
 -- chat is the native side pane (JGA-89), or Claude Code's own TUI with
 -- ai.chat.pane = "term" (D48)

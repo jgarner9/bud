@@ -4,7 +4,7 @@
 return {
   description = "File tree and the debugger panel; F5 starts debugging",
   panes = {
-    { kind = "tree", side = "left", size = 30 },
+    { kind = "tree", side = "left", size = 24 },
     { kind = "debug", side = "bottom", size = 0.3 },
   },
 }

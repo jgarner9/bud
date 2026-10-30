@@ -33,7 +33,7 @@ It lives in its own namespace (`NVIM_APPNAME=bud`), so your existing `~/.config/
 | --- | --- |
 | **An isolated Neovim** | Plugins come from Neovim's built-in `vim.pack`, pinned in a committed lockfile and lazy-loaded where it counts. Headless startup is around 28 ms. |
 | **Languages as data** | One file per language in [`languages/`](languages/) wires up the LSP server, linter, formatter and tree-sitter parsers. Copy [`_template.lua`](languages/_template.lua) to add your own. |
-| **Easy navigation** | fzf-lua for files, grep, buffers and symbols; two-key jumps with `gw` and `s`; a symbols outline; oil.nvim and a neo-tree side pane; four pinned files per project. |
+| **Easy navigation** | fzf-lua for files, grep, buffers and symbols; two-key jumps with `gw` and `s`; a symbols outline; oil.nvim, as a buffer and as the side pane; four pinned files per project. |
 | **Batteries included** | blink.cmp completion, gitsigns and diffview, mini.clue key hints, format on save, Catppuccin Macchiato. |
 | **A doctor** | `bud doctor` checks system deps, tool versions, config sync and machine config, and tells you the exact fix. |
 | **Honest installs** | `bud install` shows the package manager command and asks before running it. Nothing gets upgraded behind your back. |
@@ -141,7 +141,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and the keys that follow show up.
 | <kbd>Space</kbd> <kbd>/</kbd> | Grep the project |
 | <kbd>Space</kbd> <kbd>b</kbd> · <kbd>Space</kbd> <kbd>r</kbd> | Buffers · recent files |
 | <kbd>g</kbd> <kbd>w</kbd> · <kbd>s</kbd> | Jump to any word · jump by character |
-| <kbd>Space</kbd> <kbd>e</kbd> · <kbd>-</kbd> | File tree · edit the parent directory as a buffer |
+| <kbd>Space</kbd> <kbd>e</kbd> · <kbd>Space</kbd> <kbd>E</kbd> · <kbd>-</kbd> | Go to the explorer pane, or back from it · close it · edit the parent directory as a buffer |
 | <kbd>Space</kbd> <kbd>m</kbd> · <kbd>Space</kbd> <kbd>1</kbd>–<kbd>4</kbd> | Pin or unpin a file · jump to a pinned file |
 | <kbd>Space</kbd> <kbd>d</kbd> · <kbd>Space</kbd> <kbd>M</kbd> | Dashboard · Mason |
 | <kbd>Space</kbd> <kbd>t</kbd> · <kbd>Esc</kbd> <kbd>Esc</kbd> | Show a terminal along the bottom · hide it from inside |

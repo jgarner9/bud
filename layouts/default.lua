@@ -4,7 +4,7 @@
 return {
   description = "File tree and editor; <leader>ac opens chat, <leader>t the terminal",
   panes = {
-    { kind = "tree", side = "left", size = 30, focus = true },
+    { kind = "tree", side = "left", size = 24, focus = true },
   },
   terminal = { height = 0.35 },
 }

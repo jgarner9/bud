@@ -41,7 +41,8 @@ return {
     end,
   },
 
-  -- neo-tree is the side pane only; oil owns directory buffers (`nvim somedir`, `:e .`)
+  -- oil owns directory buffers (`nvim somedir`, `:e .`) and is the explorer pane
+  -- (bud.explorer, JGA-162); neo-tree is the git pane only
   { src = "nvim-lua/plenary.nvim" },
   {
     -- neo-tree's, and bud's own dialogs, menus and panels (bud.ui, JGA-136):
@@ -63,15 +64,27 @@ return {
           use_libuv_file_watcher = true,
         },
       })
-      map("n", "<leader>e", "<cmd>Neotree toggle reveal<cr>", { desc = "File tree" })
     end,
   },
   {
     src = "stevearc/oil.nvim",
     version = vim.version.range("2"),
     config = function()
-      require("oil").setup({ default_file_explorer = true })
+      require("oil").setup({
+        default_file_explorer = true,
+        -- in the explorer pane a file opens beside it, not in the pane
+        keymaps = {
+          ["<CR>"] = {
+            callback = function()
+              require("bud.explorer").select()
+            end,
+            desc = "Open",
+            mode = "n",
+          },
+        },
+      })
       map("n", "-", "<cmd>Oil<cr>", { desc = "Parent directory" })
+      require("bud.explorer").setup()
     end,
   },
 

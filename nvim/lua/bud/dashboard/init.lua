@@ -498,28 +498,19 @@ local function highlights()
   for group, link in pairs(links) do
     vim.api.nvim_set_hl(0, group, { link = link, default = true })
   end
-  -- blend 100 makes the TUI hide the cursor (:help tui-cursor-shape)
-  vim.api.nvim_set_hl(0, "BudDashboardCursor", { blend = 100, nocombine = true, default = true })
   -- FloatBorder's colour only: themes (catppuccin) give it a float's darker
   -- background, which drew a dark outline round every row
   local float = vim.api.nvim_get_hl(0, { name = "FloatBorder", link = false })
   vim.api.nvim_set_hl(0, "BudDashboardBorder", { fg = float.fg, ctermfg = float.ctermfg, default = true })
 end
 
--- the cursor is hidden in Normal mode while the dashboard is the current
--- window (JGA-158), so prompts keep theirs; saved_cursor is the user's
--- 'guicursor' to give back
-local saved_cursor
-
+-- the cursor is hidden while the dashboard is the current window (JGA-158)
+local cursor = require("bud.ui.cursor")
 local function hide_cursor()
-  saved_cursor = saved_cursor or vim.o.guicursor
-  vim.o.guicursor = saved_cursor .. ",n:block-BudDashboardCursor"
+  cursor.hide("dashboard")
 end
-
 local function show_cursor()
-  if saved_cursor then
-    vim.o.guicursor, saved_cursor = saved_cursor, nil
-  end
+  cursor.show("dashboard")
 end
 
 -- open shows the dashboard in the current window. opts.offline skips the

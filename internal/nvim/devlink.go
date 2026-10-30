@@ -71,6 +71,11 @@ func Link(checkout, dir string) error {
 		return err
 	}
 	for _, e := range entries {
+		// dot entries (a Claude Code .claude/, editor droppings) never ship,
+		// since go:embed leaves them out, so they're never linked (JGA-167)
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
 		targets[e.Name()] = filepath.Join(checkout, "nvim", e.Name())
 	}
 	for name := range targets {

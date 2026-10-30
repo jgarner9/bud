@@ -68,6 +68,8 @@ type Dashboard struct {
 	Todos      bool `json:"todos"`      // TODO/FIXME count per project, via rg
 	Chats      bool `json:"chats"`      // the last few chats, a b e to resume
 	Clock      bool `json:"clock"`      // the date and time under the robot
+	// the robot's idle moves (JGA-155), on unless turned off
+	Animate bool `json:"animate"`
 }
 
 // UI is how the editor looks beyond the colorscheme
@@ -132,7 +134,7 @@ func Defaults() Settings {
 		Layout:       "default",
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
-		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true},
+		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true, Animate: true},
 		UI:           UI{Messages: true, Breadcrumbs: true},
 		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "bud"}, Chat: Chat{Pane: "native"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},

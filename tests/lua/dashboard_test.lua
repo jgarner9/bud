@@ -127,6 +127,51 @@ for _, h in ipairs(hls) do
     error(("highlight %s out of line %q"):format(vim.inspect(h), line))
   end
 end
+-- each section in its own box, titled in the top border, all one width
+-- (JGA-155); a short window joins them with titled dividers
+has(lines, "╭─ Menu ", "menu box")
+has(lines, "╭─ " .. icons.projects .. " Projects ", "projects box")
+has(lines, "╭─ Status ", "status box")
+local function box_widths(ls)
+  local widths = {}
+  for _, l in ipairs(ls) do
+    local edge = l:match("^%s*([│╭╰├])")
+    if edge then
+      widths[vim.fn.strdisplaywidth(vim.trim(l))] = true
+    end
+  end
+  return vim.tbl_keys(widths)
+end
+eq(#box_widths(lines), 1, "every box line the same width")
+local joined = view.build(data, 100, 18)
+has(joined, "├─ Status ", "tight boxes share a divider")
+eq(#box_widths(joined), 1, "joined boxes the same width")
+
+-- the robot's moves only change the robot, and never its size
+local moves = vim.deepcopy(view.moves)
+moves.snore = view.snore
+for name, frames in pairs(moves) do
+  for i, frame in ipairs(frames) do
+    local mood = name == "snore" and "sleepy" or "normal"
+    local base = view.build(vim.tbl_extend("force", data, { mood = mood }), 100, 40)
+    local moved = view.build(vim.tbl_extend("force", data, { mood = mood, frame = frame }), 100, 40)
+    eq(#moved, #base, name .. " frame " .. i .. " line count")
+    for row = 1, #base do
+      if base[row]:find("[_]", 1, true) or base[row]:find("hey bud.", 1, true) or base[row]:find("___", 1, true) then
+        eq(vim.fn.strdisplaywidth(moved[row]), vim.fn.strdisplaywidth(base[row]), name .. " frame " .. i .. " width")
+      else
+        eq(moved[row], base[row], name .. " frame " .. i .. " leaves line " .. row)
+      end
+    end
+  end
+end
+has(
+  view.build(vim.tbl_extend("force", data, { mood = "normal", frame = view.moves.blink[1] }), 100, 40),
+  "[-.-]",
+  "blink"
+)
+has(view.build(vim.tbl_extend("force", data, { mood = "normal", frame = { wave = true } }), 100, 40), "[o.o]/", "wave")
+
 -- optional extras (JGA-97)
 local extra = vim.deepcopy(data)
 extra.projects[1].prs = { open = 2, review = 1 }
@@ -154,10 +199,11 @@ for i = 1, 10 do
   table.insert(full.menu, { key = tostring(i), icon = "file", label = "item " .. i })
 end
 full.projects = { full.projects[1], full.projects[2], full.projects[1], full.projects[2], full.projects[1] }
+-- content counts lines with something in them, not just box borders
 local function content(ls)
   local n = 0
   for _, l in ipairs(ls) do
-    n = l ~= "" and n + 1 or n
+    n = vim.fn.substitute(l, "[ │╭╮╰╯├┤─]", "", "g") ~= "" and n + 1 or n
   end
   return n
 end
@@ -254,7 +300,23 @@ end
 f = assert(io.open(tmp .. "/config.json", "w"))
 f:write('{"dashboard": {"scratchpad": true}}')
 f:close()
+-- the buddy moves now and then, and settles back between moves (JGA-155)
+dashboard.idle_ms = function()
+  return 20
+end
+dashboard.frame_ms = 20
 buf = dashboard.open({ offline = true })
+local still = dashboard.lines()
+if not vim.wait(2000, function()
+  return not vim.deep_equal(dashboard.lines(), still)
+end, 5) then
+  error("the robot never moved")
+end
+if not vim.wait(2000, function()
+  return vim.deep_equal(dashboard.lines(), still)
+end, 5) then
+  error("the robot never settled")
+end
 
 -- leaving it wipes it, and the next buffer gets its window options back
 vim.o.number = true
@@ -262,5 +324,7 @@ vim.cmd.enew()
 eq(vim.api.nvim_buf_is_valid(buf), false, "wiped on leave")
 eq(dashboard.lines(), nil, "no dashboard state left")
 eq(vim.wo.number, true, "line numbers come back")
+vim.wait(100)
+eq(dashboard.lines(), nil, "the animation stopped with it")
 
 print("dashboard_test: ok")

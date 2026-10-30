@@ -32,17 +32,37 @@ local function pad(text, cols)
   return text .. string.rep(" ", math.max(0, cols - vim.fn.strdisplaywidth(text)))
 end
 
+-- the buddy's idle moves (JGA-155): each is a list of frames, shown about
+-- 150 ms apart, that change a part of the art; the mood face shows between
+-- them. A frame never changes the art's width, so nothing around it moves
+M.moves = {
+  blink = { { face = "[-.-]" } },
+  look = { { face = "[<.<]" }, { face = "[<.<]" }, { face = "[>.>]" }, { face = "[>.>]" } },
+  antenna = { { top = "_*_" }, { top = "___" }, { top = "_*_" } },
+  wave = { { wave = true }, {}, { wave = true }, {}, { wave = true } },
+}
+-- asleep, it only snores
+M.snore = { { z = "Z" }, {}, { z = "Z" } }
+
 local function art(data)
-  local face = M.faces[data.mood] or M.faces.normal
+  local frame = data.frame or {}
+  local face = frame.face or M.faces[data.mood] or M.faces.normal
   local sleepy = data.mood == "sleepy"
+  local z = frame.z or "z"
   return {
-    { seg("   ___", "BudDashboardArt"), seg(sleepy and "     z" or "", "BudDashboardDim") },
+    { seg("   " .. (frame.top or "___"), "BudDashboardArt"), seg(sleepy and "     " .. z or "", "BudDashboardDim") },
     {
       seg("  " .. face, "BudDashboardArt"),
-      seg(sleepy and "  z     " or "        ", "BudDashboardDim"),
+      -- the raised arm takes the spacer's first cell
+      seg(frame.wave and "/" or "", "BudDashboardArt"),
+      seg(sleepy and "  " .. z .. "     " or (frame.wave and "       " or "        "), "BudDashboardDim"),
       seg("hey bud.", "BudDashboardTitle"),
     },
-    { seg("  /[_]\\", "BudDashboardArt"), seg("        "), seg('"' .. data.tagline .. '"', "BudDashboardDim") },
+    {
+      seg(frame.wave and "  /[_] " or "  /[_]\\", "BudDashboardArt"),
+      seg("        "),
+      seg('"' .. data.tagline .. '"', "BudDashboardDim"),
+    },
     { seg("   ] [", "BudDashboardArt") },
   }
 end
@@ -88,7 +108,7 @@ local function git_status(git)
 end
 
 local function projects(list)
-  local lines = { { seg("  " .. icons.projects .. "  ", "BudDashboardIcon"), seg("Projects", "BudDashboardHeader") } }
+  local lines = {}
   if #list == 0 then
     table.insert(lines, { seg("  none yet: open one with bud <dir>", "BudDashboardDim") })
     return lines
@@ -125,51 +145,96 @@ end
 local levels =
   { error = "BudDashboardError", warn = "BudDashboardWarn", info = "BudDashboardDim", update = "BudDashboardOk" }
 
--- silly is the full dashboard: robot, menu with icons, projects with git,
--- banners, health line and tip
--- roomy spaces it out (a gap between menu rows, two blank lines between
--- sections); build falls back to the tight version when that won't fit
-local function silly(data, roomy)
-  local block = {}
-  local function add(lines)
-    vim.list_extend(block, lines)
+-- box outlines a section (JGA-155): its title in the top border, its lines
+-- padded to inner cells between the sides. joined makes the top a divider
+-- under the box before it, whose bottom the caller drops
+local function box(title, lines, inner, joined)
+  local border = "BudDashboardBorder"
+  local top = { seg(joined and " ├─ " or " ╭─ ", border) }
+  if title.icon then
+    table.insert(top, seg(title.icon .. " ", "BudDashboardIcon"))
   end
-  local blank = roomy and { {}, {} } or { {} }
+  table.insert(top, seg(title.text, "BudDashboardHeader"))
+  local used = (title.icon and 2 or 0) + vim.fn.strdisplaywidth(title.text) + 3
+  table.insert(top, seg(" " .. string.rep("─", inner - used) .. (joined and "┤" or "╮"), border))
+  local out = { top }
+  for _, line in ipairs(lines) do
+    local row = { seg(" │", border) }
+    vim.list_extend(row, line)
+    table.insert(row, seg(string.rep(" ", inner - width(line)) .. "│", border))
+    table.insert(out, row)
+  end
+  table.insert(out, { seg(" ╰" .. string.rep("─", inner) .. "╯", border) })
+  return out
+end
 
-  add(art(data))
+-- silly is the full dashboard: robot, then boxes for the menu, projects with
+-- git, recent chats and the status (banners, health line and tip)
+-- roomy spaces it out (a gap between menu rows and between boxes); build
+-- falls back to the tight version, the boxes joined, when that won't fit
+local function silly(data, roomy)
+  local block = art(data)
   if data.clock then
-    add({ { seg("  " .. icons.clock .. "  " .. data.clock, "BudDashboardDim") } })
+    table.insert(block, { seg("  " .. icons.clock .. "  " .. data.clock, "BudDashboardDim") })
   end
-  add(blank)
-  add(menu(data.menu, roomy))
-  add(blank)
-  add(projects(data.projects))
+
+  local sections = {
+    { title = { text = "Menu" }, lines = menu(data.menu, roomy) },
+    { title = { icon = icons.projects, text = "Projects" }, lines = projects(data.projects) },
+  }
   if data.chats and #data.chats > 0 then
-    add(blank)
-    add({ { seg("  " .. icons.chat .. "  ", "BudDashboardIcon"), seg("Recent chats", "BudDashboardHeader") } })
+    local chats = {}
     for _, c in ipairs(data.chats) do
-      add({ { seg("  " .. c.key, "BudDashboardKey"), seg("     " .. c.title) } })
+      table.insert(chats, { seg("  " .. c.key, "BudDashboardKey"), seg("     " .. c.title) })
     end
+    table.insert(sections, { title = { icon = icons.chat, text = "Recent chats" }, lines = chats })
   end
-  if #data.banners > 0 then
-    add(blank)
-    for _, b in ipairs(data.banners) do
-      add({ { seg("  " .. (icons[b.level] or icons.tip) .. "  " .. b.text, levels[b.level]) } })
-    end
+  local status = {}
+  for _, b in ipairs(data.banners) do
+    table.insert(status, { seg("  " .. (icons[b.level] or icons.tip) .. "  " .. b.text, levels[b.level]) })
   end
-  add(blank)
   if data.health then
-    add({ { seg("  " .. data.health, "BudDashboardDim") } })
+    table.insert(status, { seg("  " .. data.health, "BudDashboardDim") })
   end
   if data.tip then
-    add({
-      {
-        seg("  " .. icons.tip .. "  ", "BudDashboardIcon"),
-        seg("tip: ", "BudDashboardDim"),
-        seg(data.tip.lhs, "BudDashboardKey"),
-        seg("  " .. data.tip.desc),
-      },
+    table.insert(status, {
+      seg("  " .. icons.tip .. "  ", "BudDashboardIcon"),
+      seg("tip: ", "BudDashboardDim"),
+      seg(data.tip.lhs, "BudDashboardKey"),
+      seg("  " .. data.tip.desc),
     })
+  end
+  if #status > 0 then
+    table.insert(sections, { title = { text = "Status" }, lines = status })
+  end
+
+  -- every box as wide as the widest section, with two cells to spare
+  local inner = 0
+  for _, sec in ipairs(sections) do
+    inner = math.max(inner, vim.fn.strdisplaywidth(sec.title.text) + 8)
+    for _, line in ipairs(sec.lines) do
+      inner = math.max(inner, width(line) + 2)
+    end
+  end
+  -- the robot (and clock) centered over the boxes
+  local top_width = 0
+  for _, line in ipairs(block) do
+    top_width = math.max(top_width, width(line))
+  end
+  local indent = string.rep(" ", math.max(0, math.floor((inner + 3 - top_width) / 2)))
+  for _, line in ipairs(block) do
+    table.insert(line, 1, seg(indent))
+  end
+  -- roomy: separate boxes a line apart; tight: one box with titled dividers
+  table.insert(block, {})
+  for i, sec in ipairs(sections) do
+    local joined = i > 1 and not roomy
+    if joined then
+      table.remove(block)
+    elseif i > 1 then
+      table.insert(block, {})
+    end
+    vim.list_extend(block, box(sec.title, sec.lines, inner, joined))
   end
   return block
 end

@@ -54,6 +54,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `dashboard.todos` | `false` | How many TODO and FIXME comments each project has, through `rg`. |
 | `dashboard.chats` | `false` | The last three full-screen chats, on `a`, `b` and `e` to resume. |
 | `dashboard.clock` | `false` | The date and time under the robot. |
+| `dashboard.animate` | `true` | The robot blinks, looks around and waves now and then (it only snores after midnight). |
 | `dashboard.sessions` | `false` | Save a project's open files on exit and restore them when you open it from the dashboard. |
 
 ## Claude Code

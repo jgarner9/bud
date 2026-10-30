@@ -502,27 +502,30 @@ There are two styles, picked with `dashboard.style = "silly" | "minimal"` in con
 #### Silly style (default)
 
 ```text
-          ___
-         [o.o]        hey bud.
-         /[_]\        "what are we breaking today?"
-          ] [
+                    ___
+                   [o.o]        hey bud.
+                   /[_]\        "what are we breaking today?"
+                    ] [
 
-   p   Open project        L   Plugins
-   f   Open file           M   Mason
-   r   Recent files        d   Doctor
-   n   New file            u   Update
-   x   Scratchpad          q   Quit
-
-    Projects
-   1   bud           main  3 1
-   2   dollarwise    main 
-
-    1 doctor warning, press d
-    24 ms ·  18 plugins ·  claude ready
-    tip: <Space>o  Symbols outline
+ ╭─ Menu ───────────────────────────────────────────╮
+ │  p   Open project        L   Plugins             │
+ │  f   Open file           M   Mason               │
+ │  r   Recent files        d   Doctor              │
+ │  n   New file            u   Update              │
+ │  x   Scratchpad          q   Quit                │
+ ╰──────────────────────────────────────────────────╯
+ ╭─  Projects ─────────────────────────────────────╮
+ │  1   bud           main  3 1                  │
+ │  2   dollarwise    main                       │
+ ╰──────────────────────────────────────────────────╯
+ ╭─ Status ─────────────────────────────────────────╮
+ │   1 doctor warning, press d                     │
+ │   24 ms ·  18 plugins ·  claude ready          │
+ │   tip: <Space>o  Symbols outline                │
+ ╰──────────────────────────────────────────────────╯
 ```
 
-Nerd Font glyphs are bud's accent in the editor, alongside the robot (D37); they're shown here as the editor draws them, so they need a Nerd Font to read. The buddy is the README's robot (D37), and its face changes with state: `[o.o]` normal, `[^.^]` once doctor comes back clean, `[O.O]` when an update is waiting, `[-.-] z` after midnight. The tagline under it rotates from `nvim/lua/bud/dashboard/taglines.lua`. Chat (`c`, `h`), the tool generator (`g`) and settings (`s`) join the menu, and a recent-chats column joins the projects, once those exist.
+Nerd Font glyphs are bud's accent in the editor, alongside the robot (D37); they're shown here as the editor draws them, so they need a Nerd Font to read. The buddy is the README's robot (D37), and its face changes with state: `[o.o]` normal, `[^.^]` once doctor comes back clean, `[O.O]` when an update is waiting, `[-.-] z` after midnight. The tagline under it rotates from `nvim/lua/bud/dashboard/taglines.lua`. Each section sits in its own rounded box, all one width, with its title in the top border; when the window is too short they join into one box with titled dividers (JGA-155). Every 4–9 seconds while the dashboard is on screen the buddy blinks, looks around, flashes its antenna or waves (after midnight it only snores), redrawn from the data already gathered; `dashboard.animate` turns it off. Chat (`c`, `h`), the tool generator (`g`) and settings (`s`) join the menu, and a recent-chats column joins the projects, once those exist.
 
 #### Minimal style
 

@@ -49,6 +49,7 @@ M.sections = {
       { key = "dashboard.todos", label = "TODO count", kind = "bool" },
       { key = "dashboard.chats", label = "Recent chats", kind = "bool" },
       { key = "dashboard.clock", label = "Clock", kind = "bool" },
+      { key = "dashboard.animate", label = "Robot animations", kind = "bool" },
     },
   },
   {

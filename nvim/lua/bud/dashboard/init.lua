@@ -194,6 +194,26 @@ end
 
 local ns = vim.api.nvim_create_namespace("bud.dashboard")
 
+-- render draws the data last gathered, with the buddy's current frame
+local function render(win)
+  if not current or not current.data or not vim.api.nvim_buf_is_valid(current.buf) then
+    return
+  end
+  win = win or vim.fn.bufwinid(current.buf)
+  if win == -1 then
+    return
+  end
+  local shown = vim.tbl_extend("force", current.data, { frame = current.frame })
+  local lines, hls = view.build(shown, vim.api.nvim_win_get_width(win), vim.api.nvim_win_get_height(win))
+  vim.bo[current.buf].modifiable = true
+  vim.api.nvim_buf_set_lines(current.buf, 0, -1, false, lines)
+  vim.bo[current.buf].modifiable = false
+  vim.api.nvim_buf_clear_namespace(current.buf, ns, 0, -1)
+  for _, h in ipairs(hls) do
+    vim.api.nvim_buf_set_extmark(current.buf, ns, h[1], h[2], { end_col = h[3], hl_group = h[4] })
+  end
+end
+
 local function draw()
   if not current or not vim.api.nvim_buf_is_valid(current.buf) then
     current = nil
@@ -204,14 +224,65 @@ local function draw()
     return
   end
   current.data = data()
-  local lines, hls = view.build(current.data, vim.api.nvim_win_get_width(win), vim.api.nvim_win_get_height(win))
-  vim.bo[current.buf].modifiable = true
-  vim.api.nvim_buf_set_lines(current.buf, 0, -1, false, lines)
-  vim.bo[current.buf].modifiable = false
-  vim.api.nvim_buf_clear_namespace(current.buf, ns, 0, -1)
-  for _, h in ipairs(hls) do
-    vim.api.nvim_buf_set_extmark(current.buf, ns, h[1], h[2], { end_col = h[3], hl_group = h[4] })
+  render(win)
+end
+
+-- animate plays one of the buddy's moves every few seconds while the
+-- dashboard is on screen (JGA-155): each frame redraws from the data already
+-- gathered, so nothing runs again; asleep, it only snores
+-- how long the buddy waits between moves, and shows each frame; swapped in tests
+M.idle_ms = function()
+  return math.random(4000, 9000)
+end
+M.frame_ms = 150
+
+local function animate()
+  local timer = vim.uv.new_timer()
+  current.anim = timer
+  local function alive()
+    return current ~= nil and current.anim == timer
   end
+  local function after(ms, fn)
+    timer:start(
+      ms,
+      0,
+      vim.schedule_wrap(function()
+        if alive() then
+          fn()
+        end
+      end)
+    )
+  end
+  local idle
+  local function play(frames, i)
+    current.frame = frames[i]
+    render()
+    if i < #frames then
+      after(M.frame_ms, function()
+        play(frames, i + 1)
+      end)
+    else
+      after(M.frame_ms, function()
+        current.frame = nil
+        render()
+        idle()
+      end)
+    end
+  end
+  idle = function()
+    after(M.idle_ms(), function()
+      if current.style == "minimal" or vim.fn.bufwinid(current.buf) == -1 then
+        return idle()
+      end
+      if current.data and current.data.mood == "sleepy" then
+        return play(view.snore, 1)
+      end
+      local names = vim.tbl_keys(view.moves)
+      table.sort(names)
+      play(view.moves[names[math.random(#names)]], 1)
+    end)
+  end
+  idle()
 end
 
 -- terminal runs a bud command in a new buffer, for d and u
@@ -452,6 +523,7 @@ local function highlights()
     BudDashboardKey = "Keyword",
     BudDashboardIcon = "Special",
     BudDashboardHeader = "Title",
+    BudDashboardBorder = "FloatBorder",
     BudDashboardDim = "Comment",
     BudDashboardOk = "DiagnosticOk",
     BudDashboardWarn = "DiagnosticWarn",
@@ -507,6 +579,8 @@ function M.open(opts)
       todos = settings.todos == true,
       chats = settings.chats == true,
       clock = settings.clock == true,
+      -- the buddy's idle moves (JGA-155), on unless config.json turns them off
+      animate = settings.animate ~= false,
       -- the default extras (JGA-62), each on unless config.json turns it off
       git = settings.git ~= false,
       health = settings.health ~= false,
@@ -516,6 +590,9 @@ function M.open(opts)
   }
   keys(buf)
   draw()
+  if current.settings.animate then
+    animate()
+  end
 
   vim.api.nvim_create_autocmd({ "VimResized", "WinResized" }, {
     buffer = buf,
@@ -524,6 +601,10 @@ function M.open(opts)
   vim.api.nvim_create_autocmd("BufWipeout", {
     buffer = buf,
     callback = function()
+      if current and current.anim then
+        current.anim:stop()
+        current.anim:close()
+      end
       current = nil
     end,
   })

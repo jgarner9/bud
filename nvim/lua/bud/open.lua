@@ -72,13 +72,83 @@ function M.go(path)
   require("bud.layout").open_project(path)
 end
 
--- browse asks for a directory, with completion, and opens it as a project
-function M.browse()
-  vim.ui.input({ prompt = "Open directory: ", completion = "dir", default = vim.fn.getcwd() .. "/" }, function(dir)
-    if dir and dir ~= "" then
-      M.go(dir)
+-- dirs is what the directory browser lists for dir: ./ and ../, then its
+-- subdirectories, dot dirs too, sorted. Each is { name, path }
+function M.dirs(dir)
+  local out = { { name = "./", path = dir }, { name = "../", path = vim.fs.dirname(dir) } }
+  local names = {}
+  for name, kind in vim.fs.dir(dir) do
+    local path = vim.fs.joinpath(dir, name)
+    if kind == "directory" or (kind == "link" and vim.fn.isdirectory(path) == 1) then
+      table.insert(names, name)
+    end
+  end
+  table.sort(names)
+  for _, name in ipairs(names) do
+    table.insert(out, { name = name .. "/", path = vim.fs.joinpath(dir, name) })
+  end
+  return out
+end
+
+M.browse_keys = "<CR> go in · <S-CR> or o open as project · q cancel"
+
+-- browse is the "browse for a directory…" entry (JGA-160): a float listing
+-- only directories, netrw style. <CR> goes into the one under the cursor,
+-- <S-CR> (or o, where the terminal can't tell it from <CR>) opens it as a
+-- project. It starts in start, else the cwd
+function M.browse(start)
+  local ui = require("bud.ui")
+  local dir = vim.fs.normalize(start or vim.fn.getcwd())
+  local list = {}
+  local h = ui.float({
+    title = dir,
+    icon = icons.project,
+    footer = M.browse_keys,
+    width = 64,
+    height = 20,
+    cursorline = true,
+    wrap = false,
+    filetype = "bud-browse",
+  })
+
+  -- show lists path, with the cursor on the entry named at (the dir just
+  -- left, going up), else the first
+  local function show(path, at)
+    dir, list = path, M.dirs(path)
+    local lines, row = {}, 1
+    for i, d in ipairs(list) do
+      table.insert(lines, " " .. d.name)
+      if d.name == at then
+        row = i
+      end
+    end
+    vim.bo[h.buf].modifiable = true
+    vim.api.nvim_buf_set_lines(h.buf, 0, -1, false, lines)
+    vim.bo[h.buf].modifiable = false
+    h.popup.border:set_text("top", " " .. icons.project .. " " .. vim.fn.fnamemodify(dir, ":~") .. " ", "center")
+    vim.api.nvim_win_set_cursor(h.win, { row, 0 })
+  end
+
+  local function under()
+    return list[vim.api.nvim_win_get_cursor(h.win)[1]]
+  end
+  h.map("<CR>", function()
+    local d = under()
+    if d and d.path ~= dir then
+      show(d.path, d.name == "../" and vim.fs.basename(dir) .. "/" or nil)
     end
   end)
+  local function pick()
+    local d = under()
+    if d then
+      h.close()
+      M.go(d.path)
+    end
+  end
+  h.map("<S-CR>", pick)
+  h.map("o", pick)
+  show(dir)
+  return h
 end
 
 -- project is p / <leader>p

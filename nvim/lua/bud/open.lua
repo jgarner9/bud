@@ -202,9 +202,9 @@ function M.typed_path(query)
   return nil
 end
 
--- file is f / <leader>f: recent files on the dashboard, files in the current
--- project anywhere else (opts.dir to pick another dir); typing an absolute
--- path that exists opens it
+-- file is f / <leader>f: files in the cwd on the dashboard (JGA-163; r is
+-- recent files there), in the current project anywhere else (opts.dir to pick
+-- another dir); typing an absolute path that exists opens it
 function M.file(opts)
   opts = opts or {}
   local actions = fzf().actions
@@ -217,11 +217,8 @@ function M.file(opts)
     end
   end
 
-  if not opts.dir and vim.bo.filetype == "bud-dashboard" then
-    fzf().oldfiles({ prompt = "Recent> ", actions = { default = edit } })
-    return
-  end
-  fzf().files({ cwd = opts.dir or M.root(), prompt = "Files> ", actions = { default = edit } })
+  local dir = opts.dir or (vim.bo.filetype == "bud-dashboard" and vim.fn.getcwd()) or M.root()
+  fzf().files({ cwd = dir, prompt = "Files> ", actions = { default = edit } })
 end
 
 return M

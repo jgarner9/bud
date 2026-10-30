@@ -69,6 +69,32 @@ eq(open.typed_path(nil), nil, "no query")
 vim.env.HOME = tmp
 eq(open.typed_path("~/loose/notes.txt"), loose_file, "~ expands")
 
+-- f searches the cwd from the dashboard, never recent files (JGA-163), and
+-- the project anywhere else
+local searched
+require("bud.pack").deferred["fzf-lua"] = function()
+  return {
+    actions = {},
+    files = function(o)
+      searched = o.cwd
+    end,
+    oldfiles = function()
+      searched = "oldfiles"
+    end,
+  }
+end
+vim.cmd.cd(vim.fn.fnameescape(tmp .. "/loose"))
+local board = vim.api.nvim_create_buf(false, true)
+vim.bo[board].filetype = "bud-dashboard"
+vim.api.nvim_win_set_buf(0, board)
+open.file()
+eq(searched, vim.fn.getcwd(), "dashboard f: files in the cwd")
+vim.cmd.edit(vim.fn.fnameescape(repo_file))
+open.file()
+eq(searched, tmp .. "/repo", "in a file: its project")
+open.file({ dir = tmp .. "/reg" })
+eq(searched, tmp .. "/reg", "opts.dir wins")
+
 -- go replaces the dashboard with an empty buffer and the layout, and no
 -- picker (JGA-161)
 local cli = require("bud.cli")

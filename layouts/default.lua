@@ -1,11 +1,10 @@
--- The default layout (BASE.md 5.6): file tree | editor | AI chat, with the
--- <leader>t terminal along the bottom. Chat is Claude Code's own TUI for now
--- (D48), skipped when Claude Code isn't installed.
+-- The default layout (BASE.md 5.6): the file tree, focused, beside the
+-- editor, with the <leader>t terminal along the bottom. Chat stays closed
+-- until <leader>ac (JGA-161).
 return {
-  description = "File tree, editor and chat; <leader>t opens the terminal",
+  description = "File tree and editor; <leader>ac opens chat, <leader>t the terminal",
   panes = {
-    { kind = "tree", side = "left", size = 30 },
-    { kind = "chat", side = "right", size = 60 },
+    { kind = "tree", side = "left", size = 30, focus = true },
   },
   terminal = { height = 0.35 },
 }

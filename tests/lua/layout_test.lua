@@ -158,4 +158,26 @@ layout.apply("plain")
 vim.env.BUD_LAYOUT = nil
 eq(layout.open_project(dir, { files = true }), true, "files named: no session")
 
+-- a pane marked focus takes the cursor, unless files were named (JGA-161)
+write(
+  "focused",
+  [[return { description = "f", panes = { { kind = "tree", side = "left", size = 30, focus = true } } }]]
+)
+layout.apply("plain")
+local main = vim.api.nvim_get_current_win()
+layout.apply("focused")
+eq(vim.api.nvim_get_current_win(), layout.wins_open()[1], "focus pane takes the cursor")
+vim.api.nvim_set_current_win(main)
+layout.apply("plain")
+vim.env.BUD_LAYOUT = "focused"
+layout.open_project(dir, { files = true })
+eq(vim.api.nvim_get_current_win(), main, "files named: the editor keeps it")
+vim.env.BUD_LAYOUT = nil
+layout.apply("plain")
+eq(
+  layout.validate({ description = "x", panes = { { kind = "tree", side = "left", size = 1, focus = 1 } } }),
+  "pane 1: focus should be a boolean",
+  "focus is a boolean"
+)
+
 print("layout_test: ok")

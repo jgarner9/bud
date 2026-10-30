@@ -40,7 +40,7 @@ function M.names()
 end
 
 local fields = { description = "string", panes = "table", terminal = "table", diff = "boolean" }
-local pane_fields = { kind = "string", side = "string", size = "number" }
+local pane_fields = { kind = "string", side = "string", size = "number", focus = "boolean" }
 local sides = { left = true, right = true, bottom = true }
 
 -- validate returns an error message for a malformed layout, or nil
@@ -139,10 +139,12 @@ local function close()
 end
 
 -- apply lays out the current tab: closes the panes a previous layout opened,
--- opens this one's around the current window and returns focus to it. name is
--- a layout name (default: M.default() for the cwd); it returns false and notifies when the
+-- opens this one's around the current window and returns focus to it, or to
+-- the pane marked focus (JGA-161) unless opts.editor. name is a layout name
+-- (default: M.default() for the cwd); it returns false and notifies when the
 -- layout can't be loaded
-function M.apply(name)
+function M.apply(name, opts)
+  opts = opts or {}
   require("bud.layout.panes")
   name = name or M.default()
   local spec, err = M.load(name)
@@ -153,6 +155,7 @@ function M.apply(name)
 
   close()
   local editor = vim.api.nvim_get_current_win()
+  local focus
   for _, pane in ipairs(spec.panes or {}) do
     local provider = M.providers[pane.kind]
     if provider and (not provider.available or provider.available()) then
@@ -169,10 +172,15 @@ function M.apply(name)
           vim.wo[win].winfixwidth = true
         end
         table.insert(wins, win)
+        if pane.focus then
+          focus = win
+        end
       end
     end
   end
-  if vim.api.nvim_win_is_valid(editor) then
+  if focus and not opts.editor then
+    vim.api.nvim_set_current_win(focus)
+  elseif vim.api.nvim_win_is_valid(editor) then
     vim.api.nvim_set_current_win(editor)
   end
 
@@ -193,7 +201,8 @@ end
 -- open_project sets up the window for a project just opened: its saved
 -- session when there is one (dashboard.sessions), else the layout. --layout
 -- (BUD_LAYOUT) always applies, over the session's windows. opts.files means
--- files were named on the command line, which a session would replace. It
+-- files were named on the command line, which a session would replace and
+-- which keep the focus over a layout's focus pane. It
 -- returns false when a session took over, true when it was a fresh layout
 function M.open_project(path, opts)
   opts = opts or {}
@@ -204,7 +213,7 @@ function M.open_project(path, opts)
     end
     vim.cmd("silent! only")
   end
-  M.apply(M.default(path))
+  M.apply(M.default(path), { editor = opts.files })
   return true
 end
 

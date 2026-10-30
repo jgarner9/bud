@@ -256,8 +256,12 @@ f = assert(io.open(tmp .. "/config.json", "w"))
 f:write('{"dashboard": {"scratchpad": true}}')
 f:close()
 
+local cursor = vim.o.guicursor
 local buf = dashboard.open({ offline = true })
 local shown = dashboard.lines()
+-- the cursor is hidden in Normal mode while it's on screen
+eq(vim.o.guicursor, cursor .. ",n:block-BudDashboardCursor", "cursor hidden")
+eq(vim.api.nvim_get_hl(0, { name = "BudDashboardCursor" }).blend, 100, "hidden cursor blends away")
 has(shown, icons.pinned .. "  a", "pinned from the registry")
 has(shown, icons.unpinned .. "  b", "recent from the registry")
 has(shown, "x   " .. icons.scratchpad .. "  Scratchpad", "scratchpad when turned on")
@@ -315,6 +319,7 @@ vim.cmd.enew()
 eq(vim.api.nvim_buf_is_valid(buf), false, "wiped on leave")
 eq(dashboard.lines(), nil, "no dashboard state left")
 eq(vim.wo.number, true, "line numbers come back")
+eq(vim.o.guicursor, cursor, "the cursor comes back")
 vim.wait(100)
 eq(dashboard.lines(), nil, "the animation stopped with it")
 

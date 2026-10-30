@@ -150,7 +150,7 @@ local levels =
 -- under the box before it, whose bottom the caller drops
 local function box(title, lines, inner, joined)
   local border = "BudDashboardBorder"
-  local top = { seg(joined and " ├─ " or " ╭─ ", border) }
+  local top = { seg(" "), seg(joined and "├─ " or "╭─ ", border) }
   if title.icon then
     table.insert(top, seg(title.icon .. " ", "BudDashboardIcon"))
   end
@@ -159,12 +159,15 @@ local function box(title, lines, inner, joined)
   table.insert(top, seg(" " .. string.rep("─", inner - used) .. (joined and "┤" or "╮"), border))
   local out = { top }
   for _, line in ipairs(lines) do
-    local row = { seg(" │", border) }
+    -- the padding stays out of the border's highlight, so a border with its
+    -- own background only colours the sides
+    local row = { seg(" "), seg("│", border) }
     vim.list_extend(row, line)
-    table.insert(row, seg(string.rep(" ", inner - width(line)) .. "│", border))
+    table.insert(row, seg(string.rep(" ", inner - width(line))))
+    table.insert(row, seg("│", border))
     table.insert(out, row)
   end
-  table.insert(out, { seg(" ╰" .. string.rep("─", inner) .. "╯", border) })
+  table.insert(out, { seg(" "), seg("╰" .. string.rep("─", inner) .. "╯", border) })
   return out
 end
 

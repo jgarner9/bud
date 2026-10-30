@@ -511,7 +511,6 @@ local function highlights()
     BudDashboardKey = "Keyword",
     BudDashboardIcon = "Special",
     BudDashboardHeader = "Title",
-    BudDashboardBorder = "FloatBorder",
     BudDashboardDim = "Comment",
     BudDashboardOk = "DiagnosticOk",
     BudDashboardWarn = "DiagnosticWarn",
@@ -520,6 +519,10 @@ local function highlights()
   for group, link in pairs(links) do
     vim.api.nvim_set_hl(0, group, { link = link, default = true })
   end
+  -- FloatBorder's colour only: themes (catppuccin) give it a float's darker
+  -- background, which drew a dark outline round every row
+  local float = vim.api.nvim_get_hl(0, { name = "FloatBorder", link = false })
+  vim.api.nvim_set_hl(0, "BudDashboardBorder", { fg = float.fg, ctermfg = float.ctermfg, default = true })
 end
 
 -- open shows the dashboard in the current window. opts.offline skips the

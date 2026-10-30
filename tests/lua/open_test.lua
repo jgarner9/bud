@@ -68,4 +68,32 @@ eq(open.typed_path(nil), nil, "no query")
 vim.env.HOME = tmp
 eq(open.typed_path("~/loose/notes.txt"), loose_file, "~ expands")
 
+-- go replaces the dashboard with an empty buffer and the layout, and no
+-- picker (JGA-161)
+local cli = require("bud.cli")
+cli.bin = function()
+  return nil
+end
+require("bud.ai.claude").opened = function() end
+local laid
+require("bud.layout").open_project = function(path)
+  laid = path
+  return true
+end
+local picked = false
+open.file = function()
+  picked = true
+end
+local dash = vim.api.nvim_create_buf(false, true)
+vim.bo[dash].bufhidden = "wipe"
+vim.bo[dash].filetype = "bud-dashboard"
+vim.api.nvim_buf_set_lines(dash, 0, -1, false, { "hey bud." })
+vim.api.nvim_win_set_buf(0, dash)
+open.go(tmp .. "/repo")
+eq(laid, tmp .. "/repo", "the layout for the project")
+eq(vim.api.nvim_buf_is_valid(dash), false, "the dashboard is gone")
+eq(vim.api.nvim_buf_get_name(0), "", "an empty buffer")
+eq(picked, false, "no file picker")
+eq(vim.fn.getcwd(), vim.uv.fs_realpath(tmp .. "/repo"), "cd to it")
+
 print("open_test: ok")

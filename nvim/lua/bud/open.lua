@@ -52,8 +52,8 @@ end
 
 -- go opens a project: registers it (or bumps when it was last opened) through
 -- the CLI, which owns projects.json, changes to it, then restores its session
--- when sessions are on and it has one, else applies the layout and opens the
--- file picker in it
+-- when sessions are on and it has one, else an empty buffer with the layout
+-- around it (JGA-161); that replaces the dashboard, so its keys go with it
 function M.go(path)
   path = vim.fs.normalize(vim.fn.expand(path))
   if vim.fn.isdirectory(path) == 0 then
@@ -67,10 +67,9 @@ function M.go(path)
   vim.cmd.cd(vim.fn.fnameescape(path))
   require("bud.ai.claude").opened(path)
 
-  -- the saved session, else the layout (D39, JGA-74) and the file picker
-  if require("bud.layout").open_project(path) then
-    M.file({ dir = path })
-  end
+  vim.cmd.enew()
+  -- the saved session, else the layout (D39, JGA-74)
+  require("bud.layout").open_project(path)
 end
 
 -- browse asks for a directory, with completion, and opens it as a project

@@ -27,6 +27,8 @@ local M = {}
 -- names of the plugins setup() added, the ones whose config failed, and the
 -- lazy ones by name (the smoke test loads each to check it works)
 M.names = {}
+-- every spec by name, for the plugin list (bud.pack_view)
+M.specs = {}
 M.failed = {}
 M.lazy = {}
 local restore_hooks = {}
@@ -174,6 +176,7 @@ function M.setup(specs)
     local src = url(spec.src)
     local name = spec.name or src:gsub("%.git$", ""):match("[^/]+$")
     table.insert(M.names, name)
+    M.specs[name] = spec
     table.insert(pack_specs, { src = src, name = name, version = spec.version })
     by_name[name] = spec
     if spec.restore then

@@ -114,6 +114,19 @@ func TestLinkInTheWay(t *testing.T) {
 	}
 }
 
+func TestLinkSkipsDotEntries(t *testing.T) {
+	repo := fakeCheckout(t)
+	os.MkdirAll(filepath.Join(repo, "nvim/.claude/.cc-writes"), 0o755)
+	dst := t.TempDir()
+	os.MkdirAll(filepath.Join(dst, ".claude/.cc-writes"), 0o755)
+	if err := Link(repo, dst); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(filepath.Join(dst, ".claude")); err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("the config dir's own .claude should be left alone: %v", err)
+	}
+}
+
 func TestRemoveConfigDevLink(t *testing.T) {
 	repo := fakeCheckout(t)
 	dst := filepath.Join(t.TempDir(), "bud")

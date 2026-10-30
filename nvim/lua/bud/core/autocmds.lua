@@ -81,3 +81,15 @@ end, {
 vim.api.nvim_create_user_command("BudDashboard", function()
   require("bud.dashboard").open()
 end, { desc = "Open the bud dashboard" })
+
+-- :BudUpdate runs bud update in a terminal, like u on the dashboard; its
+-- arguments go to bud update (:BudUpdate --check)
+vim.api.nvim_create_user_command("BudUpdate", function(o)
+  require("bud.cli").terminal(vim.list_extend({ "update" }, o.fargs))
+end, {
+  nargs = "*",
+  desc = "Update bud: install a newer release, sync the config, restore plugins",
+  complete = function()
+    return { "--check", "--channel" }
+  end,
+})

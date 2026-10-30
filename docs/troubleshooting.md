@@ -16,7 +16,7 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 **A kit item didn't sync.** `bud kit status` says why: a missing secret (`bud kit secret set NAME`), a program that isn't installed (it gives the install command), or something with the same name you set up yourself, which bud never touches.
 
-**An update went wrong.** bud checks itself after an update and goes back to the previous version if a check that passed before fails, saying why. `~/.cache/bud/update.log` has the background updates. `bud update` runs one by hand.
+**An update went wrong.** bud checks itself after an update and goes back to the previous version if a check that passed before fails, saying why. `~/.cache/bud/update.log` has the background updates. `bud update` (or `:BudUpdate` in the editor) runs one by hand.
 
 **The app doesn't open.** `bud bundle` builds it again with your current `PATH` and bud; `bud launch` from a shell shows any error.
 

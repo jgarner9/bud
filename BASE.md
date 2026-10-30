@@ -623,7 +623,7 @@ boot (detached, at most once per day, skippable with --no-update, D9)
        └─ new version → steps 1–2 below in the background, the rest at next launch
                         (nightly, D42, or update.auto = false → dashboard banner instead)
 
-bud update  /  Settings → Update  /  [u] on dashboard
+bud update  /  :BudUpdate [args]  /  Settings → Update  /  [u] on dashboard
   1. if a newer release exists:
        download the archive, checksums.txt and its signature; verify the signature, then the SHA-256 (D7)
        keep the running binary as bud.prev, swap the new one in place (rename, so it's atomic)

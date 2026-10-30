@@ -285,18 +285,6 @@ local function animate()
   idle()
 end
 
--- terminal runs a bud command in a new buffer, for d and u
-local function terminal(args)
-  local bin = cli.bin()
-  if not bin then
-    vim.notify("bud: can't find the bud binary", vim.log.levels.ERROR)
-    return
-  end
-  vim.cmd.enew()
-  vim.fn.jobstart(vim.list_extend({ bin }, args), { term = true })
-  vim.cmd.startinsert()
-end
-
 -- leader replays a global leader mapping, so the dashboard follows whatever it does
 local function leader(keys)
   return function()
@@ -331,15 +319,15 @@ local function keys(buf)
     require("bud.settings").open()
   end, "Settings")
   map("d", function()
-    terminal({ "doctor" })
+    cli.terminal({ "doctor" })
   end, "Doctor")
   map("u", function()
-    terminal({ "update" })
+    cli.terminal({ "update" })
   end, "Update")
   -- chat, or setting up Claude Code first when the banner says it isn't
   map("c", function()
     if current.claude and current.claude.status ~= "ok" then
-      terminal({ "claude", "setup" })
+      cli.terminal({ "claude", "setup" })
     else
       require("bud.chat").open()
     end

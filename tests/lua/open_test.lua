@@ -1,6 +1,7 @@
 -- Run with: nvim --clean --headless -l tests/lua/open_test.lua (just lua-test)
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
+dofile("tests/lua/lib/nui.lua")
 
 local tmp = vim.fn.tempname()
 for _, d in ipairs({ "reg/src", "repo/.git", "repo/lib", "loose", "gone" }) do
@@ -95,5 +96,52 @@ eq(vim.api.nvim_buf_is_valid(dash), false, "the dashboard is gone")
 eq(vim.api.nvim_buf_get_name(0), "", "an empty buffer")
 eq(picked, false, "no file picker")
 eq(vim.fn.getcwd(), vim.uv.fs_realpath(tmp .. "/repo"), "cd to it")
+
+-- the directory browser (JGA-160): only dirs, dot dirs too, ./ and ../ first
+vim.fn.mkdir(tmp .. "/repo/.hidden", "p")
+local names = {}
+for _, d in ipairs(open.dirs(tmp .. "/repo")) do
+  table.insert(names, d.name)
+end
+eq(names, { "./", "../", ".git/", ".hidden/", "lib/" }, "dirs only, dot dirs, sorted")
+eq(open.dirs("/")[2].path, "/", "../ at the root stays there")
+
+local function press(keys)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "xt", false)
+end
+local function shown()
+  return vim.api.nvim_buf_get_lines(0, 0, -1, false)
+end
+local chosen
+open.go = function(path)
+  chosen = path
+end
+local h = open.browse(tmp)
+eq(vim.api.nvim_get_current_win(), h.win, "the browser has the cursor")
+eq(shown()[1], " ./", "./ on top")
+eq(shown()[2], " ../", "then ../")
+eq(vim.tbl_contains(shown(), " notes.txt"), false, "no files")
+-- down to repo/, then in
+vim.api.nvim_win_set_cursor(h.win, { vim.fn.index(shown(), " repo/") + 1, 0 })
+press("<CR>")
+eq(shown()[5], " lib/", "into repo/")
+-- up again lands on repo/
+vim.api.nvim_win_set_cursor(h.win, { 2, 0 })
+press("<CR>")
+eq(shown()[vim.api.nvim_win_get_cursor(h.win)[1]], " repo/", "up lands on the dir just left")
+-- o opens the one under the cursor as a project
+press("o")
+eq(chosen, tmp .. "/repo", "o opens it")
+eq(vim.api.nvim_win_is_valid(h.win), false, "and closes the browser")
+-- <S-CR> on ./ opens the dir being shown
+chosen = nil
+h = open.browse(tmp .. "/repo")
+press("<S-CR>")
+eq(chosen, tmp .. "/repo", "<S-CR> on ./ opens this dir")
+-- q cancels
+chosen = nil
+h = open.browse(tmp)
+press("q")
+eq(chosen, nil, "q opens nothing")
 
 print("open_test: ok")

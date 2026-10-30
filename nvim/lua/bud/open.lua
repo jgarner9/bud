@@ -221,4 +221,28 @@ function M.file(opts)
   fzf().files({ cwd = dir, prompt = "Files> ", actions = { default = edit } })
 end
 
+-- new is n on the dashboard (JGA-164): it asks where the file goes,
+-- relative to the cwd (or absolute, or ~), and opens it there, so :w saves
+-- it with no name to give; missing dirs are made on the first write. No
+-- answer opens an unnamed buffer, as before
+function M.new()
+  local where = vim.fn.fnamemodify(vim.fn.getcwd(), ":~")
+  vim.ui.input({ prompt = "New file in " .. where .. ": " }, function(path)
+    path = path and vim.trim(path) or ""
+    if path == "" then
+      vim.cmd.enew()
+      return
+    end
+    vim.cmd.edit(vim.fn.fnameescape(vim.fn.expand(path)))
+    local buf = vim.api.nvim_get_current_buf()
+    vim.api.nvim_create_autocmd("BufWritePre", {
+      buffer = buf,
+      once = true,
+      callback = function()
+        vim.fn.mkdir(vim.fs.dirname(vim.api.nvim_buf_get_name(buf)), "p")
+      end,
+    })
+  end)
+end
+
 return M

@@ -95,6 +95,25 @@ eq(searched, tmp .. "/repo", "in a file: its project")
 open.file({ dir = tmp .. "/reg" })
 eq(searched, tmp .. "/reg", "opts.dir wins")
 
+-- n asks where the new file goes and :w makes its dirs (JGA-164)
+local answer
+local asked
+vim.ui.input = function(o, cb)
+  asked = o.prompt
+  cb(answer)
+end
+vim.cmd.cd(vim.fn.fnameescape(tmp))
+answer = "notes/deep/todo.md"
+open.new()
+eq(asked:find("New file in", 1, true) ~= nil, true, "asks where")
+eq(vim.api.nvim_buf_get_name(0), tmp .. "/notes/deep/todo.md", "named from the cwd")
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "- milk" })
+vim.cmd.write()
+eq(vim.fn.readfile(tmp .. "/notes/deep/todo.md"), { "- milk" }, ":w saves it, dirs made")
+answer = nil
+open.new()
+eq(vim.api.nvim_buf_get_name(0), "", "no answer: an unnamed buffer")
+
 -- go replaces the dashboard with an empty buffer and the layout, and no
 -- picker (JGA-161)
 local cli = require("bud.cli")

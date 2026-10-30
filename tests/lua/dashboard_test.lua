@@ -75,13 +75,6 @@ eq(
 )
 eq(dashboard.parse_git("# branch.head (detached)\n").branch, "detached", "detached")
 
--- tips come from leader mappings with a description
-vim.keymap.set("n", "<leader>f", "<nop>", { desc = "Find file" })
-vim.keymap.set("n", "<leader>z", "<nop>", { desc = "Zzz" })
-vim.keymap.set("n", "<leader>q", "<nop>")
-eq(dashboard.tip(0), { lhs = "<Space>f", desc = "Find file" }, "tip day 0")
-eq(dashboard.tip(1), { lhs = "<Space>z", desc = "Zzz" }, "tip day 1")
-
 -- layout
 local data = {
   mood = "sleepy",
@@ -97,7 +90,6 @@ local data = {
   },
   banners = { { level = "warn", text = "1 doctor warning, press d" } },
   health = " 30 ms · 23 plugins · claude ready",
-  tip = { lhs = "<Space>f", desc = "Find file" },
 }
 local icons = require("bud.icons")
 -- every icon is one cell wide, or the centering is off
@@ -112,7 +104,6 @@ has(lines, icons.pinned .. "  bud", "pinned project")
 has(lines, icons.branch .. "  main   " .. icons.changed .. "  3", "git status")
 has(lines, icons.unpinned .. "  dollarwise", "unpinned project")
 has(lines, icons.warn .. "  1 doctor warning, press d", "banner")
-has(lines, icons.tip .. "  tip: <Space>f  Find file", "tip")
 -- centered both ways
 local first = 1
 while lines[first] == "" do
@@ -226,7 +217,7 @@ lines = view.build(data, 10, 5)
 has(lines, "hey bud.", "narrow window")
 
 -- minimal: one-line title, short keys four to a row, projects and the worst
--- banner's icon on one bottom line; no tagline, health or tip
+-- banner's icon on one bottom line; no tagline or health
 data.style = "minimal"
 data.menu = {
   { key = "p", label = "Open project", short = "project" },
@@ -243,7 +234,7 @@ has(lines, "q  quit", "second row")
 has(lines, "1 bud  2 dollarwise", "projects on one line")
 has(lines, icons.error, "the worst banner's icon")
 for _, line in ipairs(lines) do
-  for _, absent in ipairs({ "hjkl and chill", "tip:", "plugins", icons.warn }) do
+  for _, absent in ipairs({ "hjkl and chill", "plugins", icons.warn }) do
     if line:find(absent, 1, true) then
       error("minimal shows " .. absent .. ": " .. line)
     end
@@ -289,11 +280,11 @@ has(dashboard.lines(), "Minimal view", "back to silly")
 
 -- each default extra can be turned off in config.json
 f = assert(io.open(tmp .. "/config.json", "w"))
-f:write('{"dashboard": {"health": false, "tip": false}}')
+f:write('{"dashboard": {"health": false}}')
 f:close()
 dashboard.open({ offline = true })
 for _, line in ipairs(dashboard.lines()) do
-  if line:find("plugins ·", 1, true) or line:find("tip:", 1, true) then
+  if line:find("plugins ·", 1, true) then
     error("turned-off extra still shown: " .. line)
   end
 end

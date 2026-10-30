@@ -42,7 +42,6 @@ M.sections = {
       { key = "dashboard.git", label = "Git status per project", kind = "bool" },
       { key = "dashboard.health", label = "Health line", kind = "bool" },
       { key = "dashboard.banners", label = "Banners", kind = "bool" },
-      { key = "dashboard.tip", label = "Tip of the day", kind = "bool" },
       { key = "dashboard.scratchpad", label = "Scratchpad (x)", kind = "bool" },
       { key = "dashboard.sessions", label = "Restore sessions", kind = "bool" },
       { key = "dashboard.prs", label = "Open PRs (gh)", kind = "bool" },

@@ -60,7 +60,6 @@ type Dashboard struct {
 	Git     bool `json:"git"`     // branch and changes per project
 	Health  bool `json:"health"`  // startup time, plugins, Claude Code
 	Banners bool `json:"banners"` // doctor problems with a one-key fix
-	Tip     bool `json:"tip"`     // a keymap a day
 	// optional extras, off by default (JGA-99)
 	Scratchpad bool `json:"scratchpad"` // x opens a persistent notes buffer
 	Sessions   bool `json:"sessions"`   // opening a project restores its last session
@@ -134,7 +133,7 @@ func Defaults() Settings {
 		Layout:       "default",
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
-		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Tip: true, Animate: true},
+		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, Breadcrumbs: true},
 		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "bud"}, Chat: Chat{Pane: "native"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},

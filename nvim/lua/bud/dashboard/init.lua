@@ -107,26 +107,6 @@ function M.parse_git(out)
   return git
 end
 
--- tip picks a leader mapping with a description, a different one each day
-function M.tip(day)
-  local leader = vim.g.mapleader or "\\"
-  local maps = {}
-  for _, m in ipairs(vim.api.nvim_get_keymap("n")) do
-    if m.desc and m.desc ~= "" and vim.startswith(m.lhs, leader) and #m.lhs > #leader then
-      table.insert(maps, m)
-    end
-  end
-  if #maps == 0 then
-    return nil
-  end
-  table.sort(maps, function(a, b)
-    return a.lhs < b.lhs
-  end)
-  local m = maps[(day % #maps) + 1]
-  local name = leader == " " and "<Space>" or leader
-  return { lhs = name .. m.lhs:sub(#leader + 1), desc = m.desc }
-end
-
 local function health()
   local parts = {}
   if vim.g.bud_startup_ms then
@@ -186,7 +166,6 @@ local function data()
     projects = list,
     banners = current.update and { current.update, unpack(current.banners) } or current.banners,
     health = current.settings.health and health() or nil,
-    tip = current.settings.tip and current.tip or nil,
     clock = current.settings.clock and os.date("%a %b %d  %H:%M") or nil,
     chats = current.chats,
   }
@@ -560,7 +539,6 @@ function M.open(opts)
     banners = {},
     update = settings.banners ~= false and M.update_banner(read_update()) or nil,
     tagline = taglines[math.random(#taglines)],
-    tip = M.tip(tonumber(os.date("%j"))),
     -- t switches it for this session; config.json's dashboard.style is the default
     style = settings.style or "silly",
     settings = {
@@ -576,7 +554,6 @@ function M.open(opts)
       git = settings.git ~= false,
       health = settings.health ~= false,
       banners = settings.banners ~= false,
-      tip = settings.tip ~= false,
     },
   }
   keys(buf)

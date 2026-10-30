@@ -129,7 +129,7 @@ local function menu(settings)
     table.insert(items, { key = "x", icon = "scratchpad", label = "Scratchpad", short = "notes" })
   end
   vim.list_extend(items, {
-    { key = "L", icon = "plugins", label = "Plugins", short = "plugins" },
+    { key = "P", icon = "plugins", label = "Plugins", short = "plugins" },
     { key = "M", icon = "mason", label = "Mason", short = "mason" },
     { key = "s", icon = "settings", label = "Settings", short = "settings" },
     { key = "d", icon = "doctor", label = "Doctor", short = "doctor" },
@@ -290,7 +290,9 @@ local function keys(buf)
   map("n", function()
     require("bud.open").new()
   end, "New file")
-  map("L", leader("L"), "Plugins")
+  map("P", function()
+    require("bud.pack_view").open()
+  end, "Plugins")
   map("M", function()
     vim.cmd("Mason")
   end, "Mason")

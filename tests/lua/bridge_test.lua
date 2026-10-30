@@ -87,6 +87,7 @@ local function upgrade(c, auth)
     "Connection: Upgrade",
     "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
     "Sec-WebSocket-Version: 13",
+    "Sec-WebSocket-Protocol: mcp",
   }
   if auth then
     table.insert(headers, "x-claude-code-ide-authorization: " .. auth)
@@ -135,8 +136,13 @@ wait(function()
   return bad.eof
 end, "the bad client to be closed")
 
+-- Claude Code asks for the mcp subprotocol and drops the connection unless
+-- the answer names it
 local c = connect()
-eq(upgrade(c, lock.authToken):match("^HTTP/1.1 (%d+)"), "101", "upgraded")
+local head = upgrade(c, lock.authToken)
+eq(head:match("^HTTP/1.1 (%d+)"), "101", "upgraded")
+eq(head:match("Sec%-WebSocket%-Protocol: (%S+)"), "mcp", "subprotocol")
+eq({ ws.subprotocol("chat, mcp"), ws.subprotocol("chat"), ws.subprotocol(nil) }, { "mcp" }, "subprotocol picks mcp")
 wait(function()
   return bridge.connected() == 1
 end, "connected")

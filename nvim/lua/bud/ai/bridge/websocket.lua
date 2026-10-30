@@ -148,6 +148,16 @@ function M.parse_request(buf)
   return { line = lines[1], headers = headers }, buf:sub(head_end + 4)
 end
 
+-- subprotocol picks "mcp" from a client's Sec-WebSocket-Protocol list, the
+-- only one the bridge speaks, or nil
+function M.subprotocol(offered)
+  for name in (offered or ""):gmatch("[^,%s]+") do
+    if name == "mcp" then
+      return name
+    end
+  end
+end
+
 -- serve listens on 127.0.0.1 (a free port) and returns the server, whose
 -- port, send(client, text) and close() are what callers use. opts.token is
 -- the auth header's required value; opts.on_open(client),
@@ -239,14 +249,21 @@ function M.serve(opts)
     if h["x-claude-code-ide-authorization"] ~= opts.token then
       return reject(client, "401 Unauthorized")
     end
-    client.sock:write(table.concat({
+    local reply = {
       "HTTP/1.1 101 Switching Protocols",
       "Upgrade: websocket",
       "Connection: Upgrade",
       "Sec-WebSocket-Accept: " .. M.accept_key(h["sec-websocket-key"]),
-      "",
-      "",
-    }, "\r\n"))
+    }
+    -- Claude Code asks for the "mcp" subprotocol, and its WebSocket client
+    -- drops a connection whose answer doesn't name it
+    local protocol = M.subprotocol(h["sec-websocket-protocol"])
+    if protocol then
+      table.insert(reply, "Sec-WebSocket-Protocol: " .. protocol)
+    end
+    table.insert(reply, "")
+    table.insert(reply, "")
+    client.sock:write(table.concat(reply, "\r\n"))
     client.open = true
     if opts.on_open then
       vim.schedule(function()

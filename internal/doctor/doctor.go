@@ -177,43 +177,109 @@ func checkCore(p *paths.Paths, dir string) (Result, bool) {
 // rely on it for since D77 (JGA-175): the MCP servers kit.json expects, from
 // its config or a claude.ai connector, and the core.md rule. clod sets both
 // up; without it bud still works, with fewer tools and none of the always-on
-// instructions
+// instructions. A listed server only counts once it connects (JGA-180)
 func checkClaudeSetup(dir string) (Result, bool) {
 	k, err := kit.Load(kitFS())
 	if err != nil || (len(k.ExpectedMCP) == 0 && k.Core == "") {
 		return Result{}, false
 	}
 	r := Result{Name: "claude setup"}
-	have := map[string]bool{}
-	if out, err := mcpList(); err == nil {
-		for _, line := range strings.Split(out, "\n") {
-			name, _, ok := strings.Cut(strings.TrimSpace(line), ": ")
-			if ok {
-				have[mcpKey(strings.TrimPrefix(name, "claude.ai "))] = true
-			}
-		}
-	} else {
+	out, err := mcpList()
+	if err != nil {
 		r.Status, r.Detail = Warn, "couldn't list Claude Code's MCP servers: "+err.Error()
 		return r, true
 	}
-	var missing []string
+	servers, multi := parseMCPList(out)
+
+	var missing, failed, auth []string
 	for _, name := range k.ExpectedMCP {
-		if !have[mcpKey(name)] {
+		statuses, ok := servers[mcpKey(name)]
+		if !ok {
 			missing = append(missing, name)
+			continue
+		}
+		// any connected entry (a server and a connector, say) gives the tools
+		if slices.ContainsFunc(statuses, mcpConnected) {
+			continue
+		}
+		status := statuses[0]
+		problem := name + " (" + status + ")"
+		if multi[mcpKey(name)] {
+			problem += ", defined in more than one scope, and the one that wins may be the broken one"
+		}
+		if strings.Contains(strings.ToLower(status), "needs authentication") {
+			auth = append(auth, problem)
+		} else {
+			failed = append(failed, problem)
 		}
 	}
 	if k.Core != "" && !hasCoreRule(dir, k.Core) {
 		missing = append(missing, "the core.md rule")
 	}
-	if len(missing) == 0 {
-		r.Detail = "the MCP servers and core.md rule bud's sessions use are there"
+	if len(missing)+len(failed)+len(auth) == 0 {
+		r.Detail = "the MCP servers and core.md rule bud's sessions use are there and connect"
 		return r, true
 	}
+
 	r.Status = Warn
-	r.Detail = "Claude Code's config has no " + strings.Join(missing, ", ") + ", so bud's sessions go without"
-	r.Fix = "run clod's install (or add them to ~/.claude yourself)"
+	var details, fixes []string
+	if len(missing) > 0 {
+		details = append(details, "Claude Code's config has no "+strings.Join(missing, ", ")+", so bud's sessions go without")
+		fixes = append(fixes, "run clod's install (or add them to ~/.claude yourself)")
+	}
+	if len(failed) > 0 {
+		details = append(details, "can't connect to "+strings.Join(failed, "; "))
+		fixes = append(fixes, "run the server's command by hand to see the error (claude mcp get NAME shows it)")
+	}
+	if len(auth) > 0 {
+		details = append(details, "not logged in to "+strings.Join(auth, "; "))
+		fixes = append(fixes, "log in once via /mcp in bud agent")
+	}
+	r.Detail = strings.Join(details, "; ")
+	r.Fix = strings.Join(fixes, "; ")
 
 	return r, true
+}
+
+// parseMCPList reads claude mcp list's output: each server's statuses by
+// mcpKey ("name: target - ✔ Connected", a claude.ai connector named
+// "claude.ai Name"), and the servers its diagnostics say are defined in more
+// than one scope. The diagnostics come after the list and aren't servers
+func parseMCPList(out string) (servers map[string][]string, multi map[string]bool) {
+	servers, multi = map[string][]string{}, map[string]bool{}
+	diagnostics := false
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "MCP config diagnostics") {
+			diagnostics = true
+		}
+		if diagnostics {
+			if _, rest, ok := strings.Cut(line, `Server "`); ok {
+				if name, tail, ok := strings.Cut(rest, `"`); ok && strings.Contains(tail, "multiple scopes") {
+					multi[mcpKey(strings.TrimPrefix(name, "claude.ai "))] = true
+				}
+			}
+			continue
+		}
+		name, rest, ok := strings.Cut(line, ": ")
+		if !ok {
+			continue
+		}
+		status := ""
+		if i := strings.LastIndex(rest, " - "); i >= 0 {
+			status = strings.TrimLeft(rest[i+3:], "✔✓✘✗!⚠ ")
+		}
+		key := mcpKey(strings.TrimPrefix(name, "claude.ai "))
+		servers[key] = append(servers[key], status)
+	}
+
+	return servers, multi
+}
+
+// mcpConnected says whether a claude mcp list status is a working server. An
+// older list printed only the mark, which counts
+func mcpConnected(status string) bool {
+	return status == "" || strings.HasPrefix(status, "Connected")
 }
 
 // mcpKey compares server names the way a person would: "Basic Memory",

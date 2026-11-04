@@ -3,8 +3,10 @@ package doctor
 import (
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -570,5 +572,83 @@ func TestCheckClaudeSetup(t *testing.T) {
 	mcpList = func() (string, error) { return "", errors.New("boom") }
 	if r, _ := checkClaudeSetup(dir); r.Status != Warn || !strings.Contains(r.Detail, "boom") {
 		t.Fatalf("list failed: %+v", r)
+	}
+}
+
+// claude mcp list as Claude Code 2.1 prints it, diagnostics block included
+const mcpListOutput = `Checking MCP server health…
+
+claude.ai Context7: https://mcp.context7.com/mcp - ✔ Connected
+claude.ai Basic Memory: https://memory.example/mcp - ✔ Connected
+linear: https://mcp.linear.app/mcp (HTTP) - ! Needs authentication
+serena: uvx --from serena-agent serena start-mcp-server - ✘ Failed to connect
+
+MCP config diagnostics ⚠
+
+[Conflicting scopes]
+├ Server "serena" is defined in multiple scopes with different endpoints: user (serena start-mcp-server), local (uvx serena). OAuth tokens are stored per endpoint.
+└ Keep the correct endpoint and remove the others: ` + "`claude mcp remove serena -s user`" + `
+`
+
+func TestCheckClaudeSetupWarnsAboutServersThatDontConnect(t *testing.T) {
+	origFS, origList := kitFS, mcpList
+	kitFS = func() fs.FS {
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"expected_mcp": ["basic-memory", "context7", "linear", "serena"]}`)}}
+	}
+	t.Cleanup(func() { kitFS, mcpList = origFS, origList })
+	dir := t.TempDir()
+
+	mcpList = func() (string, error) { return mcpListOutput, nil }
+	r, _ := checkClaudeSetup(dir)
+	if r.Status != Warn {
+		t.Fatalf("want a warning, got %+v", r)
+	}
+	for _, want := range []string{
+		"can't connect to serena (Failed to connect), defined in more than one scope",
+		"not logged in to linear (Needs authentication)",
+	} {
+		if !strings.Contains(r.Detail, want) {
+			t.Errorf("detail lacks %q: %s", want, r.Detail)
+		}
+	}
+	if strings.Contains(r.Detail, "Context7") || strings.Contains(r.Detail, "basic-memory") || strings.Contains(r.Detail, "has no") {
+		t.Errorf("connected servers named: %s", r.Detail)
+	}
+	for _, want := range []string{"claude mcp get NAME", "/mcp in bud agent"} {
+		if !strings.Contains(r.Fix, want) {
+			t.Errorf("fix lacks %q: %s", want, r.Fix)
+		}
+	}
+
+	// a connected server defined twice is fine: its tools are there
+	mcpList = func() (string, error) {
+		return strings.NewReplacer("! Needs authentication", "✔ Connected", "✘ Failed to connect", "✔ Connected").Replace(mcpListOutput), nil
+	}
+	if r, _ := checkClaudeSetup(dir); r.Status != OK {
+		t.Fatalf("all connected: %+v", r)
+	}
+
+	// a connector that connects covers a server of the same name that doesn't
+	mcpList = func() (string, error) {
+		return strings.Replace(mcpListOutput, "linear:", "claude.ai Linear: https://mcp.linear.app/mcp - ✔ Connected\nlinear:", 1), nil
+	}
+	if r, _ := checkClaudeSetup(dir); strings.Contains(r.Detail, "linear") {
+		t.Fatalf("linear's connector connects: %+v", r)
+	}
+}
+
+func TestParseMCPListSkipsTheDiagnostics(t *testing.T) {
+	servers, multi := parseMCPList(mcpListOutput)
+	want := map[string][]string{
+		"context7":    {"Connected"},
+		"basicmemory": {"Connected"},
+		"linear":      {"Needs authentication"},
+		"serena":      {"Failed to connect"},
+	}
+	if !maps.EqualFunc(servers, want, slices.Equal) {
+		t.Errorf("servers = %v, want %v", servers, want)
+	}
+	if !maps.Equal(multi, map[string]bool{"serena": true}) {
+		t.Errorf("multi = %v, want serena", multi)
 	}
 }

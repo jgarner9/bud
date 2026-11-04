@@ -540,3 +540,35 @@ func TestCheckCore(t *testing.T) {
 		t.Fatalf("pasted: %+v", r)
 	}
 }
+
+func TestCheckClaudeSetup(t *testing.T) {
+	origFS, origList := kitFS, mcpList
+	kitFS = func() fs.FS {
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"core": "bud-plugins/core.md", "expected_mcp": ["basic-memory", "context7", "linear"]}`)}}
+	}
+	t.Cleanup(func() { kitFS, mcpList = origFS, origList })
+	dir := t.TempDir()
+
+	// a claude.ai connector counts, whatever its spelling
+	mcpList = func() (string, error) {
+		return "Checking MCP server health...\n\nbasic-memory: https://bm.example/mcp (HTTP) - ✔ Connected\nclaude.ai Context7: https://mcp.context7.com/mcp - ✔ Connected\n", nil
+	}
+	r, ok := checkClaudeSetup(dir)
+	if !ok || r.Status != Warn || !strings.Contains(r.Detail, "linear, the core.md rule") || strings.Contains(r.Detail, "context7") {
+		t.Fatalf("missing linear and the rule: %+v", r)
+	}
+
+	mcpList = func() (string, error) {
+		return "basic-memory: x - ✔\nclaude.ai Context7: y - ✔\nclaude.ai Linear: z - ✔\n", nil
+	}
+	os.MkdirAll(filepath.Join(dir, "rules", "clod"), 0o755)
+	os.WriteFile(filepath.Join(dir, "rules", "clod", "core.md"), []byte("You are Bud. Be a bud.\n"), 0o644)
+	if r, _ := checkClaudeSetup(dir); r.Status != OK {
+		t.Fatalf("all there: %+v", r)
+	}
+
+	mcpList = func() (string, error) { return "", errors.New("boom") }
+	if r, _ := checkClaudeSetup(dir); r.Status != Warn || !strings.Contains(r.Detail, "boom") {
+		t.Fatalf("list failed: %+v", r)
+	}
+}

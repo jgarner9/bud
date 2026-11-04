@@ -14,6 +14,8 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 **Claude can't edit anything.** Edits come as diffs to accept with `ga` or `:w`; a prompt that was closed counts as no. Allowing something for the rest of the session (`a`) only lasts until you quit.
 
+**bud's sessions have fewer tools than you expect.** Since bud shares `~/.claude`, its MCP servers and the `core.md` rule come from Claude Code's own config, which clod sets up. `bud doctor` (the full run, not `--quick`) has a `claude setup` check that names any of `kit.json`'s `expected_mcp` servers missing from `claude mcp list` (a claude.ai connector counts) and whether the `core.md` rule is there. Run clod's install, or add them yourself.
+
 **claude.ai answers differently from Claude Code.** claude.ai's personal preferences hold a pasted copy of bud-plugins' `core.md`. When it changes, `bud kit sync` (and so `bud update`) and `bud doctor` say so: run `bud kit core | pbcopy`, paste it into Settings, Profile, personal preferences (on Bedrock, Desktop's organization instructions come from clod), then `bud kit core --pasted`.
 
 **A kit item didn't sync.** `bud kit status` says why: usually something with the same name you set up yourself, which bud never touches. MCP servers aren't in the kit any more: they come from Claude Code's own config (`claude mcp list`), and the first sync after updating takes out the ones an older bud added.

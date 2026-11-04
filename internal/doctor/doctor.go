@@ -79,6 +79,15 @@ var (
 	claudeCheck   = claude.Check
 	lookPath      = exec.LookPath
 	kitFS         = func() fs.FS { return bud.Kit() }
+	// claude mcp list's output: it checks every server, so it takes seconds
+	mcpList = func() (string, error) {
+		bin := claude.Find()
+		if bin == "" {
+			return "", nil
+		}
+		out, err := exec.Command(bin, "mcp", "list").Output()
+		return string(out), err
+	}
 )
 
 // Options picks which checks Run does
@@ -123,6 +132,12 @@ func Run(opts Options) []Result {
 	if r, ok := checkCore(p, claudeDir()); ok {
 		results = append(results, r)
 	}
+	if !opts.Quick && status.LoggedIn {
+		// claude.ai's connectors only show up through claude mcp list
+		if r, ok := checkClaudeSetup(claudeDir()); ok {
+			results = append(results, r)
+		}
+	}
 
 	return append(results, cfgResult, checkProjects(p))
 }
@@ -156,6 +171,87 @@ func checkCore(p *paths.Paths, dir string) (Result, bool) {
 	}
 
 	return Result{Name: "core.md", Detail: "the copy in claude.ai is current"}, true
+}
+
+// checkClaudeSetup warns when Claude Code's config lacks what bud's sessions
+// rely on it for since D77 (JGA-175): the MCP servers kit.json expects, from
+// its config or a claude.ai connector, and the core.md rule. clod sets both
+// up; without it bud still works, with fewer tools and none of the always-on
+// instructions
+func checkClaudeSetup(dir string) (Result, bool) {
+	k, err := kit.Load(kitFS())
+	if err != nil || (len(k.ExpectedMCP) == 0 && k.Core == "") {
+		return Result{}, false
+	}
+	r := Result{Name: "claude setup"}
+	have := map[string]bool{}
+	if out, err := mcpList(); err == nil {
+		for _, line := range strings.Split(out, "\n") {
+			name, _, ok := strings.Cut(strings.TrimSpace(line), ": ")
+			if ok {
+				have[mcpKey(strings.TrimPrefix(name, "claude.ai "))] = true
+			}
+		}
+	} else {
+		r.Status, r.Detail = Warn, "couldn't list Claude Code's MCP servers: "+err.Error()
+		return r, true
+	}
+	var missing []string
+	for _, name := range k.ExpectedMCP {
+		if !have[mcpKey(name)] {
+			missing = append(missing, name)
+		}
+	}
+	if k.Core != "" && !hasCoreRule(dir, k.Core) {
+		missing = append(missing, "the core.md rule")
+	}
+	if len(missing) == 0 {
+		r.Detail = "the MCP servers and core.md rule bud's sessions use are there"
+		return r, true
+	}
+	r.Status = Warn
+	r.Detail = "Claude Code's config has no " + strings.Join(missing, ", ") + ", so bud's sessions go without"
+	r.Fix = "run clod's install (or add them to ~/.claude yourself)"
+
+	return r, true
+}
+
+// mcpKey compares server names the way a person would: "Basic Memory",
+// "basic-memory" and "basic_memory" are one server
+func mcpKey(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			return r
+		}
+		if r >= 'A' && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return -1
+	}, name)
+}
+
+// hasCoreRule says whether Claude Code's config loads core.md's text: a rule
+// under rules/, or its CLAUDE.md, starting with the same first line
+func hasCoreRule(dir, core string) bool {
+	first := "You are Bud."
+	if c, err := kit.ReadCore(core, dir, ""); err == nil && c.Path != "" {
+		first = strings.TrimSpace(firstLine(c.Text))
+	}
+	found := false
+	check := func(p string) {
+		if data, err := os.ReadFile(p); err == nil && strings.Contains(string(data), first) {
+			found = true
+		}
+	}
+	check(filepath.Join(dir, "CLAUDE.md"))
+	_ = filepath.WalkDir(filepath.Join(dir, "rules"), func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(p, ".md") {
+			check(p)
+		}
+		return nil
+	})
+
+	return found
 }
 
 // checkClaudeCommand looks for the wrapper ai.claude.command runs Claude Code

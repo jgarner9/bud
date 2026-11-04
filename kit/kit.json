@@ -7,5 +7,12 @@
     "bud-ide@bud-plugins",
     "superpowers@anthropic-plugin-directory"
   ],
-  "core": "bud-plugins/core.md"
+  "core": "bud-plugins/core.md",
+  "expected_mcp": [
+    "basic-memory",
+    "context7",
+    "exa",
+    "linear",
+    "serena"
+  ]
 }

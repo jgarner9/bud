@@ -37,6 +37,9 @@ type Kit struct {
 	// the always-on instructions you paste into claude.ai, as
 	// "marketplace/path" in that marketplace (JGA-179, ReadCore)
 	Core string
+	// MCP servers bud's sessions rely on that Claude Code's own config
+	// provides (clod's), which doctor checks for (JGA-175)
+	ExpectedMCP []string
 }
 
 // Load reads kit.json from fsys, laid out like the repo's kit/
@@ -49,12 +52,13 @@ func Load(fsys fs.FS) (*Kit, error) {
 		Marketplaces map[string]string `json:"marketplaces"`
 		Plugins      []string          `json:"plugins"`
 		Core         string            `json:"core"`
+		ExpectedMCP  []string          `json:"expected_mcp"`
 	}
 	if err := json.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("kit.json: %w", err)
 	}
 
-	return &Kit{Marketplaces: index.Marketplaces, Plugins: index.Plugins, Core: index.Core}, nil
+	return &Kit{Marketplaces: index.Marketplaces, Plugins: index.Plugins, Core: index.Core, ExpectedMCP: index.ExpectedMCP}, nil
 }
 
 // Ledger is what bud put into Claude Code's config

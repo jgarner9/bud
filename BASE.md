@@ -203,7 +203,7 @@ bud/
 │       # bud.desktop template; the icons are the same Go-drawn robot
 │
 ├── kit/
-│   # Claude Code setup: MCP servers, skills, agents, commands, hooks, instructions (see 4.1)
+│   # kit.json: the plugin marketplace, plugins and output style bud kit sync installs (see 4.1, D77)
 │
 ├── completions/
 │   # hand-written bash/zsh/fish completions (later)
@@ -304,88 +304,43 @@ Guardrails: generated code runs through a headless nvim load test before it's ac
 
 ### 4.1 Claude Code setup (`bud kit`)
 
-The repo tracks the Claude Code setup you want on every machine: MCP servers, skills, subagents, slash commands, hooks and global instructions. `bud kit sync` writes it into Claude Code's user config, so every session bud starts (4.2), and any `claude` you run by hand, gets the same tools. Context7 is the first entry, and the kit grows from there.
+How Claude works (the Bud persona, code style, planning, which tool to use when, the bud-specific skills) lives in one place, the public [`jgarner9/bud-plugins`](https://github.com/jgarner9/bud-plugins), which every Claude surface loads (D77). bud shares `~/.claude` by default, where clod (Jason's private machine setup) keeps the MCP servers, settings and `core.md` rule, so the kit only makes sure Claude Code has bud's plugins.
 
-**In the repo:**
-
-```text
-kit/
-├── kit.json
-│   # the index: what's in the kit, per-profile on/off
-├── mcp/
-│   # one JSON file per MCP server
-│   └── context7.json
-├── skills/
-│   # SKILL.md folders
-├── agents/
-│   # subagent definitions (*.md with frontmatter)
-├── commands/
-│   # slash commands (*.md)
-├── hooks/
-│   # hook scripts + hooks.json
-└── CLAUDE.md
-    # your global instructions ("You are Bud. Be a bud.")
-```
-
-An MCP entry never holds a secret. It names the env vars it needs, and sync writes them as Claude Code's `${VAR}` references, which it expands at runtime:
+**In the repo:** `kit/kit.json`, and nothing else:
 
 ```json
-// kit/mcp/context7.json (illustrative)
 {
-  "name": "context7",
-  "description": "Up-to-date library docs",
-  "transport": "http",
-  "url": "https://mcp.context7.com/mcp",
-  "headers": { "CONTEXT7_API_KEY": "$secret:CONTEXT7_API_KEY" },
-  "profiles": ["full", "minimal"]
+  "marketplaces": { "bud-plugins": "https://github.com/jgarner9/bud-plugins.git" },
+  "plugins": ["bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@anthropic-plugin-directory"],
+  "output_style": "bud-ide:bud"
 }
 ```
 
-**Where each piece goes:**
-
-| Kit piece         | Written to                                             |
-| ----------------- | ------------------------------------------------------ |
-| MCP servers       | `claude mcp add-json --scope user`                     |
-| Skills            | symlinked into `~/.claude/skills/`                     |
-| Agents / commands | `~/.claude/agents/`, `~/.claude/commands/`             |
-| Hooks             | merged into `~/.claude/settings.json`                  |
-| Instructions      | a fenced bud-managed block in `~/.claude/CLAUDE.md`    |
-
-These paths and commands come from Claude Code's current docs and get re-checked when sync is built.
+| Plugin | What it brings |
+| ------ | -------------- |
+| `bud@bud-plugins` | `bud:code-style`, `bud:planning`, `bud:tools` (the lookup ladder and Basic Memory cache), `bud:bootstrap-project`, `/bud:plan-to-linear`, the `code-reviewer` agent |
+| `bud-ide@bud-plugins` | `bud-ide:bud-dev`, `bud-ide:file-issue` (what `:BudIssue` runs), the `bud-ide:bud` output style, and a SessionStart hook with the notes on working inside bud, only when `BUD_BIN` is set |
+| `superpowers@anthropic-plugin-directory` | `brainstorming` and `writing-plans` (D62) |
 
 **Sync rules:**
 
-1. Bud only touches what it owns. It keeps a ledger (`~/.local/state/bud/kit-ledger.json`) of everything it wrote. When something is removed from the repo, the next sync removes it from Claude Code. Anything you set up by hand isn't in the ledger, so it's never touched.
-2. Where `claude` has a command for something (like `claude mcp add-json`), sync uses it instead of editing files. JSON files are merged key by key with `encoding/json`, keeping unknown keys.
-3. **Secrets** are resolved from env vars or the OS keychain (D15). If a secret is missing, sync warns and skips that item instead of failing.
+1. Bud only touches what it added. The ledger (`~/.local/state/bud/kit-ledger.json`) records each marketplace and plugin; anything you set up yourself, from any source, isn't in it and is never touched. A plugin already installed (clod's local checkout, or the copy claude.ai syncs) is skipped as yours, and so is a marketplace of the same name.
+2. Everything goes through `claude plugin` (`marketplace add|update|remove`, `install|update|uninstall --scope user`). A marketplace bud added is refreshed at every sync, with bud's plugins from it, since Claude Code doesn't update a git marketplace by itself.
+3. `output_style` is set as `outputStyle` in `settings.json` only when it's unset or still bud's (D75), and once the plugin that has it is installed.
+4. What an older bud synced (MCP servers, skills, agents, commands, output style files, the `CLAUDE.md` block) is taken out on the next sync, only where it's still what bud wrote.
 
 **Commands:**
 
 ```text
-bud kit sync [--dry-run]                       # write the kit into Claude Code (also runs in bud update)
-bud kit status                                 # per item: synced / drifted / missing secret
+bud kit sync [--dry-run]                       # also runs after bud install and bud update
+bud kit status                                 # per item: synced / not synced / skipped and why
 bud kit ls
-bud kit add mcp [--url … | --cmd …] <name>     # scaffold kit/mcp/<name>.json
-bud kit add skill|agent|command <name>         # scaffold (Claude can draft it, like :BudGen)
-bud kit rm <name>                              # remove from the kit (next sync uninstalls it)
-bud kit adopt <name>                           # pull something you set up by hand in ~/.claude INTO the kit
-bud kit enable|disable [--profile …] <name>
+bud kit unsync [--dry-run] [--yes]             # take out what the kit added, forget the ledger
+bud kit add plugin <name@marketplace>          # in a checkout's kit.json
+bud kit add marketplace <name> <source>
+bud kit rm <name>                              # the next sync uninstalls it
+bud kit enable|disable <name>                  # this machine only (kit.disabled)
 ```
-
-**Candidate tools to grow the kit** (only Context7 is decided, so pick from these):
-
-| Tool                   | Kind       | What it's for                                                                  |
-| ---------------------- | ---------- | ------------------------------------------------------------------------------ |
-| ✅ Context7            | MCP (http) | current library/framework docs                                                 |
-| ✅ GitHub              | MCP        | PRs, issues, code search                                                       |
-| Playwright / browser   | MCP        | drive a browser to test web UIs                                                |
-| Web search (e.g. Exa)  | MCP        | fresh research beyond docs                                                     |
-| Linear / issue tracker | MCP        | tickets, if you use one                                                        |
-| Basic Memory           | MCP        | your notes knowledge base (you already use it)                                 |
-| ✅ `bud-dev` skill     | skill      | teaches Claude how _this_ repo works: add a language spec, a tool, a layout    |
-| ✅ code-reviewer       | subagent   | a second pass over a diff before you commit                                    |
-| `/commit`, `/pr`       | commands   | your house style for commit messages and PRs                                   |
-| format-on-edit         | hook       | run the language formatter after Claude edits a file                           |
 
 ### 4.2 A Claude Code session alongside the editor (D25)
 
@@ -648,7 +603,7 @@ With no newer release, `bud update` skips step 1 and just re-syncs, which also r
 | Drop something            | `bud tools rm` / `bud lang disable`, or delete the file                                                                                |
 | Change a layout           | edit `layouts/*.lua` in the repo (with `bud dev link`, `:BudLayout reload` shows it live) → ships in the next release                 |
 | Ship config changes       | commit, push a `v*` tag → GoReleaser builds the release → every machine gets it on `bud update`                                        |
-| Add an AI tool everywhere | `bud kit add mcp <name>` (or `bud kit adopt <name>`) → commit → release → every machine gets it on update                              |
+| Add an AI tool everywhere | a skill, agent or command: in `jgarner9/bud-plugins`, push, and every surface picks it up; an MCP server: in clod; a plugin: `bud kit add plugin <id>` → commit → release |
 | Build a Claude TUI        | write a Lua module on `require("bud.ai.claude")` (4.2), in `nvim/lua/bud/` to ship it or `user-tools/` to keep it local         |
 | Per-machine tweak         | `bud config set …` (never committed)                                                                                                   |
 

@@ -188,7 +188,7 @@ func argValues(cmd string, before []string) []string {
 		return kitNames()
 	case "kit add":
 		if len(before) == 0 {
-			return []string{"skill", "agent", "command", "output-style", "plugin"}
+			return kit.Kinds
 		}
 	case "config get", "config set", "config unset":
 		if len(before) == 0 {

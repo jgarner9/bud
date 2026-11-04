@@ -25,14 +25,14 @@ func init() {
 }
 
 // Kit writes bud's Claude Code setup into Claude Code's user config (BASE.md
-// 4.1): plugin marketplaces, plugins, skills, subagents, slash commands and
-// output styles
+// 4.1, D77): the plugin marketplace bud's plugins come from, the plugins, and
+// the output style it turns on
 func Kit() *Command {
 	var dryRun, yes bool
 	var repo string
 	return &Command{
 		Name:  "kit",
-		Usage: "Syncs bud's Claude Code setup (plugin marketplaces, plugins, skills, agents, commands, output styles) into Claude Code",
+		Usage: "Syncs bud's Claude Code setup (its plugins, their marketplace, the output style) into Claude Code",
 		Subs: []*Command{
 			{
 				Name:  "sync",
@@ -56,7 +56,7 @@ func Kit() *Command {
 			{Name: "ls", Usage: "list what's in the kit", Run: func(_ *Globals, args []string) error { return kitLs(args) }},
 			{
 				Name:  "add",
-				Usage: "scaffold a kit entry in a bud checkout: add skill|agent|command|output-style|plugin <name>",
+				Usage: "list a plugin or marketplace in a bud checkout's kit: add plugin <name@marketplace>, or add marketplace <name> <source>",
 				Flags: func(fs *flag.FlagSet) {
 					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
 				},
@@ -69,14 +69,6 @@ func Kit() *Command {
 					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
 				},
 				Run: func(_ *Globals, args []string) error { return kitRm(args, repo) },
-			},
-			{
-				Name:  "adopt",
-				Usage: "pull a skill, agent or command you set up by hand into the kit: adopt <name>",
-				Flags: func(fs *flag.FlagSet) {
-					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
-				},
-				Run: func(_ *Globals, args []string) error { return kitAdopt(args, repo) },
 			},
 			{
 				Name:  "enable",
@@ -120,7 +112,7 @@ func defaultKitFS() fs.FS {
 	return bud.Kit()
 }
 
-// kitRepo is the checkout's kit/ that add, rm, adopt and --profile edit
+// kitRepo is the checkout's kit/ that add and rm edit
 func kitRepo(repo string) (kit.Repo, error) {
 	if repo == "" {
 		p, err := paths.Resolve()
@@ -142,29 +134,28 @@ func kitRepo(repo string) (kit.Repo, error) {
 }
 
 func kitAdd(args []string, repo string) error {
-	if len(args) != 2 {
-		return usageErrorf("kit add takes a kind and a name: add skill|agent|command|output-style|plugin <name>")
-	}
-	kind, name := args[0], args[1]
-	if _, ok := kit.Kinds[kind]; !ok {
-		return usageErrorf("kit add: %q isn't skill, agent, command, output-style or plugin", kind)
+	usage := "kit add takes add plugin <name@marketplace>, or add marketplace <name> <source>"
+	if len(args) < 2 || !slices.Contains(kit.Kinds, args[0]) {
+		return usageErrorf("%s", usage)
 	}
 	r, err := kitRepo(repo)
 	if err != nil {
 		return err
 	}
-	if kind == "plugin" {
-		if err := r.AddPlugin(name); err != nil {
+	switch {
+	case args[0] == "plugin" && len(args) == 2:
+		if err := r.AddPlugin(args[1]); err != nil {
 			return err
 		}
-		fmt.Printf("Added the plugin %s; bud kit sync installs it.\n", name)
-		return nil
+		fmt.Printf("Added the plugin %s; bud kit sync installs it.\n", args[1])
+	case args[0] == "marketplace" && len(args) == 3:
+		if err := r.AddMarketplace(args[1], args[2]); err != nil {
+			return err
+		}
+		fmt.Printf("Added the marketplace %s; bud kit sync adds it before installing its plugins.\n", args[1])
+	default:
+		return usageErrorf("%s", usage)
 	}
-	path, err := r.Scaffold(kind, name)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Added the %s %s: fill in %s, then bud kit sync.\n", kind, name, path)
 
 	return nil
 }
@@ -183,34 +174,6 @@ func kitRm(args []string, repo string) error {
 		return err
 	}
 	fmt.Printf("Took the %s %s out of the kit; bud kit sync removes it from Claude Code.\n", kind, name)
-
-	return nil
-}
-
-func kitAdopt(args []string, repo string) error {
-	if len(args) != 1 {
-		return usageErrorf("kit adopt takes one name")
-	}
-	r, err := kitRepo(repo)
-	if err != nil {
-		return err
-	}
-	p, err := paths.Resolve()
-	if err != nil {
-		return err
-	}
-	env, err := kitEnv(p)
-	if err != nil {
-		return err
-	}
-	kind, err := r.Adopt(args[0], env.ClaudeDir)
-	if err != nil {
-		return err
-	}
-	if err := kit.Own(env.Ledger, env.ClaudeDir, kind, args[0]); err != nil {
-		return err
-	}
-	fmt.Printf("Adopted the %s %s into %s.\n", kind, args[0], r.Dir)
 
 	return nil
 }

@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"testing/fstest"
 
 	"jgarner.dev/bud"
 )
@@ -18,21 +17,31 @@ func TestShippedKit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(k.Plugins, "superpowers@anthropic-plugin-directory") {
-		t.Fatalf("plugins %v", k.Plugins)
+	// everything about how Claude works comes from bud-plugins (D77)
+	if k.Marketplaces["bud-plugins"] != "https://github.com/jgarner9/bud-plugins.git" {
+		t.Errorf("marketplaces %v", k.Marketplaces)
+	}
+	for _, id := range []string{"bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@anthropic-plugin-directory"} {
+		if !slices.Contains(k.Plugins, id) {
+			t.Errorf("no %s in %v", id, k.Plugins)
+		}
+	}
+	if k.OutputStyle != "bud-ide:bud" {
+		t.Errorf("output style %q", k.OutputStyle)
 	}
 }
 
-func TestWithBlock(t *testing.T) {
-	doc := withBlock("# mine\n", "be a bud")
-	if doc != "# mine\n\n"+blockStart+"\nbe a bud\n"+blockEnd+"\n" {
-		t.Fatalf("added: %q", doc)
-	}
-	if again := withBlock(doc+"\nmore of mine\n", "be a good bud"); !strings.Contains(again, "be a good bud") || strings.Contains(again, "be a bud\n") || !strings.HasSuffix(again, "more of mine\n") {
-		t.Fatalf("replaced: %q", again)
-	}
-	if gone := withBlock(doc, ""); gone != "# mine\n" {
-		t.Fatalf("removed: %q", gone)
+func TestWithoutBlock(t *testing.T) {
+	block := blockStart + "\nbe a bud\n" + blockEnd + "\n"
+	for doc, want := range map[string]string{
+		"# mine\n\n" + block:                      "# mine\n",
+		"# mine\n\n" + block + "\nmore of mine\n": "# mine\n\nmore of mine\n",
+		block:          "",
+		"# no block\n": "# no block\n",
+	} {
+		if got := withoutBlock(doc); got != want {
+			t.Errorf("withoutBlock(%q) = %q, want %q", doc, got, want)
+		}
 	}
 }
 
@@ -55,81 +64,7 @@ func (f *fakeClaude) run(args ...string) error {
 	return os.WriteFile(f.json, data, 0o644)
 }
 
-func TestSync(t *testing.T) {
-	dir := t.TempDir()
-	claudeDir := filepath.Join(dir, ".claude")
-	fc := &fakeClaude{servers: map[string]string{}, json: filepath.Join(dir, ".claude.json")}
-	env := Env{ClaudeDir: claudeDir, ClaudeJSON: fc.json, Ledger: filepath.Join(dir, "ledger.json"), Claude: fc.run}
-	fsys := fstest.MapFS{
-		"kit.json":                {Data: []byte(`{"skills": ["bud-dev", "mine"], "commands": ["commit"]}`)},
-		"skills/bud-dev/SKILL.md": {Data: []byte("skill")},
-		"skills/mine/SKILL.md":    {Data: []byte("the kit's")},
-		"commands/commit.md":      {Data: []byte("commit style")},
-	}
-	k, err := Load(fsys)
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.MkdirAll(filepath.Join(claudeDir, "skills", "mine"), 0o755)
-	os.WriteFile(filepath.Join(claudeDir, "skills", "mine", "SKILL.md"), []byte("yours"), 0o644)
-
-	// a dry run changes nothing
-	actions, err := Sync(k, env, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if exists(filepath.Join(claudeDir, "commands", "commit.md")) {
-		t.Fatal("dry run wrote a file")
-	}
-	got := map[string]string{}
-	for _, a := range actions {
-		got[a.Name] = a.Do + " " + a.Why
-	}
-	for name, want := range map[string]string{
-		"skills/bud-dev/SKILL.md": "add ", "commands/commit.md": "add ", "skills/mine/SKILL.md": "skip you have your own",
-	} {
-		if got[name] != want {
-			t.Errorf("%s: %q, want %q", name, got[name], want)
-		}
-	}
-
-	if _, err := Sync(k, env, false); err != nil {
-		t.Fatal(err)
-	}
-	if data, _ := os.ReadFile(filepath.Join(claudeDir, "skills", "bud-dev", "SKILL.md")); string(data) != "skill" {
-		t.Fatalf("skill %q", data)
-	}
-	if data, _ := os.ReadFile(filepath.Join(claudeDir, "skills", "mine", "SKILL.md")); string(data) != "yours" {
-		t.Fatalf("overwrote yours: %q", data)
-	}
-
-	// again: nothing to do
-	actions, _ = Sync(k, env, false)
-	for _, a := range actions {
-		if a.Do != "ok" && a.Do != "skip" {
-			t.Errorf("second sync: %v", a)
-		}
-	}
-
-	// the kit drops the command: it's removed
-	k.Commands = nil
-	if _, err := Sync(k, env, false); err != nil {
-		t.Fatal(err)
-	}
-	if exists(filepath.Join(claudeDir, "commands")) {
-		t.Fatal("dropped command left behind")
-	}
-
-	// a skill file you edited isn't overwritten
-	os.WriteFile(filepath.Join(claudeDir, "skills", "bud-dev", "SKILL.md"), []byte("my edit"), 0o644)
-	fsys["skills/bud-dev/SKILL.md"] = &fstest.MapFile{Data: []byte("skill v2")}
-	actions, _ = Sync(k, env, false)
-	if data, _ := os.ReadFile(filepath.Join(claudeDir, "skills", "bud-dev", "SKILL.md")); string(data) != "my edit" {
-		t.Fatalf("overwrote your edit: %q (%v)", data, actions)
-	}
-}
-
-// what a bud from before D77 synced, MCP servers and the CLAUDE.md block,
+// what a bud from before D77 synced (MCP servers, files, the CLAUDE.md block)
 // comes out, and only bud's
 func TestSyncRemovesLegacy(t *testing.T) {
 	dir := t.TempDir()
@@ -138,16 +73,25 @@ func TestSyncRemovesLegacy(t *testing.T) {
 	fc.run("mcp", "add-json", "--scope", "user", "mine", "{}")
 	fc.ran = nil
 	env := Env{ClaudeDir: claudeDir, ClaudeJSON: fc.json, Ledger: filepath.Join(dir, "ledger.json"), Claude: fc.run}
-	os.MkdirAll(claudeDir, 0o755)
-	os.WriteFile(filepath.Join(claudeDir, "CLAUDE.md"), []byte(withBlock("# mine\n", "be a bud")), 0o644)
+	write := func(rel, body string) {
+		p := filepath.Join(claudeDir, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(body), 0o644)
+	}
+	write("CLAUDE.md", "# mine\n\n"+blockStart+"\nbe a bud\n"+blockEnd+"\n")
+	write("skills/lookup/SKILL.md", "the kit's")
+	write("agents/code-reviewer.md", "edited by you")
+	write("skills/notes/SKILL.md", "yours")
 	// "gone" was removed by hand already
-	os.WriteFile(env.Ledger, []byte(`{"mcp": {"docs": "x", "gone": "y"}, "instructions": "z"}`), 0o644)
+	os.WriteFile(env.Ledger, []byte(`{"mcp": {"docs": "x", "gone": "y"}, "instructions": "z", "files": {
+		"skills/lookup/SKILL.md": "`+hash([]byte("the kit's"))+`",
+		"agents/code-reviewer.md": "`+hash([]byte("what bud wrote"))+`"}}`), 0o644)
 
 	actions, err := Sync(&Kit{}, env, true)
 	if err != nil || len(fc.ran) != 0 {
 		t.Fatalf("dry run ran %q (%v)", fc.ran, err)
 	}
-	if len(actions) != 3 {
+	if len(actions) != 5 {
 		t.Fatalf("dry run actions %v", actions)
 	}
 
@@ -163,8 +107,16 @@ func TestSyncRemovesLegacy(t *testing.T) {
 	if md, _ := os.ReadFile(filepath.Join(claudeDir, "CLAUDE.md")); string(md) != "# mine\n" {
 		t.Fatalf("CLAUDE.md %q", md)
 	}
+	if exists(filepath.Join(claudeDir, "skills", "lookup")) {
+		t.Error("the kit's skill is still there")
+	}
+	for _, rel := range []string{"agents/code-reviewer.md", "skills/notes/SKILL.md"} {
+		if !exists(filepath.Join(claudeDir, filepath.FromSlash(rel))) {
+			t.Errorf("removed %s, which is yours", rel)
+		}
+	}
 	l, _, _ := ReadLedger(env.Ledger)
-	if len(l.MCP) != 0 || l.Instructions != "" {
+	if len(l.MCP) != 0 || len(l.Files) != 0 || l.Instructions != "" {
 		t.Fatalf("ledger kept %+v", l)
 	}
 	actions, _ = Sync(&Kit{}, env, false)

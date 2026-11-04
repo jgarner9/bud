@@ -12,67 +12,48 @@ func repoKit(t *testing.T) Repo {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "kit")
 	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "kit.json"), []byte(`{"skills": [], "agents": [], "commands": []}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "kit.json"), []byte(`{"plugins": [], "output_style": "p:s"}`), 0o644)
 	return Repo{Dir: dir}
 }
 
-func TestAddScaffoldRemove(t *testing.T) {
+func TestAddRemove(t *testing.T) {
 	r := repoKit(t)
-	if _, err := r.Scaffold("skill", "Bad Name"); err == nil {
-		t.Fatal("took a bad name")
+	if err := r.AddMarketplace("market", "https://example.com/market.git"); err != nil {
+		t.Fatal(err)
 	}
-	for _, kind := range []string{"skill", "agent", "command"} {
-		p, err := r.Scaffold(kind, "my-"+kind)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if data, _ := os.ReadFile(p); !strings.Contains(string(data), "TODO") {
-			t.Fatalf("%s scaffold %q", kind, data)
+	if err := r.AddPlugin("p@market"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []error{
+		r.AddPlugin("p@market"),       // twice
+		r.AddPlugin("no-marketplace"), // not name@marketplace
+		r.AddPlugin("Bad@market"),
+		r.AddMarketplace("market", "https://x"),
+		r.AddMarketplace("other", ""),
+	} {
+		if bad == nil {
+			t.Error("took a bad entry")
 		}
 	}
 	k, err := Load(os.DirFS(r.Dir))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Scaffold("skill", "my-skill"); err == nil {
-		t.Fatal("added my-skill twice")
-	}
-	if !slices.Equal(k.Skills, []string{"my-skill"}) || !slices.Equal(k.Commands, []string{"my-command"}) {
-		t.Fatalf("lists %v %v", k.Skills, k.Commands)
+	if !slices.Equal(k.Plugins, []string{"p@market"}) || k.Marketplaces["market"] != "https://example.com/market.git" || k.OutputStyle != "p:s" {
+		t.Fatalf("kit %+v", k)
 	}
 
-	if kind, err := r.Remove("my-skill"); err != nil || kind != "skill" {
-		t.Fatalf("rm: %s %v", kind, err)
+	for _, name := range []string{"p@market", "market"} {
+		if _, err := r.Remove(name); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := os.Stat(filepath.Join(r.Dir, "skills", "my-skill")); err == nil {
-		t.Fatal("skill files left")
+	if _, err := r.Remove("nothing"); err == nil {
+		t.Fatal("removed nothing")
 	}
-}
-
-func TestAdopt(t *testing.T) {
-	r := repoKit(t)
-	home := t.TempDir()
-	claudeDir := filepath.Join(home, ".claude")
-	os.MkdirAll(filepath.Join(claudeDir, "skills", "notes", "ref"), 0o755)
-	os.WriteFile(filepath.Join(claudeDir, "skills", "notes", "SKILL.md"), []byte("notes skill"), 0o644)
-	os.WriteFile(filepath.Join(claudeDir, "skills", "notes", "ref", "a.md"), []byte("ref"), 0o644)
-
-	if kind, err := r.Adopt("notes", claudeDir); err != nil || kind != "skill" {
-		t.Fatalf("adopt notes: %s %v", kind, err)
-	}
-	if data, _ := os.ReadFile(filepath.Join(r.Dir, "skills", "notes", "ref", "a.md")); string(data) != "ref" {
-		t.Fatalf("skill files: %q", data)
-	}
-	if _, err := r.Adopt("nothing", claudeDir); err == nil {
-		t.Fatal("adopted nothing")
-	}
-
-	// bud owns it now, in sync as it is
-	ledger := filepath.Join(home, "ledger.json")
-	Own(ledger, claudeDir, "skill", "notes")
-	l, _, _ := ReadLedger(ledger)
-	if len(l.Files) != 2 {
-		t.Fatalf("ledger %+v", l)
+	k, _ = Load(os.DirFS(r.Dir))
+	if len(k.Plugins) != 0 || len(k.Marketplaces) != 0 || k.OutputStyle != "p:s" {
+		t.Fatalf("after rm %+v", k)
 	}
 }
 
@@ -89,24 +70,5 @@ func TestSyncSkipsDisabled(t *testing.T) {
 	}
 	if _, err := Sync(k, env, false); err != nil || len(ran) != 0 {
 		t.Fatalf("synced a disabled entry: %q %v", ran, err)
-	}
-}
-
-func TestScaffoldOutputStyle(t *testing.T) {
-	r := repoKit(t)
-	p, err := r.Scaffold("output-style", "terse")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p != filepath.Join(r.Dir, "output-styles", "terse.md") {
-		t.Errorf("path %s", p)
-	}
-	data, _ := os.ReadFile(p)
-	if !strings.Contains(string(data), "name: terse") || !strings.Contains(string(data), "keep-coding-instructions: true") {
-		t.Errorf("scaffold:\n%s", data)
-	}
-	idx, _ := r.index()
-	if got := list(idx, "output-styles"); !slices.Equal(got, []string{"terse"}) {
-		t.Errorf("kit.json output-styles %v", got)
 	}
 }

@@ -8,16 +8,18 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"jgarner.dev/bud/internal/atomicfile"
 )
 
 // syncOutputStyle makes outputStyle in the Claude dir's settings.json want:
 // set when it's unset or still what bud set, never over a style the user
-// picked, and taken out again (want "") only while it's still bud's. haveFile
-// says the style's file is bud's and in place; without it want isn't turned
-// on. It records what it set in the ledger; nil means there was nothing to do.
-func syncOutputStyle(want string, haveFile bool, env Env, ledger *Ledger, dryRun bool) (*Action, error) {
+// picked, and taken out again (want "") only while it's still bud's.
+// havePlugin says the plugin with the style is installed; without it want
+// isn't turned on. It records what it set in the ledger; nil means there was
+// nothing to do.
+func syncOutputStyle(want string, havePlugin bool, env Env, ledger *Ledger, dryRun bool) (*Action, error) {
 	if want == "" && ledger.OutputStyle == "" {
 		return nil, nil
 	}
@@ -63,8 +65,9 @@ func syncOutputStyle(want string, haveFile bool, env Env, ledger *Ledger, dryRun
 	case cur == want:
 		// set by bud, or by the user before bud did, which stays theirs
 		return &Action{"output-style", "settings.json", "ok", ""}, nil
-	case !haveFile:
-		return &Action{"output-style", "settings.json", "skip", "you have your own output-styles/" + want + ".md"}, nil
+	case !havePlugin:
+		plugin, _, _ := strings.Cut(want, ":")
+		return &Action{"output-style", "settings.json", "skip", "needs the " + plugin + " plugin"}, nil
 	case cur != "" && cur != ledger.OutputStyle:
 		if !dryRun {
 			ledger.OutputStyle = ""

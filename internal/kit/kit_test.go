@@ -317,6 +317,45 @@ func TestSyncMarketplaceYouAdded(t *testing.T) {
 	}
 }
 
+// a plugin claude.ai syncs loads as name@synced (JGA-177): the kit leaves it
+// be, and takes out its own copy if it had installed one before
+func TestSyncPluginFromClaudeAI(t *testing.T) {
+	dir := t.TempDir()
+	f := &fakeMarketplaces{registered: []string{"bud-plugins"}, installed: []string{"bud@synced", "bud@bud-plugins"}}
+	env := f.env(dir)
+	os.WriteFile(env.Ledger, []byte(`{"plugins": {"bud@bud-plugins": "installed"}, "marketplaces": {"bud-plugins": "x"}}`), 0o644)
+	k := &Kit{
+		Marketplaces: map[string]string{"bud-plugins": "x"},
+		Plugins:      []string{"bud@bud-plugins", "bud-ide@bud-plugins"},
+	}
+
+	actions, err := Sync(k, env, true)
+	if err != nil || slices.Contains(f.ran, "plugin uninstall --scope user bud@bud-plugins") {
+		t.Fatalf("dry run ran %q (%v)", f.ran, err)
+	}
+	if !slices.Contains(actions, Action{"plugin", "bud@bud-plugins", "remove", "claude.ai syncs it"}) {
+		t.Fatalf("dry run actions %v", actions)
+	}
+
+	f.ran = nil
+	if _, err := Sync(k, env, false); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(f.ran, "plugin uninstall --scope user bud@bud-plugins") || !slices.Contains(f.installed, "bud@synced") {
+		t.Fatalf("ran %q, installed %v", f.ran, f.installed)
+	}
+	if l, _, _ := ReadLedger(env.Ledger); l.Plugins["bud@bud-plugins"] != "" {
+		t.Fatalf("ledger kept bud's copy: %v", l.Plugins)
+	}
+
+	// from then on it's skipped, and only bud-ide is bud's
+	f.ran = nil
+	actions, _ = Sync(k, env, false)
+	if !slices.Contains(actions, Action{"plugin", "bud@bud-plugins", "skip", "claude.ai syncs it"}) || slices.ContainsFunc(f.ran, func(r string) bool { return strings.Contains(r, "bud@") }) {
+		t.Fatalf("actions %v, ran %q", actions, f.ran)
+	}
+}
+
 func TestParseMarketplaces(t *testing.T) {
 	out := `[{"name": "bud-plugins", "source": "git", "url": "https://github.com/jgarner9/bud-plugins.git", "installLocation": "/x"}, {"name": "local", "source": "directory"}]`
 	names, err := ParseMarketplaces([]byte(out))

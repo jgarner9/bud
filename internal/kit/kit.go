@@ -227,8 +227,10 @@ func Unsync(env Env, dryRun bool) ([]Action, error) {
 // from any source, updates bud's own at every sync (JGA-174: a marketplace you
 // own, like clod's local checkout, isn't refreshed by bud, but the copy
 // Claude Code installed from it still goes stale), and uninstalls bud's that
-// the kit dropped. A plugin you installed yourself stays yours. It returns
-// the kit's plugins that are, or after a dry run would be, installed
+// the kit dropped. A plugin you installed yourself stays yours, and so does
+// one claude.ai syncs (it loads as name@synced, JGA-177): then bud takes its
+// own copy out, so the synced one loads and updates with claude.ai. It
+// returns the plugins that are, or after a dry run would be, there
 func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action) (present []string, err error) {
 	if len(k.Plugins) == 0 && len(ledger.Plugins) == 0 {
 		return nil, nil
@@ -242,7 +244,24 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 	}
 	for _, id := range k.Plugins {
 		_, owned := ledger.Plugins[id]
+		synced := pluginName(id) + "@synced"
 		switch {
+		case slices.Contains(installed, synced) && owned:
+			*actions = append(*actions, Action{"plugin", id, "remove", "claude.ai syncs it"})
+			present = append(present, synced)
+			if dryRun {
+				continue
+			}
+			if slices.Contains(installed, id) {
+				if err := env.Claude("plugin", "uninstall", "--scope", "user", id); err != nil {
+					errs = append(errs, fmt.Errorf("uninstalling %s: %w", id, err))
+					continue
+				}
+			}
+			delete(ledger.Plugins, id)
+		case slices.Contains(installed, synced):
+			*actions = append(*actions, Action{"plugin", id, "skip", "claude.ai syncs it"})
+			present = append(present, synced)
 		case slices.Contains(installed, id) && owned:
 			*actions = append(*actions, Action{"plugin", id, "ok", ""})
 			present = append(present, id)
@@ -475,10 +494,10 @@ func ParseMarketplaces(out []byte) ([]string, error) {
 	return names, nil
 }
 
-// marketplaceOf is the marketplace in a plugin id, name@marketplace
-func marketplaceOf(id string) string {
-	_, m, _ := strings.Cut(id, "@")
-	return m
+// pluginName is the name in a plugin id, name@marketplace
+func pluginName(id string) string {
+	name, _, _ := strings.Cut(id, "@")
+	return name
 }
 
 func sortedKeys(m map[string]string) []string {

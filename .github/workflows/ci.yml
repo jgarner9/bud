@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: shellcheck install.sh scripts/*.sh
       - run: sh scripts/install-test.sh
+      - run: sh scripts/release_plan_test.sh
 
   lua:
     runs-on: ubuntu-latest

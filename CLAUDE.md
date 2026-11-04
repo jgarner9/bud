@@ -25,6 +25,7 @@ just fmt             # gofmt -w .
 just lua-fmt         # stylua over nvim/ and scripts/
 just lua-test        # headless Lua tests in tests/lua (plain asserts, no framework)
 just install-test    # install.sh's checks against fake releases signed with a throwaway key
+just release-plan-test # release-plan.sh's decisions against throwaway repos with a fake gh
 just smoke           # sync the config into temp XDG dirs, restore plugins, start nvim headless (needs network)
 just lang-check [go] # install every language's tooling in temp XDG dirs, check each on a sample project (slow, needs network)
 just snapshot        # local GoReleaser build into dist/, needs goreleaser installed
@@ -98,7 +99,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 ## Release and install
 
-Pushing a `v*` tag runs `.github/workflows/release.yml` (GoReleaser): linux/darwin × amd64/arm64 archives plus `checksums.txt`. Archive names deliberately leave out the version (`bud_<os>_<arch>.tar.gz`) because `install.sh` downloads from `releases/latest/download/<name>`, so keep `.goreleaser.yaml` and `install.sh` in sync. `install.sh` must stay POSIX `sh` and shellcheck-clean. It verifies the signature on `checksums.txt` with `ssh-keygen -Y verify` against its pinned `RELEASE_KEYS`, one per line (D41/D44; a test keeps them equal to `updater.ReleaseKeys`), then the checksum, installs to `~/.local/bin`, and asks on `/dev/tty` before running `bud install`, because stdin is the script under `curl | sh`.
+Releases come from `VERSION` (D80): a push to main that changes it runs `.github/workflows/release.yml`, where `scripts/release-plan.sh` checks it (`X.Y.Z`, newer than the newest stable tag; `just release-plan-test`), the tests run, the workflow pushes the `vX.Y.Z` tag itself and GoReleaser builds linux/darwin × amd64/arm64 archives plus `checksums.txt`. Cloud sessions can't push tags (their git proxy allows only `refs/heads/*`), so to cut a release, bump `VERSION` and push main; a hand-pushed `v*` tag must match `VERSION`, and re-running the workflow builds a tag that has no release yet. Archive names deliberately leave out the version (`bud_<os>_<arch>.tar.gz`) because `install.sh` downloads from `releases/latest/download/<name>`, so keep `.goreleaser.yaml` and `install.sh` in sync. `install.sh` must stay POSIX `sh` and shellcheck-clean. It verifies the signature on `checksums.txt` with `ssh-keygen -Y verify` against its pinned `RELEASE_KEYS`, one per line (D41/D44; a test keeps them equal to `updater.ReleaseKeys`), then the checksum, installs to `~/.local/bin`, and asks on `/dev/tty` before running `bud install`, because stdin is the script under `curl | sh`.
 
 
 **Bootstrap.** `bud bootstrap [--config] user@host` (`internal/cli/bootstrap.go`) runs the install.sh one-liner over `ssh -t` with `--profile` (default minimal), `--yes` and `--version` of this bud (`releaseVersion`); `--config` pipes `config.json` into the remote state dir first. Tests swap `runSSH`.

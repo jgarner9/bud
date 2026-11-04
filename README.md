@@ -183,7 +183,7 @@ just lang-check go   # install a language's tools in a temp dir and check it on 
 
 The Go side uses the standard library only, and flags always go before positional arguments. [`CLAUDE.md`](CLAUDE.md) has the architecture tour.
 
-To release, push a `v*` tag: GoReleaser builds linux/darwin × amd64/arm64 and attaches the archives and `checksums.txt` to a GitHub release, where `install.sh` picks them up.
+To release, change `VERSION` (for example to `0.19.0`) and merge it to `main`: the release workflow checks it is newer than the last release, runs the tests, tags `v0.19.0`, and GoReleaser builds linux/darwin × amd64/arm64 and attaches the archives and `checksums.txt` to a GitHub release, where `install.sh` picks them up.
 
 <div align="center">
 <sub>[o.o] beep boop, built one commit at a time</sub>

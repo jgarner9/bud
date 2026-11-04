@@ -51,6 +51,10 @@ lua-test:
 rotate-test:
   sh scripts/rotate_test.sh
 
+# release-plan.sh's decisions for each way the release workflow starts, with a fake gh
+release-plan-test:
+  sh scripts/release_plan_test.sh
+
 # sync the config into a throwaway dir, restore plugins, start nvim headless (needs network)
 smoke:
   sh scripts/smoke.sh
@@ -65,7 +69,7 @@ lang-check *langs:
   sh scripts/lang-check.sh "$@"
 
 # everything CI checks (lint + tests + smoke)
-check: lint test lua-test install-test rotate-test smoke
+check: lint test lua-test install-test rotate-test release-plan-test smoke
 
 # fail with an install hint when a tool isn't on PATH
 [private]

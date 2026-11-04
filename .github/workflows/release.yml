@@ -1,11 +1,22 @@
 name: Release
 
+# D80: VERSION is the release manifest. A push to main that changes it tags
+# v<VERSION> and releases it, so cutting a release is a commit, which a cloud
+# session (branch pushes only) can make. Pushing a v* tag by hand still works,
+# as long as it matches VERSION. Re-running the workflow builds a tag that has
+# no release yet, so a failed release is fixed by running it again
 on:
   push:
+    branches: [main]
+    paths: [VERSION] # never evaluated for tag pushes, so those always run
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
 
 jobs:
   goreleaser:
@@ -13,16 +24,36 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0 # full history for the changelog
+          fetch-depth: 0 # full history for the changelog, and every tag
+      - name: Which release
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/release-plan.sh
       - uses: actions/setup-go@v6
+        if: steps.plan.outputs.skip != 'true'
         with:
           go-version-file: go.mod
+      # test before the tag goes up, so a broken main never leaves a tag behind
+      - name: Test
+        if: steps.plan.outputs.skip != 'true'
+        run: go test ./...
+      # a push with GITHUB_TOKEN starts no other workflow, so this run releases it
+      - name: Tag the release
+        if: steps.plan.outputs.new == 'true'
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
       - uses: goreleaser/goreleaser-action@v6
+        if: steps.plan.outputs.skip != 'true'
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ steps.plan.outputs.tag }}
       # D7, D41: signs checksums.txt once the release key exists. Off until
       # the BUD_RELEASE_KEY secret is set; sign-release.sh fails the release if
       # that key doesn't match the public key pinned in install.sh
@@ -30,10 +61,11 @@ jobs:
         id: key
         run: echo "set=${{ secrets.BUD_RELEASE_KEY != '' }}" >>"$GITHUB_OUTPUT"
       - name: Sign checksums.txt
-        if: steps.key.outputs.set == 'true'
+        if: steps.plan.outputs.skip != 'true' && steps.key.outputs.set == 'true'
         env:
           BUD_RELEASE_KEY: ${{ secrets.BUD_RELEASE_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.plan.outputs.tag }}
         run: |
           scripts/sign-release.sh dist/checksums.txt
-          gh release upload "$GITHUB_REF_NAME" dist/checksums.txt.sig
+          gh release upload "$TAG" dist/checksums.txt.sig

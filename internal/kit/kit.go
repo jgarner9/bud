@@ -34,6 +34,9 @@ type Kit struct {
 	// marketplace add takes it)
 	Marketplaces map[string]string
 	Plugins      []string // Claude Code plugins, name@marketplace
+	// the always-on instructions you paste into claude.ai, as
+	// "marketplace/path" in that marketplace (JGA-179, ReadCore)
+	Core string
 }
 
 // Load reads kit.json from fsys, laid out like the repo's kit/
@@ -45,12 +48,13 @@ func Load(fsys fs.FS) (*Kit, error) {
 	var index struct {
 		Marketplaces map[string]string `json:"marketplaces"`
 		Plugins      []string          `json:"plugins"`
+		Core         string            `json:"core"`
 	}
 	if err := json.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("kit.json: %w", err)
 	}
 
-	return &Kit{Marketplaces: index.Marketplaces, Plugins: index.Plugins}, nil
+	return &Kit{Marketplaces: index.Marketplaces, Plugins: index.Plugins, Core: index.Core}, nil
 }
 
 // Ledger is what bud put into Claude Code's config

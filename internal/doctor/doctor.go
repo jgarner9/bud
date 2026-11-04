@@ -20,6 +20,7 @@ import (
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
+	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/lang"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
@@ -77,6 +78,7 @@ var (
 	startupTime   = nvim.StartupTime
 	claudeCheck   = claude.Check
 	lookPath      = exec.LookPath
+	kitFS         = func() fs.FS { return bud.Kit() }
 )
 
 // Options picks which checks Run does
@@ -118,8 +120,42 @@ func Run(opts Options) []Result {
 	if r, ok := checkClaudeCommand(cfg, status); ok {
 		results = append(results, r)
 	}
+	if r, ok := checkCore(p, claudeDir()); ok {
+		results = append(results, r)
+	}
 
 	return append(results, cfgResult, checkProjects(p))
+}
+
+// claudeDir is the Claude Code config dir in use: CLAUDE_CONFIG_DIR, which
+// main sets for bud's own, else ~/.claude
+func claudeDir() string {
+	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
+		return d
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".claude")
+}
+
+// checkCore warns when bud-plugins' core.md changed since you last pasted it
+// into claude.ai (JGA-179), which the dashboard shows. Nothing to say without
+// a checkout of it
+func checkCore(p *paths.Paths, dir string) (Result, bool) {
+	k, err := kit.Load(kitFS())
+	if err != nil || k.Core == "" {
+		return Result{}, false
+	}
+	c, err := kit.ReadCore(k.Core, dir, p.CorePasted())
+	switch {
+	case err != nil:
+		return Result{Name: "core.md", Status: Warn, Detail: err.Error()}, true
+	case c.Path == "":
+		return Result{}, false
+	case !c.Pasted:
+		return Result{Name: "core.md", Status: Warn, Detail: "changed since you last pasted it into claude.ai", Fix: "bud kit core | pbcopy, paste it, then bud kit core --pasted"}, true
+	}
+
+	return Result{Name: "core.md", Detail: "the copy in claude.ai is current"}, true
 }
 
 // checkClaudeCommand looks for the wrapper ai.claude.command runs Claude Code

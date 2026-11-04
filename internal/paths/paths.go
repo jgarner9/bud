@@ -53,6 +53,9 @@ func (p *Paths) MachineConfig() string { return filepath.Join(p.State, "config.j
 // Projects is the project registry the dashboard reads
 func (p *Paths) Projects() string { return filepath.Join(p.State, "projects.json") }
 
+// CorePasted records which core.md you last pasted into claude.ai (JGA-179)
+func (p *Paths) CorePasted() string { return filepath.Join(p.State, "core-pasted.json") }
+
 // KitLedger records everything `bud kit sync` wrote into Claude Code's config
 func (p *Paths) KitLedger() string { return filepath.Join(p.State, "kit-ledger.json") }
 

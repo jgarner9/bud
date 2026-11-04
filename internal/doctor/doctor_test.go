@@ -13,6 +13,7 @@ import (
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
+	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/lang"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
@@ -511,5 +512,31 @@ func TestCheckClaudeCommand(t *testing.T) {
 	cfg.AI.Claude.Command = []string{"mywrap", "--"}
 	if r, _ := checkClaudeCommand(cfg, bedrock); r.Status != OK {
 		t.Fatalf("another wrapper on bedrock: %+v", r)
+	}
+}
+
+func TestCheckCore(t *testing.T) {
+	p := &paths.Paths{State: t.TempDir()}
+	orig := kitFS
+	kitFS = func() fs.FS {
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"core": "bud-plugins/core.md"}`)}}
+	}
+	t.Cleanup(func() { kitFS = orig })
+
+	if _, ok := checkCore(p, t.TempDir()); ok {
+		t.Fatal("a result without a checkout")
+	}
+	dir, checkout := t.TempDir(), t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "plugins"), 0o755)
+	os.WriteFile(filepath.Join(dir, "plugins", "known_marketplaces.json"), []byte(`{"bud-plugins": {"installLocation": "`+checkout+`"}}`), 0o644)
+	os.WriteFile(filepath.Join(checkout, "core.md"), []byte("You are Bud.\n"), 0o644)
+	r, ok := checkCore(p, dir)
+	if !ok || r.Status != Warn || !strings.Contains(r.Fix, "bud kit core --pasted") {
+		t.Fatalf("not pasted: %+v", r)
+	}
+	c, _ := kit.ReadCore("bud-plugins/core.md", dir, p.CorePasted())
+	kit.MarkCorePasted(p.CorePasted(), c)
+	if r, _ := checkCore(p, dir); r.Status != OK {
+		t.Fatalf("pasted: %+v", r)
 	}
 }

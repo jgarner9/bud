@@ -6,5 +6,6 @@
     "bud@bud-plugins",
     "bud-ide@bud-plugins",
     "superpowers@anthropic-plugin-directory"
-  ]
+  ],
+  "core": "bud-plugins/core.md"
 }

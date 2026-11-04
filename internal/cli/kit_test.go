@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -152,5 +153,52 @@ func TestKitCommands(t *testing.T) {
 	captureStdout(t, func() { resyncKit(&Globals{}, p) })
 	if len(f.ran) != 1 {
 		t.Fatalf("update synced after unsync: %q", f.ran)
+	}
+}
+
+// bud kit core prints core.md from the bud-plugins checkout, a sync reminds
+// you to paste it while it's changed, and --pasted quiets that (JGA-179)
+func TestKitCore(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dir := filepath.Join(t.TempDir(), "claude")
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"core": "bud-plugins/core.md"}`)}})
+
+	if err := kitCore(nil, false); err == nil || !strings.Contains(err.Error(), "bud kit sync") {
+		t.Fatalf("no checkout: %v", err)
+	}
+	checkout := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "plugins"), 0o755)
+	os.WriteFile(filepath.Join(dir, "plugins", "known_marketplaces.json"), []byte(`{"bud-plugins": {"installLocation": "`+checkout+`"}}`), 0o644)
+	os.WriteFile(filepath.Join(checkout, "core.md"), []byte("You are Bud.\n"), 0o644)
+
+	out := captureStdout(t, func() {
+		if err := kitCore(nil, false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if out != "You are Bud.\n" {
+		t.Fatalf("core %q", out)
+	}
+	sync := func() string {
+		return captureStdout(t, func() {
+			if err := syncKitWith(&Globals{}, nil, false); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if out := sync(); !strings.Contains(out, "core.md changed") {
+		t.Fatalf("no reminder: %q", out)
+	}
+	captureStdout(t, func() {
+		if err := kitCore(nil, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if out := sync(); strings.Contains(out, "core.md changed") {
+		t.Fatalf("reminded after pasting: %q", out)
 	}
 }

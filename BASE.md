@@ -327,7 +327,8 @@ How Claude works (the Bud persona, code style, planning, which tool to use when,
 1. Bud only touches what it added. The ledger (`~/.local/state/bud/kit-ledger.json`) records each marketplace and plugin; anything you set up yourself, from any source, isn't in it and is never touched. A plugin already installed (clod's local checkout) is skipped as yours, and so is a marketplace of the same name. A plugin claude.ai syncs loads as `name@synced` and counts as yours too; bud uninstalls any copy of its own then, so the synced one loads and updates with claude.ai (JGA-177).
 2. Everything goes through `claude plugin` (`marketplace add|update|remove`, `install|update|uninstall --scope user`). A marketplace bud added is refreshed at every sync, since Claude Code doesn't update a git marketplace by itself, and bud's plugins are updated at every sync from whichever marketplace they came from, yours included (JGA-174).
 3. bud sets no output style (D78). A style you pick yourself is still passed to headless sessions, which print mode would otherwise ignore.
-4. What an older bud synced (MCP servers, skills, agents, commands, output style files and the `outputStyle` it set, the `CLAUDE.md` block) is taken out on the next sync, only where it's still what bud wrote.
+4. `kit.json`'s `core` (`bud-plugins/core.md`) names the always-on instructions that claude.ai's personal preferences hold a pasted copy of. bud reads it from the marketplace's checkout and, when it changed since `bud kit core --pasted`, says so after each sync and in a doctor warning, which the dashboard shows (JGA-179).
+5. What an older bud synced (MCP servers, skills, agents, commands, output style files and the `outputStyle` it set, the `CLAUDE.md` block) is taken out on the next sync, only where it's still what bud wrote.
 
 **Commands:**
 
@@ -336,6 +337,7 @@ bud kit sync [--dry-run]                       # also runs after bud install and
 bud kit status                                 # per item: synced / not synced / skipped and why
 bud kit ls
 bud kit unsync [--dry-run] [--yes]             # take out what the kit added, forget the ledger
+bud kit core [--pasted]                        # print core.md to paste into claude.ai; --pasted records it
 bud kit add plugin <name@marketplace>          # in a checkout's kit.json
 bud kit add marketplace <name> <source>
 bud kit rm <name>                              # the next sync uninstalls it

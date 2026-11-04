@@ -124,7 +124,7 @@ bud main.go util.go # open files, from the project root they belong to
 | `bud claude` | `status` and `setup`: is Claude Code installed and logged in, and fix it if not |
 | `bud chat` | Full-screen chat with Claude Code, with history; `bud agent [path]` opens Claude Code's own TUI |
 | `bud tools` | Your tools and bud's: `ls`, `enable`, `disable`, `rm`, `promote`, and `gen "..."` to have Claude write one |
-| `bud kit` | Syncs bud's Claude Code setup (plugin marketplaces and plugins) into Claude Code: `status`, `sync`, `unsync` |
+| `bud kit` | Syncs bud's Claude Code setup (plugin marketplaces and plugins) into Claude Code: `status`, `sync`, `unsync`, `core` |
 | `bud config` | `ls`, `get`, `set`, `unset`, `edit`: machine config by dotted key |
 | `bud completion` | Shell completion: add `eval "$(bud completion zsh)"` to your shell rc |
 

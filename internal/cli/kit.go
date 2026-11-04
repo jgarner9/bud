@@ -28,7 +28,7 @@ func init() {
 // 4.1, D77): the plugin marketplace bud's plugins come from, the plugins, and
 // the output style it turns on
 func Kit() *Command {
-	var dryRun, yes bool
+	var dryRun, yes, pasted bool
 	var repo string
 	return &Command{
 		Name:  "kit",
@@ -54,6 +54,14 @@ func Kit() *Command {
 			},
 			{Name: "status", Usage: "per item: synced, not synced, changed, or skipped and why", Run: func(g *Globals, args []string) error { return kitStatus(args) }},
 			{Name: "ls", Usage: "list what's in the kit", Run: func(_ *Globals, args []string) error { return kitLs(args) }},
+			{
+				Name:  "core",
+				Usage: "print bud-plugins' core.md, to paste into claude.ai's personal preferences (bud kit core | pbcopy); --pasted records that you did",
+				Flags: func(fs *flag.FlagSet) {
+					fs.BoolVar(&pasted, "pasted", false, "record the current core.md as pasted, which quiets the reminder")
+				},
+				Run: func(_ *Globals, args []string) error { return kitCore(args, pasted) },
+			},
 			{
 				Name:  "add",
 				Usage: "list a plugin or marketplace in a bud checkout's kit: add plugin <name@marketplace>, or add marketplace <name> <source>",
@@ -368,6 +376,9 @@ func syncKitWith(g *Globals, pr *prompter, dryRun bool) error {
 	default:
 		fmt.Printf("Synced the kit into Claude Code (%d changed).\n", changed)
 	}
+	if !dryRun {
+		remindCore(k, env)
+	}
 
 	return nil
 }
@@ -539,4 +550,49 @@ func resyncKit(g *Globals, p *paths.Paths) {
 		return
 	}
 	g.Logf("synced the Claude Code kit")
+	remindCore(k, env)
+}
+
+// remindCore says when bud-plugins' core.md changed since you last pasted it
+// into claude.ai (JGA-179). A sync is when the checkout it reads moves on
+func remindCore(k *kit.Kit, env kit.Env) {
+	p, err := paths.Resolve()
+	if err != nil || k.Core == "" {
+		return
+	}
+	if c, err := kit.ReadCore(k.Core, env.ClaudeDir, p.CorePasted()); err == nil && c.Path != "" && !c.Pasted {
+		fmt.Println(kit.CoreReminder + ".")
+	}
+}
+
+// kitCore prints core.md, or with pasted records it as pasted (JGA-179)
+func kitCore(args []string, pasted bool) error {
+	if len(args) > 0 {
+		return usageErrorf("kit core takes no arguments")
+	}
+	k, env, err := loadKit()
+	if err != nil {
+		return err
+	}
+	p, err := paths.Resolve()
+	if err != nil {
+		return err
+	}
+	c, err := kit.ReadCore(k.Core, env.ClaudeDir, p.CorePasted())
+	if err != nil {
+		return err
+	}
+	if c.Path == "" {
+		return fmt.Errorf("Claude Code has no %s yet: run bud kit sync", k.Core)
+	}
+	if !pasted {
+		fmt.Print(c.Text)
+		return nil
+	}
+	if err := kit.MarkCorePasted(p.CorePasted(), c); err != nil {
+		return err
+	}
+	fmt.Println("Recorded core.md as pasted; bud says when it changes again.")
+
+	return nil
 }

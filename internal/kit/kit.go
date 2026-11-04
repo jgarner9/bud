@@ -184,11 +184,11 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 
 	// marketplaces, then the plugins from them, then the marketplaces the kit
 	// dropped, once nothing of bud's is installed from them
-	registered, refreshed, err := syncMarketplaces(k, env, ledger, dryRun, &actions)
+	registered, err := syncMarketplaces(k, env, ledger, dryRun, &actions)
 	if err != nil {
 		errs = append(errs, err)
 	}
-	present, err := syncPlugins(k, env, ledger, refreshed, dryRun, &actions)
+	present, err := syncPlugins(k, env, ledger, dryRun, &actions)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -224,11 +224,12 @@ func Unsync(env Env, dryRun bool) ([]Action, error) {
 }
 
 // syncPlugins installs the kit's plugins (user scope) that aren't installed
-// from any source, updates bud's own once their marketplace was refreshed,
-// and uninstalls bud's that the kit dropped. A plugin you installed yourself
-// stays yours. It returns the kit's plugins that are, or after a dry run
-// would be, installed
-func syncPlugins(k *Kit, env Env, ledger *Ledger, refreshed map[string]bool, dryRun bool, actions *[]Action) (present []string, err error) {
+// from any source, updates bud's own at every sync (JGA-174: a marketplace you
+// own, like clod's local checkout, isn't refreshed by bud, but the copy
+// Claude Code installed from it still goes stale), and uninstalls bud's that
+// the kit dropped. A plugin you installed yourself stays yours. It returns
+// the kit's plugins that are, or after a dry run would be, installed
+func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action) (present []string, err error) {
 	if len(k.Plugins) == 0 && len(ledger.Plugins) == 0 {
 		return nil, nil
 	}
@@ -245,11 +246,11 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, refreshed map[string]bool, dry
 		case slices.Contains(installed, id) && owned:
 			*actions = append(*actions, Action{"plugin", id, "ok", ""})
 			present = append(present, id)
-			if dryRun || !refreshed[marketplaceOf(id)] {
+			if dryRun {
 				continue
 			}
-			// its marketplace was just refreshed: bring it up to date too
-			// (a failure only means it stays as it was until next time)
+			// a failure (offline, say) only means it stays as it was until
+			// next time
 			_ = env.Claude("plugin", "update", "--scope", "user", id)
 		case slices.Contains(installed, id):
 			*actions = append(*actions, Action{"plugin", id, "skip", "you installed it yourself"})
@@ -291,15 +292,14 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, refreshed map[string]bool, dry
 // syncMarketplaces adds the kit's marketplaces Claude Code doesn't have yet
 // and refreshes the ones bud added, so the plugins from them can follow. One
 // you added yourself, from whatever source, is left alone (D77). It returns
-// the marketplaces Claude Code had and the ones it refreshed
-func syncMarketplaces(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action) (registered []string, refreshed map[string]bool, err error) {
-	refreshed = map[string]bool{}
+// the marketplaces Claude Code had
+func syncMarketplaces(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action) (registered []string, err error) {
 	if len(k.Marketplaces) == 0 && len(ledger.Marketplaces) == 0 {
-		return nil, refreshed, nil
+		return nil, nil
 	}
 	if env.Marketplaces != nil {
 		if registered, err = env.Marketplaces(); err != nil {
-			return nil, refreshed, fmt.Errorf("listing plugin marketplaces: %w", err)
+			return nil, fmt.Errorf("listing plugin marketplaces: %w", err)
 		}
 	}
 	var errs []error
@@ -321,7 +321,6 @@ func syncMarketplaces(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]A
 				continue
 			}
 			*actions = append(*actions, Action{"marketplace", name, "ok", ""})
-			refreshed[name] = true
 		default:
 			*actions = append(*actions, Action{"marketplace", name, "add", ""})
 			if dryRun {
@@ -336,7 +335,7 @@ func syncMarketplaces(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]A
 		}
 	}
 
-	return registered, refreshed, errors.Join(errs...)
+	return registered, errors.Join(errs...)
 }
 
 // removeMarketplaces takes out the marketplaces bud added that the kit no

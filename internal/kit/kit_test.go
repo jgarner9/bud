@@ -248,8 +248,9 @@ func TestSyncMarketplaces(t *testing.T) {
 	if i := slices.IndexFunc(actions, func(a Action) bool { return a.Kind == "marketplace" }); i < 0 || actions[i].Do != "skip" {
 		t.Fatalf("actions %v", actions)
 	}
-	if slices.Contains(f.ran, "plugin update --scope user bud-ide@bud-plugins") {
-		t.Fatalf("updated a plugin from a marketplace that didn't refresh: %q", f.ran)
+	// bud's plugin is still brought up to date from the copy that's there
+	if !slices.Contains(f.ran, "plugin update --scope user bud-ide@bud-plugins") {
+		t.Fatalf("didn't update bud's plugin: %q", f.ran)
 	}
 	f.fail = ""
 
@@ -292,6 +293,16 @@ func TestSyncMarketplaceYouAdded(t *testing.T) {
 		if !slices.Contains(actions, want) {
 			t.Errorf("no %v in %v", want, actions)
 		}
+	}
+
+	// later syncs update bud's plugin from your marketplace (JGA-174), and
+	// never refresh the marketplace or touch your plugin
+	f.ran = nil
+	if _, err := Sync(k, env, false); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(f.ran, []string{"plugin update --scope user bud-ide@bud-plugins"}) {
+		t.Fatalf("second sync ran %q", f.ran)
 	}
 
 	f.ran = nil

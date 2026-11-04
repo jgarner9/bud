@@ -124,9 +124,10 @@ func TestKitCommands(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if !strings.Contains(out, "already has the kit") {
-		t.Errorf("second sync %q", out)
+	if !strings.Contains(out, "already has the kit") || f.ran[len(f.ran)-1] != "plugin update --scope user docs@market" {
+		t.Errorf("second sync %q, ran %q", out, f.ran)
 	}
+	f.ran = nil
 
 	// unsync takes it out and forgets the ledger, so an update doesn't put it back
 	out = captureStdout(t, func() {
@@ -134,7 +135,7 @@ func TestKitCommands(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if len(f.ran) != 1 || !strings.Contains(out, "  plugin docs@market") {
+	if len(f.ran) != 0 || !strings.Contains(out, "  plugin docs@market") {
 		t.Fatalf("dry run: ran %q, out %q", f.ran, out)
 	}
 	captureStdout(t, func() {
@@ -142,14 +143,14 @@ func TestKitCommands(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if len(f.ran) != 2 || f.ran[1] != "plugin uninstall --scope user docs@market" {
+	if !slices.Equal(f.ran, []string{"plugin uninstall --scope user docs@market"}) {
 		t.Fatalf("unsync ran %q", f.ran)
 	}
 	if _, err := os.Stat(p.KitLedger()); !os.IsNotExist(err) {
 		t.Fatalf("ledger left: %v", err)
 	}
 	captureStdout(t, func() { resyncKit(&Globals{}, p) })
-	if len(f.ran) != 2 {
+	if len(f.ran) != 1 {
 		t.Fatalf("update synced after unsync: %q", f.ran)
 	}
 }

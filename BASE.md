@@ -325,7 +325,7 @@ How Claude works (the Bud persona, code style, planning, which tool to use when,
 **Sync rules:**
 
 1. Bud only touches what it added. The ledger (`~/.local/state/bud/kit-ledger.json`) records each marketplace and plugin; anything you set up yourself, from any source, isn't in it and is never touched. A plugin already installed (clod's local checkout, or the copy claude.ai syncs) is skipped as yours, and so is a marketplace of the same name.
-2. Everything goes through `claude plugin` (`marketplace add|update|remove`, `install|update|uninstall --scope user`). A marketplace bud added is refreshed at every sync, with bud's plugins from it, since Claude Code doesn't update a git marketplace by itself.
+2. Everything goes through `claude plugin` (`marketplace add|update|remove`, `install|update|uninstall --scope user`). A marketplace bud added is refreshed at every sync, since Claude Code doesn't update a git marketplace by itself, and bud's plugins are updated at every sync from whichever marketplace they came from, yours included (JGA-174).
 3. `output_style` is set as `outputStyle` in `settings.json` only when it's unset or still bud's (D75), and once the plugin that has it is installed.
 4. What an older bud synced (MCP servers, skills, agents, commands, output style files, the `CLAUDE.md` block) is taken out on the next sync, only where it's still what bud wrote.
 

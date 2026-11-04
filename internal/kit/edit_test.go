@@ -1,7 +1,6 @@
 package kit
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,134 +12,66 @@ func repoKit(t *testing.T) Repo {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "kit")
 	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "kit.json"), []byte(`{"mcp": [], "skills": [], "agents": [], "commands": []}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "kit.json"), []byte(`{"plugins": [], "other": "kept"}`), 0o644)
 	return Repo{Dir: dir}
 }
 
-func TestAddScaffoldRemove(t *testing.T) {
+func TestAddRemove(t *testing.T) {
 	r := repoKit(t)
-	if _, err := r.AddMCP("docs", "https://docs.example/mcp", ""); err != nil {
+	if err := r.AddMarketplace("market", "https://example.com/market.git"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.AddMCP("local", "", "npx -y some-mcp --flag"); err != nil {
+	if err := r.AddPlugin("p@market"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.AddMCP("docs", "https://x", ""); err == nil {
-		t.Fatal("added docs twice")
-	}
-	if _, err := r.AddMCP("Bad Name", "https://x", ""); err == nil {
-		t.Fatal("took a bad name")
-	}
-	for _, kind := range []string{"skill", "agent", "command"} {
-		p, err := r.Scaffold(kind, "my-"+kind)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if data, _ := os.ReadFile(p); !strings.Contains(string(data), "TODO") {
-			t.Fatalf("%s scaffold %q", kind, data)
+	for _, bad := range []error{
+		r.AddPlugin("p@market"),       // twice
+		r.AddPlugin("no-marketplace"), // not name@marketplace
+		r.AddPlugin("Bad@market"),
+		r.AddMarketplace("market", "https://x"),
+		r.AddMarketplace("other", ""),
+	} {
+		if bad == nil {
+			t.Error("took a bad entry")
 		}
 	}
 	k, err := Load(os.DirFS(r.Dir))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(k.MCP) != 2 || k.MCP[1].Command != "npx" || !slices.Equal(k.MCP[1].Args, []string{"-y", "some-mcp", "--flag"}) {
-		t.Fatalf("mcp %+v", k.MCP)
-	}
-	if !slices.Equal(k.Skills, []string{"my-skill"}) || !slices.Equal(k.Commands, []string{"my-command"}) {
-		t.Fatalf("lists %v %v", k.Skills, k.Commands)
+	if !slices.Equal(k.Plugins, []string{"p@market"}) || k.Marketplaces["market"] != "https://example.com/market.git" {
+		t.Fatalf("kit %+v", k)
 	}
 
-	if kind, err := r.Remove("my-skill"); err != nil || kind != "skill" {
-		t.Fatalf("rm: %s %v", kind, err)
+	for _, name := range []string{"p@market", "market"} {
+		if _, err := r.Remove(name); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := os.Stat(filepath.Join(r.Dir, "skills", "my-skill")); err == nil {
-		t.Fatal("skill files left")
-	}
-	if err := r.SetProfiles("docs", []string{"full"}); err != nil {
-		t.Fatal(err)
+	if _, err := r.Remove("nothing"); err == nil {
+		t.Fatal("removed nothing")
 	}
 	k, _ = Load(os.DirFS(r.Dir))
-	if k.MCP[0].For("minimal") || !k.MCP[0].For("full") {
-		t.Fatalf("profiles %v", k.MCP[0].Profiles)
+	if len(k.Plugins) != 0 || len(k.Marketplaces) != 0 {
+		t.Fatalf("after rm %+v", k)
 	}
-}
-
-func TestAdopt(t *testing.T) {
-	r := repoKit(t)
-	home := t.TempDir()
-	claudeDir := filepath.Join(home, ".claude")
-	claudeJSON := filepath.Join(home, ".claude.json")
-	os.WriteFile(claudeJSON, []byte(`{"mcpServers": {"gh": {"type": "http", "url": "https://gh", "headers": {"Authorization": "Bearer real-token"}}}}`), 0o644)
-	os.MkdirAll(filepath.Join(claudeDir, "skills", "notes", "ref"), 0o755)
-	os.WriteFile(filepath.Join(claudeDir, "skills", "notes", "SKILL.md"), []byte("notes skill"), 0o644)
-	os.WriteFile(filepath.Join(claudeDir, "skills", "notes", "ref", "a.md"), []byte("ref"), 0o644)
-
-	kind, secrets, err := r.Adopt("gh", claudeDir, claudeJSON)
-	if err != nil || kind != "mcp" || !slices.Equal(secrets, []string{"GH_AUTHORIZATION"}) {
-		t.Fatalf("adopt gh: %s %v %v", kind, secrets, err)
-	}
-	data, _ := os.ReadFile(filepath.Join(r.Dir, "mcp", "gh.json"))
-	if strings.Contains(string(data), "real-token") {
-		t.Fatalf("a secret landed in the repo: %s", data)
-	}
-	var m MCP
-	json.Unmarshal(data, &m)
-	if m.Headers["Authorization"] != "$secret:GH_AUTHORIZATION" || m.URL != "https://gh" {
-		t.Fatalf("adopted %+v", m)
-	}
-
-	if kind, _, err := r.Adopt("notes", claudeDir, claudeJSON); err != nil || kind != "skill" {
-		t.Fatalf("adopt notes: %s %v", kind, err)
-	}
-	if data, _ := os.ReadFile(filepath.Join(r.Dir, "skills", "notes", "ref", "a.md")); string(data) != "ref" {
-		t.Fatalf("skill files: %q", data)
-	}
-	if _, _, err := r.Adopt("nothing", claudeDir, claudeJSON); err == nil {
-		t.Fatal("adopted nothing")
-	}
-
-	// bud owns them now: the skill is in sync as it is, the server gets rewritten
-	ledger := filepath.Join(home, "ledger.json")
-	Own(ledger, claudeDir, "skill", "notes")
-	Own(ledger, claudeDir, "mcp", "gh")
-	l, _, _ := ReadLedger(ledger)
-	if _, ok := l.MCP["gh"]; !ok || len(l.Files) != 2 {
-		t.Fatalf("ledger %+v", l)
+	if idx, _ := r.index(); idx["other"] != "kept" {
+		t.Fatalf("lost a key: %v", idx)
 	}
 }
 
 func TestSyncSkipsDisabled(t *testing.T) {
 	r := repoKit(t)
-	r.AddMCP("docs", "https://d", "")
+	r.AddPlugin("docs@market")
 	k, _ := Load(os.DirFS(r.Dir))
 	dir := t.TempDir()
 	var ran []string
 	env := Env{
 		ClaudeDir: filepath.Join(dir, ".claude"), ClaudeJSON: filepath.Join(dir, ".claude.json"),
-		Ledger: filepath.Join(dir, "l.json"), Profile: "full", Disabled: []string{"docs"},
-		Claude: func(a ...string) error { ran = append(ran, strings.Join(a, " ")); return nil }, SecretSet: func(string) bool { return false },
+		Ledger: filepath.Join(dir, "l.json"), Disabled: []string{"docs@market"},
+		Claude: func(a ...string) error { ran = append(ran, strings.Join(a, " ")); return nil },
 	}
 	if _, err := Sync(k, env, false); err != nil || len(ran) != 0 {
 		t.Fatalf("synced a disabled entry: %q %v", ran, err)
-	}
-}
-
-func TestScaffoldOutputStyle(t *testing.T) {
-	r := repoKit(t)
-	p, err := r.Scaffold("output-style", "terse")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p != filepath.Join(r.Dir, "output-styles", "terse.md") {
-		t.Errorf("path %s", p)
-	}
-	data, _ := os.ReadFile(p)
-	if !strings.Contains(string(data), "name: terse") || !strings.Contains(string(data), "keep-coding-instructions: true") {
-		t.Errorf("scaffold:\n%s", data)
-	}
-	idx, _ := r.index()
-	if got := list(idx, "output-styles"); !slices.Equal(got, []string{"terse"}) {
-		t.Errorf("kit.json output-styles %v", got)
 	}
 }

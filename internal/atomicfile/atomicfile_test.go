@@ -29,6 +29,10 @@ func TestWriteFile(t *testing.T) {
 }
 
 func TestWriteFileKeepsOldOnFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		// root writes into a read-only dir anyway (cloud sandboxes, some CI)
+		t.Skip("running as root, which a read-only dir doesn't stop")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "x.json")
 	if err := WriteFile(path, []byte("old"), 0o644); err != nil {

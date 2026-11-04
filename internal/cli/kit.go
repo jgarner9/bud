@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -12,7 +11,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/claude"
@@ -20,8 +18,6 @@ import (
 	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
-	"jgarner.dev/bud/internal/projects"
-	"jgarner.dev/bud/internal/secrets"
 )
 
 func init() {
@@ -29,13 +25,14 @@ func init() {
 }
 
 // Kit writes bud's Claude Code setup into Claude Code's user config (BASE.md
-// 4.1): MCP servers, skills, subagents, slash commands and instructions
+// 4.1, D77): the plugin marketplace bud's plugins come from, the plugins, and
+// the output style it turns on
 func Kit() *Command {
-	var dryRun, yes bool
-	var url, cmd, repo, profiles string
+	var dryRun, yes, pasted bool
+	var repo string
 	return &Command{
 		Name:  "kit",
-		Usage: "Syncs bud's Claude Code setup (MCP servers, skills, agents, commands, output styles) into Claude Code",
+		Usage: "Syncs bud's Claude Code setup (its plugins, their marketplace, the output style) into Claude Code",
 		Subs: []*Command{
 			{
 				Name:  "sync",
@@ -58,19 +55,20 @@ func Kit() *Command {
 			{Name: "status", Usage: "per item: synced, not synced, changed, or skipped and why", Run: func(g *Globals, args []string) error { return kitStatus(args) }},
 			{Name: "ls", Usage: "list what's in the kit", Run: func(_ *Globals, args []string) error { return kitLs(args) }},
 			{
-				Name:  "secret",
-				Usage: "store a kit secret in the keychain (set NAME, asks for the value), or delete it (rm NAME)",
-				Run:   func(_ *Globals, args []string) error { return kitSecret(args) },
+				Name:  "core",
+				Usage: "print bud-plugins' core.md, to paste into claude.ai's personal preferences (bud kit core | pbcopy); --pasted records that you did",
+				Flags: func(fs *flag.FlagSet) {
+					fs.BoolVar(&pasted, "pasted", false, "record the current core.md as pasted, which quiets the reminder")
+				},
+				Run: func(_ *Globals, args []string) error { return kitCore(args, pasted) },
 			},
 			{
 				Name:  "add",
-				Usage: "scaffold a kit entry in a bud checkout: add mcp --url URL|--cmd CMD <name>, or add skill|agent|command <name>",
+				Usage: "list a plugin or marketplace in a bud checkout's kit: add plugin <name@marketplace>, or add marketplace <name> <source>",
 				Flags: func(fs *flag.FlagSet) {
-					fs.StringVar(&url, "url", "", "an MCP server over HTTP at this URL")
-					fs.StringVar(&cmd, "cmd", "", "an MCP server that runs this command (stdio)")
 					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
 				},
-				Run: func(_ *Globals, args []string) error { return kitAdd(args, url, cmd, repo) },
+				Run: func(_ *Globals, args []string) error { return kitAdd(args, repo) },
 			},
 			{
 				Name:  "rm",
@@ -81,34 +79,14 @@ func Kit() *Command {
 				Run: func(_ *Globals, args []string) error { return kitRm(args, repo) },
 			},
 			{
-				Name:  "adopt",
-				Usage: "pull an MCP server, skill, agent or command you set up by hand into the kit: adopt <name>",
-				Flags: func(fs *flag.FlagSet) {
-					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
-				},
-				Run: func(_ *Globals, args []string) error { return kitAdopt(args, repo) },
-			},
-			{
 				Name:  "enable",
-				Usage: "turn a kit entry on for this machine: enable <name>; --profile sets which profiles an MCP entry is for, in the checkout",
-				Flags: func(fs *flag.FlagSet) {
-					fs.StringVar(&profiles, "profile", "", "comma-separated profiles (full,minimal) for the entry, written to the checkout")
-					fs.StringVar(&repo, "repo", "", "the bud checkout, for --profile")
-				},
-				Run: func(_ *Globals, args []string) error { return kitToggle(args, true, profiles, repo) },
+				Usage: "turn a kit entry on for this machine: enable <name>",
+				Run:   func(_ *Globals, args []string) error { return kitToggle(args, true) },
 			},
 			{
 				Name:  "disable",
 				Usage: "turn a kit entry off for this machine; the next sync removes it from Claude Code: disable <name>",
-				Run:   func(_ *Globals, args []string) error { return kitToggle(args, false, "", "") },
-			},
-			{
-				Name:  "env",
-				Usage: "what a Claude Code session bud starts needs, as JSON: the kit's keychain secrets, and with --root the project's own MCP servers",
-				Flags: func(fs *flag.FlagSet) {
-					fs.StringVar(&repo, "root", "", "the project the session runs in")
-				},
-				Run: func(_ *Globals, args []string) error { return kitEnvCmd(args, repo) },
+				Run:   func(_ *Globals, args []string) error { return kitToggle(args, false) },
 			},
 		},
 	}
@@ -142,7 +120,7 @@ func defaultKitFS() fs.FS {
 	return bud.Kit()
 }
 
-// kitRepo is the checkout's kit/ that add, rm, adopt and --profile edit
+// kitRepo is the checkout's kit/ that add and rm edit
 func kitRepo(repo string) (kit.Repo, error) {
 	if repo == "" {
 		p, err := paths.Resolve()
@@ -163,38 +141,29 @@ func kitRepo(repo string) (kit.Repo, error) {
 	return kit.Repo{Dir: dir}, nil
 }
 
-func kitAdd(args []string, url, cmd, repo string) error {
-	if len(args) != 2 {
-		return usageErrorf("kit add takes a kind and a name: add mcp|skill|agent|command|output-style|plugin <name>")
-	}
-	kind, name := args[0], args[1]
-	if _, ok := kit.Kinds[kind]; !ok {
-		return usageErrorf("kit add: %q isn't mcp, skill, agent, command, output-style or plugin", kind)
+func kitAdd(args []string, repo string) error {
+	usage := "kit add takes add plugin <name@marketplace>, or add marketplace <name> <source>"
+	if len(args) < 2 || !slices.Contains(kit.Kinds, args[0]) {
+		return usageErrorf("%s", usage)
 	}
 	r, err := kitRepo(repo)
 	if err != nil {
 		return err
 	}
-	var path string
-	if kind == "plugin" {
-		if err := r.AddPlugin(name); err != nil {
+	switch {
+	case args[0] == "plugin" && len(args) == 2:
+		if err := r.AddPlugin(args[1]); err != nil {
 			return err
 		}
-		fmt.Printf("Added the plugin %s; bud kit sync installs it.\n", name)
-		return nil
-	}
-	if kind == "mcp" {
-		path, err = r.AddMCP(name, url, cmd)
-	} else {
-		if url != "" || cmd != "" {
-			return usageErrorf("--url and --cmd are for MCP servers")
+		fmt.Printf("Added the plugin %s; bud kit sync installs it.\n", args[1])
+	case args[0] == "marketplace" && len(args) == 3:
+		if err := r.AddMarketplace(args[1], args[2]); err != nil {
+			return err
 		}
-		path, err = r.Scaffold(kind, name)
+		fmt.Printf("Added the marketplace %s; bud kit sync adds it before installing its plugins.\n", args[1])
+	default:
+		return usageErrorf("%s", usage)
 	}
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Added the %s %s: fill in %s, then bud kit sync.\n", kind, name, path)
 
 	return nil
 }
@@ -217,43 +186,9 @@ func kitRm(args []string, repo string) error {
 	return nil
 }
 
-func kitAdopt(args []string, repo string) error {
-	if len(args) != 1 {
-		return usageErrorf("kit adopt takes one name")
-	}
-	r, err := kitRepo(repo)
-	if err != nil {
-		return err
-	}
-	p, err := paths.Resolve()
-	if err != nil {
-		return err
-	}
-	env, err := kitEnv(p)
-	if err != nil {
-		return err
-	}
-	kind, needed, err := r.Adopt(args[0], env.ClaudeDir, env.ClaudeJSON)
-	if err != nil {
-		return err
-	}
-	if err := kit.Own(env.Ledger, env.ClaudeDir, kind, args[0]); err != nil {
-		return err
-	}
-	fmt.Printf("Adopted the %s %s into %s.\n", kind, args[0], r.Dir)
-	if len(needed) > 0 {
-		fmt.Printf("Its values became secrets, so none are in the repo. Store each before syncing:\n")
-		for _, n := range needed {
-			fmt.Printf("  bud kit secret set %s\n", n)
-		}
-	}
-
-	return nil
-}
-
 // kitToggle turns an entry on or off for this machine (config.json's
-// kit.disabled), or with profiles, sets the entry's profiles in the checkout
-func kitToggle(args []string, on bool, profiles, repo string) error {
+// kit.disabled)
+func kitToggle(args []string, on bool) error {
 	if len(args) != 1 {
 		return usageErrorf("kit enable and disable take one name")
 	}
@@ -269,23 +204,6 @@ func kitToggle(args []string, on bool, profiles, repo string) error {
 	if !found {
 		return usageErrorf("the kit has nothing called %s", name)
 	}
-	if profiles != "" {
-		r, err := kitRepo(repo)
-		if err != nil {
-			return err
-		}
-		list := strings.Split(profiles, ",")
-		for _, pr := range list {
-			if !slices.Contains(config.Profiles, pr) {
-				return usageErrorf("--profile %q isn't one of %s", pr, strings.Join(config.Profiles, ", "))
-			}
-		}
-		if err := r.SetProfiles(name, list); err != nil {
-			return err
-		}
-		fmt.Printf("%s is for %s now, in %s.\n", name, strings.Join(list, " and "), r.Dir)
-	}
-
 	p, err := paths.Resolve()
 	if err != nil {
 		return err
@@ -334,25 +252,21 @@ func kitDisabled(f *config.File) []string {
 	return out
 }
 
-// installedPlugins asks claude which plugins are installed
-// kitConnectors lists the claude.ai connectors Claude Code has, so sync can
-// leave out the kit's entries they already provide (JGA-128). claude mcp list
-// checks each server's health, so it takes a few seconds
-var kitConnectors = func() ([]kit.Connector, error) {
+// kitMarketplaces lists the plugin marketplaces Claude Code has, by name
+var kitMarketplaces = func() ([]string, error) {
 	bin := claude.Find()
 	if bin == "" {
 		return nil, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, bin, "mcp", "list").Output()
+	out, err := exec.Command(bin, "plugin", "marketplace", "list", "--json").Output()
 	if err != nil {
 		return nil, err
 	}
 
-	return kit.ParseConnectors(string(out)), nil
+	return kit.ParseMarketplaces(out)
 }
 
+// installedPlugins asks claude which plugins are installed
 var installedPlugins = func() ([]string, error) {
 	bin := claude.Find()
 	if bin == "" {
@@ -385,12 +299,8 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
 		dir = d
 	}
-	s := config.Defaults()
 	var disabled []string
 	if f, err := config.Load(p.MachineConfig()); err == nil {
-		if loaded, err := f.Settings(); err == nil {
-			s = loaded
-		}
 		disabled = kitDisabled(f)
 	}
 
@@ -398,12 +308,10 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 		ClaudeDir:        dir,
 		ClaudeJSON:       claudeJSONFor(dir),
 		Ledger:           p.KitLedger(),
-		Profile:          s.Profile,
 		Claude:           kitClaude,
-		SecretSet:        secrets.Has,
 		InstalledPlugins: installedPlugins,
+		Marketplaces:     kitMarketplaces,
 		Disabled:         disabled,
-		Connectors:       kitConnectors,
 	}, nil
 }
 
@@ -467,6 +375,9 @@ func syncKitWith(g *Globals, pr *prompter, dryRun bool) error {
 		fmt.Println("Claude Code already has the kit.")
 	default:
 		fmt.Printf("Synced the kit into Claude Code (%d changed).\n", changed)
+	}
+	if !dryRun {
+		remindCore(k, env)
 	}
 
 	return nil
@@ -639,242 +550,49 @@ func resyncKit(g *Globals, p *paths.Paths) {
 		return
 	}
 	g.Logf("synced the Claude Code kit")
+	remindCore(k, env)
 }
 
-// secretNames lists the $secret names the kit's entries for this profile
-// use; required ones are those without optional_secrets
-func secretNames(k *kit.Kit, profile string) (all, required []string) {
-	seen := map[string]bool{}
-	for _, m := range k.MCP {
-		if !m.For(profile) {
-			continue
-		}
-		add := func(v string, needed bool) {
-			for _, name := range kit.SecretRefs(v) {
-				if seen[name] {
-					continue
-				}
-				seen[name] = true
-				all = append(all, name)
-				if needed {
-					required = append(required, name)
-				}
-			}
-		}
-		// a secret in the URL is needed even when the entry's others are optional
-		add(m.URL, true)
-		for _, vals := range []map[string]string{m.Headers, m.Env} {
-			for _, v := range vals {
-				add(v, !m.OptionalSecrets)
-			}
-		}
+// remindCore says when bud-plugins' core.md changed since you last pasted it
+// into claude.ai (JGA-179). A sync is when the checkout it reads moves on
+func remindCore(k *kit.Kit, env kit.Env) {
+	p, err := paths.Resolve()
+	if err != nil || k.Core == "" {
+		return
 	}
-	slices.Sort(all)
-	slices.Sort(required)
-
-	return all, required
+	if c, err := kit.ReadCore(k.Core, env.ClaudeDir, p.CorePasted()); err == nil && c.Path != "" && !c.Pasted {
+		fmt.Println(kit.CoreReminder + ".")
+	}
 }
 
-func kitSecret(args []string) error {
-	if len(args) != 2 || (args[0] != "set" && args[0] != "rm") {
-		return usageErrorf("kit secret takes set NAME or rm NAME")
+// kitCore prints core.md, or with pasted records it as pasted (JGA-179)
+func kitCore(args []string, pasted bool) error {
+	if len(args) > 0 {
+		return usageErrorf("kit core takes no arguments")
 	}
-	name := args[1]
-	if args[0] == "rm" {
-		if err := secrets.Delete(name); err != nil {
-			return fmt.Errorf("deleting %s from the keychain: %w", name, err)
-		}
-		fmt.Printf("Deleted %s from the keychain.\n", name)
-		return nil
-	}
-	if !isTerminal(os.Stdin) {
-		return fmt.Errorf("bud kit secret set asks for the value, so it needs a terminal")
-	}
-	value, err := readSecret(name)
-	if err != nil {
-		return err
-	}
-	if value == "" {
-		fmt.Println("Nothing stored.")
-		return nil
-	}
-	if err := secrets.Set(name, value); err != nil {
-		return fmt.Errorf("storing %s: %w", name, err)
-	}
-	fmt.Printf("Stored %s in the keychain; bud kit sync picks it up.\n", name)
-
-	return nil
-}
-
-// swappable in tests: asks for a secret on the terminal without echoing it
-var readSecret = func(name string) (string, error) {
-	fmt.Printf("%s (typing won't show): ", name)
-	stty := func(arg string) {
-		cmd := exec.Command("stty", arg)
-		cmd.Stdin = os.Stdin
-		_ = cmd.Run()
-	}
-	stty("-echo")
-	defer func() {
-		stty("echo")
-		fmt.Println()
-	}()
-	var line []byte
-	buf := make([]byte, 1)
-	for {
-		n, err := os.Stdin.Read(buf)
-		if n == 0 || err != nil || buf[0] == '\n' || buf[0] == '\r' {
-			break
-		}
-		line = append(line, buf[0])
-	}
-
-	return strings.TrimSpace(string(line)), nil
-}
-
-// keychainEnv is the kit's secrets that are in the keychain but not the
-// environment: what a Claude Code process bud starts needs handed to it
-func keychainEnv() (map[string]string, error) {
 	k, env, err := loadKit()
 	if err != nil {
-		return nil, err
-	}
-	all, _ := secretNames(k, env.Profile)
-	out := map[string]string{}
-	for _, name := range all {
-		if secrets.FromEnv(name) {
-			continue
-		}
-		if v, ok := secrets.Get(name); ok {
-			out[name] = v
-		}
-	}
-
-	return out, nil
-}
-
-func kitEnvCmd(args []string, root string) error {
-	if len(args) > 0 {
-		return usageErrorf("kit env takes no arguments")
-	}
-	vars, err := keychainEnv()
-	if err != nil {
 		return err
 	}
-	out := map[string]any{"env": vars}
-	if root != "" {
-		if cfg, err := sessionMCP(root); err == nil && cfg != nil {
-			out["mcp_config"] = string(cfg)
-		}
-	}
-	data, err := json.Marshal(out)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(data))
-
-	return nil
-}
-
-// sizeMaxAge is how old a project's measured size may be before it's measured again
-const sizeMaxAge = 24 * time.Hour
-
-// projectSize is root's size from the registry, measured again when it's
-// missing or a day old (and saved, when the project is registered)
-func projectSize(root string) projects.Size {
 	p, err := paths.Resolve()
 	if err != nil {
-		return projects.Size{}
+		return err
 	}
-	r, err := projects.Load(p.Projects())
-	if err == nil {
-		if pr, ok := r.Get(root); ok && pr.Size != nil && time.Since(pr.Size.Measured) < sizeMaxAge {
-			return *pr.Size
-		}
-	}
-	size, _ := projects.Measure(root)
-	if err == nil {
-		if _, err := r.SetSize(root, size); err == nil {
-			_ = r.Save()
-		}
-	}
-
-	return size
-}
-
-// sessionMCP is the --mcp-config for kit entries that only load in some
-// projects (large ones, JGA-117; web ones, JGA-131) when root is one; nil
-// when there are none
-func sessionMCP(root string) ([]byte, error) {
-	k, env, err := loadKit()
-	if err != nil {
-		return nil, err
-	}
-	hasConditional := false
-	for _, m := range k.MCP {
-		hasConditional = hasConditional || m.When != nil
-	}
-	if !hasConditional {
-		return nil, nil
-	}
-	s := config.Defaults()
-	if p, err := paths.Resolve(); err == nil {
-		if f, err := config.Load(p.MachineConfig()); err == nil {
-			if loaded, err := f.Settings(); err == nil {
-				s = loaded
-			}
-		}
-	}
-	size := projectSize(root)
-
-	return k.SessionServers(env.Profile, kit.Project{Root: root, Files: size.Files, LOC: size.LOC}, s.Kit.LargeFiles, s.Kit.LargeLOC, env.Disabled, secrets.Has, func(bin string) bool {
-		_, err := exec.LookPath(bin)
-		return err == nil
-	})
-}
-
-// askKitSecrets asks once for each required kit secret that isn't set and
-// stores it in the keychain (bud install). Skipping one is fine: sync skips
-// that server and says why
-func askKitSecrets(pr *prompter) error {
-	if pr == nil {
-		return nil
-	}
-	k, env, err := loadKit()
+	c, err := kit.ReadCore(k.Core, env.ClaudeDir, p.CorePasted())
 	if err != nil {
 		return err
 	}
-	// a claude.ai connector already gives Claude Code those entries
-	if env.Connectors != nil {
-		if connectors, err := env.Connectors(); err == nil {
-			k.MCP = slices.DeleteFunc(slices.Clone(k.MCP), func(m kit.MCP) bool {
-				_, provided := m.ProvidedBy(connectors)
-				return provided
-			})
-		}
+	if c.Path == "" {
+		return fmt.Errorf("Claude Code has no %s yet: run bud kit sync", k.Core)
 	}
-	_, required := secretNames(k, env.Profile)
-	for _, name := range required {
-		if secrets.Has(name) {
-			continue
-		}
-		ok, err := pr.confirm(fmt.Sprintf("The kit needs %s. Store it in the keychain now?", name))
-		if err != nil {
-			return err
-		}
-		if !ok {
-			continue
-		}
-		value, err := readSecret(name)
-		if err != nil {
-			return err
-		}
-		if value != "" {
-			if err := secrets.Set(name, value); err != nil {
-				fmt.Printf("Couldn't store %s: %v\n", name, err)
-			}
-		}
+	if !pasted {
+		fmt.Print(c.Text)
+		return nil
 	}
+	if err := kit.MarkCorePasted(p.CorePasted(), c); err != nil {
+		return err
+	}
+	fmt.Println("Recorded core.md as pasted; bud says when it changes again.")
 
 	return nil
 }

@@ -44,7 +44,7 @@ func TestComplete(t *testing.T) {
 	if got := completions(t, "--layout", "focus", "lau"); !has(got, "launch") {
 		t.Errorf("past a global flag's value: %v", got)
 	}
-	if got := completions(t, "kit", ""); !has(got, "sync", "status", "secret", "adopt") {
+	if got := completions(t, "kit", ""); !has(got, "sync", "status", "unsync", "ls") {
 		t.Errorf("kit subs: %v", got)
 	}
 	if got := completions(t, "kit", "sync", "--"); !has(got, "--dry-run") {
@@ -59,7 +59,7 @@ func TestComplete(t *testing.T) {
 	if got := completions(t, "layout", "set-default", ""); !has(got, "default", "focus") {
 		t.Errorf("layout names: %v", got)
 	}
-	if got := completions(t, "kit", "rm", ""); !has(got, "context7") {
+	if got := completions(t, "kit", "rm", ""); !has(got, "superpowers@anthropic-plugin-directory") {
 		t.Errorf("kit names: %v", got)
 	}
 	// a path: nothing, so the shell completes file names

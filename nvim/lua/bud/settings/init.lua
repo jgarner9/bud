@@ -62,7 +62,7 @@ M.sections = {
         key = "ai.claude.config",
         label = "Claude Code config (restart bud)",
         kind = "choice",
-        choices = { "bud", "home" },
+        choices = { "home", "bud" },
       },
       { key = "ai.claude.command", label = "Run through", kind = "list" },
       { key = "ai.claude.args", label = "Extra flags", kind = "list" },

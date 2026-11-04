@@ -63,9 +63,6 @@ local claude = require("bud.ai.claude")
 claude.bin = function()
   return fake
 end
-claude.secret_env = function(_, cb)
-  cb({})
-end
 claude.check_login = function(_, cb)
   vim.schedule(function()
     cb(true)
@@ -109,6 +106,7 @@ eq(ctx.diagnostics, { "L2 lua_ls: undefined global y" }, "diagnostics on the lin
 ctx.bud, ctx.messages = "0.11.0", { "E5108: boom" }
 local text = issue.prompt("Dashboard drops a row\nonly when narrow", { team = "JGA", project = "Bud IDE" }, ctx)
 for _, want in ipairs({
+  "Use the bud-ide:file-issue skill",
   "round 1: propose only",
   'Target: team "JGA", project "Bud IDE".',
   "> Dashboard drops a row\n> only when narrow",
@@ -234,4 +232,25 @@ issue.start = real_start
 
 claude.stop_all()
 vim.fn.delete(tmp, "rf")
+-- the skill comes from the bud-ide plugin, from whichever marketplace (D77)
+local cc = vim.env.CLAUDE_CONFIG_DIR
+vim.fn.delete(cc .. "/plugins", "rf")
+eq(issue.skill_installed(), false, "no plugins")
+vim.fn.mkdir(cc .. "/plugins", "p")
+vim.fn.writefile(
+  { vim.json.encode({ version = 2, plugins = { ["bud@bud-plugins"] = {} } }) },
+  cc .. "/plugins/installed_plugins.json"
+)
+eq(issue.skill_installed(), false, "only the bud plugin")
+vim.fn.writefile(
+  { vim.json.encode({ version = 2, plugins = { ["bud-ide@local-checkout"] = {} } }) },
+  cc .. "/plugins/installed_plugins.json"
+)
+eq(issue.skill_installed(), true, "bud-ide from another marketplace")
+vim.fn.delete(cc .. "/plugins/installed_plugins.json")
+local synced = cc .. "/plugins/synced/bud-ide/skills/file-issue"
+vim.fn.mkdir(synced, "p")
+vim.fn.writefile({ "---" }, synced .. "/SKILL.md")
+eq(issue.skill_installed(), true, "a synced copy")
+
 print("issue_test: ok")

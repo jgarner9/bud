@@ -12,13 +12,13 @@ import (
 	"jgarner.dev/bud/internal/atomicfile"
 )
 
-// syncOutputStyle makes outputStyle in the Claude dir's settings.json want:
-// set when it's unset or still what bud set, never over a style the user
-// picked, and taken out again (want "") only while it's still bud's. haveFile
-// says the style's file is bud's and in place; without it want isn't turned
-// on. It records what it set in the ledger; nil means there was nothing to do.
-func syncOutputStyle(want string, haveFile bool, env Env, ledger *Ledger, dryRun bool) (*Action, error) {
-	if want == "" && ledger.OutputStyle == "" {
+// removeOutputStyle takes out the outputStyle an older bud set in the Claude
+// dir's settings.json (D75), now that the kit sets none (D78): only while it's
+// still the one bud set (Ledger.OutputStyle), so a style you picked since
+// stays. The rest of settings.json is kept as it was. nil means there was
+// nothing to do
+func removeOutputStyle(env Env, ledger *Ledger, dryRun bool) (*Action, error) {
+	if ledger.OutputStyle == "" {
 		return nil, nil
 	}
 	p := filepath.Join(env.ClaudeDir, "settings.json")
@@ -43,43 +43,18 @@ func syncOutputStyle(want string, haveFile bool, env Env, ledger *Ledger, dryRun
 	case err != nil && !errors.Is(err, fs.ErrNotExist):
 		return nil, err
 	}
-	if settings == nil {
-		settings = map[string]any{}
-	}
-	cur, _ := settings["outputStyle"].(string)
-
-	var a Action
-	switch {
-	case want == "":
-		if cur != ledger.OutputStyle {
-			// changed since bud set it: it's the user's now
-			if !dryRun {
-				ledger.OutputStyle = ""
-			}
-			return nil, nil
-		}
-		a = Action{"output-style", "settings.json", "remove", "no longer in the kit"}
-		delete(settings, "outputStyle")
-	case cur == want:
-		// set by bud, or by the user before bud did, which stays theirs
-		return &Action{"output-style", "settings.json", "ok", ""}, nil
-	case !haveFile:
-		return &Action{"output-style", "settings.json", "skip", "you have your own output-styles/" + want + ".md"}, nil
-	case cur != "" && cur != ledger.OutputStyle:
+	if cur, _ := settings["outputStyle"].(string); cur != ledger.OutputStyle {
+		// gone, or changed since bud set it: it's yours now
 		if !dryRun {
 			ledger.OutputStyle = ""
 		}
-		return &Action{"output-style", "settings.json", "skip", "you picked " + cur}, nil
-	default:
-		a = Action{"output-style", "settings.json", "add", ""}
-		if cur != "" {
-			a.Do = "update"
-		}
-		settings["outputStyle"] = want
+		return nil, nil
 	}
+	a := &Action{"output-style", "settings.json", "remove", "bud doesn't set one any more"}
 	if dryRun {
-		return &a, nil
+		return a, nil
 	}
+	delete(settings, "outputStyle")
 
 	var out bytes.Buffer
 	e := json.NewEncoder(&out)
@@ -88,17 +63,10 @@ func syncOutputStyle(want string, haveFile bool, env Env, ledger *Ledger, dryRun
 	if err := e.Encode(settings); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return nil, err
-	}
 	if err := atomicfile.WriteFile(p, out.Bytes(), perm); err != nil {
 		return nil, err
 	}
-	if a.Do == "remove" {
-		ledger.OutputStyle = ""
-	} else {
-		ledger.OutputStyle = want
-	}
+	ledger.OutputStyle = ""
 
-	return &a, nil
+	return a, nil
 }

@@ -1,16 +1,67 @@
 package cli
 
 import (
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
 
-	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/paths"
 )
+
+// kitFake is claude plugin for the kit tests: what ran, in which config dir,
+// and what's installed in each
+type kitFake struct {
+	ran, dirs []string
+	installed map[string][]string
+}
+
+// fakeKit swaps in a kit made of files and a claude that keeps track of
+// plugins per config dir and takes MCP servers out of its .claude.json
+func fakeKit(t *testing.T, files fstest.MapFS) *kitFake {
+	t.Helper()
+	f := &kitFake{installed: map[string][]string{}}
+	dir := func() string {
+		if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
+			return d
+		}
+		home, _ := homeClaudeDir()
+		return home
+	}
+	origFS, origClaude, origPlugins, origMarkets := kitFS, kitClaude, installedPlugins, kitMarketplaces
+	kitFS = func() fs.FS { return files }
+	kitClaude = func(args ...string) error {
+		d := dir()
+		f.ran = append(f.ran, strings.Join(args, " "))
+		f.dirs = append(f.dirs, d)
+		id := args[len(args)-1]
+		switch args[0] + " " + args[1] {
+		case "plugin install":
+			f.installed[d] = append(f.installed[d], id)
+		case "plugin uninstall":
+			f.installed[d] = slices.DeleteFunc(f.installed[d], func(s string) bool { return s == id })
+		case "mcp remove":
+			var cfg map[string]map[string]any
+			data, _ := os.ReadFile(claudeJSONFor(d))
+			json.Unmarshal(data, &cfg)
+			delete(cfg["mcpServers"], id)
+			data, _ = json.Marshal(cfg)
+			os.WriteFile(claudeJSONFor(d), data, 0o644)
+		}
+		return nil
+	}
+	installedPlugins = func() ([]string, error) { return slices.Clone(f.installed[dir()]), nil }
+	kitMarketplaces = func() ([]string, error) { return nil, nil }
+	t.Cleanup(func() {
+		kitFS, kitClaude, installedPlugins, kitMarketplaces = origFS, origClaude, origPlugins, origMarkets
+	})
+
+	return f
+}
 
 func TestKitCommands(t *testing.T) {
 	home := t.TempDir()
@@ -18,43 +69,25 @@ func TestKitCommands(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	var ran []string
-	origFS, origClaude := kitFS, kitClaude
-	kitFS = func() fs.FS {
-		return fstest.MapFS{
-			"kit.json":      {Data: []byte(`{"mcp": ["docs"]}`)},
-			"mcp/docs.json": {Data: []byte(`{"description": "the docs", "transport": "http", "url": "https://d"}`)},
-		}
-	}
-	kitClaude = func(args ...string) error {
-		ran = append(ran, strings.Join(args, " "))
-		return os.WriteFile(filepath.Join(home, ".claude.json"), []byte(`{"mcpServers": {"docs": {}}}`), 0o644)
-	}
-	origPlugins, origConnectors := installedPlugins, kitConnectors
-	installedPlugins = func() ([]string, error) { return nil, nil }
-	kitConnectors = func() ([]kit.Connector, error) { return nil, nil }
-	t.Cleanup(func() {
-		kitFS, kitClaude = origFS, origClaude
-		installedPlugins, kitConnectors = origPlugins, origConnectors
-	})
+	f := fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["docs@market"]}`)}})
 
 	out := captureStdout(t, func() {
 		if err := kitLs(nil); err != nil {
 			t.Fatal(err)
 		}
 	})
-	if !strings.Contains(out, "mcp          docs             the docs") {
+	if !strings.Contains(out, "plugin       docs@market") {
 		t.Errorf("ls %q", out)
 	}
 	out = captureStdout(t, func() { kitStatus(nil) })
-	if !strings.Contains(out, "docs") || !strings.Contains(out, "not synced") {
+	if !strings.Contains(out, "docs@market") || !strings.Contains(out, "not synced") {
 		t.Errorf("status before %q", out)
 	}
 	// an update doesn't sync a kit you never synced
 	p, _ := paths.Resolve()
 	captureStdout(t, func() { resyncKit(&Globals{}, p) })
-	if len(ran) != 0 {
-		t.Fatalf("update synced unasked: %q", ran)
+	if len(f.ran) != 0 {
+		t.Fatalf("update synced unasked: %q", f.ran)
 	}
 
 	// the first sync into ~/.claude shows what it adds and needs a yes
@@ -63,24 +96,24 @@ func TestKitCommands(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if len(ran) != 0 || !strings.Contains(out, "It would add:\n  mcp docs") || !strings.Contains(out, "on a terminal") {
-		t.Fatalf("synced unasked: ran %q, out %q", ran, out)
+	if len(f.ran) != 0 || !strings.Contains(out, "It would add:\n  plugin docs@market") || !strings.Contains(out, "on a terminal") {
+		t.Fatalf("synced unasked: ran %q, out %q", f.ran, out)
 	}
 	out = captureStdout(t, func() {
 		if err := syncKitWith(&Globals{}, yesPrompter("n\n"), false); err != nil {
 			t.Fatal(err)
 		}
 	})
-	if len(ran) != 0 || !strings.Contains(out, "Nothing changed") {
-		t.Fatalf("synced on a no: ran %q, out %q", ran, out)
+	if len(f.ran) != 0 || !strings.Contains(out, "Nothing changed") {
+		t.Fatalf("synced on a no: ran %q, out %q", f.ran, out)
 	}
 	out = captureStdout(t, func() {
 		if err := syncKitWith(&Globals{}, yesPrompter("y\n"), false); err != nil {
 			t.Fatal(err)
 		}
 	})
-	if len(ran) != 1 || !strings.HasPrefix(ran[0], "mcp add-json --scope user docs {") || !strings.Contains(out, "Synced the kit") {
-		t.Fatalf("ran %q, out %q", ran, out)
+	if !slices.Equal(f.ran, []string{"plugin install --scope user docs@market"}) || !strings.Contains(out, "Synced the kit") {
+		t.Fatalf("ran %q, out %q", f.ran, out)
 	}
 	out = captureStdout(t, func() { kitStatus(nil) })
 	if !strings.Contains(out, "synced") || strings.Contains(out, "not synced") {
@@ -92,9 +125,10 @@ func TestKitCommands(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if !strings.Contains(out, "already has the kit") {
-		t.Errorf("second sync %q", out)
+	if !strings.Contains(out, "already has the kit") || f.ran[len(f.ran)-1] != "plugin update --scope user docs@market" {
+		t.Errorf("second sync %q, ran %q", out, f.ran)
 	}
+	f.ran = nil
 
 	// unsync takes it out and forgets the ledger, so an update doesn't put it back
 	out = captureStdout(t, func() {
@@ -102,60 +136,69 @@ func TestKitCommands(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if len(ran) != 1 || !strings.Contains(out, "  mcp docs") {
-		t.Fatalf("dry run: ran %q, out %q", ran, out)
+	if len(f.ran) != 0 || !strings.Contains(out, "  plugin docs@market") {
+		t.Fatalf("dry run: ran %q, out %q", f.ran, out)
 	}
 	captureStdout(t, func() {
 		if err := kitUnsync(nil, false, true); err != nil {
 			t.Fatal(err)
 		}
 	})
-	if len(ran) != 2 || ran[1] != "mcp remove --scope user docs" {
-		t.Fatalf("unsync ran %q", ran)
+	if !slices.Equal(f.ran, []string{"plugin uninstall --scope user docs@market"}) {
+		t.Fatalf("unsync ran %q", f.ran)
 	}
 	if _, err := os.Stat(p.KitLedger()); !os.IsNotExist(err) {
 		t.Fatalf("ledger left: %v", err)
 	}
 	captureStdout(t, func() { resyncKit(&Globals{}, p) })
-	if len(ran) != 2 {
-		t.Fatalf("update synced after unsync: %q", ran)
+	if len(f.ran) != 1 {
+		t.Fatalf("update synced after unsync: %q", f.ran)
 	}
 }
 
-func TestKitSecrets(t *testing.T) {
+// bud kit core prints core.md from the bud-plugins checkout, a sync reminds
+// you to paste it while it's changed, and --pasted quiets that (JGA-179)
+func TestKitCore(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("NEEDED_KEY", "")
-	t.Setenv("NICE_KEY", "from-env")
-	origFS := kitFS
-	kitFS = func() fs.FS {
-		return fstest.MapFS{
-			"kit.json":   {Data: []byte(`{"mcp": ["a", "b", "c"]}`)},
-			"mcp/a.json": {Data: []byte(`{"transport": "http", "url": "https://a", "headers": {"K": "$secret:NEEDED_KEY"}}`)},
-			"mcp/b.json": {Data: []byte(`{"transport": "http", "url": "https://b", "optional_secrets": true, "headers": {"K": "$secret:NICE_KEY"}}`)},
-			"mcp/c.json": {Data: []byte(`{"transport": "http", "url": "$secret:HOST_URL", "optional_secrets": true}`)},
+	dir := filepath.Join(t.TempDir(), "claude")
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"core": "bud-plugins/core.md"}`)}})
+
+	if err := kitCore(nil, false); err == nil || !strings.Contains(err.Error(), "bud kit sync") {
+		t.Fatalf("no checkout: %v", err)
+	}
+	checkout := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "plugins"), 0o755)
+	os.WriteFile(filepath.Join(dir, "plugins", "known_marketplaces.json"), []byte(`{"bud-plugins": {"installLocation": "`+checkout+`"}}`), 0o644)
+	os.WriteFile(filepath.Join(checkout, "core.md"), []byte("You are Bud.\n"), 0o644)
+
+	out := captureStdout(t, func() {
+		if err := kitCore(nil, false); err != nil {
+			t.Fatal(err)
 		}
+	})
+	if out != "You are Bud.\n" {
+		t.Fatalf("core %q", out)
 	}
-	t.Cleanup(func() { kitFS = origFS })
-	k, env, err := loadKit()
-	if err != nil {
-		t.Fatal(err)
+	sync := func() string {
+		return captureStdout(t, func() {
+			if err := syncKitWith(&Globals{}, nil, false); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
-	all, required := secretNames(k, env.Profile)
-	// a URL secret is needed even in an entry whose others are optional
-	if strings.Join(all, ",") != "HOST_URL,NEEDED_KEY,NICE_KEY" || strings.Join(required, ",") != "HOST_URL,NEEDED_KEY" {
-		t.Fatalf("all %v, required %v", all, required)
+	if out := sync(); !strings.Contains(out, "core.md changed") {
+		t.Fatalf("no reminder: %q", out)
 	}
-	// an env var is already in the session's environment, so it isn't handed over again
-	vars, err := keychainEnv()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := vars["NICE_KEY"]; ok {
-		t.Fatalf("handed over an env var: %v", vars)
-	}
-	// nobody to ask: nothing asked, nothing fails
-	if err := askKitSecrets(nil); err != nil {
-		t.Fatal(err)
+	captureStdout(t, func() {
+		if err := kitCore(nil, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if out := sync(); strings.Contains(out, "core.md changed") {
+		t.Fatalf("reminded after pasting: %q", out)
 	}
 }

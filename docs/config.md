@@ -65,7 +65,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `ai.claude.idle_minutes` | `30` | Stop a session nothing has used for this long; the next use starts it again on the same conversation. `0` never stops one. |
 | `ai.claude.args` | `[]` | Extra flags for every session, e.g. `["--model", "opus"]`. |
 | `ai.claude.command` | unset | What runs Claude Code when it isn't `claude` itself: a wrapper that passes the rest on, e.g. `["headroom", "wrap", "claude", "--code-memory", "none", "--"]`. `bud install` offers exactly that when Headroom is installed, and `bud doctor` warns if the wrapper isn't on PATH. |
-| `ai.claude.config` | `"bud"` | Whose Claude Code config bud uses. `"bud"` is its own, in `~/.local/share/bud/claude` (set as `CLAUDE_CONFIG_DIR` for everything bud starts): the kit, plugins, settings, history and login stay apart from the `claude` you run yourself, so it needs its own login (`bud claude setup`). `"home"` shares `~/.claude`. When this changes, `bud kit sync` offers to take what the kit added out of the old one. When `~/.claude/settings.json` runs Claude Code on Bedrock, Vertex or Foundry, `bud claude setup` and `bud install` offer `"home"`, since bud's own dir can't see that; the first kit sync into `~/.claude` asks first, and `bud kit unsync` takes the kit back out. A `CLAUDE_CONFIG_DIR` you set yourself wins. |
+| `ai.claude.config` | `"home"` | Whose Claude Code config bud uses. `"home"` shares `~/.claude` with the `claude` you run yourself, so bud's sessions get its MCP servers, settings, rules and login. `"bud"` is its own, in `~/.local/share/bud/claude` (set as `CLAUDE_CONFIG_DIR` for everything bud starts): the kit, plugins, settings, history and login stay apart, so it needs its own login (`bud claude setup`), and it can't see a cloud provider set up in `~/.claude/settings.json` (then `bud claude setup` and `bud install` offer to share). When this changes, `bud kit sync` offers to take what the kit added out of the old one. The first kit sync into `~/.claude` lists what it adds and asks first, and `bud kit unsync` takes the kit back out. A `CLAUDE_CONFIG_DIR` you set yourself wins. |
 | `ai.chat.pane` | `"native"` | The default layout's chat pane: bud's own chat, or `"term"` for Claude Code's own TUI. |
 | `ai.issues.team` | unset | The Linear team issues filed with `<leader>ai` go to, for projects without their own (`bud issue set --team T [--project P] [project]`). `bud issue set --global` sets it. |
 | `ai.issues.project` | unset | The Linear project in that team, if any. |
@@ -77,9 +77,7 @@ bud config edit                           # open it in bud's editor, then check 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `tools.disabled` | unset | Tools turned off on this machine. `bud tools enable/disable` edits it; a tool that fails to load is added here with the reason (`bud tools ls` shows it). |
-| `kit.large_files` | `10000` | A project with this many tracked source files counts as large, for kit entries that only load there (Code-Index-MCP). |
-| `kit.large_loc` | `1000000` | The same, by lines of tracked source (estimated from bytes). Either threshold is enough. |
-| `kit.disabled` | unset | Kit entries turned off on this machine; `bud kit sync` removes them from Claude Code. `bud kit enable/disable` edits it. Entries a claude.ai connector already provides (Context7, ...) are left out by themselves, so you don't need to disable those. Disabling the `bud` output style also stops sync setting it as `outputStyle`. |
+| `kit.disabled` | unset | Kit entries turned off on this machine, by name (`bud-ide@bud-plugins`, `bud-plugins`); `bud kit sync` removes what bud added of them from Claude Code. `bud kit enable/disable` edits it. |
 
 ## Environment
 
@@ -88,4 +86,3 @@ bud config edit                           # open it in bud's editor, then check 
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` | Where bud's dirs go, on macOS too. |
 | `NO_COLOR` | Plain output, no colour. |
 | `CLAUDE_CONFIG_DIR` | Where Claude Code's own config is (default `~/.claude`). bud's kit and IDE bridge follow it. |
-| `CONTEXT7_API_KEY`, `GITHUB_PAT`, ... | Secrets the kit's servers use. Set them in your environment, or keep them in the keychain with `bud kit secret set NAME`. |

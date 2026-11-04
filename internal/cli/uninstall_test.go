@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,7 +9,6 @@ import (
 	"testing/fstest"
 
 	"jgarner.dev/bud/internal/bundle"
-	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -201,28 +199,7 @@ func TestPlanUninstallKit(t *testing.T) {
 	p, bin := fakeInstall(t)
 	home := os.Getenv("HOME")
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	var ran []string
-	origFS, origClaude, origPlugins, origConnectors := kitFS, kitClaude, installedPlugins, kitConnectors
-	kitFS = func() fs.FS {
-		return fstest.MapFS{
-			"kit.json":          {Data: []byte(`{"mcp": ["docs"], "skills": ["s"]}`)},
-			"mcp/docs.json":     {Data: []byte(`{"description": "the docs", "transport": "http", "url": "https://d"}`)},
-			"skills/s/SKILL.md": {Data: []byte("---\nname: s\n---\n")},
-		}
-	}
-	kitClaude = func(args ...string) error {
-		ran = append(ran, strings.Join(args, " "))
-		servers := `{"mcpServers": {"docs": {}}}`
-		if args[1] == "remove" {
-			servers = `{"mcpServers": {}}`
-		}
-		return os.WriteFile(filepath.Join(home, ".claude.json"), []byte(servers), 0o644)
-	}
-	installedPlugins = func() ([]string, error) { return nil, nil }
-	kitConnectors = func() ([]kit.Connector, error) { return nil, nil }
-	t.Cleanup(func() {
-		kitFS, kitClaude, installedPlugins, kitConnectors = origFS, origClaude, origPlugins, origConnectors
-	})
+	f := fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["a@market", "b@market"]}`)}})
 	mine := filepath.Join(home, ".claude", "skills", "mine", "SKILL.md")
 	os.MkdirAll(filepath.Dir(mine), 0o755)
 	os.WriteFile(mine, []byte("mine"), 0o644)
@@ -241,11 +218,8 @@ func TestPlanUninstallKit(t *testing.T) {
 		t.Fatalf("first removal %+v", removals[0])
 	}
 	runRemovals(t, removals)
-	if len(ran) != 2 || ran[1] != "mcp remove --scope user docs" {
-		t.Errorf("ran %q", ran)
-	}
-	if exists(filepath.Join(claudeDir, "skills", "s")) {
-		t.Error("the kit's skill is still there")
+	if len(f.ran) != 4 || f.ran[2] != "plugin uninstall --scope user a@market" || len(f.installed[claudeDir]) != 0 {
+		t.Errorf("ran %q", f.ran)
 	}
 	if !exists(mine) {
 		t.Error("removed your own skill")

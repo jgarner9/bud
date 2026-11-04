@@ -110,9 +110,6 @@ func install(g *Globals, args []string, yes bool) error {
 		if err := installClaude(pr, yes); err != nil {
 			fmt.Printf("Claude Code isn't set up (%v); 'bud claude setup' tries again.\n", err)
 		}
-		if err := askKitSecrets(pr); err != nil {
-			fmt.Printf("Kit secrets: %v; 'bud kit secret set NAME' stores one.\n", err)
-		}
 		if s.Profile == "full" {
 			if err := offerHeadroom(pr, f, s); err != nil {
 				fmt.Printf("Headroom: %v; 'bud config set ai.claude.command' sets it.\n", err)
@@ -171,10 +168,10 @@ var installClaude = func(pr *prompter, yes bool) error {
 // syncKit is syncKitWith; swappable in tests
 var syncKit = syncKitWith
 
-// installKit syncs the Claude Code kit after the secrets were asked
-// (JGA-132). It waits for a login: the claude.ai connectors that stand in for
-// some entries are only listed for a logged-in account, so syncing before
-// that would add duplicates
+// installKit syncs the Claude Code kit once Claude Code is set up (JGA-132).
+// It waits for a login: plugins claude.ai syncs (bud's own among them) only
+// show up for a logged-in account, so syncing before that could install a
+// second copy
 func installKit(g *Globals, pr *prompter) error {
 	s, err := checkClaude()
 	if err != nil {

@@ -39,9 +39,6 @@ type Settings struct {
 // Kit is the kit's settings on this machine
 type Kit struct {
 	Disabled []string `json:"disabled"` // bud kit enable/disable (D58)
-	// how big a project is "large", for entries that only load there (JGA-117)
-	LargeFiles int   `json:"large_files"`
-	LargeLOC   int64 `json:"large_loc"`
 }
 
 // Disabled lists what's turned off on this machine
@@ -114,8 +111,8 @@ type Claude struct {
 	// what runs claude, when it isn't claude itself: a wrapper that passes
 	// what follows on, such as ["headroom", "wrap", "claude", "--"]
 	Command []string `json:"command"`
-	// whose Claude Code config bud's sessions use: bud's own dir ("bud") or
-	// Claude Code's usual ~/.claude ("home"), JGA-135
+	// whose Claude Code config bud's sessions use: Claude Code's usual
+	// ~/.claude ("home", the default, D77) or bud's own dir ("bud", JGA-135)
 	Config string `json:"config"`
 }
 
@@ -135,9 +132,8 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, Breadcrumbs: true},
-		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "bud"}, Chat: Chat{Pane: "native"},
+		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "home"}, Chat: Chat{Pane: "native"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
-		Kit: Kit{LargeFiles: 10000, LargeLOC: 1000000},
 	}
 }
 
@@ -152,7 +148,7 @@ func (s Settings) Validate() error {
 		{"update.channel", s.Update.Channel, []string{"stable", "nightly"}},
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
 		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},
-		{"ai.claude.config", s.AI.Claude.Config, []string{"bud", "home"}},
+		{"ai.claude.config", s.AI.Claude.Config, []string{"home", "bud"}},
 		{"ai.chat.pane", s.AI.Chat.Pane, []string{"native", "term"}},
 	}
 	for _, c := range checks {

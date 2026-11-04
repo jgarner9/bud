@@ -29,8 +29,6 @@ type Project struct {
 	Layout string `json:"layout,omitempty"`
 	// zero, and left out of the file, when it was added but never opened through bud
 	LastOpened time.Time `json:"last_opened,omitzero"`
-	// how big it is, measured in the background when it opens (JGA-117); nil until then
-	Size *Size `json:"size,omitempty"`
 	// where issues filed from it go (JGA-123); nil means config.json's ai.issues
 	Issues *IssueTarget `json:"issues,omitempty"`
 
@@ -38,19 +36,12 @@ type Project struct {
 	extra map[string]json.RawMessage
 }
 
-var projectKeys = []string{"name", "path", "pinned", "layout", "last_opened", "size", "issues"}
+var projectKeys = []string{"name", "path", "pinned", "layout", "last_opened", "issues"}
 
 // IssueTarget is the Linear team and project issues are filed in
 type IssueTarget struct {
 	Team    string `json:"team"`
 	Project string `json:"project,omitempty"`
-}
-
-// Size is a project's tracked source: files, and lines estimated from bytes
-type Size struct {
-	Files    int       `json:"files"`
-	LOC      int64     `json:"loc"`
-	Measured time.Time `json:"measured"`
 }
 
 func (p *Project) UnmarshalJSON(data []byte) error {
@@ -267,17 +258,6 @@ func (r *Registry) SetLayout(nameOrPath, layout string) (Project, error) {
 		return Project{}, fmt.Errorf("no project %q (see 'bud projects ls')", nameOrPath)
 	}
 	r.Projects[i].Layout = layout
-
-	return r.Projects[i], nil
-}
-
-// SetSize records how big a project is
-func (r *Registry) SetSize(nameOrPath string, size Size) (Project, error) {
-	i := r.index(nameOrPath)
-	if i < 0 {
-		return Project{}, fmt.Errorf("no project %q", nameOrPath)
-	}
-	r.Projects[i].Size = &size
 
 	return r.Projects[i], nil
 }

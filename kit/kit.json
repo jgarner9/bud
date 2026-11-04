@@ -1,34 +1,18 @@
 {
-  "mcp": [
-    "context7",
-    "github",
-    "serena",
-    "cocoindex-code",
-    "code-index",
-    "exa",
-    "basic-memory",
-    "linear",
-    "headroom",
-    "playwright"
-  ],
-  "skills": [
-    "bud-dev",
-    "plan-to-linear",
-    "file-issue",
-    "lookup"
-  ],
-  "agents": [
-    "code-reviewer"
-  ],
-  "commands": [
-    "plan-to-linear",
-    "file-issue"
-  ],
+  "marketplaces": {
+    "bud-plugins": "https://github.com/jgarner9/bud-plugins.git"
+  },
   "plugins": [
+    "bud@bud-plugins",
+    "bud-ide@bud-plugins",
     "superpowers@anthropic-plugin-directory"
   ],
-  "output-styles": [
-    "bud"
-  ],
-  "output_style": "bud"
+  "core": "bud-plugins/core.md",
+  "expected_mcp": [
+    "basic-memory",
+    "context7",
+    "exa",
+    "linear",
+    "serena"
+  ]
 }

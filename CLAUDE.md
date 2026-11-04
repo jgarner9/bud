@@ -46,7 +46,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **Prompts.** `terminalPrompter(yes)` returns a prompter, or nil with `--yes` or no terminal (nil takes every default); `confirmOnTerminal` guards destructive steps and refuses without a terminal, naming the `--yes` command. A command not built yet returns an error saying so, never a silent exit 0.
 
-**Colour** (`internal/cli/color.go`, JGA-109): `paint(w, style, s)` adds ANSI codes only when `w` is a terminal `*os.File`, `TERM` isn't `dumb` and `NO_COLOR` is unset, so tests (buffers) and pipes stay plain. Pad text before painting it, or the codes break the columns.
+**Colour** (`internal/cli/color.go`, JGA-109): `paint(w, style, s)` adds ANSI codes only when `w` is a terminal `*os.File`, `TERM` isn't `dumb` and `NO_COLOR` is unset, so tests (buffers) and pipes stay plain. Pad text before painting it, or the codes break the columns: `cell(w, style, s, width)` does both. The list and status commands share one palette (JGA-159): names bold, kinds, paths and descriptions dim, on/enabled green (`onStyle`), attention yellow, broken red; `config ls`/`get` bold the JSON keys (`paintJSONKeys`). `TestListsColourLikePlain` forces `colorOn` and checks that stripping the codes gives back the plain output byte for byte.
 
 **Completion** (`internal/cli/complete.go`, JGA-96): `bud completion bash|zsh|fish` prints a few lines that call the hidden `bud __complete <words> <current>` (left out of help), which walks `CommandRegistry`, flags (`valueFlags` for flag values) and `argValues` (layouts, languages, tools, kit entries, config keys, projects, all read from files, never through nvim). Nothing printed means the shell completes file names.
 

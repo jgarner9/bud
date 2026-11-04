@@ -486,6 +486,19 @@ func confirmShared(pr *prompter, k *kit.Kit, env kit.Env) (bool, error) {
 // statusWords say what a dry run's action means for an item
 var statusWords = map[string]string{"ok": "synced", "add": "not synced", "update": "changed", "remove": "to remove", "skip": "skipped"}
 
+// kitStatusStyle is the colour of a status word: synced is green, skipped
+// dim, and anything a sync would change yellow
+func kitStatusStyle(do string) string {
+	switch do {
+	case "ok":
+		return ansiGreen
+	case "skip":
+		return ansiDim
+	}
+
+	return ansiYellow
+}
+
 func kitStatus(args []string) error {
 	if len(args) > 0 {
 		return usageErrorf("kit status takes no arguments")
@@ -501,10 +514,11 @@ func kitStatus(args []string) error {
 	if len(actions) == 0 {
 		fmt.Println("The kit is empty.")
 	}
+	out := os.Stdout
 	for _, a := range actions {
-		line := fmt.Sprintf("%-12s %-24s %s", a.Kind, a.Name, statusWords[a.Do])
+		line := cell(out, ansiDim, a.Kind, 12) + " " + cell(out, ansiBold, a.Name, 24) + " " + paint(out, kitStatusStyle(a.Do), statusWords[a.Do])
 		if a.Why != "" {
-			line += " (" + a.Why + ")"
+			line += " " + paint(out, ansiDim, "("+a.Why+")")
 		}
 		fmt.Println(line)
 	}
@@ -520,8 +534,10 @@ func kitLs(args []string) error {
 	if err != nil {
 		return err
 	}
+	out := os.Stdout
 	for _, e := range k.Entries() {
-		fmt.Println(strings.TrimRight(fmt.Sprintf("%-12s %-16s %s", e[0], e[1], e[2]), " "))
+		line := cell(out, ansiDim, e[0], 12) + " " + cell(out, ansiBold, e[1], 16) + " " + paint(out, ansiDim, e[2])
+		fmt.Println(strings.TrimRight(line, " "))
 	}
 
 	return nil

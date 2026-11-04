@@ -60,21 +60,26 @@ func claudeStatus(args []string) error {
 	if err != nil {
 		return err
 	}
-	switch {
-	case s.Bin == "":
-		fmt.Println("Claude Code isn't installed: run bud claude setup")
-	case !s.LoggedIn && s.Elsewhere != "":
-		fmt.Printf("Claude Code %s (%s), not logged in here; %s\n", s.Version, s.Bin, elsewhereHint(s))
-	case !s.LoggedIn:
-		fmt.Printf("Claude Code %s (%s), not logged in: run bud claude setup\n", s.Version, s.Bin)
-	default:
-		fmt.Printf("Claude Code %s (%s), logged in with %s\n", s.Version, s.Bin, s.Method)
-	}
-	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
-		fmt.Printf("Config: %s\n", dir)
+	out := os.Stdout
+	if s.Bin == "" {
+		fmt.Printf("Claude Code %s: run bud claude setup\n", paint(out, ansiRed, "isn't installed"))
 	} else {
-		fmt.Println("Config: ~/.claude")
+		var state string
+		switch {
+		case !s.LoggedIn && s.Elsewhere != "":
+			state = paint(out, ansiYellow, "not logged in here") + "; " + elsewhereHint(s)
+		case !s.LoggedIn:
+			state = paint(out, ansiYellow, "not logged in") + ": run bud claude setup"
+		default:
+			state = paint(out, ansiGreen, "logged in with "+s.Method)
+		}
+		fmt.Printf("Claude Code %s (%s), %s\n", paint(out, ansiBold, s.Version), paint(out, ansiDim, s.Bin), state)
 	}
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		dir = "~/.claude"
+	}
+	fmt.Printf("Config: %s\n", paint(out, ansiDim, dir))
 
 	return nil
 }

@@ -61,19 +61,20 @@ func projectsLs(args []string) error {
 		return nil
 	}
 
+	out := os.Stdout
 	for _, p := range r.Sorted() {
 		mark := " "
 		if p.Pinned {
-			mark = "*"
+			mark = paint(out, ansiYellow, "*")
 		}
-		when := "never opened"
+		when, whenStyle := "never opened", ansiDim
 		if !p.LastOpened.IsZero() {
 			when = ago(now().Sub(p.LastOpened))
 		}
 		if p.Missing() {
-			when = "missing"
+			when, whenStyle = "missing", ansiRed
 		}
-		fmt.Printf("%s %-20s %-14s %s\n", mark, p.Name, when, p.Path)
+		fmt.Printf("%s %s %s %s\n", mark, cell(out, ansiBold, p.Name, 20), cell(out, whenStyle, when, 14), paint(out, ansiDim, p.Path))
 	}
 
 	return nil

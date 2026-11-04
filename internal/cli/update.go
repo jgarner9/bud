@@ -419,13 +419,15 @@ func checkForUpdate(g *Globals, channel string) error {
 		return err
 	}
 
+	out := os.Stdout
+	current, release := paint(out, ansiBold, s.Current), paint(out, ansiBold, s.Release.Version)
 	switch {
 	case s.Dev:
-		fmt.Printf("This is a development build (%s); the newest %s release is %s.\n", s.Current, channel, s.Release.Version)
+		fmt.Printf("This is a development build (%s); the newest %s release is %s.\n", current, channel, release)
 	case s.Newer:
-		fmt.Printf("bud %s is available on %s (you have %s).\n", s.Release.Version, channel, s.Current)
+		fmt.Printf("bud %s %s on %s (you have %s).\n", release, paint(out, ansiYellow, "is available"), channel, current)
 	default:
-		fmt.Printf("bud %s is up to date on %s.\n", s.Current, channel)
+		fmt.Printf("bud %s %s on %s.\n", current, paint(out, ansiGreen, "is up to date"), channel)
 	}
 
 	return nil

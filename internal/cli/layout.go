@@ -142,9 +142,9 @@ func layoutLs(args []string) error {
 		}
 		mark := ""
 		if len(marks) > 0 {
-			mark = "  (" + strings.Join(marks, ", ") + ")"
+			mark = "  " + paint(os.Stdout, ansiGreen, "("+strings.Join(marks, ", ")+")")
 		}
-		fmt.Printf("%-*s  %s%s\n", width, l.Name, l.Description, mark)
+		fmt.Printf("%s  %s%s\n", cell(os.Stdout, ansiBold, l.Name, width), paint(os.Stdout, ansiDim, l.Description), mark)
 	}
 
 	return nil

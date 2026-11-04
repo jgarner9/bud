@@ -226,18 +226,21 @@ func toolsLs(args []string) error {
 	for _, t := range e.tools {
 		width = max(width, len(t.Name))
 	}
+	out := os.Stdout
 	for _, t := range e.tools {
-		state := "on"
-		if slices.Contains(e.disabled, t.Name) {
-			state = "off"
+		on := !slices.Contains(e.disabled, t.Name)
+		state := "off"
+		if on {
+			state = "on"
 		}
 		whose := "bud's"
 		if t.Yours {
 			whose = "yours"
 		}
-		line := fmt.Sprintf("%-*s  %-3s  %-5s  %s", width, t.Name, state, whose, t.Description)
-		if why := e.reasons[t.Name]; why != "" && state == "off" {
-			line += "  (broken: " + why + ")"
+		line := cell(out, ansiBold, t.Name, width) + "  " + cell(out, onStyle(on), state, 3) + "  " +
+			cell(out, ansiDim, whose, 5) + "  " + paint(out, ansiDim, t.Description)
+		if why := e.reasons[t.Name]; why != "" && !on {
+			line += "  " + paint(out, ansiRed, "(broken: "+why+")")
 		}
 		fmt.Println(strings.TrimRight(line, " "))
 	}

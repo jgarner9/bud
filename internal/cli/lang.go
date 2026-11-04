@@ -140,27 +140,32 @@ func langLs(args []string) error {
 		return err
 	}
 
+	out := os.Stdout
+	row := func(name, state, stateStyle, rest, restStyle string) {
+		fmt.Printf("%s %s %s\n", cell(out, ansiBold, name, 12), cell(out, stateStyle, state, 9), paint(out, restStyle, rest))
+	}
 	enabled := e.enabledNames()
 	for _, name := range e.specs.Names() {
+		on := slices.Contains(enabled, name)
 		state := "disabled"
-		if slices.Contains(enabled, name) {
+		if on {
 			state = "enabled"
 		}
 		source := "bud"
 		if !shipped(name) {
 			source = "yours"
 		}
-		fmt.Printf("%-12s %-9s %s\n", name, state, source)
+		row(name, state, onStyle(on), source, ansiDim)
 	}
 	for _, name := range slices.Sorted(maps.Keys(e.specs.Errors)) {
-		fmt.Printf("%-12s %-9s %s\n", name, "broken", e.specs.Errors[name])
+		row(name, "broken", ansiRed, e.specs.Errors[name], "")
 	}
 	_, unknown := e.specs.Enabled(enabled, e.s.Profile)
 	for _, name := range unknown {
-		fmt.Printf("%-12s %-9s %s\n", name, "enabled", "no spec (remove it with 'bud lang disable "+name+"')")
+		row(name, "enabled", ansiYellow, "no spec (remove it with 'bud lang disable "+name+"')", "")
 	}
 	if e.s.Languages == nil {
-		fmt.Printf("\n(the %s profile's preset: no languages list in %s)\n", e.s.Profile, e.p.MachineConfig())
+		fmt.Printf("\n%s\n", paint(out, ansiDim, fmt.Sprintf("(the %s profile's preset: no languages list in %s)", e.s.Profile, e.p.MachineConfig())))
 	}
 
 	return nil

@@ -35,12 +35,6 @@ local function now()
   return vim.uv.hrtime() / 1e6
 end
 
--- realtime is the wall clock in seconds, to compare with file times
-local function realtime()
-  local t = vim.uv.clock_gettime("realtime")
-  return t.sec + t.nsec / 1e9
-end
-
 -- swappable in tests: the command a session runs, and whether claude is
 -- logged in (cb(ok, why))
 M.bin = function()
@@ -588,6 +582,21 @@ function M.session(root, opts)
   return s
 end
 
+-- conversations lists Claude Code's stored conversations for root, id to
+-- { size, mtime }, the mtime in seconds
+local function conversations(root)
+  local dir = require("bud.chat.store").project_dir(root)
+  local found = {}
+  for name, kind in vim.fs.dir(dir) do
+    local id = kind == "file" and name:match("^(.+)%.jsonl$")
+    local st = id and vim.uv.fs_stat(dir .. "/" .. name)
+    if st then
+      found[id] = { size = st.size, mtime = st.mtime.sec + st.mtime.nsec / 1e9 }
+    end
+  end
+  return found
+end
+
 -- handover gives root's session to Claude Code's own TUI (D48): the headless
 -- job stops, and nothing can send until handback. It returns the TUI's argv,
 -- or nil and why it can't run
@@ -604,23 +613,24 @@ function M.handover(root)
     vim.fn.jobstop(s.job)
   end
   s.starting, s.queue, s.term, s.last_used = nil, {}, true, now()
-  s.handed_at = realtime()
+  s.handed = conversations(root)
   set_status(s, "term")
   local cfg = settings()
   return vim.list_extend(vim.list_extend(M.prefix(bin, cfg), M.resume_args(s, cfg)), cfg.args or {})
 end
 
 -- tui_conversation is the conversation the TUI wrote to since it took root's
--- session: the newest written since then, nil when it wrote nothing
-local function tui_conversation(root, since)
-  local dir = require("bud.chat.store").project_dir(root)
+-- session (before, from conversations()): the newest one that's new or has
+-- changed, nil when it wrote nothing. Only file times are compared, never
+-- with the clock: the kernel stamps them from a coarser one, so a file written
+-- just after a clock reading can look older than it
+local function tui_conversation(root, before)
   local best, best_t
-  for name, kind in vim.fs.dir(dir) do
-    local id = kind == "file" and name:match("^(.+)%.jsonl$")
-    local st = id and vim.uv.fs_stat(dir .. "/" .. name)
-    local t = st and st.mtime.sec + st.mtime.nsec / 1e9
-    if t and t >= since and (not best_t or t > best_t) then
-      best, best_t = id, t
+  for id, cur in pairs(conversations(root)) do
+    local was = before[id]
+    local changed = not was or was.size ~= cur.size or was.mtime ~= cur.mtime
+    if changed and (not best_t or cur.mtime > best_t) then
+      best, best_t = id, cur.mtime
     end
   end
   return best
@@ -633,7 +643,7 @@ function M.handback(root)
   local s = sessions[lookup(root)]
   if s and s.term then
     s.term = nil
-    local id = s.handed_at and tui_conversation(s.root, s.handed_at)
+    local id = s.handed and tui_conversation(s.root, s.handed)
     if id then
       s.session_id = id
       if project(s) then

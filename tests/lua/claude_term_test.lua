@@ -28,18 +28,21 @@ require("bud.ai.bridge").lock_dir = function()
   return tmp .. "/ide"
 end
 
--- headless (-p) it answers each message; as the TUI it waits for a q line
+-- headless (-p) it answers each message; as the TUI it waits for a q line.
+-- Both append, as Claude Code does. The TUI writes as soon as it starts,
+-- within a tick of the kernel's coarse file clock of the handover, so handback
+-- can't tell its conversation by comparing file times with the clock
 local fake = tmp .. "/claude"
 vim.fn.writefile({
   "#!/bin/sh",
   'echo "$@" >> "$(dirname "$0")/argv.log"',
   'if [ "$1" != "-p" ]; then',
-  "  echo '{}' > '" .. tui_store .. "/sess-tui.jsonl'",
+  "  echo '{}' >> '" .. tui_store .. "/sess-tui.jsonl'",
   '  while IFS= read -r line; do [ "$line" = q ] && exit 0; done',
   "  exit 0",
   "fi",
   "while IFS= read -r line; do",
-  "  echo '{}' > '" .. tui_store .. "/sess-1.jsonl'",
+  "  echo '{}' >> '" .. tui_store .. "/sess-1.jsonl'",
   [[  printf '{"type":"result","subtype":"success","session_id":"sess-1","result":"ok"}\n']],
   "done",
 }, fake)

@@ -202,7 +202,7 @@ func TestPlanUninstallKit(t *testing.T) {
 	home := os.Getenv("HOME")
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	var ran []string
-	origFS, origClaude, origPlugins, origConnectors := kitFS, kitClaude, installedPlugins, kitConnectors
+	origFS, origClaude, origPlugins, origMarkets, origConnectors := kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors
 	kitFS = func() fs.FS {
 		return fstest.MapFS{
 			"kit.json":          {Data: []byte(`{"mcp": ["docs"], "skills": ["s"]}`)},
@@ -219,9 +219,10 @@ func TestPlanUninstallKit(t *testing.T) {
 		return os.WriteFile(filepath.Join(home, ".claude.json"), []byte(servers), 0o644)
 	}
 	installedPlugins = func() ([]string, error) { return nil, nil }
+	kitMarketplaces = func() ([]string, error) { return nil, nil }
 	kitConnectors = func() ([]kit.Connector, error) { return nil, nil }
 	t.Cleanup(func() {
-		kitFS, kitClaude, installedPlugins, kitConnectors = origFS, origClaude, origPlugins, origConnectors
+		kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors = origFS, origClaude, origPlugins, origMarkets, origConnectors
 	})
 	mine := filepath.Join(home, ".claude", "skills", "mine", "SKILL.md")
 	os.MkdirAll(filepath.Dir(mine), 0o755)

@@ -353,6 +353,20 @@ var kitConnectors = func() ([]kit.Connector, error) {
 	return kit.ParseConnectors(string(out)), nil
 }
 
+// kitMarketplaces lists the plugin marketplaces Claude Code has, by name
+var kitMarketplaces = func() ([]string, error) {
+	bin := claude.Find()
+	if bin == "" {
+		return nil, nil
+	}
+	out, err := exec.Command(bin, "plugin", "marketplace", "list", "--json").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	return kit.ParseMarketplaces(out)
+}
+
 var installedPlugins = func() ([]string, error) {
 	bin := claude.Find()
 	if bin == "" {
@@ -402,6 +416,7 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 		Claude:           kitClaude,
 		SecretSet:        secrets.Has,
 		InstalledPlugins: installedPlugins,
+		Marketplaces:     kitMarketplaces,
 		Disabled:         disabled,
 		Connectors:       kitConnectors,
 	}, nil

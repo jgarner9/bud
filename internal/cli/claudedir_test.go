@@ -40,7 +40,7 @@ func TestMoveKit(t *testing.T) {
 
 	skill := []byte("---\nname: s\n---\n")
 	var ran []string
-	origFS, origClaude, origPlugins, origConnectors := kitFS, kitClaude, installedPlugins, kitConnectors
+	origFS, origClaude, origPlugins, origMarkets, origConnectors := kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors
 	kitFS = func() fs.FS {
 		return fstest.MapFS{
 			"kit.json":          {Data: []byte(`{"mcp": ["docs"], "skills": ["s"]}`)},
@@ -53,9 +53,10 @@ func TestMoveKit(t *testing.T) {
 		return nil
 	}
 	installedPlugins = func() ([]string, error) { return nil, nil }
+	kitMarketplaces = func() ([]string, error) { return nil, nil }
 	kitConnectors = func() ([]kit.Connector, error) { return nil, nil }
 	t.Cleanup(func() {
-		kitFS, kitClaude, installedPlugins, kitConnectors = origFS, origClaude, origPlugins, origConnectors
+		kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors = origFS, origClaude, origPlugins, origMarkets, origConnectors
 	})
 
 	// what an older bud left: the kit in ~/.claude, a ledger without a dir

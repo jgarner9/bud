@@ -33,9 +33,13 @@ import (
 
 // Kit is the kit as the repo describes it
 type Kit struct {
-	MCP          []MCP
-	Skills       []string
-	Plugins      []string // Claude Code plugins, name@marketplace
+	MCP     []MCP
+	Skills  []string
+	Plugins []string // Claude Code plugins, name@marketplace
+	// the plugin marketplaces sync adds before installing plugins: name ->
+	// source (a git URL, GitHub owner/repo or path, as claude plugin
+	// marketplace add takes it)
+	Marketplaces map[string]string
 	Agents       []string
 	Commands     []string
 	OutputStyles []string
@@ -193,18 +197,19 @@ func Load(fsys fs.FS) (*Kit, error) {
 		return nil, err
 	}
 	var index struct {
-		MCP          []string `json:"mcp"`
-		Skills       []string `json:"skills"`
-		Plugins      []string `json:"plugins"`
-		Agents       []string `json:"agents"`
-		Commands     []string `json:"commands"`
-		OutputStyles []string `json:"output-styles"`
-		OutputStyle  string   `json:"output_style"`
+		MCP          []string          `json:"mcp"`
+		Skills       []string          `json:"skills"`
+		Plugins      []string          `json:"plugins"`
+		Marketplaces map[string]string `json:"marketplaces"`
+		Agents       []string          `json:"agents"`
+		Commands     []string          `json:"commands"`
+		OutputStyles []string          `json:"output-styles"`
+		OutputStyle  string            `json:"output_style"`
 	}
 	if err := json.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("kit.json: %w", err)
 	}
-	k := &Kit{Skills: index.Skills, Plugins: index.Plugins, Agents: index.Agents, Commands: index.Commands, OutputStyles: index.OutputStyles, OutputStyle: index.OutputStyle, fsys: fsys}
+	k := &Kit{Skills: index.Skills, Plugins: index.Plugins, Marketplaces: index.Marketplaces, Agents: index.Agents, Commands: index.Commands, OutputStyles: index.OutputStyles, OutputStyle: index.OutputStyle, fsys: fsys}
 	for _, name := range index.MCP {
 		data, err := fs.ReadFile(fsys, "mcp/"+name+".json")
 		if err != nil {
@@ -307,7 +312,8 @@ func (m MCP) Server(set func(name string) bool) (server []byte, missing []string
 type Ledger struct {
 	MCP          map[string]string `json:"mcp"`
 	Plugins      map[string]string `json:"plugins,omitempty"`
-	Files        map[string]string `json:"files"` // path under the Claude dir -> hash
+	Marketplaces map[string]string `json:"marketplaces,omitempty"` // name -> the source bud added it from
+	Files        map[string]string `json:"files"`                  // path under the Claude dir -> hash
 	Instructions string            `json:"instructions,omitempty"`
 	// the outputStyle bud set in settings.json; "" when it didn't set one
 	OutputStyle string `json:"output_style,omitempty"`
@@ -318,7 +324,7 @@ type Ledger struct {
 
 // ReadLedger reads path; a missing ledger is an empty one, and false
 func ReadLedger(path string) (*Ledger, bool, error) {
-	l := &Ledger{MCP: map[string]string{}, Plugins: map[string]string{}, Files: map[string]string{}}
+	l := &Ledger{MCP: map[string]string{}, Plugins: map[string]string{}, Marketplaces: map[string]string{}, Files: map[string]string{}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return l, false, nil
@@ -331,6 +337,9 @@ func ReadLedger(path string) (*Ledger, bool, error) {
 	}
 	if l.Plugins == nil {
 		l.Plugins = map[string]string{}
+	}
+	if l.Marketplaces == nil {
+		l.Marketplaces = map[string]string{}
 	}
 	if l.MCP == nil {
 		l.MCP = map[string]string{}
@@ -395,9 +404,12 @@ type Env struct {
 	Claude     func(args ...string) error // runs claude
 	// lists the installed plugins (claude plugin list --json); nil means none
 	InstalledPlugins func() ([]string, error)
-	SecretSet        func(name string) bool
-	HasBin           func(name string) bool // nil means look on PATH
-	Disabled         []string               // entries turned off on this machine (bud kit disable)
+	// lists the plugin marketplaces Claude Code has, by name (claude plugin
+	// marketplace list --json); nil means none
+	Marketplaces func() ([]string, error)
+	SecretSet    func(name string) bool
+	HasBin       func(name string) bool // nil means look on PATH
+	Disabled     []string               // entries turned off on this machine (bud kit disable)
 	// the claude.ai connectors Claude Code has (claude mcp list); nil means none
 	Connectors func() ([]Connector, error)
 }
@@ -469,6 +481,14 @@ func (k *Kit) without(names []string) *Kit {
 	out.MCP = slices.DeleteFunc(slices.Clone(k.MCP), func(m MCP) bool { return slices.Contains(names, m.Name) })
 	out.Skills, out.Agents, out.Commands, out.Plugins = keep(k.Skills), keep(k.Agents), keep(k.Commands), keep(k.Plugins)
 	out.OutputStyles = keep(k.OutputStyles)
+	if len(k.Marketplaces) > 0 {
+		out.Marketplaces = map[string]string{}
+		for name, src := range k.Marketplaces {
+			if !slices.Contains(names, name) {
+				out.Marketplaces[name] = src
+			}
+		}
+	}
 	if slices.Contains(names, k.OutputStyle) {
 		out.OutputStyle = ""
 	}
@@ -478,7 +498,7 @@ func (k *Kit) without(names []string) *Kit {
 
 // Action is one thing sync does, or would do with --dry-run
 type Action struct {
-	Kind string // "mcp", "skill", "agent", "command", "output-style", "instructions"
+	Kind string // "mcp", "marketplace", "plugin", "skill", "agent", "command", "output-style", "instructions"
 	Name string
 	Do   string // "add", "update", "remove", "skip", "ok"
 	Why  string
@@ -688,6 +708,13 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 		delete(ledger.MCP, name)
 	}
 
+	// marketplaces, then the plugins from them, then the marketplaces the kit
+	// dropped, once nothing of bud's is installed from them
+	registered, refreshed, err := syncMarketplaces(k, env, ledger, dryRun, &actions)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	// plugins: through claude plugin, user scope
 	if len(k.Plugins) > 0 || len(ledger.Plugins) > 0 {
 		var installed []string
@@ -701,6 +728,12 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 			switch {
 			case slices.Contains(installed, id) && owned:
 				actions = append(actions, Action{"plugin", id, "ok", ""})
+				if dryRun || !refreshed[marketplaceOf(id)] {
+					continue
+				}
+				// its marketplace was just refreshed: bring it up to date too
+				// (a failure only means it stays as it was until next time)
+				_ = env.Claude("plugin", "update", "--scope", "user", id)
 			case slices.Contains(installed, id):
 				actions = append(actions, Action{"plugin", id, "skip", "you installed it yourself"})
 			default:
@@ -732,6 +765,7 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 			delete(ledger.Plugins, id)
 		}
 	}
+	removeMarketplaces(k, env, ledger, registered, dryRun, &actions, &errs)
 
 	// skills, agents and commands: files under the Claude dir
 	files, err := k.files()
@@ -860,6 +894,102 @@ func Unsync(env Env, dryRun bool) ([]Action, error) {
 	return Sync(&Kit{}, env, dryRun)
 }
 
+// syncMarketplaces adds the kit's marketplaces Claude Code doesn't have yet
+// and refreshes the ones bud added, so the plugins from them can follow. One
+// you added yourself, from whatever source, is left alone (D77). It returns
+// the marketplaces Claude Code had and the ones it refreshed
+func syncMarketplaces(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action) (registered []string, refreshed map[string]bool, err error) {
+	refreshed = map[string]bool{}
+	if len(k.Marketplaces) == 0 && len(ledger.Marketplaces) == 0 {
+		return nil, refreshed, nil
+	}
+	if env.Marketplaces != nil {
+		if registered, err = env.Marketplaces(); err != nil {
+			return nil, refreshed, fmt.Errorf("listing plugin marketplaces: %w", err)
+		}
+	}
+	var errs []error
+	for _, name := range sortedKeys(k.Marketplaces) {
+		src := k.Marketplaces[name]
+		_, owned := ledger.Marketplaces[name]
+		switch {
+		case slices.Contains(registered, name) && !owned:
+			*actions = append(*actions, Action{"marketplace", name, "skip", "you added it yourself"})
+		case slices.Contains(registered, name):
+			if dryRun {
+				*actions = append(*actions, Action{"marketplace", name, "ok", ""})
+				continue
+			}
+			// refreshed every sync: a git marketplace is a cached copy that
+			// Claude Code doesn't update by itself. Offline, it stays as it was
+			if err := env.Claude("plugin", "marketplace", "update", name); err != nil {
+				*actions = append(*actions, Action{"marketplace", name, "skip", "couldn't refresh it: " + err.Error()})
+				continue
+			}
+			*actions = append(*actions, Action{"marketplace", name, "ok", ""})
+			refreshed[name] = true
+		default:
+			*actions = append(*actions, Action{"marketplace", name, "add", ""})
+			if dryRun {
+				continue
+			}
+			if err := env.Claude("plugin", "marketplace", "add", src); err != nil {
+				errs = append(errs, fmt.Errorf("adding marketplace %s: %w", name, err))
+				continue
+			}
+			ledger.Marketplaces[name] = src
+			registered = append(registered, name)
+		}
+	}
+
+	return registered, refreshed, errors.Join(errs...)
+}
+
+// removeMarketplaces takes out the marketplaces bud added that the kit no
+// longer has. It runs after the plugins, so bud's plugins from one are
+// uninstalled first
+func removeMarketplaces(k *Kit, env Env, ledger *Ledger, registered []string, dryRun bool, actions *[]Action, errs *[]error) {
+	for _, name := range sortedKeys(ledger.Marketplaces) {
+		if _, keep := k.Marketplaces[name]; keep {
+			continue
+		}
+		*actions = append(*actions, Action{"marketplace", name, "remove", "no longer in the kit"})
+		if dryRun {
+			continue
+		}
+		if slices.Contains(registered, name) {
+			if err := env.Claude("plugin", "marketplace", "remove", name); err != nil {
+				*errs = append(*errs, fmt.Errorf("removing marketplace %s: %w", name, err))
+				continue
+			}
+		}
+		delete(ledger.Marketplaces, name)
+	}
+}
+
+// ParseMarketplaces reads the names out of claude plugin marketplace list
+// --json
+func ParseMarketplaces(out []byte) ([]string, error) {
+	var list []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(out, &list); err != nil {
+		return nil, fmt.Errorf("claude plugin marketplace list: %w", err)
+	}
+	names := make([]string, len(list))
+	for i, m := range list {
+		names[i] = m.Name
+	}
+
+	return names, nil
+}
+
+// marketplaceOf is the marketplace in a plugin id, name@marketplace
+func marketplaceOf(id string) string {
+	_, m, _ := strings.Cut(id, "@")
+	return m
+}
+
 func hasBin(env Env, name string) bool {
 	if env.HasBin != nil {
 		return env.HasBin(name)
@@ -897,6 +1027,9 @@ func (k *Kit) Entries() [][3]string {
 	}
 	for _, s := range k.Skills {
 		out = append(out, [3]string{"skill", s, ""})
+	}
+	for _, name := range sortedKeys(k.Marketplaces) {
+		out = append(out, [3]string{"marketplace", name, k.Marketplaces[name]})
 	}
 	for _, p := range k.Plugins {
 		out = append(out, [3]string{"plugin", p, ""})

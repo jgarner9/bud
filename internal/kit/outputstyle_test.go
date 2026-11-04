@@ -27,7 +27,7 @@ func styleEnv(t *testing.T) Env {
 	t.Helper()
 	dir := t.TempDir()
 
-	return Env{ClaudeDir: filepath.Join(dir, "claude"), Ledger: filepath.Join(dir, "ledger.json"), Profile: "full"}
+	return Env{ClaudeDir: filepath.Join(dir, "claude"), Ledger: filepath.Join(dir, "ledger.json")}
 }
 
 func writeSettings(t *testing.T, env Env, body string) {

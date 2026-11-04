@@ -2,7 +2,6 @@ package kit
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -13,7 +12,7 @@ import (
 )
 
 // Kinds are the kinds of kit entry, as kit.json names their lists
-var Kinds = map[string]string{"mcp": "mcp", "skill": "skills", "agent": "agents", "command": "commands", "plugin": "plugins", "output-style": "output-styles"}
+var Kinds = map[string]string{"skill": "skills", "agent": "agents", "command": "commands", "plugin": "plugins", "output-style": "output-styles"}
 
 var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*(@[a-z0-9][a-z0-9._-]*)?$`)
 
@@ -85,8 +84,6 @@ func entryPath(kind, name string) string {
 	switch kind {
 	case "plugin":
 		return ""
-	case "mcp":
-		return "mcp/" + name + ".json"
 	case "skill":
 		return "skills/" + name
 	case "agent":
@@ -127,29 +124,6 @@ func (r Repo) add(kind, name string, files map[string][]byte) (string, error) {
 	setList(idx, Kinds[kind], append(list(idx, Kinds[kind]), name))
 
 	return filepath.Join(r.Dir, filepath.FromSlash(entryPath(kind, name))), r.saveIndex(idx)
-}
-
-// AddMCP scaffolds an MCP server entry: an http one at url, or a stdio one
-// running cmd
-func (r Repo) AddMCP(name, url, cmd string) (string, error) {
-	m := MCP{Name: name, Description: "TODO: what it's for", Profiles: []string{"full", "minimal"}}
-	switch {
-	case url != "" && cmd != "":
-		return "", errors.New("give --url or --cmd, not both")
-	case url != "":
-		m.Transport, m.URL = "http", url
-	case cmd != "":
-		f := strings.Fields(cmd)
-		m.Transport, m.Command, m.Args = "stdio", f[0], f[1:]
-	default:
-		return "", errors.New("an MCP server needs --url or --cmd")
-	}
-	data, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return "", err
-	}
-
-	return r.add("mcp", name, map[string][]byte{entryPath("mcp", name): append(data, '\n')})
 }
 
 // AddPlugin lists a Claude Code plugin (name@marketplace) in the kit
@@ -214,76 +188,9 @@ func (r Repo) Remove(name string) (string, error) {
 	return kind, os.RemoveAll(filepath.Join(r.Dir, filepath.FromSlash(entryPath(kind, name))))
 }
 
-// SetProfiles sets which profiles an MCP entry is on for
-func (r Repo) SetProfiles(name string, profiles []string) error {
-	p := filepath.Join(r.Dir, "mcp", name+".json")
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return fmt.Errorf("only MCP entries have profiles: %w", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-	list := make([]any, len(profiles))
-	for i, pr := range profiles {
-		list[i] = pr
-	}
-	m["profiles"] = list
-	out, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(p, append(out, '\n'), 0o644)
-}
-
-// Adopt pulls something you set up by hand in Claude Code into the kit: a
-// user-scope MCP server from claudeJSON, or a skill, agent or command from
-// claudeDir. An MCP server's header and env values become $secret:
-// references, so no secret lands in the repo; secrets lists them, for you to
-// store. kind is what it found
-func (r Repo) Adopt(name, claudeDir, claudeJSON string) (kind string, secrets []string, err error) {
-	if servers := userServers(claudeJSON); servers[name] != nil {
-		var s struct {
-			Type    string            `json:"type"`
-			URL     string            `json:"url"`
-			Command string            `json:"command"`
-			Args    []string          `json:"args"`
-			Headers map[string]string `json:"headers"`
-			Env     map[string]string `json:"env"`
-		}
-		if err := json.Unmarshal(servers[name], &s); err != nil {
-			return "", nil, err
-		}
-		if s.Type == "" {
-			s.Type = "stdio"
-		}
-		ref := func(in map[string]string) map[string]string {
-			if len(in) == 0 {
-				return nil
-			}
-			out := map[string]string{}
-			for k := range in {
-				secret := strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9]+`).ReplaceAllString(name+"_"+k, "_"))
-				out[k] = secretPrefix + secret
-				secrets = append(secrets, secret)
-			}
-			return out
-		}
-		m := MCP{
-			Name: name, Description: "adopted from Claude Code", Transport: s.Type, URL: s.URL,
-			Command: s.Command, Args: s.Args, Headers: ref(s.Headers), Env: ref(s.Env),
-		}
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return "", nil, err
-		}
-		slices.Sort(secrets)
-		_, err = r.add("mcp", name, map[string][]byte{entryPath("mcp", name): append(data, '\n')})
-		return "mcp", secrets, err
-	}
-
+// Adopt pulls a skill, agent or command you set up by hand in claudeDir into
+// the kit. kind is what it found
+func (r Repo) Adopt(name, claudeDir string) (kind string, err error) {
 	for _, kind := range []string{"skill", "agent", "command"} {
 		src := filepath.Join(claudeDir, filepath.FromSlash(entryPath(kind, name)))
 		info, err := os.Stat(src)
@@ -307,11 +214,11 @@ func (r Repo) Adopt(name, claudeDir, claudeJSON string) (kind string, secrets []
 			files[entryPath(kind, name)] = data
 		}
 		if err != nil {
-			return "", nil, err
+			return "", err
 		}
 		_, err = r.add(kind, name, files)
-		return kind, nil, err
+		return kind, err
 	}
 
-	return "", nil, fmt.Errorf("Claude Code has no MCP server, skill, agent or command called %s", name)
+	return "", fmt.Errorf("Claude Code has no skill, agent or command called %s", name)
 }

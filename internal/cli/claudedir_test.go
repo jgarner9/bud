@@ -3,7 +3,6 @@ package cli
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -29,8 +28,9 @@ func TestClaudeConfigDir(t *testing.T) {
 	}
 }
 
-// the kit was synced into ~/.claude before bud had its own dir: a sync takes
-// it out of there (on a yes) and puts it in bud's
+// the kit was synced into ~/.claude by an older bud, with an MCP server and a
+// skill then: a sync into another dir takes them out of there (on a yes)
+// and syncs the kit in the new one
 func TestMoveKit(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -39,29 +39,15 @@ func TestMoveKit(t *testing.T) {
 	budDir := filepath.Join(t.TempDir(), "claude")
 	t.Setenv("CLAUDE_CONFIG_DIR", budDir)
 	p, _ := paths.Resolve()
-
-	skill := []byte("---\nname: s\n---\n")
-	var ran []string
-	origFS, origClaude, origPlugins, origMarkets, origConnectors := kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors
-	kitFS = func() fs.FS {
-		return fstest.MapFS{
-			"kit.json":          {Data: []byte(`{"mcp": ["docs"], "skills": ["s"]}`)},
-			"mcp/docs.json":     {Data: []byte(`{"description": "the docs", "transport": "http", "url": "https://d"}`)},
-			"skills/s/SKILL.md": {Data: skill},
+	f := fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["docs@market"]}`)}})
+	ran := func() []string {
+		var out []string
+		for i, r := range f.ran {
+			out = append(out, f.dirs[i]+": "+r)
 		}
+		return out
 	}
-	kitClaude = func(args ...string) error {
-		ran = append(ran, os.Getenv("CLAUDE_CONFIG_DIR")+": "+strings.Join(args[:2], " "))
-		return nil
-	}
-	installedPlugins = func() ([]string, error) { return nil, nil }
-	kitMarketplaces = func() ([]string, error) { return nil, nil }
-	kitConnectors = func() ([]kit.Connector, error) { return nil, nil }
-	t.Cleanup(func() {
-		kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors = origFS, origClaude, origPlugins, origMarkets, origConnectors
-	})
 
-	// what an older bud left: the kit in ~/.claude, a ledger without a dir
 	sync := func(pr *prompter) string {
 		t.Helper()
 		return captureStdout(t, func() {
@@ -71,57 +57,57 @@ func TestMoveKit(t *testing.T) {
 		})
 	}
 	old := filepath.Join(home, ".claude")
-	os.MkdirAll(filepath.Join(old, "skills", "s"), 0o755)
-	os.WriteFile(filepath.Join(old, "skills", "s", "SKILL.md"), skill, 0o644)
-	os.WriteFile(filepath.Join(home, ".claude.json"), []byte(`{"mcpServers": {"docs": {}}}`), 0o644)
+	skill := []byte("---\nname: s\n---\n")
 	sum := sha256.Sum256(skill)
-	writeLedger := func() {
+	leave := func() {
+		os.MkdirAll(filepath.Join(old, "skills", "s"), 0o755)
+		os.WriteFile(filepath.Join(old, "skills", "s", "SKILL.md"), skill, 0o644)
+		os.WriteFile(filepath.Join(home, ".claude.json"), []byte(`{"mcpServers": {"docs": {}}}`), 0o644)
 		os.MkdirAll(p.State, 0o755)
 		os.WriteFile(p.KitLedger(), []byte(`{"mcp": {"docs": "x"}, "files": {"skills/s/SKILL.md": "`+hex.EncodeToString(sum[:8])+`"}}`), 0o644)
 	}
-	writeLedger()
+	leave()
 
-	// not logged in to bud's dir yet: nothing changes
+	// not logged in to the new dir yet: nothing changes
 	fakeClaude(t, claudeLoggedOut)
 	out := sync(yesPrompter("y\n"))
-	if len(ran) != 0 || !strings.Contains(out, "bud claude setup") {
-		t.Fatalf("ran %q, out %q", ran, out)
+	if len(f.ran) != 0 || !strings.Contains(out, "bud claude setup") {
+		t.Fatalf("ran %q, out %q", f.ran, out)
 	}
 
 	// nobody to ask: nothing changes
 	fakeClaude(t, claudeReady)
 	out = sync(nil)
-	if len(ran) != 0 || !strings.Contains(out, "on a terminal") {
-		t.Fatalf("ran %q, out %q", ran, out)
+	if len(f.ran) != 0 || !strings.Contains(out, "on a terminal") {
+		t.Fatalf("ran %q, out %q", f.ran, out)
 	}
 
-	// a no: left in ~/.claude, the kit goes into bud's dir
+	// a no: left in ~/.claude, the kit goes into the new dir
 	out = sync(yesPrompter("n\n"))
 	if !strings.Contains(out, "Left in") || !isFile(filepath.Join(old, "skills", "s", "SKILL.md")) {
 		t.Fatalf("out %q", out)
 	}
-	if len(ran) != 1 || ran[0] != budDir+": mcp add-json" || !isFile(filepath.Join(budDir, "skills", "s", "SKILL.md")) {
-		t.Fatalf("ran %q", ran)
+	if got := ran(); !slices.Equal(got, []string{budDir + ": plugin install --scope user docs@market"}) {
+		t.Fatalf("ran %q", got)
 	}
 
 	// a yes: removed from ~/.claude (claude run without CLAUDE_CONFIG_DIR there)
-	ran = nil
-	os.RemoveAll(budDir)
-	writeLedger()
+	f.ran, f.dirs, f.installed = nil, nil, map[string][]string{}
+	leave()
 	out = sync(yesPrompter("y\n"))
 	if isFile(filepath.Join(old, "skills", "s", "SKILL.md")) {
 		t.Fatalf("skill left in ~/.claude: %q", out)
 	}
-	if len(ran) != 2 || ran[0] != ": mcp remove" || ran[1] != budDir+": mcp add-json" {
-		t.Fatalf("ran %q", ran)
+	want := []string{old + ": mcp remove --scope user docs", budDir + ": plugin install --scope user docs@market"}
+	if got := ran(); !slices.Equal(got, want) {
+		t.Fatalf("ran %q, want %q", got, want)
 	}
 	l, _, _ := kit.ReadLedger(p.KitLedger())
-	if l.Dir != budDir || l.Files["skills/s/SKILL.md"] == "" {
+	if l.Dir != budDir || l.Plugins["docs@market"] == "" || len(l.MCP) != 0 || len(l.Files) != 0 {
 		t.Fatalf("ledger %+v", l)
 	}
 
 	// synced where it is: nothing asked
-	ran = nil
 	out = sync(nil)
 	if strings.Contains(out, "uses the Claude Code config") {
 		t.Fatalf("asked again: %q", out)
@@ -137,41 +123,11 @@ func TestMoveKitToHome(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
-	os.Unsetenv("CLAUDE_CONFIG_DIR")
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	p, _ := paths.Resolve()
 	budDir := p.ClaudeConfig()
-
-	// claude plugin, per config dir
-	installed := map[string][]string{budDir: {"kitted@market"}}
-	var ran []string
-	dir := func() string {
-		if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
-			return d
-		}
-		return filepath.Join(home, ".claude")
-	}
-	origFS, origClaude, origPlugins, origMarkets, origConnectors := kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors
-	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["kitted@market"]}`)}}
-	}
-	kitClaude = func(args ...string) error {
-		d := dir()
-		ran = append(ran, d+": "+strings.Join(args, " "))
-		id := args[len(args)-1]
-		switch args[1] {
-		case "install":
-			installed[d] = append(installed[d], id)
-		case "uninstall":
-			installed[d] = slices.DeleteFunc(installed[d], func(s string) bool { return s == id })
-		}
-		return nil
-	}
-	installedPlugins = func() ([]string, error) { return slices.Clone(installed[dir()]), nil }
-	kitMarketplaces = func() ([]string, error) { return nil, nil }
-	kitConnectors = func() ([]kit.Connector, error) { return nil, nil }
-	t.Cleanup(func() {
-		kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors = origFS, origClaude, origPlugins, origMarkets, origConnectors
-	})
+	f := fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["kitted@market"]}`)}})
+	f.installed[budDir] = []string{"kitted@market"}
 	os.MkdirAll(p.State, 0o755)
 	os.WriteFile(p.KitLedger(), []byte(`{"plugins": {"kitted@market": "installed"}, "dir": "`+budDir+`"}`), 0o644)
 	fakeClaude(t, claudeReady)
@@ -181,14 +137,11 @@ func TestMoveKitToHome(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	want := []string{
-		budDir + ": plugin uninstall --scope user kitted@market",
-		filepath.Join(home, ".claude") + ": plugin install --scope user kitted@market",
+	home = filepath.Join(home, ".claude")
+	if !slices.Equal(f.ran, []string{"plugin uninstall --scope user kitted@market", "plugin install --scope user kitted@market"}) || !slices.Equal(f.dirs, []string{budDir, home}) {
+		t.Fatalf("ran %q in %q", f.ran, f.dirs)
 	}
-	if !slices.Equal(ran, want) {
-		t.Fatalf("ran %q, want %q", ran, want)
-	}
-	if l, _, _ := kit.ReadLedger(p.KitLedger()); l.Dir != filepath.Join(home, ".claude") {
+	if l, _, _ := kit.ReadLedger(p.KitLedger()); l.Dir != home {
 		t.Fatalf("ledger dir %q", l.Dir)
 	}
 }

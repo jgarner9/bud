@@ -37,4 +37,4 @@ bud issue unset                         # back to the global one
 
 The first `<leader>ai` in a project with no target asks for one and offers to save it. Issues about bud go to `ai.issues.bud` (bud's own tracker), and Claude reads bud's code in your `bud dev link` checkout, or the synced config without one.
 
-Needs the kit's `file-issue` skill (`bud kit sync`) and Linear in Claude Code (the claude.ai Linear connector).
+Needs the kit's `file-issue` skill (`bud kit sync`) and Linear in Claude Code: the claude.ai Linear connector, or a `linear` MCP server in Claude Code's config where there's no claude.ai (Bedrock).

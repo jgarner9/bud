@@ -168,10 +168,10 @@ var installClaude = func(pr *prompter, yes bool) error {
 // syncKit is syncKitWith; swappable in tests
 var syncKit = syncKitWith
 
-// installKit syncs the Claude Code kit after the secrets were asked
-// (JGA-132). It waits for a login: the claude.ai connectors that stand in for
-// some entries are only listed for a logged-in account, so syncing before
-// that would add duplicates
+// installKit syncs the Claude Code kit once Claude Code is set up (JGA-132).
+// It waits for a login: plugins claude.ai syncs (bud's own among them) only
+// show up for a logged-in account, so syncing before that could install a
+// second copy
 func installKit(g *Globals, pr *prompter) error {
 	s, err := checkClaude()
 	if err != nil {

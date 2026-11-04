@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -12,7 +11,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/claude"
@@ -27,13 +25,14 @@ func init() {
 }
 
 // Kit writes bud's Claude Code setup into Claude Code's user config (BASE.md
-// 4.1): MCP servers, skills, subagents, slash commands and instructions
+// 4.1): plugin marketplaces, plugins, skills, subagents, slash commands and
+// output styles
 func Kit() *Command {
 	var dryRun, yes bool
-	var url, cmd, repo, profiles string
+	var repo string
 	return &Command{
 		Name:  "kit",
-		Usage: "Syncs bud's Claude Code setup (MCP servers, skills, agents, commands, output styles) into Claude Code",
+		Usage: "Syncs bud's Claude Code setup (plugin marketplaces, plugins, skills, agents, commands, output styles) into Claude Code",
 		Subs: []*Command{
 			{
 				Name:  "sync",
@@ -57,13 +56,11 @@ func Kit() *Command {
 			{Name: "ls", Usage: "list what's in the kit", Run: func(_ *Globals, args []string) error { return kitLs(args) }},
 			{
 				Name:  "add",
-				Usage: "scaffold a kit entry in a bud checkout: add mcp --url URL|--cmd CMD <name>, or add skill|agent|command <name>",
+				Usage: "scaffold a kit entry in a bud checkout: add skill|agent|command|output-style|plugin <name>",
 				Flags: func(fs *flag.FlagSet) {
-					fs.StringVar(&url, "url", "", "an MCP server over HTTP at this URL")
-					fs.StringVar(&cmd, "cmd", "", "an MCP server that runs this command (stdio)")
 					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
 				},
-				Run: func(_ *Globals, args []string) error { return kitAdd(args, url, cmd, repo) },
+				Run: func(_ *Globals, args []string) error { return kitAdd(args, repo) },
 			},
 			{
 				Name:  "rm",
@@ -75,7 +72,7 @@ func Kit() *Command {
 			},
 			{
 				Name:  "adopt",
-				Usage: "pull an MCP server, skill, agent or command you set up by hand into the kit: adopt <name>",
+				Usage: "pull a skill, agent or command you set up by hand into the kit: adopt <name>",
 				Flags: func(fs *flag.FlagSet) {
 					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
 				},
@@ -83,17 +80,13 @@ func Kit() *Command {
 			},
 			{
 				Name:  "enable",
-				Usage: "turn a kit entry on for this machine: enable <name>; --profile sets which profiles an MCP entry is for, in the checkout",
-				Flags: func(fs *flag.FlagSet) {
-					fs.StringVar(&profiles, "profile", "", "comma-separated profiles (full,minimal) for the entry, written to the checkout")
-					fs.StringVar(&repo, "repo", "", "the bud checkout, for --profile")
-				},
-				Run: func(_ *Globals, args []string) error { return kitToggle(args, true, profiles, repo) },
+				Usage: "turn a kit entry on for this machine: enable <name>",
+				Run:   func(_ *Globals, args []string) error { return kitToggle(args, true) },
 			},
 			{
 				Name:  "disable",
 				Usage: "turn a kit entry off for this machine; the next sync removes it from Claude Code: disable <name>",
-				Run:   func(_ *Globals, args []string) error { return kitToggle(args, false, "", "") },
+				Run:   func(_ *Globals, args []string) error { return kitToggle(args, false) },
 			},
 		},
 	}
@@ -148,19 +141,18 @@ func kitRepo(repo string) (kit.Repo, error) {
 	return kit.Repo{Dir: dir}, nil
 }
 
-func kitAdd(args []string, url, cmd, repo string) error {
+func kitAdd(args []string, repo string) error {
 	if len(args) != 2 {
-		return usageErrorf("kit add takes a kind and a name: add mcp|skill|agent|command|output-style|plugin <name>")
+		return usageErrorf("kit add takes a kind and a name: add skill|agent|command|output-style|plugin <name>")
 	}
 	kind, name := args[0], args[1]
 	if _, ok := kit.Kinds[kind]; !ok {
-		return usageErrorf("kit add: %q isn't mcp, skill, agent, command, output-style or plugin", kind)
+		return usageErrorf("kit add: %q isn't skill, agent, command, output-style or plugin", kind)
 	}
 	r, err := kitRepo(repo)
 	if err != nil {
 		return err
 	}
-	var path string
 	if kind == "plugin" {
 		if err := r.AddPlugin(name); err != nil {
 			return err
@@ -168,14 +160,7 @@ func kitAdd(args []string, url, cmd, repo string) error {
 		fmt.Printf("Added the plugin %s; bud kit sync installs it.\n", name)
 		return nil
 	}
-	if kind == "mcp" {
-		path, err = r.AddMCP(name, url, cmd)
-	} else {
-		if url != "" || cmd != "" {
-			return usageErrorf("--url and --cmd are for MCP servers")
-		}
-		path, err = r.Scaffold(kind, name)
-	}
+	path, err := r.Scaffold(kind, name)
 	if err != nil {
 		return err
 	}
@@ -218,7 +203,7 @@ func kitAdopt(args []string, repo string) error {
 	if err != nil {
 		return err
 	}
-	kind, needed, err := r.Adopt(args[0], env.ClaudeDir, env.ClaudeJSON)
+	kind, err := r.Adopt(args[0], env.ClaudeDir)
 	if err != nil {
 		return err
 	}
@@ -226,16 +211,13 @@ func kitAdopt(args []string, repo string) error {
 		return err
 	}
 	fmt.Printf("Adopted the %s %s into %s.\n", kind, args[0], r.Dir)
-	if len(needed) > 0 {
-		fmt.Printf("Its values became secrets, so none are in the repo. Set each in your environment before syncing: %s\n", strings.Join(needed, ", "))
-	}
 
 	return nil
 }
 
 // kitToggle turns an entry on or off for this machine (config.json's
-// kit.disabled), or with profiles, sets the entry's profiles in the checkout
-func kitToggle(args []string, on bool, profiles, repo string) error {
+// kit.disabled)
+func kitToggle(args []string, on bool) error {
 	if len(args) != 1 {
 		return usageErrorf("kit enable and disable take one name")
 	}
@@ -251,23 +233,6 @@ func kitToggle(args []string, on bool, profiles, repo string) error {
 	if !found {
 		return usageErrorf("the kit has nothing called %s", name)
 	}
-	if profiles != "" {
-		r, err := kitRepo(repo)
-		if err != nil {
-			return err
-		}
-		list := strings.Split(profiles, ",")
-		for _, pr := range list {
-			if !slices.Contains(config.Profiles, pr) {
-				return usageErrorf("--profile %q isn't one of %s", pr, strings.Join(config.Profiles, ", "))
-			}
-		}
-		if err := r.SetProfiles(name, list); err != nil {
-			return err
-		}
-		fmt.Printf("%s is for %s now, in %s.\n", name, strings.Join(list, " and "), r.Dir)
-	}
-
 	p, err := paths.Resolve()
 	if err != nil {
 		return err
@@ -316,25 +281,6 @@ func kitDisabled(f *config.File) []string {
 	return out
 }
 
-// installedPlugins asks claude which plugins are installed
-// kitConnectors lists the claude.ai connectors Claude Code has, so sync can
-// leave out the kit's entries they already provide (JGA-128). claude mcp list
-// checks each server's health, so it takes a few seconds
-var kitConnectors = func() ([]kit.Connector, error) {
-	bin := claude.Find()
-	if bin == "" {
-		return nil, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, bin, "mcp", "list").Output()
-	if err != nil {
-		return nil, err
-	}
-
-	return kit.ParseConnectors(string(out)), nil
-}
-
 // kitMarketplaces lists the plugin marketplaces Claude Code has, by name
 var kitMarketplaces = func() ([]string, error) {
 	bin := claude.Find()
@@ -349,6 +295,7 @@ var kitMarketplaces = func() ([]string, error) {
 	return kit.ParseMarketplaces(out)
 }
 
+// installedPlugins asks claude which plugins are installed
 var installedPlugins = func() ([]string, error) {
 	bin := claude.Find()
 	if bin == "" {
@@ -381,28 +328,19 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
 		dir = d
 	}
-	s := config.Defaults()
 	var disabled []string
 	if f, err := config.Load(p.MachineConfig()); err == nil {
-		if loaded, err := f.Settings(); err == nil {
-			s = loaded
-		}
 		disabled = kitDisabled(f)
 	}
 
 	return kit.Env{
-		ClaudeDir:  dir,
-		ClaudeJSON: claudeJSONFor(dir),
-		Ledger:     p.KitLedger(),
-		Profile:    s.Profile,
-		Claude:     kitClaude,
-		// the MCP entries' secrets now come from wherever Claude Code's own
-		// config gets them; until those entries go, only the environment counts
-		SecretSet:        func(name string) bool { return os.Getenv(name) != "" },
+		ClaudeDir:        dir,
+		ClaudeJSON:       claudeJSONFor(dir),
+		Ledger:           p.KitLedger(),
+		Claude:           kitClaude,
 		InstalledPlugins: installedPlugins,
 		Marketplaces:     kitMarketplaces,
 		Disabled:         disabled,
-		Connectors:       kitConnectors,
 	}, nil
 }
 

@@ -39,9 +39,6 @@ type Settings struct {
 // Kit is the kit's settings on this machine
 type Kit struct {
 	Disabled []string `json:"disabled"` // bud kit enable/disable (D58)
-	// how big a project is "large", for entries that only load there (JGA-117)
-	LargeFiles int   `json:"large_files"`
-	LargeLOC   int64 `json:"large_loc"`
 }
 
 // Disabled lists what's turned off on this machine
@@ -137,7 +134,6 @@ func Defaults() Settings {
 		UI:           UI{Messages: true, Breadcrumbs: true},
 		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "home"}, Chat: Chat{Pane: "native"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
-		Kit: Kit{LargeFiles: 10000, LargeLOC: 1000000},
 	}
 }
 

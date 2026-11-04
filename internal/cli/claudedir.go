@@ -147,8 +147,8 @@ func moveKit(pr *prompter, env kit.Env, dryRun bool) (bool, error) {
 	if old == env.ClaudeDir {
 		return true, nil
 	}
-	// the claude.ai connectors that stand in for some entries are listed only
-	// once this config is logged in; without them the sync would add duplicates
+	// plugins claude.ai syncs show up only once this config is logged in;
+	// without them the sync could install second copies
 	if s, err := checkClaude(); err != nil || s.Bin == "" || !s.LoggedIn {
 		fmt.Printf("bud now uses the Claude Code config in %s: log in there with 'bud claude setup', then run 'bud kit sync'.\n", env.ClaudeDir)
 		return false, err

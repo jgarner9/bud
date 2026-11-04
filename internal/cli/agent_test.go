@@ -14,10 +14,11 @@ func TestAgent(t *testing.T) {
 	os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755)
 	t.Setenv("PATH", filepath.Dir(bin))
 
+	t.Setenv("BUD_BIN", "/an/older/bud")
 	var dir string
-	var argv []string
+	var argv, env []string
 	orig := execClaude
-	execClaude = func(d string, a []string) error { dir, argv = d, a; return nil }
+	execClaude = func(d string, a, e []string) error { dir, argv, env = d, a, e; return nil }
 	t.Cleanup(func() { execClaude = orig })
 
 	project := t.TempDir()
@@ -30,6 +31,11 @@ func TestAgent(t *testing.T) {
 	}
 	if dir != project || !slices.Equal(argv, []string{bin, "--continue"}) {
 		t.Fatalf("ran %q in %s", argv, dir)
+	}
+	// bud-ide's hook knows it's bud's session by BUD_BIN, which is this bud
+	self, _ := os.Executable()
+	if got := slices.DeleteFunc(slices.Clone(env), func(kv string) bool { return !strings.HasPrefix(kv, "BUD_BIN=") }); !slices.Equal(got, []string{"BUD_BIN=" + self}) {
+		t.Fatalf("BUD_BIN in the env: %q", got)
 	}
 
 	// ai.claude.command wraps it

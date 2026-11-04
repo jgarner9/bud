@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
+	"strings"
 	"syscall"
 
 	"jgarner.dev/bud/internal/claude"
@@ -27,11 +29,26 @@ func Agent() *Command {
 }
 
 // swappable in tests
-var execClaude = func(dir string, argv []string) error {
+var execClaude = func(dir string, argv, env []string) error {
 	if err := os.Chdir(dir); err != nil {
 		return err
 	}
-	return syscall.Exec(argv[0], argv, os.Environ())
+	return syscall.Exec(argv[0], argv, env)
+}
+
+// agentEnv is the environment Claude Code's TUI gets: this one, with
+// BUD_BIN pointing at this bud, as nvim's sessions have it, so bud-ide's
+// SessionStart hook knows the session is bud's and adds its notes on
+// working inside bud (D77)
+func agentEnv() []string {
+	env := os.Environ()
+	self, err := os.Executable()
+	if err != nil {
+		return env
+	}
+	env = slices.DeleteFunc(env, func(kv string) bool { return strings.HasPrefix(kv, "BUD_BIN=") })
+
+	return append(env, "BUD_BIN="+self)
 }
 
 func agent(g *Globals, args []string) error {
@@ -69,5 +86,5 @@ func agent(g *Globals, args []string) error {
 	argv = append(argv, s.AI.Claude.Args...)
 	g.Logf("running %q in %s", argv, ws.Root)
 
-	return execClaude(ws.Root, argv)
+	return execClaude(ws.Root, argv, agentEnv())
 }

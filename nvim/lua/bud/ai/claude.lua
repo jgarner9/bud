@@ -447,27 +447,6 @@ local function evict(keep)
   end
 end
 
--- secret_env asks the CLI what a session in root needs from the kit: its
--- secrets that live in the keychain (D15), and the MCP config of entries
--- only for large projects when root is one (JGA-117). Swappable in tests.
--- cb(vars, mcp_config or nil)
-M.secret_env = function(root, cb)
-  local bin = require("bud.cli").bin()
-  if not bin then
-    return cb({})
-  end
-  vim.system({ bin, "kit", "env", "--root", root }, { text = true }, function(res)
-    local ok, out = pcall(vim.json.decode, res.stdout or "")
-    vim.schedule(function()
-      if res.code ~= 0 or not ok or type(out) ~= "table" then
-        return cb({})
-      end
-      local mcp = type(out.mcp_config) == "string" and out.mcp_config ~= "" and out.mcp_config or nil
-      cb(type(out.env) == "table" and out.env or {}, mcp)
-    end)
-  end)
-end
-
 local start_job
 
 local function spawn(s)
@@ -483,31 +462,20 @@ local function spawn(s)
     if not s.starting then
       return -- stopped while checking
     end
+    s.starting = nil
     if not ok then
-      s.starting = nil
       set_status(s, "missing", why)
       return
     end
-    M.secret_env(s.root, function(secrets, mcp)
-      if not s.starting then
-        return -- stopped meanwhile
-      end
-      s.starting = nil
-      -- kept for the TUI, which starts without asking again
-      s.kit_mcp = mcp
-      start_job(s, bin, secrets, mcp)
-    end)
+    start_job(s, bin)
   end)
 end
 
--- start_job runs the session's claude, with the bridge's environment and the
--- kit's keychain secrets
-start_job = function(s, bin, secrets, mcp)
-  local env = vim.tbl_extend("force", secrets or {}, M.bridge_env(s.root))
+-- start_job runs the session's claude with the bridge's environment. Its MCP
+-- servers and their secrets come from the Claude Code config (D77)
+start_job = function(s, bin)
+  local env = M.bridge_env(s.root)
   local argv = vim.list_extend(M.argv(bin, s, settings()), require("bud.ai.bridge").headless_args(s.root))
-  if mcp then
-    vim.list_extend(argv, { "--mcp-config", mcp })
-  end
   local job = vim.fn.jobstart(argv, {
     cwd = s.root,
     env = env,
@@ -639,11 +607,7 @@ function M.handover(root)
   s.handed_at = realtime()
   set_status(s, "term")
   local cfg = settings()
-  local argv = vim.list_extend(vim.list_extend(M.prefix(bin, cfg), M.resume_args(s, cfg)), cfg.args or {})
-  if s.kit_mcp then
-    vim.list_extend(argv, { "--mcp-config", s.kit_mcp })
-  end
-  return argv
+  return vim.list_extend(vim.list_extend(M.prefix(bin, cfg), M.resume_args(s, cfg)), cfg.args or {})
 end
 
 -- tui_conversation is the conversation the TUI wrote to since it took root's

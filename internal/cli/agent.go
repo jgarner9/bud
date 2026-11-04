@@ -31,14 +31,7 @@ var execClaude = func(dir string, argv []string) error {
 	if err := os.Chdir(dir); err != nil {
 		return err
 	}
-	vars := os.Environ()
-	// the kit's MCP servers read their secrets from the environment (D15)
-	if extra, err := keychainEnv(); err == nil {
-		for k, v := range extra {
-			vars = append(vars, k+"="+v)
-		}
-	}
-	return syscall.Exec(argv[0], argv, vars)
+	return syscall.Exec(argv[0], argv, os.Environ())
 }
 
 func agent(g *Globals, args []string) error {
@@ -74,10 +67,6 @@ func agent(g *Globals, args []string) error {
 		argv = append(argv, "--continue")
 	}
 	argv = append(argv, s.AI.Claude.Args...)
-	// the kit's servers for large projects (JGA-117)
-	if cfg, err := sessionMCP(ws.Root); err == nil && cfg != nil {
-		argv = append(argv, "--mcp-config", string(cfg))
-	}
 	g.Logf("running %q in %s", argv, ws.Root)
 
 	return execClaude(ws.Root, argv)

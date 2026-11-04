@@ -88,4 +88,3 @@ bud config edit                           # open it in bud's editor, then check 
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` | Where bud's dirs go, on macOS too. |
 | `NO_COLOR` | Plain output, no colour. |
 | `CLAUDE_CONFIG_DIR` | Where Claude Code's own config is (default `~/.claude`). bud's kit and IDE bridge follow it. |
-| `CONTEXT7_API_KEY`, `GITHUB_PAT`, ... | Secrets the kit's servers use. Set them in your environment, or keep them in the keychain with `bud kit secret set NAME`. |

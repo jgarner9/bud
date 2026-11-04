@@ -190,10 +190,6 @@ func argValues(cmd string, before []string) []string {
 		if len(before) == 0 {
 			return []string{"mcp", "skill", "agent", "command", "plugin"}
 		}
-	case "kit secret":
-		if len(before) == 0 {
-			return []string{"set", "rm"}
-		}
 	case "config get", "config set", "config unset":
 		if len(before) == 0 {
 			return configKeys()

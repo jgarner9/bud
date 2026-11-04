@@ -56,9 +56,6 @@ end
 claude.bin = function()
   return fake
 end
-claude.secret_env = function(_, cb)
-  cb({})
-end
 claude.check_login = function(_, cb)
   vim.schedule(function()
     cb(true)

@@ -20,8 +20,6 @@ import (
 	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
-	"jgarner.dev/bud/internal/projects"
-	"jgarner.dev/bud/internal/secrets"
 )
 
 func init() {
@@ -57,11 +55,6 @@ func Kit() *Command {
 			},
 			{Name: "status", Usage: "per item: synced, not synced, changed, or skipped and why", Run: func(g *Globals, args []string) error { return kitStatus(args) }},
 			{Name: "ls", Usage: "list what's in the kit", Run: func(_ *Globals, args []string) error { return kitLs(args) }},
-			{
-				Name:  "secret",
-				Usage: "store a kit secret in the keychain (set NAME, asks for the value), or delete it (rm NAME)",
-				Run:   func(_ *Globals, args []string) error { return kitSecret(args) },
-			},
 			{
 				Name:  "add",
 				Usage: "scaffold a kit entry in a bud checkout: add mcp --url URL|--cmd CMD <name>, or add skill|agent|command <name>",
@@ -101,14 +94,6 @@ func Kit() *Command {
 				Name:  "disable",
 				Usage: "turn a kit entry off for this machine; the next sync removes it from Claude Code: disable <name>",
 				Run:   func(_ *Globals, args []string) error { return kitToggle(args, false, "", "") },
-			},
-			{
-				Name:  "env",
-				Usage: "what a Claude Code session bud starts needs, as JSON: the kit's keychain secrets, and with --root the project's own MCP servers",
-				Flags: func(fs *flag.FlagSet) {
-					fs.StringVar(&repo, "root", "", "the project the session runs in")
-				},
-				Run: func(_ *Globals, args []string) error { return kitEnvCmd(args, repo) },
 			},
 		},
 	}
@@ -242,10 +227,7 @@ func kitAdopt(args []string, repo string) error {
 	}
 	fmt.Printf("Adopted the %s %s into %s.\n", kind, args[0], r.Dir)
 	if len(needed) > 0 {
-		fmt.Printf("Its values became secrets, so none are in the repo. Store each before syncing:\n")
-		for _, n := range needed {
-			fmt.Printf("  bud kit secret set %s\n", n)
-		}
+		fmt.Printf("Its values became secrets, so none are in the repo. Set each in your environment before syncing: %s\n", strings.Join(needed, ", "))
 	}
 
 	return nil
@@ -409,12 +391,14 @@ func kitEnv(p *paths.Paths) (kit.Env, error) {
 	}
 
 	return kit.Env{
-		ClaudeDir:        dir,
-		ClaudeJSON:       claudeJSONFor(dir),
-		Ledger:           p.KitLedger(),
-		Profile:          s.Profile,
-		Claude:           kitClaude,
-		SecretSet:        secrets.Has,
+		ClaudeDir:  dir,
+		ClaudeJSON: claudeJSONFor(dir),
+		Ledger:     p.KitLedger(),
+		Profile:    s.Profile,
+		Claude:     kitClaude,
+		// the MCP entries' secrets now come from wherever Claude Code's own
+		// config gets them; until those entries go, only the environment counts
+		SecretSet:        func(name string) bool { return os.Getenv(name) != "" },
 		InstalledPlugins: installedPlugins,
 		Marketplaces:     kitMarketplaces,
 		Disabled:         disabled,
@@ -654,242 +638,4 @@ func resyncKit(g *Globals, p *paths.Paths) {
 		return
 	}
 	g.Logf("synced the Claude Code kit")
-}
-
-// secretNames lists the $secret names the kit's entries for this profile
-// use; required ones are those without optional_secrets
-func secretNames(k *kit.Kit, profile string) (all, required []string) {
-	seen := map[string]bool{}
-	for _, m := range k.MCP {
-		if !m.For(profile) {
-			continue
-		}
-		add := func(v string, needed bool) {
-			for _, name := range kit.SecretRefs(v) {
-				if seen[name] {
-					continue
-				}
-				seen[name] = true
-				all = append(all, name)
-				if needed {
-					required = append(required, name)
-				}
-			}
-		}
-		// a secret in the URL is needed even when the entry's others are optional
-		add(m.URL, true)
-		for _, vals := range []map[string]string{m.Headers, m.Env} {
-			for _, v := range vals {
-				add(v, !m.OptionalSecrets)
-			}
-		}
-	}
-	slices.Sort(all)
-	slices.Sort(required)
-
-	return all, required
-}
-
-func kitSecret(args []string) error {
-	if len(args) != 2 || (args[0] != "set" && args[0] != "rm") {
-		return usageErrorf("kit secret takes set NAME or rm NAME")
-	}
-	name := args[1]
-	if args[0] == "rm" {
-		if err := secrets.Delete(name); err != nil {
-			return fmt.Errorf("deleting %s from the keychain: %w", name, err)
-		}
-		fmt.Printf("Deleted %s from the keychain.\n", name)
-		return nil
-	}
-	if !isTerminal(os.Stdin) {
-		return fmt.Errorf("bud kit secret set asks for the value, so it needs a terminal")
-	}
-	value, err := readSecret(name)
-	if err != nil {
-		return err
-	}
-	if value == "" {
-		fmt.Println("Nothing stored.")
-		return nil
-	}
-	if err := secrets.Set(name, value); err != nil {
-		return fmt.Errorf("storing %s: %w", name, err)
-	}
-	fmt.Printf("Stored %s in the keychain; bud kit sync picks it up.\n", name)
-
-	return nil
-}
-
-// swappable in tests: asks for a secret on the terminal without echoing it
-var readSecret = func(name string) (string, error) {
-	fmt.Printf("%s (typing won't show): ", name)
-	stty := func(arg string) {
-		cmd := exec.Command("stty", arg)
-		cmd.Stdin = os.Stdin
-		_ = cmd.Run()
-	}
-	stty("-echo")
-	defer func() {
-		stty("echo")
-		fmt.Println()
-	}()
-	var line []byte
-	buf := make([]byte, 1)
-	for {
-		n, err := os.Stdin.Read(buf)
-		if n == 0 || err != nil || buf[0] == '\n' || buf[0] == '\r' {
-			break
-		}
-		line = append(line, buf[0])
-	}
-
-	return strings.TrimSpace(string(line)), nil
-}
-
-// keychainEnv is the kit's secrets that are in the keychain but not the
-// environment: what a Claude Code process bud starts needs handed to it
-func keychainEnv() (map[string]string, error) {
-	k, env, err := loadKit()
-	if err != nil {
-		return nil, err
-	}
-	all, _ := secretNames(k, env.Profile)
-	out := map[string]string{}
-	for _, name := range all {
-		if secrets.FromEnv(name) {
-			continue
-		}
-		if v, ok := secrets.Get(name); ok {
-			out[name] = v
-		}
-	}
-
-	return out, nil
-}
-
-func kitEnvCmd(args []string, root string) error {
-	if len(args) > 0 {
-		return usageErrorf("kit env takes no arguments")
-	}
-	vars, err := keychainEnv()
-	if err != nil {
-		return err
-	}
-	out := map[string]any{"env": vars}
-	if root != "" {
-		if cfg, err := sessionMCP(root); err == nil && cfg != nil {
-			out["mcp_config"] = string(cfg)
-		}
-	}
-	data, err := json.Marshal(out)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(data))
-
-	return nil
-}
-
-// sizeMaxAge is how old a project's measured size may be before it's measured again
-const sizeMaxAge = 24 * time.Hour
-
-// projectSize is root's size from the registry, measured again when it's
-// missing or a day old (and saved, when the project is registered)
-func projectSize(root string) projects.Size {
-	p, err := paths.Resolve()
-	if err != nil {
-		return projects.Size{}
-	}
-	r, err := projects.Load(p.Projects())
-	if err == nil {
-		if pr, ok := r.Get(root); ok && pr.Size != nil && time.Since(pr.Size.Measured) < sizeMaxAge {
-			return *pr.Size
-		}
-	}
-	size, _ := projects.Measure(root)
-	if err == nil {
-		if _, err := r.SetSize(root, size); err == nil {
-			_ = r.Save()
-		}
-	}
-
-	return size
-}
-
-// sessionMCP is the --mcp-config for kit entries that only load in some
-// projects (large ones, JGA-117; web ones, JGA-131) when root is one; nil
-// when there are none
-func sessionMCP(root string) ([]byte, error) {
-	k, env, err := loadKit()
-	if err != nil {
-		return nil, err
-	}
-	hasConditional := false
-	for _, m := range k.MCP {
-		hasConditional = hasConditional || m.When != nil
-	}
-	if !hasConditional {
-		return nil, nil
-	}
-	s := config.Defaults()
-	if p, err := paths.Resolve(); err == nil {
-		if f, err := config.Load(p.MachineConfig()); err == nil {
-			if loaded, err := f.Settings(); err == nil {
-				s = loaded
-			}
-		}
-	}
-	size := projectSize(root)
-
-	return k.SessionServers(env.Profile, kit.Project{Root: root, Files: size.Files, LOC: size.LOC}, s.Kit.LargeFiles, s.Kit.LargeLOC, env.Disabled, secrets.Has, func(bin string) bool {
-		_, err := exec.LookPath(bin)
-		return err == nil
-	})
-}
-
-// askKitSecrets asks once for each required kit secret that isn't set and
-// stores it in the keychain (bud install). Skipping one is fine: sync skips
-// that server and says why
-func askKitSecrets(pr *prompter) error {
-	if pr == nil {
-		return nil
-	}
-	k, env, err := loadKit()
-	if err != nil {
-		return err
-	}
-	// a claude.ai connector already gives Claude Code those entries
-	if env.Connectors != nil {
-		if connectors, err := env.Connectors(); err == nil {
-			k.MCP = slices.DeleteFunc(slices.Clone(k.MCP), func(m kit.MCP) bool {
-				_, provided := m.ProvidedBy(connectors)
-				return provided
-			})
-		}
-	}
-	_, required := secretNames(k, env.Profile)
-	for _, name := range required {
-		if secrets.Has(name) {
-			continue
-		}
-		ok, err := pr.confirm(fmt.Sprintf("The kit needs %s. Store it in the keychain now?", name))
-		if err != nil {
-			return err
-		}
-		if !ok {
-			continue
-		}
-		value, err := readSecret(name)
-		if err != nil {
-			return err
-		}
-		if value != "" {
-			if err := secrets.Set(name, value); err != nil {
-				fmt.Printf("Couldn't store %s: %v\n", name, err)
-			}
-		}
-	}
-
-	return nil
 }

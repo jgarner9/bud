@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -18,12 +19,13 @@ import (
 func TestClaudeConfigDir(t *testing.T) {
 	p := &paths.Paths{Data: "/data"}
 	s := config.Defaults()
-	if got := claudeConfigDir(p, s); got != "/data/claude" {
+	// bud shares ~/.claude unless told to keep its own (D77)
+	if got := claudeConfigDir(p, s); got != "" {
 		t.Errorf("default %q", got)
 	}
-	s.AI.Claude.Config = "home"
-	if got := claudeConfigDir(p, s); got != "" {
-		t.Errorf("home %q", got)
+	s.AI.Claude.Config = "bud"
+	if got := claudeConfigDir(p, s); got != "/data/claude" {
+		t.Errorf("bud %q", got)
 	}
 }
 
@@ -121,7 +123,72 @@ func TestMoveKit(t *testing.T) {
 	// synced where it is: nothing asked
 	ran = nil
 	out = sync(nil)
-	if strings.Contains(out, "keeps its own") {
+	if strings.Contains(out, "uses the Claude Code config") {
 		t.Fatalf("asked again: %q", out)
+	}
+}
+
+// a machine that never set ai.claude.config had the kit in bud's own dir;
+// with sharing the default (D77), the next sync moves it into ~/.claude,
+// asking at both ends
+func TestMoveKitToHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	os.Unsetenv("CLAUDE_CONFIG_DIR")
+	p, _ := paths.Resolve()
+	budDir := p.ClaudeConfig()
+
+	// claude plugin, per config dir
+	installed := map[string][]string{budDir: {"kitted@market"}}
+	var ran []string
+	dir := func() string {
+		if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
+			return d
+		}
+		return filepath.Join(home, ".claude")
+	}
+	origFS, origClaude, origPlugins, origMarkets, origConnectors := kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors
+	kitFS = func() fs.FS {
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["kitted@market"]}`)}}
+	}
+	kitClaude = func(args ...string) error {
+		d := dir()
+		ran = append(ran, d+": "+strings.Join(args, " "))
+		id := args[len(args)-1]
+		switch args[1] {
+		case "install":
+			installed[d] = append(installed[d], id)
+		case "uninstall":
+			installed[d] = slices.DeleteFunc(installed[d], func(s string) bool { return s == id })
+		}
+		return nil
+	}
+	installedPlugins = func() ([]string, error) { return slices.Clone(installed[dir()]), nil }
+	kitMarketplaces = func() ([]string, error) { return nil, nil }
+	kitConnectors = func() ([]kit.Connector, error) { return nil, nil }
+	t.Cleanup(func() {
+		kitFS, kitClaude, installedPlugins, kitMarketplaces, kitConnectors = origFS, origClaude, origPlugins, origMarkets, origConnectors
+	})
+	os.MkdirAll(p.State, 0o755)
+	os.WriteFile(p.KitLedger(), []byte(`{"plugins": {"kitted@market": "installed"}, "dir": "`+budDir+`"}`), 0o644)
+	fakeClaude(t, claudeReady)
+
+	captureStdout(t, func() {
+		if err := syncKitWith(&Globals{}, yesPrompter("y\ny\n"), false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	want := []string{
+		budDir + ": plugin uninstall --scope user kitted@market",
+		filepath.Join(home, ".claude") + ": plugin install --scope user kitted@market",
+	}
+	if !slices.Equal(ran, want) {
+		t.Fatalf("ran %q, want %q", ran, want)
+	}
+	if l, _, _ := kit.ReadLedger(p.KitLedger()); l.Dir != filepath.Join(home, ".claude") {
+		t.Fatalf("ledger dir %q", l.Dir)
 	}
 }

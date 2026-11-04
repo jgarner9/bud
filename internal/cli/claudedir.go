@@ -10,14 +10,15 @@ import (
 	"jgarner.dev/bud/internal/paths"
 )
 
-// claudeConfigDir is the Claude Code config dir bud uses (JGA-135, D73):
-// bud's own, so its kit, plugins, settings and login stay apart from the
-// claude you run yourself, or "" for Claude Code's usual ~/.claude
+// claudeConfigDir is the Claude Code config dir bud uses: "" for Claude
+// Code's usual ~/.claude, which bud shares by default (D77), or with
+// ai.claude.config "bud" its own (JGA-135, D73), so its kit, plugins,
+// settings and login stay apart from the claude you run yourself
 func claudeConfigDir(p *paths.Paths, s config.Settings) string {
-	if s.AI.Claude.Config == "home" {
-		return ""
+	if s.AI.Claude.Config == "bud" {
+		return p.ClaudeConfig()
 	}
-	return p.ClaudeConfig()
+	return ""
 }
 
 // UseClaudeConfig points everything this bud runs at its Claude Code config
@@ -55,9 +56,10 @@ func budClaudeDir() bool {
 
 // shareClaudeDir offers to switch bud to ~/.claude when that runs Claude Code
 // on a cloud provider bud's own dir doesn't see (JGA-146): the kit's ledger
-// keeps bud's things apart from yours there. On a yes it saves
-// ai.claude.config "home" and points this process at ~/.claude, so the rest
-// of the command sees it. A CLAUDE_CONFIG_DIR you set yourself is left alone
+// keeps bud's things apart from yours there. On a yes it unsets
+// ai.claude.config, whose default is "home", and points this process at
+// ~/.claude, so the rest of the command sees it. A CLAUDE_CONFIG_DIR you set
+// yourself is left alone
 var shareClaudeDir = func(pr *prompter, yes bool, provider string) (bool, error) {
 	// with nobody to ask, the caller's hint says it all
 	if !budClaudeDir() || (!yes && pr == nil) {
@@ -79,9 +81,7 @@ var shareClaudeDir = func(pr *prompter, yes bool, provider string) (bool, error)
 	if err != nil {
 		return false, err
 	}
-	if err := f.Set("ai.claude.config", "home"); err != nil {
-		return false, err
-	}
+	f.Unset("ai.claude.config")
 	if _, err := f.Settings(); err != nil {
 		return false, err
 	}
@@ -89,7 +89,7 @@ var shareClaudeDir = func(pr *prompter, yes bool, provider string) (bool, error)
 		return false, err
 	}
 	os.Unsetenv("CLAUDE_CONFIG_DIR")
-	fmt.Println("bud now shares ~/.claude; 'bud config unset ai.claude.config' gives it its own again.")
+	fmt.Println("bud now shares ~/.claude; 'bud config set ai.claude.config bud' gives it its own again.")
 
 	return true, nil
 }
@@ -150,7 +150,7 @@ func moveKit(pr *prompter, env kit.Env, dryRun bool) (bool, error) {
 	// the claude.ai connectors that stand in for some entries are listed only
 	// once this config is logged in; without them the sync would add duplicates
 	if s, err := checkClaude(); err != nil || s.Bin == "" || !s.LoggedIn {
-		fmt.Printf("bud now keeps its own Claude Code config in %s: log in there with 'bud claude setup', then run 'bud kit sync'.\n", env.ClaudeDir)
+		fmt.Printf("bud now uses the Claude Code config in %s: log in there with 'bud claude setup', then run 'bud kit sync'.\n", env.ClaudeDir)
 		return false, err
 	}
 	oldEnv := env
@@ -175,7 +175,7 @@ func moveKit(pr *prompter, env kit.Env, dryRun bool) (bool, error) {
 		}
 		return true, nil
 	}
-	fmt.Printf("bud now keeps its own Claude Code config in %s. The kit synced these into %s:\n", env.ClaudeDir, old)
+	fmt.Printf("bud now uses the Claude Code config in %s. The kit synced these into %s:\n", env.ClaudeDir, old)
 	for _, a := range gone {
 		fmt.Printf("  %s %s\n", a.Kind, a.Name)
 	}

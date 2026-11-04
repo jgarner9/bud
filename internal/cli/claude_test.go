@@ -145,7 +145,7 @@ func TestClaudeSetupElsewhere(t *testing.T) {
 	})
 }
 
-// shareClaudeDir saves ai.claude.config "home" and points this process at
+// shareClaudeDir unsets ai.claude.config (default "home") and points this process at
 // ~/.claude, but only when the dir in use is bud's own
 func TestShareClaudeDir(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
@@ -174,8 +174,11 @@ func TestShareClaudeDir(t *testing.T) {
 		t.Errorf("CLAUDE_CONFIG_DIR still %q", d)
 	}
 	f, _ := config.Load(p.MachineConfig())
-	if v, _ := f.Get("ai.claude.config"); v != "home" {
-		t.Errorf("ai.claude.config = %v", v)
+	if v, set := f.Get("ai.claude.config"); set {
+		t.Errorf("ai.claude.config = %v, want it unset", v)
+	}
+	if s, _ := f.Settings(); s.AI.Claude.Config != "home" {
+		t.Errorf("shares %q", s.AI.Claude.Config)
 	}
 }
 

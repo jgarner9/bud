@@ -12,7 +12,7 @@ func repoKit(t *testing.T) Repo {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "kit")
 	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "kit.json"), []byte(`{"plugins": [], "output_style": "p:s"}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "kit.json"), []byte(`{"plugins": [], "other": "kept"}`), 0o644)
 	return Repo{Dir: dir}
 }
 
@@ -39,7 +39,7 @@ func TestAddRemove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(k.Plugins, []string{"p@market"}) || k.Marketplaces["market"] != "https://example.com/market.git" || k.OutputStyle != "p:s" {
+	if !slices.Equal(k.Plugins, []string{"p@market"}) || k.Marketplaces["market"] != "https://example.com/market.git" {
 		t.Fatalf("kit %+v", k)
 	}
 
@@ -52,8 +52,11 @@ func TestAddRemove(t *testing.T) {
 		t.Fatal("removed nothing")
 	}
 	k, _ = Load(os.DirFS(r.Dir))
-	if len(k.Plugins) != 0 || len(k.Marketplaces) != 0 || k.OutputStyle != "p:s" {
+	if len(k.Plugins) != 0 || len(k.Marketplaces) != 0 {
 		t.Fatalf("after rm %+v", k)
+	}
+	if idx, _ := r.index(); idx["other"] != "kept" {
+		t.Fatalf("lost a key: %v", idx)
 	}
 }
 

@@ -69,14 +69,13 @@ A hands-on pass over bud's editor UI, for a release that changes it (written for
 - [ ] `<leader>as` shares a selection. `<leader>ae`/`af`/`at` on a selection open the chat pane with a reply.
 - [ ] `<leader>am` in a commit buffer writes a commit message.
 
-## 11. Kit plugins and output style (JGA-141 to JGA-144, JGA-168 to JGA-173)
+## 11. Kit plugins (JGA-168 to JGA-179)
 
 - [ ] `bud kit sync --dry-run` lists the `bud-plugins` marketplace, `bud`, `bud-ide` and `superpowers`, and on a machine synced by an older bud, the MCP servers, files and `CLAUDE.md` block it takes out. On the Bedrock Mac, `bud@bud-plugins` and the marketplace show as skipped (clod's).
-- [ ] After `bud kit sync`, `claude plugin list` has `bud-ide@bud-plugins`, and `~/.claude/settings.json` has `"outputStyle": "bud-ide:bud"` unless you'd picked one.
+- [ ] After `bud kit sync`, `claude plugin list` has `bud-ide@bud-plugins`, and `~/.claude/settings.json` has no `outputStyle` bud set (one you picked stays).
 - [ ] In `bud agent`, `/context` (or the first reply) shows the "When you're running inside bud" notes; in a plain `claude` outside bud they're absent.
-- [ ] Ask `bud agent` for a small task: the reply comes back as a log (`●` `✎` `✓` ...).
 - [ ] Ask something version-specific: the reply ends with a `◇` source line (`bud:tools`), and a `cache/` note appears in Basic Memory.
-- [ ] Ask the same in the chat pane (headless): the style still applies there.
+- [ ] Ask about the project in plain words, in `bud agent` and the chat pane: it answers conversationally, not as a task log.
 
 ## 12. Settings and config (JGA-135, JGA-132)
 

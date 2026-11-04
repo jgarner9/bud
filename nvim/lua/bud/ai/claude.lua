@@ -187,7 +187,7 @@ local function claude_settings()
 end
 
 -- output_style is outputStyle from the Claude Code config dir's settings.json
--- (the kit's, or one you picked), which print mode ignores unless it's passed
+-- (one you picked; bud sets none, D78), which print mode ignores unless it's passed
 -- with --settings; nil when there's none
 function M.output_style()
   local style = claude_settings().outputStyle

@@ -26,9 +26,7 @@ func TestShippedKit(t *testing.T) {
 			t.Errorf("no %s in %v", id, k.Plugins)
 		}
 	}
-	if k.OutputStyle != "bud-ide:bud" {
-		t.Errorf("output style %q", k.OutputStyle)
-	}
+
 }
 
 func TestWithoutBlock(t *testing.T) {

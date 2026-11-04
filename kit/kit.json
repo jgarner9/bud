@@ -6,6 +6,5 @@
     "bud@bud-plugins",
     "bud-ide@bud-plugins",
     "superpowers@anthropic-plugin-directory"
-  ],
-  "output_style": "bud-ide:bud"
+  ]
 }

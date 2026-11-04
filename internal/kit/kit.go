@@ -1,15 +1,14 @@
 // Package kit syncs bud's Claude Code setup (BASE.md 4.1, D77) from the
 // kit.json embedded in the binary into Claude Code's user config: the plugin
-// marketplaces bud's plugins come from, the plugins, and the output style
-// sync turns on. What Claude knows and how it works lives in those plugins
-// (jgarner9/bud-plugins), not in bud.
+// marketplaces bud's plugins come from, and the plugins. What Claude knows
+// and how it works lives in those plugins (jgarner9/bud-plugins), not in bud.
 //
 // bud only touches what it added: a ledger records each item, so the next
 // sync refreshes what's there, removes what the kit dropped, and leaves
 // anything you set up yourself alone. Everything goes through `claude
 // plugin`, never by editing its files. An older bud also synced MCP servers,
-// skills, agents, commands, output style files and a CLAUDE.md block; sync
-// takes out the ones still in the ledger, and nothing of yours.
+// skills, agents, commands, output styles and a CLAUDE.md block; sync takes
+// out the ones still in the ledger, and nothing of yours.
 package kit
 
 import (
@@ -35,9 +34,6 @@ type Kit struct {
 	// marketplace add takes it)
 	Marketplaces map[string]string
 	Plugins      []string // Claude Code plugins, name@marketplace
-	// the output style sync turns on in settings.json, as Claude Code names a
-	// plugin's: plugin:style
-	OutputStyle string
 }
 
 // Load reads kit.json from fsys, laid out like the repo's kit/
@@ -49,31 +45,30 @@ func Load(fsys fs.FS) (*Kit, error) {
 	var index struct {
 		Marketplaces map[string]string `json:"marketplaces"`
 		Plugins      []string          `json:"plugins"`
-		OutputStyle  string            `json:"output_style"`
 	}
 	if err := json.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("kit.json: %w", err)
 	}
 
-	return &Kit{Marketplaces: index.Marketplaces, Plugins: index.Plugins, OutputStyle: index.OutputStyle}, nil
+	return &Kit{Marketplaces: index.Marketplaces, Plugins: index.Plugins}, nil
 }
 
 // Ledger is what bud put into Claude Code's config
 type Ledger struct {
 	Plugins      map[string]string `json:"plugins,omitempty"`
 	Marketplaces map[string]string `json:"marketplaces,omitempty"` // name -> the source bud added it from
-	// the outputStyle bud set in settings.json; "" when it didn't set one
-	OutputStyle string `json:"output_style,omitempty"`
 	// the Claude Code config dir all this is in; "" from before bud kept its
 	// own (JGA-135) means ~/.claude
 	Dir string `json:"dir,omitempty"`
 
-	// what an older bud synced before D77, kept so sync can take it out: MCP
-	// servers, files under the Claude dir (path -> hash of what bud wrote)
-	// and the hash of its CLAUDE.md block
+	// what an older bud synced before D77 and D78, kept so sync can take it
+	// out: MCP servers, files under the Claude dir (path -> hash of what bud
+	// wrote), the hash of its CLAUDE.md block, and the outputStyle it set in
+	// settings.json
 	MCP          map[string]string `json:"mcp,omitempty"`
 	Files        map[string]string `json:"files,omitempty"`
 	Instructions string            `json:"instructions,omitempty"`
+	OutputStyle  string            `json:"output_style,omitempty"`
 }
 
 // ReadLedger reads path; a missing ledger is an empty one, and false
@@ -141,16 +136,13 @@ func (k *Kit) without(names []string) *Kit {
 			}
 		}
 	}
-	if slices.Contains(names, k.OutputStyle) {
-		out.OutputStyle = ""
-	}
 
 	return &out
 }
 
 // Action is one thing sync does, or would do with --dry-run
 type Action struct {
-	Kind string // "marketplace", "plugin", "output-style"; "mcp", "file" and "instructions" for what an older bud left
+	Kind string // "marketplace", "plugin"; "mcp", "file", "instructions" and "output-style" for what an older bud left
 	Name string
 	Do   string // "add", "update", "remove", "skip", "ok"
 	Why  string
@@ -188,7 +180,7 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 	if err != nil {
 		errs = append(errs, err)
 	}
-	present, err := syncPlugins(k, env, ledger, dryRun, &actions)
+	err = syncPlugins(k, env, ledger, dryRun, &actions)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -198,10 +190,7 @@ func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
 	// have now (D77)
 	removeLegacy(env, ledger, dryRun, &actions, &errs)
 
-	// outputStyle in settings.json, once the plugin with the style is there
-	plugin, _, _ := strings.Cut(k.OutputStyle, ":")
-	haveStyle := slices.ContainsFunc(present, func(id string) bool { return strings.HasPrefix(id, plugin+"@") })
-	if a, err := syncOutputStyle(k.OutputStyle, haveStyle, env, ledger, dryRun); err != nil {
+	if a, err := removeOutputStyle(env, ledger, dryRun); err != nil {
 		errs = append(errs, err)
 	} else if a != nil {
 		actions = append(actions, *a)
@@ -229,13 +218,13 @@ func Unsync(env Env, dryRun bool) ([]Action, error) {
 // Claude Code installed from it still goes stale), and uninstalls bud's that
 // the kit dropped. A plugin you installed yourself stays yours, and so does
 // one claude.ai syncs (it loads as name@synced, JGA-177): then bud takes its
-// own copy out, so the synced one loads and updates with claude.ai. It
-// returns the plugins that are, or after a dry run would be, there
-func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action) (present []string, err error) {
+// own copy out, so the synced one loads and updates with claude.ai
+func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action) error {
 	if len(k.Plugins) == 0 && len(ledger.Plugins) == 0 {
-		return nil, nil
+		return nil
 	}
 	var installed []string
+	var err error
 	var errs []error
 	if env.InstalledPlugins != nil {
 		if installed, err = env.InstalledPlugins(); err != nil {
@@ -248,7 +237,6 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 		switch {
 		case slices.Contains(installed, synced) && owned:
 			*actions = append(*actions, Action{"plugin", id, "remove", "claude.ai syncs it"})
-			present = append(present, synced)
 			if dryRun {
 				continue
 			}
@@ -261,10 +249,8 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			delete(ledger.Plugins, id)
 		case slices.Contains(installed, synced):
 			*actions = append(*actions, Action{"plugin", id, "skip", "claude.ai syncs it"})
-			present = append(present, synced)
 		case slices.Contains(installed, id) && owned:
 			*actions = append(*actions, Action{"plugin", id, "ok", ""})
-			present = append(present, id)
 			if dryRun {
 				continue
 			}
@@ -273,11 +259,9 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			_ = env.Claude("plugin", "update", "--scope", "user", id)
 		case slices.Contains(installed, id):
 			*actions = append(*actions, Action{"plugin", id, "skip", "you installed it yourself"})
-			present = append(present, id)
 		default:
 			*actions = append(*actions, Action{"plugin", id, "add", ""})
 			if dryRun {
-				present = append(present, id)
 				continue
 			}
 			if err := env.Claude("plugin", "install", "--scope", "user", id); err != nil {
@@ -285,7 +269,6 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 				continue
 			}
 			ledger.Plugins[id] = "installed"
-			present = append(present, id)
 		}
 	}
 	for _, id := range sortedKeys(ledger.Plugins) {
@@ -305,7 +288,7 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 		delete(ledger.Plugins, id)
 	}
 
-	return present, errors.Join(errs...)
+	return errors.Join(errs...)
 }
 
 // syncMarketplaces adds the kit's marketplaces Claude Code doesn't have yet
@@ -529,9 +512,6 @@ func (k *Kit) Entries() [][3]string {
 	}
 	for _, p := range k.Plugins {
 		out = append(out, [3]string{"plugin", p, ""})
-	}
-	if k.OutputStyle != "" {
-		out = append(out, [3]string{"output-style", k.OutputStyle, "turned on unless you picked one"})
 	}
 
 	return out

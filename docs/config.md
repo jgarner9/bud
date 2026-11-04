@@ -77,7 +77,7 @@ bud config edit                           # open it in bud's editor, then check 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `tools.disabled` | unset | Tools turned off on this machine. `bud tools enable/disable` edits it; a tool that fails to load is added here with the reason (`bud tools ls` shows it). |
-| `kit.disabled` | unset | Kit entries turned off on this machine, by name (`bud-ide@bud-plugins`, `bud-plugins`, `bud-ide:bud`); `bud kit sync` removes what bud added of them from Claude Code. `bud kit enable/disable` edits it. Disabling `bud-ide:bud` stops sync setting it as `outputStyle`. |
+| `kit.disabled` | unset | Kit entries turned off on this machine, by name (`bud-ide@bud-plugins`, `bud-plugins`); `bud kit sync` removes what bud added of them from Claude Code. `bud kit enable/disable` edits it. |
 
 ## Environment
 

@@ -92,7 +92,9 @@ function M.toggle()
   end
   M.arrange()
   if fresh then
-    vim.fn.jobstart(vim.o.shell, {
+    -- the shell itself, as :terminal starts it, not under sh -c: bud.quit
+    -- tells an idle shell by it having no child processes
+    vim.fn.jobstart(vim.split(vim.o.shell, "%s+", { trimempty = true }), {
       term = true,
       on_exit = function()
         -- the shell is gone, so the next press starts a new one
@@ -109,6 +111,15 @@ function M.toggle()
     })
   end
   vim.cmd.startinsert()
+end
+
+-- job is the terminal's shell job, nil when there's none (bud.quit)
+function M.job()
+  if buf and vim.api.nvim_buf_is_valid(buf) then
+    local chan = vim.bo[buf].channel
+    return chan > 0 and chan or nil
+  end
+  return nil
 end
 
 -- buf_id is the terminal's buffer, for tests

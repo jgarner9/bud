@@ -4,6 +4,9 @@ local map = vim.keymap.set
 -- window, Normal mode in a terminal pane included (Esc Esc gets there)
 map("n", "<leader>w", "<C-w>", { desc = "+window" })
 
+-- <leader>qq quit, <leader>qw save all and quit, <leader>qQ quit without saving
+require("bud.quit").setup()
+
 map("n", "<leader>d", function()
   require("bud.dashboard").open()
 end, { desc = "Dashboard" })

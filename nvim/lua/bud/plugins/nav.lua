@@ -122,6 +122,7 @@ return {
           { mode = "n", keys = "<Leader>c", desc = "+code" },
           { mode = "n", keys = "<Leader>g", desc = "+git" },
           { mode = "n", keys = "<Leader>h", desc = "+hunks" },
+          { mode = "n", keys = "<Leader>q", desc = "+quit" },
           { mode = "n", keys = "<Leader>u", desc = "+interface" },
           clue.gen_clues.builtin_completion(),
           clue.gen_clues.g(),

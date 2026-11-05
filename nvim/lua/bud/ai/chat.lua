@@ -119,6 +119,15 @@ function M._closed(s)
   end
 end
 
+-- stop_all stops the chat TUI, for quitting (bud.quit), and returns its job
+function M.stop_all()
+  if state.job then
+    vim.fn.jobstop(state.job)
+    return { state.job }
+  end
+  return {}
+end
+
 -- running says whether the chat TUI is open, for tests
 function M.running()
   return state.job ~= nil

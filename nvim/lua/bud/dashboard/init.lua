@@ -315,7 +315,7 @@ local function keys(buf)
     draw()
   end, "Switch style")
   map("q", function()
-    vim.cmd("confirm qall")
+    require("bud.quit").quit()
   end, "Quit")
   if current.settings.scratchpad then
     map("x", function()

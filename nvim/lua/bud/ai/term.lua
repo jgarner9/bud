@@ -192,6 +192,18 @@ function M.reap(minutes, at)
   end
 end
 
+-- stop_all stops every TUI, for quitting (bud.quit), and returns their jobs
+function M.stop_all()
+  local jobs = {}
+  for _, t in pairs(terms) do
+    if t.job then
+      vim.fn.jobstop(t.job)
+      table.insert(jobs, t.job)
+    end
+  end
+  return jobs
+end
+
 -- running says whether root has a TUI open, for tests
 function M.running(root)
   return terms[root_of(root)] ~= nil

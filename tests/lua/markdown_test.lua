@@ -89,4 +89,47 @@ md.toggle(scratch)
 md.sync(scratch)
 eq(#calls, 1, "an unattached buffer is left alone")
 
+-- the toggle does nothing while the file is in a diff, and says why
+calls = {}
+md.toggle(buf)
+eq(calls, { { buf, true } }, "toggled back on for the next checks")
+vim.cmd("vsplit")
+vim.wo.diff = true
+md.sync_all()
+local said
+local notify = vim.notify
+vim.notify = function(msg)
+  said = msg
+end
+md.toggle(buf)
+vim.notify = notify
+eq(vim.b[buf].bud_markdown, true, "the choice is kept during a diff")
+eq(said ~= nil, true, "and the toggle says why nothing changed")
+vim.cmd("close")
+md.sync_all()
+
+-- with setup, windows going in and out of diff mode are followed by themselves
+md.setup()
+calls = {}
+vim.cmd("vsplit")
+vim.cmd.diffthis()
+eq(calls, { { buf, false } }, "diffthis shows the text")
+vim.cmd("close")
+if not vim.wait(1000, function()
+  return #calls == 2
+end, 10) then
+  error("closing the diff window didn't render it again: " .. vim.inspect(calls))
+end
+eq(calls[2], { buf, true }, "closing the diff window renders it again")
+
+-- a reopened file (:bdelete, then :edit) is set up again, as ui.markdown says now
+settings("{}")
+local path = vim.api.nvim_buf_get_name(buf)
+vim.cmd("enew")
+vim.cmd("bdelete " .. buf)
+vim.cmd.edit(vim.fn.fnameescape(path))
+eq(vim.api.nvim_get_current_buf(), buf, "the same buffer comes back")
+eq(vim.b[buf].bud_markdown, true, "its choice is set up again")
+eq(vim.fn.maparg("<leader>um", "n", false, true).buffer, 1, "and its toggle")
+
 print("markdown_test: ok")

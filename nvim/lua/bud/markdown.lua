@@ -7,6 +7,9 @@
 
 local M = {}
 
+-- the markdown buffers bud set up, so events only look at those
+local tracked = {}
+
 -- the plugin's API; tests swap it
 M.api = function()
   return require("render-markdown")
@@ -27,9 +30,14 @@ local function in_diff(buf)
   return false
 end
 
--- sync renders buf or not, from what you chose and whether it's in a diff
+-- sync renders buf or not, from what you chose and whether it's in a diff.
+-- A hidden buffer waits until it's shown: the plugin draws in a window
 function M.sync(buf)
-  if not vim.api.nvim_buf_is_valid(buf) or vim.b[buf].bud_markdown == nil then
+  if not vim.api.nvim_buf_is_valid(buf) then
+    tracked[buf] = nil
+    return
+  end
+  if vim.b[buf].bud_markdown == nil or #vim.fn.win_findbuf(buf) == 0 then
     return
   end
   local on = vim.b[buf].bud_markdown and not in_diff(buf)
@@ -43,9 +51,9 @@ function M.sync(buf)
   end)
 end
 
--- sync_all syncs every buffer the plugin attached to
+-- sync_all syncs every buffer bud set up
 function M.sync_all()
-  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+  for buf in pairs(tracked) do
     M.sync(buf)
   end
 end
@@ -56,17 +64,23 @@ function M.toggle(buf)
   if vim.b[buf].bud_markdown == nil then
     return
   end
+  if in_diff(buf) then
+    vim.notify("bud: this file shows as text while it's in a diff", vim.log.levels.INFO)
+    return
+  end
   vim.b[buf].bud_markdown = not vim.b[buf].bud_markdown
   M.sync(buf)
 end
 
 -- attach is the plugin's on.attach: the buffer starts as ui.markdown says,
--- read now rather than at startup, so a change applies to the next file
-function M.attach(ctx)
+-- read now rather than at startup, so a change applies to the next file.
+-- reopened: the plugin attached to it before, and what it draws is unknown
+function M.attach(ctx, reopened)
   local buf = ctx.buf
+  tracked[buf] = true
   vim.b[buf].bud_markdown = require("bud.config").get("ui.markdown", true) ~= false
-  -- what the plugin does by itself once attached
-  vim.b[buf].bud_markdown_shown = true
+  -- just attached, the plugin renders; unknown, the next sync sets it either way
+  vim.b[buf].bud_markdown_shown = not reopened or nil
   vim.keymap.set("n", "<leader>um", function()
     M.toggle(buf)
   end, { buffer = buf, desc = "Toggle markdown rendering" })
@@ -94,6 +108,18 @@ end
 -- setup follows windows going in and out of diff mode, once the plugin loaded
 function M.setup()
   local group = vim.api.nvim_create_augroup("bud.markdown", {})
+  -- after :bdelete the plugin still counts a reopened file as attached, so its
+  -- on.attach doesn't run again, but its b: variables and keys are gone
+  vim.api.nvim_create_autocmd("FileType", {
+    group = group,
+    pattern = "markdown",
+    desc = "set a reopened markdown file up again",
+    callback = function(ev)
+      if tracked[ev.buf] and vim.b[ev.buf].bud_markdown == nil and M.file(ev.buf) then
+        M.attach({ buf = ev.buf }, true)
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd("OptionSet", {
     group = group,
     pattern = "diff",

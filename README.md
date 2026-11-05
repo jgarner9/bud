@@ -189,6 +189,10 @@ The Go side uses the standard library only, and flags always go before positiona
 
 To release, run Claude Code's `/bud:release` (the `bud:release` skill from [bud-plugins](https://github.com/jgarner9/bud-plugins), which `bud kit sync` installs). It runs a code review and a security review of everything since the last tag, goes through the findings with you, then changes `VERSION` (for example to `0.20.0`) on `main`. The release workflow checks it is newer than the last release, runs the tests, tags `v0.20.0`, and GoReleaser builds linux/darwin × amd64/arm64 and attaches the archives and `checksums.txt` to a GitHub release, where `install.sh` picks them up.
 
+## License
+
+[MIT](LICENSE). The plugins bud installs keep their own licenses.
+
 <div align="center">
 <sub>[o.o] beep boop, built one commit at a time</sub>
 </div>

@@ -167,12 +167,10 @@ has(view.build(vim.tbl_extend("force", data, { mood = "normal", frame = { wave =
 local extra = vim.deepcopy(data)
 extra.projects[1].prs = { open = 2, review = 1 }
 extra.projects[1].todos = 7
-extra.chats = { { key = "a", title = "bud roadmap" } }
 extra.clock = "Tue Oct 27  21:30"
 lines = view.build(extra, 120, 60)
 has(lines, icons.pr .. "  2   " .. icons.review .. "  1", "PRs and reviews")
 has(lines, icons.todo .. "  7", "TODO count")
-has(lines, "a     bud roadmap", "a recent chat")
 has(lines, icons.clock .. "  Tue Oct 27  21:30", "clock")
 eq(
   dashboard.parse_prs('[{"reviewRequests":[{"login":"me"}]},{"reviewRequests":[]}]', "me"),

@@ -438,7 +438,7 @@ function M.start(report, target, root, ctx)
   local run = { key = key, root = vim.uv.fs_realpath(root) or root, target = target, state = "proposing" }
   M.runs[key] = run
   -- a conversation of its own, never the project's
-  claude.session(run.root, { key = key, resume = "new", chat = true })
+  claude.session(run.root, { key = key, resume = "new", extra = true })
   local unsub
   unsub = claude.on("done", function(d, s)
     if s.key ~= key then

@@ -21,7 +21,7 @@ vim.fn.mkdir(tmp .. "/proj", "p")
 require("bud.config").file = tmp .. "/config.json"
 vim.env.CLAUDE_CONFIG_DIR = tmp .. "/cc"
 -- where the TUI writes its conversation: a new one, as after /clear
-local tui_store = require("bud.chat.store").project_dir(tmp .. "/proj")
+local tui_store = require("bud.ai.claude").project_dir(tmp .. "/proj")
 vim.fn.mkdir(tui_store, "p")
 -- never the real ~/.claude/ide
 require("bud.ai.bridge").lock_dir = function()

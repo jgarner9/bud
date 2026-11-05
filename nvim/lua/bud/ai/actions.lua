@@ -1,7 +1,7 @@
 -- Inline actions (BASE.md 4, JGA-90): explain, refactor or write tests for a
--- selection, and draft a commit message, all on the project's session. The
--- answer shows in the chat pane; edits Claude proposes come as permission
--- diffs to accept or reject (bud.ai.permissions).
+-- selection in the project's Claude Code TUI (bud.ai.term, JGA-165), whose
+-- edits come as diffs to accept or reject (the IDE bridge's openDiff); and
+-- draft a commit message on the project's headless session.
 
 local claude = require("bud.ai.claude")
 
@@ -29,7 +29,8 @@ function M.range()
   return first == last and ("%s#L%d"):format(rel, first) or ("%s#L%d-%d"):format(rel, first, last)
 end
 
--- run sends one action for the selection and shows the pane
+-- run sends one action for the selection to the project's TUI, opening it
+-- beside the code when it isn't showing
 function M.run(action)
   local where = M.range()
   if not where then
@@ -37,14 +38,7 @@ function M.run(action)
     return
   end
   vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
-  local text = M.prompts[action]:format("@" .. where)
-  if claude.send(text) then
-    require("bud.chat.pane").open({ focus = false })
-    local v = require("bud.chat.pane").view()
-    if v then
-      v:add({ role = "user", text = text })
-    end
-  end
+  require("bud.ai.term").send(M.prompts[action]:format("@" .. where))
 end
 
 local function git(args)

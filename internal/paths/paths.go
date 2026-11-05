@@ -65,6 +65,10 @@ func (p *Paths) UpdateState() string { return filepath.Join(p.State, "update.jso
 // UpdateLog is where the detached background update check writes
 func (p *Paths) UpdateLog() string { return filepath.Join(p.Cache, "update.log") }
 
+// Chat is where bud's chat runs Claude Code (JGA-165), a dir that's no
+// project's, so its conversations are kept apart; nvim's stdpath("state")/chat
+func (p *Paths) Chat() string { return filepath.Join(p.State, "chat") }
+
 // Migrations records which migrations/ scripts have run
 func (p *Paths) Migrations() string { return filepath.Join(p.State, "migrations.json") }
 

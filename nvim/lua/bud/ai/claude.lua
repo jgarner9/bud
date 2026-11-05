@@ -214,14 +214,52 @@ local function read_ids()
   return ok and type(ids) == "table" and ids or {}
 end
 
+-- claude_dir is Claude Code's config dir; swappable in tests
+M.claude_dir = function()
+  local dir = vim.env.CLAUDE_CONFIG_DIR
+  return (dir and dir ~= "") and dir or vim.fn.expand("~/.claude")
+end
+
+-- project_dir is Claude Code's store for conversations run in dir: the path
+-- with everything but letters and digits turned into -
+function M.project_dir(dir)
+  dir = vim.uv.fs_realpath(dir) or dir
+  return M.claude_dir() .. "/projects/" .. dir:gsub("[^%w]", "-")
+end
+
+-- plugin_file is rel inside the installed plugin named name (from any
+-- marketplace), nil when Claude Code doesn't have it or the plugin has no
+-- such file (an older copy)
+function M.plugin_file(name, rel)
+  local plugins = M.claude_dir() .. "/plugins"
+  local f = io.open(plugins .. "/installed_plugins.json")
+  if f then
+    local ok, data = pcall(vim.json.decode, f:read("*a"))
+    f:close()
+    if ok and type(data) == "table" and type(data.plugins) == "table" then
+      for id, installs in pairs(data.plugins) do
+        if type(id) == "string" and id:match("^(.-)@") == name and type(installs) == "table" then
+          for _, install in ipairs(installs) do
+            local path = type(install) == "table" and install.installPath
+            if type(path) == "string" and vim.uv.fs_stat(path .. "/" .. rel) then
+              return path .. "/" .. rel
+            end
+          end
+        end
+      end
+    end
+  end
+  return nil
+end
+
 -- project says whether s is a project's own session, not a keyed one
--- (chat, issues, gen), which keep their conversations themselves
+-- (issues, work, gen), which keep their conversations themselves
 local function project(s)
-  return s.root ~= nil and s.key == s.root and not s.chat
+  return s.root ~= nil and s.key == s.root and not s.extra
 end
 
 local function conversation(root, id)
-  return require("bud.chat.store").project_dir(root) .. "/" .. id .. ".jsonl"
+  return M.project_dir(root) .. "/" .. id .. ".jsonl"
 end
 
 -- saved_id is root's conversation from an earlier session, when Claude Code
@@ -262,7 +300,7 @@ end
 -- any_conversation says whether Claude Code has a conversation in root, so
 -- --continue has one to pick
 local function any_conversation(root)
-  for name, kind in vim.fs.dir(require("bud.chat.store").project_dir(root or vim.fn.getcwd())) do
+  for name, kind in vim.fs.dir(M.project_dir(root or vim.fn.getcwd())) do
     if kind == "file" and name:match("%.jsonl$") then
       return true
     end
@@ -422,14 +460,14 @@ local function feed(s, data)
 end
 
 -- least recently used running project session other than keep, to make
--- room (chat's own sessions don't count: there's one at a time)
+-- room (extra sessions, such as issues' and gen's, don't count)
 local function evict(keep)
-  if keep.chat then
+  if keep.extra then
     return
   end
   local running, oldest = 0, nil
   for _, s in pairs(sessions) do
-    if s.job and s ~= keep and not s.chat then
+    if s.job and s ~= keep and not s.extra then
       running = running + 1
       if not oldest or s.last_used < oldest.last_used then
         oldest = s
@@ -549,10 +587,10 @@ end
 
 -- session returns root's session (default: the current dir), starting it if
 -- it isn't running. A project's session is keyed by its root; opts.key names
--- another one in root (the chat's). opts: context (files to mention with the
+-- another one in root (an issue's, gen's). opts: context (files to mention with the
 -- first message), and for a new keyed session session_id (the conversation to
 -- resume), resume ("new" or "continue", over config), args (extra flags such
--- as --model) and chat (not counted against the project sessions)
+-- as --model) and extra (not counted against the project sessions)
 function M.session(root, opts)
   opts = opts or {}
   local key = opts.key or root_of(root)
@@ -568,7 +606,7 @@ function M.session(root, opts)
       session_id = opts.session_id,
       resume = opts.resume,
       args = opts.args,
-      chat = opts.chat,
+      extra = opts.extra,
     }
     sessions[key] = s
   end
@@ -585,7 +623,7 @@ end
 -- conversations lists Claude Code's stored conversations for root, id to
 -- { size, mtime }, the mtime in seconds
 local function conversations(root)
-  local dir = require("bud.chat.store").project_dir(root)
+  local dir = M.project_dir(root)
   local found = {}
   for name, kind in vim.fs.dir(dir) do
     local id = kind == "file" and name:match("^(.+)%.jsonl$")
@@ -616,7 +654,14 @@ function M.handover(root)
   s.handed = conversations(root)
   set_status(s, "term")
   local cfg = settings()
-  return vim.list_extend(vim.list_extend(M.prefix(bin, cfg), M.resume_args(s, cfg)), cfg.args or {})
+  return M.tui_argv(bin, M.resume_args(s, cfg))
+end
+
+-- tui_argv is the command line for Claude Code's own TUI: the prefix
+-- (ai.claude.command), flags, then ai.claude.args
+function M.tui_argv(bin, flags)
+  local cfg = settings()
+  return vim.list_extend(vim.list_extend(M.prefix(bin, cfg), flags or {}), cfg.args or {})
 end
 
 -- tui_conversation is the conversation the TUI wrote to since it took root's
@@ -742,7 +787,7 @@ function M.restart(root)
 end
 
 -- drop stops a session and forgets it, so the next one under its key starts
--- fresh (chat switching conversations)
+-- fresh (gen starting over)
 function M.drop(key)
   local s = sessions[key]
   if s then
@@ -835,14 +880,17 @@ function M.setup()
     end,
   })
   vim.keymap.set("n", "<leader>ch", function()
-    require("bud.chat").toggle()
-  end, { desc = "Chat" })
-  vim.keymap.set("n", "<leader>aa", function()
-    require("bud.chat.pane").toggle()
-  end, { desc = "Chat pane (this project)" })
+    require("bud.ai.chat").toggle()
+  end, { desc = "Chat (Claude Code, chat mode)" })
   vim.api.nvim_create_user_command("BudChat", function(o)
-    require("bud.chat").open({ resume = o.args ~= "" and o.args or nil })
-  end, { nargs = "?", desc = "Full-screen chat, resuming the chat titled like the argument" })
+    require("bud.ai.chat").open({ resume = o.args == "resume" })
+  end, {
+    nargs = "?",
+    desc = "Chat with Claude Code in chat mode; resume picks an earlier chat",
+    complete = function()
+      return { "resume" }
+    end,
+  })
   vim.keymap.set("n", "<leader>ac", function()
     require("bud.ai.term").toggle()
   end, { desc = "Claude Code (its own TUI)" })

@@ -122,7 +122,7 @@ bud main.go util.go # open files, from the project root they belong to
 | `bud launch` | Opens bud in a new Kitty or Ghostty window (what the app runs). `bud bundle` installs the app |
 | `bud layout` | `ls` lists pane layouts; `set-default`, `set` and `unset` pick what projects open in |
 | `bud claude` | `status` and `setup`: is Claude Code installed and logged in, and fix it if not |
-| `bud chat` | Full-screen chat with Claude Code, with history; `bud agent [path]` opens Claude Code's own TUI |
+| `bud chat` | Chats with Claude Code in chat mode, outside any project (`--resume` picks an earlier chat); `bud agent [path]` opens Claude Code in a project |
 | `bud tools` | Your tools and bud's: `ls`, `enable`, `disable`, `rm`, `promote`, and `gen "..."` to have Claude write one |
 | `bud kit` | Syncs bud's Claude Code setup (plugin marketplaces and plugins) into Claude Code: `status`, `sync`, `unsync`, `core` |
 | `bud config` | `ls`, `get`, `set`, `unset`, `edit`: machine config by dotted key |
@@ -149,8 +149,8 @@ Leader is <kbd>Space</kbd>. Press it and wait, and the keys that follow show up.
 | <kbd>Space</kbd> <kbd>x</kbd> | Diagnostics |
 | <kbd>Space</kbd> <kbd>c</kbd> <kbd>f</kbd> | Format buffer |
 | <kbd>Space</kbd> <kbd>g</kbd> <kbd>d</kbd> | Diff the working tree |
-| <kbd>Space</kbd> <kbd>c</kbd> <kbd>h</kbd> · <kbd>Space</kbd> <kbd>a</kbd> <kbd>a</kbd> | Full-screen chat · chat pane for this project |
-| <kbd>Space</kbd> <kbd>a</kbd> <kbd>e</kbd> / <kbd>f</kbd> / <kbd>t</kbd> | Explain · refactor · write tests for the selection |
+| <kbd>Space</kbd> <kbd>c</kbd> <kbd>h</kbd> | Chat: Claude Code in chat mode, in its own tab |
+| <kbd>Space</kbd> <kbd>a</kbd> <kbd>e</kbd> / <kbd>f</kbd> / <kbd>t</kbd> | Explain · refactor · write tests for the selection, in Claude Code's TUI |
 | <kbd>Space</kbd> <kbd>a</kbd> <kbd>c</kbd> | Claude Code's own TUI |
 | <kbd>g</kbd> <kbd>a</kbd> · <kbd>q</kbd> | In a proposed edit: accept · reject |
 | <kbd>Space</kbd> <kbd>,</kbd> | Settings |
@@ -165,7 +165,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and the keys that follow show up.
 - [x] Self-update in the background, with doctor-based rollback
 - [x] Signed releases and a nightly channel
 - [x] Pane layouts, a Kitty/Ghostty launcher, and app bundles
-- [x] **Claude Code built in:** one session per project, shared by side-pane chat, full-screen chat, inline actions and a tool generator, with edits as diffs you accept
+- [x] **Claude Code built in:** one session per project, shared by Claude Code's own TUI, inline actions and a tool generator, with edits as diffs you accept, plus a chat mode outside any project
 - [x] Polish: settings screen, `bud config`, completions, docs, Lua, debugging
 
 The full plan and every decision made so far live in [`BASE.md`](BASE.md). How-tos and the config reference are in [`docs/`](docs/): [config](docs/config.md), [languages](docs/languages.md), [tools](docs/tools.md), [layouts](docs/layouts.md), [building a Claude TUI](docs/claude-tui.md) and [troubleshooting](docs/troubleshooting.md).

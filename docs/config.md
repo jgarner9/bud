@@ -51,7 +51,6 @@ bud config edit                           # open it in bud's editor, then check 
 | `dashboard.scratchpad` | `false` | `x` opens one notes file in bud's data dir. |
 | `dashboard.prs` | `false` | Open PRs per project, and how many ask you for a review, through `gh`. |
 | `dashboard.todos` | `false` | How many TODO and FIXME comments each project has, through `rg`. |
-| `dashboard.chats` | `false` | The last three full-screen chats, on `a`, `b` and `e` to resume. |
 | `dashboard.clock` | `false` | The date and time under the robot. |
 | `dashboard.animate` | `true` | The robot blinks, looks around and waves now and then (it only snores after midnight). |
 | `dashboard.sessions` | `false` | Save a project's open files on exit and restore them when you open it from the dashboard. |
@@ -61,12 +60,11 @@ bud config edit                           # open it in bud's editor, then check 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `ai.claude.autostart` | `true` | Start a Claude Code session when a project opens. Off, bud only starts one when you use an AI feature. |
-| `ai.claude.resume` | `"continue"` | Reopening a project carries on bud's last conversation there (kept in `~/.local/state/bud/claude-sessions.json`, so never one you started yourself, or an issue or chat session); `"new"` starts fresh each time. |
+| `ai.claude.resume` | `"continue"` | Reopening a project carries on bud's last conversation there (kept in `~/.local/state/bud/claude-sessions.json`, so never one you started yourself, or an issue, gen or chat conversation); `"new"` starts fresh each time. |
 | `ai.claude.idle_minutes` | `30` | Stop a session nothing has used for this long; the next use starts it again on the same conversation. `0` never stops one. |
 | `ai.claude.args` | `[]` | Extra flags for every session, e.g. `["--model", "opus"]`. |
 | `ai.claude.command` | unset | What runs Claude Code when it isn't `claude` itself: a wrapper that passes the rest on, e.g. `["headroom", "wrap", "claude", "--code-memory", "none", "--"]`. `bud install` offers exactly that when Headroom is installed, and `bud doctor` warns if the wrapper isn't on PATH. |
 | `ai.claude.config` | `"home"` | Whose Claude Code config bud uses. `"home"` shares `~/.claude` with the `claude` you run yourself, so bud's sessions get its MCP servers, settings, rules and login. `"bud"` is its own, in `~/.local/share/bud/claude` (set as `CLAUDE_CONFIG_DIR` for everything bud starts): the kit, plugins, settings, history and login stay apart, so it needs its own login (`bud claude setup`), and it can't see a cloud provider set up in `~/.claude/settings.json` (then `bud claude setup` and `bud install` offer to share). When this changes, `bud kit sync` offers to take what the kit added out of the old one. The first kit sync into `~/.claude` lists what it adds and asks first, and `bud kit unsync` takes the kit back out. A `CLAUDE_CONFIG_DIR` you set yourself wins. |
-| `ai.chat.pane` | `"native"` | The default layout's chat pane: bud's own chat, or `"term"` for Claude Code's own TUI. |
 | `ai.issues.team` | unset | The Linear team issues filed with `<leader>ai` go to, for projects without their own (`bud issue set --team T [--project P] [project]`). `bud issue set --global` sets it. |
 | `ai.issues.project` | unset | The Linear project in that team, if any. |
 | `ai.issues.bud.team` | `"JGA"` | Where issues about bud itself (`<leader>aB`) go: bud's own tracker. |

@@ -90,7 +90,7 @@ eq(
   nil,
   "nor an id not saved yet"
 )
-local here_store = require("bud.chat.store").project_dir(here.root)
+local here_store = require("bud.ai.claude").project_dir(here.root)
 vim.fn.mkdir(here_store, "p")
 vim.fn.writefile({ "{}" }, here_store .. "/abc.jsonl")
 eq(claude.argv("claude", here, { resume = "continue", args = { "--model", "x" } }), {
@@ -118,7 +118,7 @@ do
   local root = tmp .. "/saved"
   local proj = { key = root, root = root }
   vim.fn.writefile({ vim.json.encode({ [root] = "old" }) }, tmp .. "/claude-sessions.json")
-  local store = require("bud.chat.store").project_dir(root)
+  local store = require("bud.ai.claude").project_dir(root)
   vim.fn.mkdir(store, "p")
   vim.fn.writefile({ "{}" }, store .. "/other.jsonl")
   eq(claude.resume_args(proj, { resume = "continue" }), { "--continue" }, "a saved id Claude Code lost")
@@ -126,7 +126,7 @@ do
   eq(claude.resume_args(proj, { resume = "continue" }), { "--resume", "old" }, "the saved id")
   eq(claude.resume_args(proj, { resume = "new" }), {}, "resume new ignores it")
   eq(
-    claude.resume_args({ key = "chat", root = root, chat = true }, { resume = "continue" }),
+    claude.resume_args({ key = "issue", root = root, extra = true }, { resume = "continue" }),
     { "--continue" },
     "keyed sessions keep their own"
   )

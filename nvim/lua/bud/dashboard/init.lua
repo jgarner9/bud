@@ -140,9 +140,6 @@ local function menu(settings)
   return items
 end
 
--- recent chats open on these keys
-local chat_keys = { "a", "b", "e" }
-
 local function data()
   local list = {}
   for _, p in ipairs(projects.list()) do
@@ -167,7 +164,6 @@ local function data()
     banners = current.update and { current.update, unpack(current.banners) } or current.banners,
     health = current.settings.health and health() or nil,
     clock = current.settings.clock and os.date("%a %b %d  %H:%M") or nil,
-    chats = current.chats,
   }
 end
 
@@ -305,12 +301,13 @@ local function keys(buf)
   map("u", function()
     cli.terminal({ "update" })
   end, "Update")
-  -- chat, or setting up Claude Code first when the banner says it isn't
+  -- chat (Claude Code's TUI in chat mode, JGA-165), or setting up Claude
+  -- Code first when the banner says it isn't
   map("c", function()
     if current.claude and current.claude.status ~= "ok" then
       cli.terminal({ "claude", "setup" })
     else
-      require("bud.chat").open()
+      require("bud.ai.chat").open()
     end
   end, "Chat")
   map("t", function()
@@ -332,17 +329,6 @@ local function keys(buf)
         M.open_project(p)
       end
     end, "Open project " .. i)
-  end
-  -- recent chats on a b c (JGA-97)
-  if current.settings.chats then
-    for i, key in ipairs(chat_keys) do
-      map(key, function()
-        local c = current and current.chats and current.chats[i]
-        if c then
-          require("bud.chat").open({ resume = c.title })
-        end
-      end, "Resume chat " .. i)
-    end
   end
 end
 
@@ -414,22 +400,6 @@ local function extras()
           end)
         end
       )
-    end
-  end
-  if current.settings.chats then
-    local ok, store = pcall(require, "bud.chat.store")
-    if ok then
-      local recent = {}
-      for _, e in ipairs(store.list()) do
-        table.insert(recent, e)
-      end
-      table.sort(recent, function(a, b)
-        return a.mtime > b.mtime
-      end)
-      current.chats = {}
-      for i = 1, math.min(#chat_keys, #recent) do
-        table.insert(current.chats, { key = chat_keys[i], title = recent[i].title })
-      end
     end
   end
   if current.settings.clock then
@@ -557,7 +527,6 @@ function M.open(opts)
       -- optional extras (JGA-97), off unless config.json turns them on
       prs = settings.prs == true,
       todos = settings.todos == true,
-      chats = settings.chats == true,
       clock = settings.clock == true,
       -- the buddy's idle moves (JGA-155), on unless config.json turns them off
       animate = settings.animate ~= false,

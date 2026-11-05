@@ -225,7 +225,7 @@ function M.start(id, title, repo)
     state = "working",
   }
   M.runs[id] = run
-  claude.session(run.worktree, { key = run.key, resume = "new", chat = true })
+  claude.session(run.worktree, { key = run.key, resume = "new", extra = true })
   local unsub
   unsub = claude.on("done", function(d, s)
     if s.key ~= run.key then

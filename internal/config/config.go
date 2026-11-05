@@ -62,7 +62,6 @@ type Dashboard struct {
 	Sessions   bool `json:"sessions"`   // opening a project restores its last session
 	PRs        bool `json:"prs"`        // open PRs and review requests per project, via gh
 	Todos      bool `json:"todos"`      // TODO/FIXME count per project, via rg
-	Chats      bool `json:"chats"`      // the last few chats, a b e to resume
 	Clock      bool `json:"clock"`      // the date and time under the robot
 	// the robot's idle moves (JGA-155), on unless turned off
 	Animate bool `json:"animate"`
@@ -79,7 +78,6 @@ type UI struct {
 
 type AI struct {
 	Claude Claude `json:"claude"`
-	Chat   Chat   `json:"chat"`
 	Issues Issues `json:"issues"`
 }
 
@@ -95,11 +93,6 @@ type Issues struct {
 type IssueTarget struct {
 	Team    string `json:"team"`
 	Project string `json:"project"`
-}
-
-type Chat struct {
-	// the layout's chat pane: bud's own ("native", JGA-89) or Claude Code's TUI ("term", D48)
-	Pane string `json:"pane"`
 }
 
 type Claude struct {
@@ -132,7 +125,7 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, Breadcrumbs: true},
-		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "home"}, Chat: Chat{Pane: "native"},
+		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
 	}
 }
@@ -149,7 +142,6 @@ func (s Settings) Validate() error {
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
 		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},
 		{"ai.claude.config", s.AI.Claude.Config, []string{"home", "bud"}},
-		{"ai.chat.pane", s.AI.Chat.Pane, []string{"native", "term"}},
 	}
 	for _, c := range checks {
 		if !slices.Contains(c.allowed, c.value) {

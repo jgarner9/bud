@@ -6,8 +6,8 @@
 -- headless Neovim first: it's turned on only if that passes, and turned off
 -- with the error if not.
 --
--- The conversation shows in a split, so you can ask for changes; each reply
--- runs the checks again.
+-- The conversation shows as a log in a split, where i asks for changes; each
+-- reply runs the checks again.
 
 local claude = require("bud.ai.claude")
 
@@ -151,15 +151,84 @@ local function template()
   return text
 end
 
--- open shows the generator's conversation in a split along the bottom
+-- the log: the conversation as plain lines, in a scratch buffer
+local function log(lines)
+  local buf = state.buf
+  if not buf or not vim.api.nvim_buf_is_valid(buf) then
+    return
+  end
+  if type(lines) == "string" then
+    lines = vim.split(lines, "\n", { plain = true })
+  end
+  vim.bo[buf].modifiable = true
+  local last = vim.api.nvim_buf_line_count(buf)
+  local empty = last == 1 and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
+  vim.api.nvim_buf_set_lines(buf, empty and 0 or last, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+    vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
+  end
+end
+
+-- ask sends a follow-up (asking for changes), from the log's i or Enter
+local function ask()
+  vim.ui.input({ prompt = "Ask for changes: " }, function(text)
+    if text and vim.trim(text) ~= "" and claude.send(text, { key = M.key }) then
+      log({ "", "> " .. text, "" })
+    end
+  end)
+end
+
+-- show puts the log in a split along the bottom
 local function show()
-  local v = state.view
-  if v.win and vim.api.nvim_win_is_valid(v.win) then
+  if #vim.fn.win_findbuf(state.buf) > 0 then
     return
   end
   local win =
-    vim.api.nvim_open_win(v.transcript, false, { split = "below", win = -1, height = math.floor(vim.o.lines * 0.3) })
-  v:show(win)
+    vim.api.nvim_open_win(state.buf, false, { split = "below", win = -1, height = math.floor(vim.o.lines * 0.3) })
+  vim.wo[win].winbar = "%#Title# " .. state.title:gsub("%%", "%%%%") .. " %*  i ask for changes  q close"
+  vim.wo[win].wrap = true
+end
+
+local function close()
+  for _, unsub in ipairs(state.unsub or {}) do
+    unsub()
+  end
+  if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
+    vim.api.nvim_buf_delete(state.buf, { force = true })
+  end
+end
+
+-- listen logs what the generator's session says, and checks what Claude
+-- wrote after each reply
+local function listen(dir)
+  local function mine(session)
+    return session.key == M.key
+  end
+  state.unsub = {
+    claude.on("message", function(d, session)
+      if mine(session) and d.role == "assistant" and d.text then
+        log(vim.list_extend(vim.split(d.text, "\n", { plain = true }), { "" }))
+      end
+    end),
+    claude.on("tool_use", function(d, session)
+      if mine(session) then
+        local input = type(d.input) == "table" and d.input or {}
+        local what = input.file_path or input.path or input.command or ""
+        log(("● %s %s"):format(d.name, type(what) == "string" and vim.fn.fnamemodify(what, ":~:.") or ""))
+      end
+    end),
+    claude.on("done", function(d, session)
+      if mine(session) then
+        if not d.ok then
+          log({ "✗ " .. (d.text or "Claude stopped"), "" })
+        end
+        -- each reply may have written files: check them, then compare against now
+        M.check(state.before)
+        state.before = snapshot(dir)
+      end
+    end),
+  }
 end
 
 -- run starts generating from a description: a fresh conversation each time
@@ -174,24 +243,24 @@ function M.run(request)
   end
   local dir = user_tools()
   claude.drop(M.key)
-  if state.view then
-    state.view:close()
+  close()
+  state = { title = "BudGen: " .. request, buf = vim.api.nvim_create_buf(false, true) }
+  vim.bo[state.buf].bufhidden = "hide"
+  vim.bo[state.buf].modifiable = false
+  for _, lhs in ipairs({ "i", "<CR>" }) do
+    vim.keymap.set("n", lhs, ask, { buffer = state.buf, nowait = true, desc = "Ask for changes" })
   end
-  local view = require("bud.chat.view")
-  view.highlights()
-  state.view = view.new({ key = M.key, root = dir, session = { chat = true, resume = "new" } })
-  state.view.title = "BudGen: " .. request
+  vim.keymap.set("n", "q", function()
+    for _, win in ipairs(vim.fn.win_findbuf(state.buf)) do
+      vim.api.nvim_win_close(win, false)
+    end
+  end, { buffer = state.buf, nowait = true, desc = "Close the generator's log" })
   state.before = snapshot(dir)
-  -- each reply may have written files: check them, then compare against now
-  state.view.on_done = function()
-    M.check(state.before)
-    state.before = snapshot(dir)
-  end
+  listen(dir)
+  claude.session(dir, { key = M.key, extra = true, resume = "new" })
   show()
-  state.view:session()
-  local prompt = M.prompt(request, template())
-  if claude.send(prompt, { key = M.key }) then
-    state.view:add({ role = "user", text = request })
+  if claude.send(M.prompt(request, template()), { key = M.key }) then
+    log({ "> " .. request, "" })
   end
 end
 
@@ -201,15 +270,13 @@ function M.setup()
   end, { nargs = "?", desc = "Have Claude write a bud tool or language spec" })
 end
 
--- view is the generator's chat view, for tests
-function M.view()
-  return state.view
+-- buf is the generator's log, for tests
+function M.buf()
+  return state.buf
 end
 
 function M._reset()
-  if state.view then
-    state.view:close()
-  end
+  close()
   claude.drop(M.key)
   state = {}
 end

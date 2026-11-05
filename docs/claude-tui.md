@@ -1,6 +1,6 @@
 # Building a Claude TUI
 
-Every AI part of bud (the chat, the side pane, inline actions, `:BudGen`) is a consumer of one module, `bud.ai.claude`, which owns one Claude Code session per project. Yours can be too. Nothing in bud starts its own Claude Code process.
+Every AI part of bud that runs Claude Code headless (the commit draft, `:BudGen`, issues) is a consumer of one module, `bud.ai.claude`, which owns one Claude Code session per project; the project's TUI pane (`bud.ai.term`) takes that session over while it's open. Yours can be a consumer too. Chat (`bud.ai.chat`) is the one exception: Claude Code's own TUI outside any project.
 
 ```lua
 local claude = require("bud.ai.claude")
@@ -24,7 +24,7 @@ Each event carries plain fields and, as `raw`, Claude Code's own stream-json eve
 
 - **The editor is connected.** Claude Code sees the open buffers, the selection and diagnostics through bud's IDE bridge, so "this function" works.
 - **Edits are reviewed.** When Claude wants to change a file, it opens as a diff to accept (`ga`, `:w`) or reject (`q`), and other tools ask in a small prompt. You don't handle permissions.
-- **A view to start from.** `require("bud.chat.view").new({ key = ..., root = ... })` is the transcript-plus-input that the chat and the side pane use; `:show(win)` puts it in a window.
+- **Or use Claude Code's own TUI.** `require("bud.ai.term").send(text)` types a prompt into the project's TUI, opening it beside the code, as the inline actions do.
 
 ## Dialogs, menus and panels
 
@@ -60,7 +60,7 @@ p.boxes.prompt.map("<CR>", function() ... end)        -- <Tab> moves between box
 
 ## Your own session
 
-A TUI that shouldn't share the project's conversation can have its own: `claude.session(dir, { key = "my-tui", resume = "new" })`, then `claude.send(text, { key = "my-tui" })`. Chat (`key = "chat"`) and `:BudGen` (`key = "gen"`) work this way.
+A TUI that shouldn't share the project's conversation can have its own: `claude.session(dir, { key = "my-tui", resume = "new", extra = true })`, then `claude.send(text, { key = "my-tui" })`; `extra` keeps it from counting against the project sessions. `:BudGen` (`key = "gen"`) and issues work this way.
 
 Put it in `nvim/lua/bud/` to ship it with bud, or make it a tool (see tools.md) to keep it on your machine.
 

@@ -46,7 +46,6 @@ M.sections = {
       { key = "dashboard.sessions", label = "Restore sessions", kind = "bool" },
       { key = "dashboard.prs", label = "Open PRs (gh)", kind = "bool" },
       { key = "dashboard.todos", label = "TODO count", kind = "bool" },
-      { key = "dashboard.chats", label = "Recent chats", kind = "bool" },
       { key = "dashboard.clock", label = "Clock", kind = "bool" },
       { key = "dashboard.animate", label = "Robot animations", kind = "bool" },
     },
@@ -57,7 +56,6 @@ M.sections = {
       { key = "ai.claude.autostart", label = "Start with a project", kind = "bool" },
       { key = "ai.claude.resume", label = "Reopening a project", kind = "choice", choices = { "continue", "new" } },
       { key = "ai.claude.idle_minutes", label = "Stop idle sessions after (min)", kind = "number" },
-      { key = "ai.chat.pane", label = "Layout's chat pane", kind = "choice", choices = { "native", "term" } },
       {
         key = "ai.claude.config",
         label = "Claude Code config (restart bud)",

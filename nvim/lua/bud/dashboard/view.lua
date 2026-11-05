@@ -172,7 +172,7 @@ local function box(title, lines, inner, joined)
 end
 
 -- silly is the full dashboard: robot, then boxes for the menu, projects with
--- git, recent chats and the status (banners and health line)
+-- git and the status (banners and health line)
 -- roomy spaces it out (a gap between menu rows and between boxes); build
 -- falls back to the tight version, the boxes joined, when that won't fit
 local function silly(data, roomy)
@@ -185,13 +185,6 @@ local function silly(data, roomy)
     { title = { text = "Menu" }, lines = menu(data.menu, roomy) },
     { title = { icon = icons.projects, text = "Projects" }, lines = projects(data.projects) },
   }
-  if data.chats and #data.chats > 0 then
-    local chats = {}
-    for _, c in ipairs(data.chats) do
-      table.insert(chats, { seg("  " .. c.key, "BudDashboardKey"), seg("     " .. c.title) })
-    end
-    table.insert(sections, { title = { icon = icons.chat, text = "Recent chats" }, lines = chats })
-  end
   local status = {}
   for _, b in ipairs(data.banners) do
     table.insert(status, { seg("  " .. (icons[b.level] or icons.tip) .. "  " .. b.text, levels[b.level]) })

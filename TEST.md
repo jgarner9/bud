@@ -25,7 +25,7 @@ A hands-on pass over bud's editor UI, for a release that changes it (written for
 
 - [ ] Anything that calls `vim.ui.select` opens bud's menu (e.g. a code action, or `:BudLayout` with no argument). Arrows, `j`/`k`, Enter, `q` and `<Esc>` all work.
 - [ ] Rename a symbol: the `vim.ui.input` float takes the text and Enter submits it.
-- [ ] Permission prompt: in the chat pane, ask Claude to run a shell command. The dialog appears, and `y`/`a`/`n`/`r` each do the right thing. `a` is remembered for that command next time.
+- [ ] Permission prompt: in `:BudGen`, ask Claude to run a shell command. The dialog appears, and `y`/`a`/`n`/`r` each do the right thing. `a` is remembered for that command next time.
 - [ ] Edit permission: ask for a file edit. The diff review opens, `ga` or `:w` accepts it and `q` rejects it.
 - [ ] Issue float: `<leader>ai`, type a report, then check the review screen looks right.
 - [ ] Borders and titles are consistent everywhere, with no emoji.
@@ -65,8 +65,8 @@ A hands-on pass over bud's editor UI, for a release that changes it (written for
 
 - [ ] The status line's Claude section moves through starting, then ready. `:BudClaude status|restart|stop` all work.
 - [ ] `<leader>ac` opens the TUI pane, and closing it hands back to the headless session.
-- [ ] `<leader>ch` opens chat: send a message, then check that `@file`, `@selection` and `@diff` get filled in and the history panel appears.
-- [ ] `<leader>as` shares a selection. `<leader>ae`/`af`/`at` on a selection open the chat pane with a reply.
+- [ ] `c` on the dashboard and `<leader>ch` open chat: Claude Code's TUI in its own tab, as the `bud-ide:chat` agent (its header or `/agents` says so). Asking it to edit a file says it can't. Quitting it goes back to the dashboard; `:BudChat resume` and `bud chat --resume` show the picker.
+- [ ] `<leader>as` shares a selection. `<leader>ae`/`af`/`at` on a selection open the project's TUI beside the code and type the request in.
 - [ ] `<leader>am` in a commit buffer writes a commit message.
 
 ## 11. Kit plugins (JGA-168 to JGA-179)
@@ -76,7 +76,7 @@ A hands-on pass over bud's editor UI, for a release that changes it (written for
 - [ ] `bud doctor` warns that core.md isn't pasted; after `bud kit core | pbcopy`, pasting into claude.ai and `bud kit core --pasted`, it doesn't, and the dashboard's warning count drops.
 - [ ] In `bud agent`, `/context` (or the first reply) shows the "When you're running inside bud" notes; in a plain `claude` outside bud they're absent.
 - [ ] Ask something version-specific: the reply ends with a `◇` source line (`bud:tools`), and a `cache/` note appears in Basic Memory.
-- [ ] Ask about the project in plain words, in `bud agent` and the chat pane: it answers conversationally, not as a task log.
+- [ ] Ask about the project in plain words, in `bud agent` and the `<leader>ac` pane: it answers conversationally, not as a task log.
 
 ## 12. Settings and config (JGA-135, JGA-132)
 

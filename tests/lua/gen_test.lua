@@ -79,7 +79,7 @@ vim.notify = function(msg)
   table.insert(notes, msg)
 end
 gen.run("a command that says hi")
-local v = gen.view()
+local log = gen.buf()
 eq(claude.get("gen").root, vim.uv.fs_realpath(vim.fn.stdpath("data") .. "/user-tools"), "runs in user-tools")
 wait(function()
   return #notes >= 2
@@ -96,7 +96,7 @@ eq(cli_calls[1]:match("^tools disable %-%-reason .*nope.* bad$") ~= nil, true, "
 eq(cli_calls[2], "tools enable hello", "the good one is turned on")
 eq(vim.fn.exists(":BudHello"), 2, "and loaded here, no restart")
 eq(
-  vim.tbl_contains(vim.api.nvim_buf_get_lines(v.transcript, 0, -1, false), "Made hello: run :BudHello."),
+  vim.tbl_contains(vim.api.nvim_buf_get_lines(log, 0, -1, false), "Made hello: run :BudHello."),
   true,
   "the reply shows"
 )

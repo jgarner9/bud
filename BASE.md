@@ -71,7 +71,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D50 | **Each Neovim has its own sessions, even on the same project.** | 2026-10-27 | Answers open question 5 (JGA-105). Two bud windows on one project run two Claude Code processes, two separate conversations; no broker. With `resume = "continue"` the next one to start picks up the most recent conversation. |
 | D51 | **The IDE bridge is bud's own, in Lua, and headless sessions reach it as an MCP server over HTTP.** | 2026-10-27 | `bud.ai.bridge` serves the protocol Claude Code's editor integrations use (the VS Code extension's, which claudecode.nvim also speaks): a WebSocket server on 127.0.0.1 with a random-port lock file in `~/.claude/ide/` holding a 128-bit token, and the tools `openFile`, `openDiff`, `getCurrentSelection`, `getLatestSelection`, `getOpenEditors`, `getWorkspaceFolders`, `getDiagnostics`, `checkDocumentDirty`, `saveDocument`, `close_tab`, `closeAllDiffTabs`, plus `selection_changed` and `at_mentioned` notifications. Written in-house rather than taking claudecode.nvim, since bud owns the session (D25) and only needs the server half. The TUI connects through the lock file and `CLAUDE_CODE_SSE_PORT`; headless `claude -p` ignores both (checked on 2.1.311), so it gets the same tools as an MCP server, streamable HTTP on the same port and token (`--mcp-config`, server `bud-ide`). Only the read-only tools are pre-allowed there (`--allowedTools`); anything that changes the editor waits for permission prompts (JGA-82). A proposed edit opens in its own tab as a diff: `:w` or `ga` accepts it, including any edits you made to it, `q` or closing it rejects. |
 | D52 | **Permission questions: edits as diffs, the rest as a prompt, and "allow for this session" lives in Neovim.** | 2026-10-27 | Headless sessions run with `--permission-prompt-tool mcp__bud-ide__approve`, a tool only the bridge's HTTP side lists (the TUI asks you itself). `Edit`, `MultiEdit` and `Write` open as the bridge's diff review: accept (`ga`/`:w`) allows it, and if you changed the proposal first, the allowed input is your version (the whole file replaced, in the same tool's shape); `q` rejects. Anything else is a small float naming the tool and what it wants (the command, path or URL): `y` allow, `a` allow for this session (the exact command for Bash, else the tool, per project), `n`/`q`/Esc deny, `r` deny with a reason Claude sees. Questions queue, one on screen at a time. Nothing changes Claude Code's own permission mode or settings files. |
-| D53 | **How the native chat works.** | 2026-10-27 | `bud.chat` (full screen) and `bud.chat.pane` (side pane) are the same view (`bud.chat.view`): a markdown transcript over a three-line input, on a `bud.ai.claude` session. Full-screen chat has its own session under the key `chat` in `~/.local/state/bud/chat/`, one conversation at a time, opening on the newest one. The history is Claude Code's store for that dir (`~/.claude/projects/<dir>/*.jsonl`, D14); bud keeps only titles you gave and pins, in `chat/history.json`, and deleting a chat deletes its `.jsonl`. The side pane is the project's own session, showing its conversation so far. It's now the default layout's chat pane, with `ai.chat.pane = "term"` to keep Claude Code's TUI there (D48). Keys: `<leader>ch` chat and back (`q` in it; not `<leader>c`, which would wait on `<leader>cf`), `<leader>h` history in chat, `<leader>aa` the pane, `c` on the dashboard. In the input, Enter sends, Ctrl-j is a new line, Ctrl-c stops; `@file`, `@selection` and `@project` become Claude Code context and `@diff` appends `git diff`. In the transcript, `ge` opens the code block under the cursor in the editor and `M` switches the model (`--model`, resuming the same conversation). Replies arrive whole, not streamed. |
+| D53 | **How the native chat works.** Superseded by D81. | 2026-10-27 | `bud.chat` (full screen) and `bud.chat.pane` (side pane) are the same view (`bud.chat.view`): a markdown transcript over a three-line input, on a `bud.ai.claude` session. Full-screen chat has its own session under the key `chat` in `~/.local/state/bud/chat/`, one conversation at a time, opening on the newest one. The history is Claude Code's store for that dir (`~/.claude/projects/<dir>/*.jsonl`, D14); bud keeps only titles you gave and pins, in `chat/history.json`, and deleting a chat deletes its `.jsonl`. The side pane is the project's own session, showing its conversation so far. It's now the default layout's chat pane, with `ai.chat.pane = "term"` to keep Claude Code's TUI there (D48). Keys: `<leader>ch` chat and back (`q` in it; not `<leader>c`, which would wait on `<leader>cf`), `<leader>h` history in chat, `<leader>aa` the pane, `c` on the dashboard. In the input, Enter sends, Ctrl-j is a new line, Ctrl-c stops; `@file`, `@selection` and `@project` become Claude Code context and `@diff` appends `git diff`. In the transcript, `ge` opens the code block under the cursor in the editor and `M` switches the model (`--model`, resuming the same conversation). Replies arrive whole, not streamed. |
 | D54 | **The tool contract.** | 2026-10-27 | A tool is a dir with `manifest.json` (`name`, `description`, the `commands` and `keymaps` it adds) and `init.lua`, which returns a table whose `setup(manifest)` runs once. bud's ship in the repo's `tools/` (embedded and synced like `languages/`); yours live in `user-tools/<name>/` (`languages` is reserved there) and win over bud's of the same name. `bud.tools` loads the enabled ones on `vim.schedule` after the first screen, so they never count against the startup budget (D35). `config.json`'s `tools.disabled` lists the ones turned off; a tool that fails to load is turned off through `bud tools disable --reason`, which keeps the error in `~/.local/state/bud/tools.json` for `bud tools ls`, and you get a notification. `bud tools promote` needs a bud checkout (`--repo`, else the `bud dev link` one), shows the move, the commit and the push, and does them only on yes. bud ships one tool, `test-file` (`:BudTestFile`, a file and its test), as the example. |
 | D55 | **The generator's review is the permission diff, and its guardrail is a headless load test.** | 2026-10-27 | `:BudGen "..."` (or `bud tools gen "..."`, which opens the editor on it) starts a fresh Claude Code conversation in `user-tools/` with the tool contract (D54) and `languages/_template.lua` in the prompt, and shows it in a split along the bottom so you can ask for changes. Claude writes files with its Write tool, so each one is the permission diff (D52): accept writes it, reject doesn't. After each reply, tools that are new or changed load in a fresh `nvim --clean --headless` first: passing turns them on (`bud tools enable`) and loads them in this Neovim with no restart; failing turns them off with the error (`bud tools disable --reason`). A new language spec gets a pointer to `bud lang enable`. |
 | D56 | **How `bud kit sync` writes into Claude Code.** | 2026-10-27 | The kit is embedded (`bud.Kit()`), like the config. MCP servers go through `claude mcp add-json --scope user` and `claude mcp remove --scope user` (an update is remove-then-add); skills, agents and commands are copied (not symlinked, since the kit lives in the binary) to `~/.claude/skills/<name>/`, `agents/<name>.md`, `commands/<name>.md`; instructions are a fenced `<!-- bud:begin -->` block in `~/.claude/CLAUDE.md`. The ledger (`kit-ledger.json`) keeps a hash of each thing written: an unchanged item is left alone, one the kit dropped is removed, and something bud didn't write (your own server or file of the same name, or a file you edited since) is skipped with a note, never overwritten. `$secret:NAME` becomes `${NAME}`; a missing secret skips the server, unless the entry says `optional_secrets`, which drops just that header (Context7 works without a key). `bud update` re-syncs only once a ledger exists. (`bud install` now syncs too, once Claude Code is logged in: D72.) The kit's `CLAUDE.md` ships empty until the instructions are decided (JGA-98). |
@@ -99,6 +99,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D78 | **bud sets no output style.** | 2026-11-04 | JGA-178; amends D75 and D77. A forced task-log format got in the way of asking about the project conversationally, so tone of voice and how finished work is reported are to be worked out in the instructions instead (bud-plugins), not as an output style. `kit.json` drops `output_style`; sync takes out an `outputStyle` bud set (still in the ledger) and leaves one you picked. Print mode still passes the config dir's own `outputStyle` with `--settings`, for a style you pick. Also refines D77: bud's own plugins get `plugin update` at every sync, from whichever marketplace they came from, yours included (JGA-174); a plugin claude.ai syncs (`name@synced`) counts as yours, and bud uninstalls its own copy then (JGA-177); bud reminds you to re-paste `core.md` into claude.ai's personal preferences when it changes (JGA-179); and the full `bud doctor` warns when Claude Code's config lacks the MCP servers or `core.md` rule bud's sessions rely on (JGA-175). |
 | D79 | **The tree pane is oil, not neo-tree.** | 2026-10-30 | JGA-162. `bud.explorer` opens oil in a 24-column split on the left as the layouts' `tree` pane, so the pane and `:e .` are the same file-editing buffer; neo-tree stays for the `git` pane. The cursor is hidden in Normal mode while the pane is current (`bud.ui.cursor`, shared with the dashboard), and insert and visual show it for oil's edits. `<leader>e` opens it and goes there, goes there when it's open, and from it goes back to the window it came from; `<leader>E` closes it. `<CR>` on a file opens it in that window, not the pane. |
 | D80 | **`VERSION` is the release manifest; CI tags the release.** | 2026-11-04 | Amends D5's "a release is a tag push". Cloud Claude Code sessions can push branches but not tags (their git proxy refuses any ref outside `refs/heads/*`), so a release that needs a tag push can't be cut from one. `VERSION` at the repo root holds `X.Y.Z`; a push to main that changes it runs `release.yml`, where `scripts/release-plan.sh` checks it is `X.Y.Z` and newer than the newest stable tag (`sort -V`), the tests run, the workflow pushes `vX.Y.Z` with its own token and GoReleaser releases it in the same run (a push with `GITHUB_TOKEN` starts no other workflow). A hand-pushed `v*` tag still releases, but only when it matches `VERSION`, so the file never falls behind. Re-running the workflow builds a tag that exists without a release, so a release that failed after tagging is fixed by running it again; one that is already released is skipped. Tags stay lightweight, like every release before. `just release-plan-test` covers the script with throwaway repos and a fake `gh`. The nightly (D42) still versions itself one patch past the newest stable tag. |
+| D81 | **Chat is Claude Code's own TUI in chat mode; bud's own chat UI is gone.** | 2026-11-05 | JGA-165; supersedes D53 and the native half of D48. A second chat UI kept drifting from Claude Code's (permissions, slash commands, `/resume`, plugins), so `c` on the dashboard, `<leader>ch`, `:BudChat` and `bud chat` all open Claude Code's TUI (`bud.ai.chat`) in its own tab, in `~/.local/state/bud/chat/` so no project's `CLAUDE.md` loads, as bud-ide's `chat` agent (`--agent bud-ide:chat`, in bud-plugins with the rest of how Claude works, D77): a conversational prompt with Edit, Write, NotebookEdit and Bash denied, so it reads, searches and looks things up but can't change anything. Permission modes aren't extensible and D78 rules out an output style, so an agent is what's left. Without the agent (bud-ide not synced, or an older copy; `claude.plugin_file`, `claude.PluginFile`) it opens plain Claude Code there and says to run `bud kit sync`. `BUD_BIN` is left out of its environment, so bud-ide's notes on working inside bud don't load. Quitting the TUI closes its tab, back to the dashboard; `--resume` (`:BudChat resume`) opens Claude Code's own picker, which replaces bud's history panel, so the dashboard's recent chats (`dashboard.chats`) go too. Inline actions (`<leader>ae`/`af`/`at`) type their prompt into the project's TUI (`bud.ai.term.send`, opening it beside the code), whose edits are the bridge's diffs; the layout's `chat` pane is always that TUI, so `ai.chat.pane` goes, and so does `<leader>aa` (`<leader>ac` toggles it). The commit draft and `:BudGen` stay headless, gen with its own log buffer (`i` asks for changes). Keyed sessions' flag is `extra` (was `chat`). |
 
 ---
 
@@ -168,9 +169,7 @@ bud/
 │       │   # the language engine: reads the synced languages/*, says what plugins/lang.lua wires up (D30)
 │       ├── ai/
 │       │   # claude.lua: the per-project Claude Code session + the API every AI UI uses (4.2);
-│       │   # inline actions, side-pane chat, tool generator UI (:BudGen)
-│       ├── chat/
-│       │   # full-screen chat mode + history panel + session store
+│       │   # inline actions, chat mode (Claude Code's TUI, D81), the project's TUI pane, tool generator UI (:BudGen)
 │       ├── dashboard/
 │       │   # custom start screen (silly + minimal styles, taglines.lua)
 │       ├── layout/
@@ -299,7 +298,7 @@ A key-hint popup (mini.clue, D74) documents all of it, so the keymap is self-des
 
 Claude Code only, for now (D26). Every part below runs on the project's Claude Code session (4.2) and is drawn by TUIs in Neovim. Three parts:
 
-1. **Assistance:** chat pane (part of the default layout), "explain / refactor / write tests for selection" (`<leader>ae` / `af` / `at`, edits come as permission diffs) and commit-message drafting (`<leader>am` in a commit message, or `:BudCommitMessage`). Claude Code's own login is the only auth.
+1. **Assistance:** Claude Code's own TUI in a side pane (`<leader>ac`), "explain / refactor / write tests for selection" (`<leader>ae` / `af` / `at`, typed into that TUI, edits come as diffs to accept, D81) and commit-message drafting (`<leader>am` in a commit message, or `:BudCommitMessage`). Claude Code's own login is the only auth.
 2. **Tool generator (`:BudGen` in nvim, `bud tools gen` in the CLI):** you describe what you want ("a command that opens the test file for the current file", "add Zig support"), the AI writes either a **tool** (`manifest.json` + `init.lua`) or a **language spec**, shows you a diff, and on accept it lands in `user-tools/` and loads immediately, no restart.
 3. **Lifecycle commands** so generated stuff never rots: list, enable, disable, remove, and **promote** (move from your machine-local `user-tools/` into the repo's `tools/`, commit, push, so every machine gets it).
 
@@ -360,7 +359,7 @@ Opening a project or files in bud also starts Claude Code in the same place. Eve
 | `bud <dir>`                     | that directory (the project root)                              | the project                        |
 | `bud <file>` / `bud a.go b.go`  | the project root found from the files (language `root` markers, then `.git`), else the files' directory | the opened files, as `@file` context |
 | bare `bud` (dashboard)          | no session until you open a project from the dashboard         |                                    |
-| full-screen chat (5.5)          | its own session in `~/.local/state/bud/chat/`, not tied to code | whatever you pull in with `@file` etc. |
+| chat (5.5)                      | Claude Code's TUI in `~/.local/state/bud/chat/`, not tied to code (D81) | whatever you point it at |
 
 **What runs.** One Claude Code process per project root per Neovim instance, run as a job in headless streaming mode (`claude -p --input-format stream-json --output-format stream-json`). Lua owns the conversation, so any UI can render it however it likes. For the times you want Claude Code's own interface, `:BudClaude term` opens it in a terminal buffer on the **same session** (it resumes the session id), and closing it hands the session back to the native UIs. Only one of the two drives the session at a time.
 
@@ -378,7 +377,7 @@ claude.interrupt()                    -- stop the current reply
 claude.status()                       -- "starting" | "ready" | "busy" | "stopped" | "missing"
 ```
 
-The side-pane chat, full-screen chat, inline actions, `:BudGen` and any TUI you add are all just consumers of this module.
+The project's TUI pane, the commit draft, `:BudGen`, issues and any TUI you add are all just consumers of this module. Chat (5.5) is the one exception: it's Claude Code's TUI on its own, outside any project, so it needs no session (D81).
 
 **Lifecycle.**
 
@@ -407,7 +406,7 @@ bud                         # open the dashboard (doesn't register the current d
 bud <path>                  # open a directory as a project (registers it) or a file; starts Claude Code there (D25)
 bud <file1> <file2> ...     # open files, one buffer each
 bud --layout focus .        # open with a specific layout (flags before the path)
-bud chat [--resume <title>] # jump straight into full-screen chat
+bud chat [--resume]         # chat with Claude Code in chat mode (--resume picks an earlier chat, D81)
 
 bud install [--profile full|minimal] [--yes]   # system deps + nvim + plugins + language tooling
 bud doctor                  # health checks: versions, missing tools, broken specs, keys present
@@ -518,8 +517,7 @@ Two keys are all you need to get to work, and they behave the same everywhere (d
 | ------------------------------ | ------------------------------ |
 | `<leader>P` (`P` on dashboard) | Plugin list, a float (JGA-166) |
 | `<leader>M` (`M` on dashboard) | Mason tool installer UI        |
-| `<leader>ch`                   | Full-screen chat (section 5.5) |
-| `<leader>h`                    | Toggle the chat history panel  |
+| `<leader>ch`                   | Chat (section 5.5)             |
 | `<leader>d`                    | Back to the dashboard          |
 | `<leader>,`                    | Settings (once the settings UI exists, JGA-94) |
 
@@ -530,7 +528,7 @@ Two keys are all you need to get to work, and they behave the same everywhere (d
 You asked for help thinking this through. These are all optional, and each can be a toggle in config. ✅ marks the ones I'd turn on by default in the silly style.
 
 - ✅ **Git status per pinned project:** branch, dirty/clean, ahead/behind.
-- ✅ **Recent chats:** the last 2–3 sessions, so you can jump right back into a thought.
+- ~~**Recent chats**~~: dropped with bud's own chat (D81); Claude Code's `/resume` covers it.
 - ✅ **Health line:** startup time, plugin count, whether Claude Code is installed and logged in.
 - ✅ **Update and doctor banners**, each with a one-key fix.
 - ✅ **Tip of the day:** a random leader keybind, to help you learn your own setup.
@@ -541,31 +539,13 @@ You asked for help thinking this through. These are all optional, and each can b
 - **Scratchpad:** one persistent quick-notes buffer, one key away (`x`).
 - **Session restore:** "reopen what you had open last time in <project>".
 
-### 5.5 Chat mode (full-screen bud)
+### 5.5 Chat mode
 
-A general-purpose chat that isn't tied to code, for bouncing ideas around. You can still pull code in whenever you want.
+A general-purpose chat that isn't tied to code, for bouncing ideas around. It's Claude Code's own TUI, run as bud-ide's `chat` agent (D81).
 
-```text
-┌─ History ──────────┐┌─ chat: "nvim layout ideas" ─────────── claude ─┐
-│ Today              ││                                                │
-│ ▸ nvim layout ideas││  you  should the AI pane be on the left or     │
-│   go embed vs fs   ││       right?                                   │
-│ Yesterday          ││                                                │
-│   rust lifetimes   ││  bud  Right. Your file tree is on the left,    │
-│   dinner recipes   ││       and keeping them apart means...          │
-│ Pinned             ││                                                │
-│ ★ bud roadmap      ││                                                │
-│                    ││ ────────────────────────────────────────────── │
-│ / search           ││ > _                                            │
-└────────────────────┘└────────────────────────────────────────────────┘
-```
-
-- **Opening it:** `c` from the dashboard, `<leader>ch` from anywhere, or `bud chat` from the shell. It takes over the whole screen as a separate tab, so your editor layout is left exactly as it was. `<leader>ch` again (or `q` in normal mode) takes you back.
-- **History panel:** toggle it with `<leader>h`. Sessions are grouped by day, pinned ones stay at the top, and `/` searches titles and contents. In the panel, `Enter` resumes, `r` renames, `d` deletes, `p` pins, and `n` starts a new chat.
-- **Storage:** chat runs through Claude Code (D14), so sessions live in its own store and the history panel reads them from there. They're per machine for now (D23) and never committed. Titles are auto-generated from the first message, and you can rename them.
-- **Context on demand:** `@file`, `@selection`, `@project` and `@diff` pull code into the conversation, and a "send to editor" action turns a code block from the chat into a buffer or a patch.
-- **Quick chat:** besides the full-screen mode, the default layout keeps a slim side-pane chat for in-flow questions. It shares the same history store.
-- **Model switcher:** pick a Claude model per chat from the header (handed to Claude Code as `--model`). The default comes from config.
+- **Opening it:** `c` from the dashboard, `<leader>ch` from anywhere, `:BudChat`, or `bud chat` from the shell. It opens in its own tab, so your editor layout is left exactly as it was; `<leader>ch` goes back and forth, and quitting Claude Code closes the tab.
+- **What it is:** a conversational prompt in `~/.local/state/bud/chat/`, so no project's instructions load. It can read files you point it at, search and look things up, but it can't edit files or run commands; for that, open the project (`bud <dir>`).
+- **History:** Claude Code's own store for that dir. `/resume` in the TUI, `:BudChat resume` or `bud chat --resume` picks an earlier chat. Per machine for now (D23).
 
 ### 5.6 App bundle + layout
 

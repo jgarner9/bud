@@ -93,6 +93,60 @@ function M.open(opts)
   return win
 end
 
+-- how long send waits for a TUI it just started to draw, and then for it to
+-- settle before the prompt is typed in, in ms; swappable in tests
+M.ready_timeout, M.settle = 15000, 300
+
+-- drawn says whether the TUI has put anything on its screen yet
+local function drawn(t)
+  for _, line in ipairs(vim.api.nvim_buf_get_lines(t.buf, 0, -1, false)) do
+    if vim.trim(line) ~= "" then
+      return true
+    end
+  end
+  return false
+end
+
+-- send types text into root's TUI (default: the current project's) and
+-- submits it, opening the TUI first, without taking the cursor, when it
+-- isn't showing. A TUI that's just started gets it once it has drawn
+function M.send(text, opts)
+  opts = opts or {}
+  local root = root_of(opts.root)
+  if not M.open({ root = root, focus = false }) then
+    return false
+  end
+  local t = terms[root]
+  local function type_in()
+    if terms[root] ~= t then
+      return
+    end
+    vim.fn.chansend(t.job, text)
+    -- a beat apart, so Claude Code reads the Enter as submit, not as part of a paste
+    vim.defer_fn(function()
+      if terms[root] == t then
+        vim.fn.chansend(t.job, "\r")
+      end
+    end, 50)
+  end
+  local waited = 0
+  local function wait()
+    if terms[root] ~= t then
+      return
+    elseif drawn(t) then
+      vim.defer_fn(type_in, M.settle)
+    elseif waited < M.ready_timeout then
+      waited = waited + 100
+      vim.defer_fn(wait, 100)
+    else
+      vim.notify("bud: Claude Code's TUI didn't start in time", vim.log.levels.WARN)
+    end
+  end
+  wait()
+  t.last_used = now()
+  return true
+end
+
 -- toggle hides the current project's TUI when it's showing, else opens it
 function M.toggle()
   local t = terms[root_of()]

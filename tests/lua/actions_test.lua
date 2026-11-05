@@ -24,16 +24,29 @@ require("bud.ai.bridge").lock_dir = function()
   return tmp .. "/ide"
 end
 
--- logs what it's sent, answers with a commit subject
+-- headless (-p), it logs what it's sent and answers with a commit subject;
+-- as the TUI it draws a prompt, logs each line typed in, and quits on q
 local fake = tmp .. "/fake-claude"
 vim.fn.writefile({
   "#!/bin/sh",
+  'if [ "$1" != "-p" ]; then',
+  "  echo '> ready'",
+  "  while IFS= read -r line; do",
+  '    [ "$line" = q ] && exit 0',
+  [[    printf '%s\n' "$line" >> "$(dirname "$0")/tui.log"]],
+  "  done",
+  "  exit 0",
+  "fi",
   "while IFS= read -r line; do",
   [[  printf '%s\n' "$line" >> "$(dirname "$0")/sent.log"]],
   [[  printf '{"type":"result","subtype":"success","session_id":"s1","result":"feat: add the greeting\\n\\nSays hi."}\n']],
   "done",
 }, fake)
 vim.fn.setfperm(fake, "rwxr-xr-x")
+local function typed()
+  local f = tmp .. "/tui.log"
+  return vim.fn.filereadable(f) == 1 and vim.fn.readfile(f) or {}
+end
 local function sent()
   local f = tmp .. "/sent.log"
   return vim.fn.filereadable(f) == 1 and vim.tbl_map(vim.json.decode, vim.fn.readfile(f)) or {}
@@ -49,6 +62,8 @@ claude.check_login = function(_, cb)
   end)
 end
 local actions = require("bud.ai.actions")
+local term = require("bud.ai.term")
+term.settle = 10
 
 local repo = tmp .. "/repo"
 vim.fn.chdir(repo)
@@ -76,16 +91,28 @@ eq(actions.range(), "main.go#L3", "one line")
 vim.cmd("normal! Vj")
 eq(actions.range(), "main.go#L3-4", "a selection")
 
+-- an action goes to the project's TUI, opened beside the code
+local code_win = vim.api.nvim_get_current_win()
 actions.run("explain")
 wait(function()
-  return #sent() == 1
+  return #typed() == 1
 end, "the explain request")
-eq(sent()[1].message.content, actions.prompts.explain:format("@main.go#L3-4"), "asked about the selection")
-local pane = require("bud.chat.pane")
-eq(pane.view() ~= nil, true, "the answer shows in the pane")
+eq(typed()[1], actions.prompts.explain:format("@main.go#L3-4"), "asked the TUI about the selection")
+eq(term.running(repo), true, "the TUI is open")
+eq(vim.api.nvim_get_current_win(), code_win, "the cursor stays in the code")
+-- a second one goes to the same TUI
+vim.cmd("normal! \27")
+actions.run("tests")
 wait(function()
-  return claude.status() == "ready"
-end, "the reply")
+  return #typed() == 2
+end, "the tests request")
+eq(typed()[2], actions.prompts.tests:format("@main.go#L4"), "the current line")
+eq(#sent(), 0, "nothing went to a headless session")
+-- quitting the TUI hands the session back for the commit draft
+term.send("q")
+wait(function()
+  return not term.running(repo)
+end, "the TUI to quit")
 
 -- commit message: nothing staged says so; staged changes get a draft
 vim.cmd.new()
@@ -93,7 +120,7 @@ vim.bo.filetype = "gitcommit"
 local commit_buf = vim.api.nvim_get_current_buf()
 vim.api.nvim_buf_set_lines(commit_buf, 0, -1, false, { "", "# Please enter the commit message" })
 actions.commit()
-eq(#sent(), 1, "nothing staged, nothing asked")
+eq(#sent(), 0, "nothing staged, nothing asked")
 vim.fn.system({ "git", "add", "main.go" })
 actions.commit()
 wait(function()
@@ -106,11 +133,10 @@ eq(vim.api.nvim_buf_get_lines(commit_buf, 0, -1, false), {
   "",
   "# Please enter the commit message",
 }, "drafted above git's comments")
-local asked = sent()[2].message.content
+local asked = sent()[1].message.content
 eq(asked:find("chore: start", 1, true) ~= nil, true, "recent commits for the style")
 eq(asked:find("+func hi() {}", 1, true) ~= nil, true, "the staged diff")
 
-pane._reset()
 claude._reset()
 require("bud.ai.bridge").stop()
 vim.fn.delete(tmp, "rf")

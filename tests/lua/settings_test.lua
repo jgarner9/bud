@@ -17,7 +17,7 @@ local config = {
   format_on_save = true,
   update = { channel = "stable", auto = true },
   dashboard = { style = "silly", git = true },
-  ai = { claude = { autostart = true, resume = "continue", idle_minutes = 30, args = {} }, chat = { pane = "native" } },
+  ai = { claude = { autostart = true, resume = "continue", idle_minutes = 30, args = {} } },
   tools = { disabled = { "off-tool" } },
 }
 local ran = {}

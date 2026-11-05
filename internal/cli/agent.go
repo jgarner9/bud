@@ -64,6 +64,23 @@ func agent(g *Globals, args []string) error {
 		return errors.New("Claude Code isn't installed: run bud claude setup")
 	}
 
+	s := machineSettings()
+	var flags []string
+	if s.AI.Claude.Resume == "continue" {
+		flags = append(flags, "--continue")
+	}
+	argv, err := tuiArgv(s, bin, flags)
+	if err != nil {
+		return err
+	}
+	g.Logf("running %q in %s", argv, ws.Root)
+
+	return execClaude(ws.Root, argv, agentEnv())
+}
+
+// machineSettings is config.json's settings, the defaults when it's missing
+// or broken
+func machineSettings() config.Settings {
 	s := config.Defaults()
 	if p, err := paths.Resolve(); err == nil {
 		if f, err := config.Load(p.MachineConfig()); err == nil {
@@ -72,19 +89,21 @@ func agent(g *Globals, args []string) error {
 			}
 		}
 	}
+	return s
+}
+
+// tuiArgv is the command line for Claude Code's TUI, as nvim builds it: bin,
+// or ai.claude.command in its place, then flags, then ai.claude.args
+func tuiArgv(s config.Settings, bin string, flags []string) ([]string, error) {
 	argv := []string{bin}
 	if len(s.AI.Claude.Command) > 0 {
 		wrapper, err := exec.LookPath(s.AI.Claude.Command[0])
 		if err != nil {
-			return fmt.Errorf("ai.claude.command: %w", err)
+			return nil, fmt.Errorf("ai.claude.command: %w", err)
 		}
 		argv = append([]string{wrapper}, s.AI.Claude.Command[1:]...)
 	}
-	if s.AI.Claude.Resume == "continue" {
-		argv = append(argv, "--continue")
-	}
-	argv = append(argv, s.AI.Claude.Args...)
-	g.Logf("running %q in %s", argv, ws.Root)
+	argv = append(argv, flags...)
 
-	return execClaude(ws.Root, argv, agentEnv())
+	return append(argv, s.AI.Claude.Args...), nil
 }

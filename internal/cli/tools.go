@@ -423,3 +423,6 @@ func toolsGen(g *Globals, args []string) error {
 
 	return launchNvim(p.UserTools(), nil, "", false)
 }
+
+// swappable in tests
+var launchNvim = nvim.Launch

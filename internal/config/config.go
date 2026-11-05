@@ -77,6 +77,9 @@ type UI struct {
 	CmdlineFloat bool `json:"cmdline_float"`
 	// path and symbol breadcrumbs at the top of file windows (dropbar, JGA-139)
 	Breadcrumbs bool `json:"breadcrumbs"`
+	// markdown files open rendered (render-markdown, D88); off, they open as
+	// text and <leader>um still renders one
+	Markdown bool `json:"markdown"`
 }
 
 type AI struct {
@@ -127,7 +130,7 @@ func Defaults() Settings {
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
-		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true},
+		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
 		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
 	}

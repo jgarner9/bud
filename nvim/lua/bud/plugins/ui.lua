@@ -49,39 +49,35 @@ return {
   },
   {
     -- markdown files render in place: headings, lists, code blocks, tables,
-    -- checkboxes (D88). Insert mode shows the cursor line as written, and
-    -- <leader>um flips a buffer between rendered and plain text to edit
+    -- checkboxes (D88). Normal mode shows the cursor line as written, Insert
+    -- mode the whole file, and <leader>um flips a buffer between the two
     src = "MeanderingProgrammer/render-markdown.nvim",
     version = vim.version.range("8"),
     ft = "markdown",
-    config = function()
-      local md = require("render-markdown")
-      -- files only: hover docs, the issue float and other scratch buffers that
-      -- set filetype=markdown stay as they are
-      local function file(buf)
-        return vim.bo[buf].buftype == ""
-      end
-      md.setup({
+    -- the plugin reads this as it loads, so even the buffer that loads it gets
+    -- bud's settings (setup() afterwards would be too late for that one)
+    init = function()
+      vim.g.render_markdown_config = {
         file_types = { "markdown" },
+        -- ui.markdown = false: files open as text, and <leader>um still renders one
+        enabled = require("bud.config").get("ui.markdown", true) ~= false,
+        -- files only: hover docs, the issue float and other scratch buffers
+        -- that set filetype=markdown stay as they are
         ignore = function(buf)
-          return not file(buf)
+          return vim.bo[buf].buftype ~= ""
         end,
-      })
-      -- the plugin attaches to the buffer that loaded it before setup() runs,
-      -- so ignore hasn't seen that one
-      if not file(0) then
-        md.buf_disable()
-      end
-      vim.api.nvim_create_autocmd("FileType", {
-        group = vim.api.nvim_create_augroup("bud.markdown", {}),
-        pattern = "markdown",
-        desc = "<leader>um toggles markdown rendering",
-        callback = function(ev)
-          if file(ev.buf) then
-            vim.keymap.set("n", "<leader>um", md.buf_toggle, { buffer = ev.buf, desc = "Toggle markdown rendering" })
-          end
-        end,
-      })
+        -- a diff (Claude's edit review, diffview) shows the text on both sides,
+        -- so a changed # or list marker is never hidden
+        render = { diff = false },
+        on = {
+          -- only buffers it attached to, so the key never does nothing
+          attach = function(ctx)
+            vim.keymap.set("n", "<leader>um", function()
+              require("render-markdown").buf_toggle()
+            end, { buffer = ctx.buf, desc = "Toggle markdown rendering" })
+          end,
+        },
+      }
     end,
   },
 }

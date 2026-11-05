@@ -7,7 +7,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that f
 | Keys | Does |
 | --- | --- |
 | `;` | The command line, without Shift. `:` repeats the last `f`/`t` jump instead. |
-| `jk` | Leave Insert mode. In the terminal, Claude Code's pane and chat, go to Normal mode. Esc still works. |
+| `jk` | Leave Insert mode (so does Esc). In the terminal, Claude Code's pane and chat, go to Normal mode; Esc there goes to the program, so it can interrupt Claude Code. |
 | `<leader>w` | Window commands, as `<C-w>`: `h` `j` `k` `l` to move, `+` `-` `<` `>` to resize. |
 | `<leader>d` | The dashboard. |
 | `<leader>,` | Settings. |

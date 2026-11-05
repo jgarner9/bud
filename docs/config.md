@@ -33,7 +33,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `ui.messages` | `true` | The command line and messages in floats instead of the bottom line (Neovim's built-in `ui2`, still experimental in 0.12). `g<` shows messages that were cut short. Turn it off if it misbehaves; takes effect on the next start. |
 | `ui.cmdline_float` | `true` | While you type a command (`;`), a search or an input, the command line is a centered float titled with what it is, and completion opens under it; it goes back to the bottom line when you're done, where the command and its messages show as before. Needs `ui.messages`. Turn it off to keep the command line at the bottom; takes effect on the next start. |
 | `ui.breadcrumbs` | `true` | Path and symbol breadcrumbs at the top of file windows (dropbar.nvim); `<leader>;` picks one and opens its menu. |
-| `ui.markdown` | `true` | Markdown files open rendered: headings, lists, code blocks, tables and checkboxes drawn in place, the cursor line shown as written. `false` opens them as text. Either way `<leader>um` switches one file, and a diff always shows the text. Takes effect on the next start. |
+| `ui.markdown` | `true` | Markdown files open rendered: headings, lists, code blocks, tables and checkboxes drawn in place, the cursor line shown as written. `false` opens them as text. Either way `<leader>um` switches one file, and a file open in a diff shows its text everywhere until the diff closes. Applies to files opened after the change. |
 
 ## Updates
 

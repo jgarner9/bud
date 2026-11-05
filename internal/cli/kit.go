@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -618,6 +619,10 @@ func offerKit(g *Globals, p *paths.Paths, pr *prompter) {
 	}
 	if home, err := homeClaudeDir(); err != nil || env.ClaudeDir != home {
 		ok, err := pr.confirm(fmt.Sprintf("The Claude Code kit isn't synced. Sync it into %s?", env.ClaudeDir))
+		// Ctrl-D (the end of input) is a no, not a failure to ask again
+		if errors.Is(err, io.EOF) {
+			ok, err = false, nil
+		}
 		if err != nil {
 			kitWarn(err)
 			return

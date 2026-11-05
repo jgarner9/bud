@@ -229,7 +229,7 @@ func TestCheckHealth(t *testing.T) {
 		return []doctor.Result{{Name: "nvim", Status: doctor.OK, Detail: "0.12.6"}}
 	}
 	var err error
-	out := captureStdout(t, func() { err = checkHealth() })
+	out := captureStdout(t, func() { err = checkHealth("") })
 	if err != nil || opts.Quick || !strings.Contains(out, "All checks pass.") || strings.Contains(out, "0.12.6") {
 		t.Fatalf("quick %v, out %q", opts.Quick, out)
 	}
@@ -240,7 +240,7 @@ func TestCheckHealth(t *testing.T) {
 			{Name: "core.md", Status: doctor.Warn, Detail: "changed since you pasted it", Fix: "bud kit core"},
 		}
 	}
-	out = captureStdout(t, func() { err = checkHealth() })
+	out = captureStdout(t, func() { err = checkHealth("") })
 	if err != nil || strings.Contains(out, "0.12.6") || !strings.Contains(out, "changed since you pasted it") || !strings.Contains(out, "fix: bud kit core") {
 		t.Fatalf("out %q", out)
 	}
@@ -249,8 +249,8 @@ func TestCheckHealth(t *testing.T) {
 	doctorChecks = func(doctor.Options) []doctor.Result {
 		return []doctor.Result{{Name: "fzf", Status: doctor.Fail, Detail: "not found on PATH", Fix: "brew install fzf"}}
 	}
-	out = captureStdout(t, func() { err = checkHealth() })
-	if err == nil || !strings.Contains(err.Error(), "doctor found 1 problem (bud doctor shows them all)") || !strings.Contains(out, "fix: brew install fzf") {
+	out = captureStdout(t, func() { err = checkHealth("updated to 0.20.0, but ") })
+	if err == nil || !strings.Contains(err.Error(), "updated to 0.20.0, but doctor found 1 problem (bud doctor shows them all)") || !strings.Contains(out, "fix: brew install fzf") {
 		t.Fatalf("err %v, out %q", err, out)
 	}
 }

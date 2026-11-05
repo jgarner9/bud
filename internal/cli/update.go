@@ -119,7 +119,7 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 		if noDoctor {
 			return nil
 		}
-		return checkHealth()
+		return checkHealth("updated to " + version.String() + ", but ")
 	}
 	if err := selfUpdate(g, p, channel, noDoctor); err != nil {
 		return err
@@ -132,15 +132,16 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 		return nil
 	}
 
-	return checkHealth()
+	return checkHealth("")
 }
 
 // checkHealth runs the full doctor after bud update has synced everything,
 // so you see right away whether the Neovim config, Claude Code and the kit
 // are all right, and lists what isn't with its fix. A Fail, new or not, makes
 // bud update exit 1, as bud doctor does, though an update is kept: only quick
-// checks that broke roll it back (finishUpdate)
-func checkHealth() error {
+// checks that broke roll it back (finishUpdate). updated starts the error
+// when a release went in, so it doesn't read as a failed update
+func checkHealth(updated string) error {
 	fmt.Println("Checking everything with bud doctor...")
 	var problems []doctor.Result
 	for _, r := range doctorChecks(doctor.Options{}) {
@@ -153,7 +154,7 @@ func checkHealth() error {
 		return nil
 	}
 	if err := report(problems); err != nil {
-		return fmt.Errorf("%w (bud doctor shows them all)", err)
+		return fmt.Errorf("%s%w (bud doctor shows them all)", updated, err)
 	}
 
 	return nil

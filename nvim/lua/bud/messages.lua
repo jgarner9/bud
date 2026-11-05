@@ -42,6 +42,24 @@ function M.rows(text, width)
   return math.max(math.ceil((vim.fn.strdisplaywidth(text) + 2) / math.max(width, 1)), 1)
 end
 
+-- text_rows is rows for what ui2 draws: the text after the type character,
+-- or after an input()'s prompt, whose own lines each take a row and whose
+-- last line takes the type character's cell and one more per extra cell
+function M.text_rows(prompt, text, width)
+  if prompt == "" then
+    return M.rows(text, width)
+  end
+  local lines = vim.split(prompt, "\n", { plain = true })
+  local rows = 0
+  for i = 1, #lines - 1 do
+    rows = rows + math.max(math.ceil(vim.fn.strdisplaywidth(lines[i]) / math.max(width, 1)), 1)
+  end
+  local last = lines[#lines]
+  local cells = vim.fn.strdisplaywidth(last) + vim.fn.strdisplaywidth(text) + 1
+
+  return rows + math.max(math.ceil(cells / math.max(width, 1)), 1)
+end
+
 -- float moves ui2's command-line window (ui2.wins.cmd) while the command line
 -- is open. A nested one (<C-r>= inside :) retitles it, and leaving that goes
 -- back to the outer one's title, so only the last leave puts it back, the way
@@ -67,8 +85,7 @@ function M.float(ui2)
       return
     end
     local prompt = vim.fn.exists("*getcmdprompt") == 1 and vim.fn.getcmdprompt() or ""
-    -- a prompt replaces the type character, so it counts one less
-    local rows = M.rows((prompt ~= "" and prompt:sub(2) or "") .. vim.fn.getcmdline(), cfg.width)
+    local rows = M.text_rows(prompt, vim.fn.getcmdline(), cfg.width)
     vim.g.ui_cmdline_pos = { cfg.row + 2 + rows, cfg.col + 1 }
   end
   local function show(type)

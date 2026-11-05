@@ -171,16 +171,13 @@ var syncKit = syncKitWith
 // installKit syncs the Claude Code kit once Claude Code is set up (JGA-132).
 // It waits for a login: plugins claude.ai syncs (bud's own among them) only
 // show up for a logged-in account, so syncing before that could install a
-// second copy. A kit you turned down or took out stays out until bud kit
-// sync, and a no here is remembered the same way (D87)
+// second copy. Installing is setting the kit up, so it syncs even one you
+// turned down before (into ~/.claude, after asking), and a no is remembered,
+// so bud update doesn't offer it again (D87)
 func installKit(g *Globals, pr *prompter) error {
 	p, err := paths.Resolve()
 	if err != nil {
 		return err
-	}
-	if declinedKit(p) {
-		fmt.Println("The Claude Code kit was left out; 'bud kit sync' adds it.")
-		return nil
 	}
 	if ready, err := claudeLoggedIn(); err != nil || !ready {
 		return err

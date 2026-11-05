@@ -99,6 +99,14 @@ assert(vim.wo[cmd].winhighlight == "Normal:MsgArea,Search:", vim.wo[cmd].winhigh
 -- a wrapped command takes more rows, so completion opens under all of them
 assert(messages.rows("", 80) == 1 and messages.rows(("x"):rep(78), 80) == 1, "one row")
 assert(messages.rows(("x"):rep(79), 80) == 2 and messages.rows(("x"):rep(200), 80) == 3, "wrapped rows")
+-- an input() prompt: counted in cells (wide characters too), and its lines
+assert(messages.text_rows("", "abc", 80) == 1, "no prompt")
+assert(messages.text_rows(("p"):rep(70) .. "> ", ("x"):rep(20), 80) == 2, "long prompt")
+assert(
+  messages.text_rows("é> ", ("x"):rep(76), 80) == 1 and messages.text_rows("é> ", ("x"):rep(77), 80) == 2,
+  "wide"
+)
+assert(messages.text_rows("line1\nline2: ", "x", 80) == 2, "prompt lines")
 
 -- ui2 taking the window back mid-command (an expanded message): completion
 -- follows it to the bottom instead of opening where the float was

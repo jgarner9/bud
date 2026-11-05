@@ -47,4 +47,41 @@ return {
       vim.keymap.set("n", "];", api.select_next_context, { desc = "Next context" })
     end,
   },
+  {
+    -- markdown files render in place: headings, lists, code blocks, tables,
+    -- checkboxes (D88). Insert mode shows the cursor line as written, and
+    -- <leader>um flips a buffer between rendered and plain text to edit
+    src = "MeanderingProgrammer/render-markdown.nvim",
+    version = vim.version.range("8"),
+    ft = "markdown",
+    config = function()
+      local md = require("render-markdown")
+      -- files only: hover docs, the issue float and other scratch buffers that
+      -- set filetype=markdown stay as they are
+      local function file(buf)
+        return vim.bo[buf].buftype == ""
+      end
+      md.setup({
+        file_types = { "markdown" },
+        ignore = function(buf)
+          return not file(buf)
+        end,
+      })
+      -- the plugin attaches to the buffer that loaded it before setup() runs,
+      -- so ignore hasn't seen that one
+      if not file(0) then
+        md.buf_disable()
+      end
+      vim.api.nvim_create_autocmd("FileType", {
+        group = vim.api.nvim_create_augroup("bud.markdown", {}),
+        pattern = "markdown",
+        desc = "<leader>um toggles markdown rendering",
+        callback = function(ev)
+          if file(ev.buf) then
+            vim.keymap.set("n", "<leader>um", md.buf_toggle, { buffer = ev.buf, desc = "Toggle markdown rendering" })
+          end
+        end,
+      })
+    end,
+  },
 }

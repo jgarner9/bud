@@ -22,37 +22,41 @@ eq(vim.api.nvim_win_get_height(win), math.floor((vim.o.lines - vim.o.cmdheight) 
 eq(vim.fn.win_screenpos(win)[1] > vim.fn.win_screenpos(editor)[1], true, "below the editor")
 local buf = terminal.buf_id()
 
--- Esc is mapped in this terminal only, not in every terminal (fzf's pickers)
-local esc = vim.fn.maparg("<Esc>", "t", false, true)
-eq(esc.buffer, 1, "Esc is buffer-local")
+-- k is mapped in this terminal only, not in every terminal (fzf's pickers)
+local k = vim.fn.maparg("k", "t", false, true)
+eq(k.buffer, 1, "k is buffer-local")
 vim.api.nvim_win_call(editor, function()
-  eq(vim.fn.maparg("<Esc>", "t"), "", "no Esc mapping outside the terminal")
+  eq(vim.fn.maparg("k", "t"), "", "no k mapping outside the terminal")
 end)
--- headless nvim doesn't run terminal-mode keys from feedkeys, so call the
--- mapping (the keypress itself is checked with a UI attached): a lone Esc
--- reaches the shell once the window for a second one has passed
-local termkeys = require("bud.termkeys")
-termkeys.window = 50
+eq(vim.fn.maparg("<Esc>", "t"), "", "Esc goes straight to the program")
+-- headless nvim doesn't run terminal-mode keys from feedkeys, so record the
+-- keys by hand and call the mapping (the keypress itself is checked with a
+-- UI attached)
+local escape = require("bud.escape")
+local clock = 0
+escape.now = function()
+  return clock
+end
 local sent = {}
 local chansend = vim.fn.chansend
 vim.fn.chansend = function(chan, data)
   table.insert(sent, data)
   return chansend(chan, data)
 end
-esc.callback()
-eq(
-  vim.wait(1000, function()
-    return #sent == 1
-  end, 10),
-  true,
-  "one Esc is passed on"
-)
-eq(sent[1], "\27", "as Esc")
--- Esc Esc goes to Normal mode instead, and passes nothing on
-esc.callback()
-esc.callback()
-vim.wait(150)
-eq(#sent, 1, "Esc Esc reaches no program")
+-- a k on its own is a k
+escape._key("a")
+k.callback()
+eq(sent, { "k" }, "a plain k")
+-- a slow jk is j then k
+escape._key("j")
+clock = clock + escape.window + 1
+k.callback()
+eq(sent, { "k", "k" }, "a slow k after j is a k")
+-- a quick jk takes the j back out and goes to Normal mode
+escape._key("j")
+clock = clock + 50
+k.callback()
+eq(sent, { "k", "k", "\127" }, "a backspace for the j, no k")
 vim.fn.chansend = chansend
 eq(terminal.is_open(), true, "and doesn't hide it: <leader>t does")
 terminal.toggle()
@@ -66,7 +70,7 @@ terminal.toggle()
 eq(terminal.buf_id(), buf, "same terminal back")
 
 -- when the shell exits, the next toggle starts a new one
--- a newline first: the shell still has the Esc passed on above
+-- a newline first: the shell still has the ks typed above
 vim.fn.chansend(vim.bo[buf].channel, "\nexit\n")
 vim.wait(3000, function()
   return terminal.buf_id() == nil

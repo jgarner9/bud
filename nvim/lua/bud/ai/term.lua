@@ -66,8 +66,8 @@ function M.open(opts)
     t = { buf = vim.api.nvim_create_buf(false, true), last_used = now() }
     terms[root] = t
     vim.bo[t.buf].bufhidden = "hide"
-    -- Esc Esc to Normal mode, where <leader>ac hides it and <leader>w moves on
-    require("bud.termkeys").attach(t.buf)
+    -- jk to Normal mode, where <leader>ac hides it and <leader>w moves on
+    require("bud.escape").attach(t.buf)
     win = show(t, opts.side)
     vim.api.nvim_win_call(win, function()
       t.job = vim.fn.jobstart(argv, {

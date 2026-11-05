@@ -145,7 +145,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and the keys that follow show up.
 | <kbd>Space</kbd> <kbd>m</kbd> · <kbd>Space</kbd> <kbd>1</kbd>–<kbd>4</kbd> | Pin or unpin a file · jump to a pinned file |
 | <kbd>Space</kbd> <kbd>d</kbd> · <kbd>Space</kbd> <kbd>M</kbd> | Dashboard · Mason |
 | <kbd>Space</kbd> <kbd>t</kbd> | Show or hide a terminal along the bottom, under the editor and Claude Code's pane |
-| <kbd>Esc</kbd> <kbd>Esc</kbd> | In the terminal, Claude Code's pane or chat: back to Normal mode, where their toggle closes them |
+| <kbd>j</kbd> <kbd>k</kbd> | Leave Insert mode, and in the terminal, Claude Code's pane or chat go to Normal mode, where their toggle closes them (Esc still works) |
 | <kbd>Space</kbd> <kbd>q</kbd> <kbd>q</kbd> · <kbd>w</kbd> · <kbd>Q</kbd> | Quit (asks about unsaved files) · save all and quit · quit without saving |
 | <kbd>Space</kbd> <kbd>w</kbd> | Window commands, as <kbd>Ctrl</kbd>-<kbd>w</kbd>: <kbd>h</kbd> <kbd>j</kbd> <kbd>k</kbd> <kbd>l</kbd> to move |
 | <kbd>Space</kbd> <kbd>o</kbd> · <kbd>Space</kbd> <kbd>S</kbd> | Symbols outline · workspace symbols |

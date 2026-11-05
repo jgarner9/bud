@@ -1,6 +1,6 @@
 -- A terminal along the bottom that <leader>t shows and hides (JGA-110): under
--- the editor and Claude Code's pane, right of the explorer (arrange). Esc Esc
--- goes to Normal mode (bud.termkeys), where <leader>t hides it and <leader>w
+-- the editor and Claude Code's pane, right of the explorer (arrange). jk
+-- goes to Normal mode (bud.escape), where <leader>t hides it and <leader>w
 -- moves to another window. Hiding keeps the shell running, so the next press
 -- brings back the same session; it's only replaced once its shell exits.
 
@@ -84,7 +84,7 @@ function M.toggle()
   local fresh = not (buf and vim.api.nvim_buf_is_valid(buf))
   if fresh then
     buf = vim.api.nvim_create_buf(false, true)
-    require("bud.termkeys").attach(buf)
+    require("bud.escape").attach(buf)
   end
   win = vim.api.nvim_open_win(buf, true, { split = "below", win = -1, height = rows() })
   for opt, value in pairs({ winfixheight = true, number = false, relativenumber = false, signcolumn = "no" }) do
@@ -129,7 +129,7 @@ end
 
 function M.setup()
   -- not <leader>t in terminal mode: every space typed in the shell would wait
-  -- to see if a t follows, so Esc Esc goes to Normal mode first (bud.termkeys)
+  -- to see if a t follows, so jk goes to Normal mode first (bud.escape)
   vim.keymap.set("n", "<leader>t", M.toggle, { desc = "Terminal" })
 end
 

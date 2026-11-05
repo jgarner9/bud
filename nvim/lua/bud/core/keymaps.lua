@@ -1,8 +1,11 @@
 local map = vim.keymap.set
 
 -- <leader>w is <C-w>: window moves (h j k l, w, s, v, q, ...) from any
--- window, Normal mode in a terminal pane included (Esc Esc gets there)
+-- window, Normal mode in a terminal pane included (jk gets there)
 map("n", "<leader>w", "<C-w>", { desc = "+window" })
+
+-- jk leaves Insert mode (and Terminal mode in bud's panes), with no lag
+require("bud.escape").setup()
 
 -- <leader>qq quit, <leader>qw save all and quit, <leader>qQ quit without saving
 require("bud.quit").setup()

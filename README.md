@@ -8,7 +8,7 @@
 <!-- the art stays outside the centered div: GitHub centers each line of a code block on its own, which breaks the alignment -->
 <div align="center">
 
-**One small Go binary. One isolated Neovim. Seven languages ready to go.**
+**One small Go binary. One isolated Neovim. Eight languages ready to go.**
 
 [![CI](https://github.com/jgarner9/bud/actions/workflows/ci.yml/badge.svg)](https://github.com/jgarner9/bud/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jgarner9/bud?color=6ca36c)](https://github.com/jgarner9/bud/releases/latest)
@@ -19,39 +19,6 @@
 
 ---
 
-> **Early days.** Bud is young and moving fast: the editor, dashboard, updater, layouts and the Claude Code layer all work today, and things may still move around.
-
-## What is it?
-
-Bud is a fast, reproducible IDE built on Neovim and driven by a small CLI called `bud`. The binary *is* the release: the whole Neovim config ships inside it, so installing or updating means one checksummed download, and every machine ends up with exactly the same setup.
-
-It lives in its own namespace (`NVIM_APPNAME=bud`), so your existing `~/.config/nvim` is never touched. Try it, keep it, or `bud uninstall` it without a trace.
-
-## What you get today
-
-|     |     |
-| --- | --- |
-| **An isolated Neovim** | Plugins come from Neovim's built-in `vim.pack`, pinned in a committed lockfile and lazy-loaded where it counts. Headless startup is around 28 ms. |
-| **Languages as data** | One file per language in [`languages/`](languages/) wires up the LSP server, linter, formatter and tree-sitter parsers. Copy [`_template.lua`](languages/_template.lua) to add your own. |
-| **Easy navigation** | fzf-lua for files, grep, buffers and symbols; two-key jumps with `gw` and `s`; a symbols outline; oil.nvim, as a buffer and as the side pane; four pinned files per project. |
-| **Batteries included** | blink.cmp completion, gitsigns and diffview, mini.clue key hints, format on save, Catppuccin Macchiato. The command line opens as a float in the middle of the screen while you type, with completion under it. |
-| **A doctor** | `bud doctor` checks system deps, tool versions, config sync and machine config, and tells you the exact fix. |
-| **Honest installs** | `bud install` shows the package manager command and asks before running it. Nothing gets upgraded behind your back. |
-
-### Day-one languages
-
-| Language | Server | Lint | Format on save |
-| --- | --- | --- | --- |
-| **Go** | gopls | golangci-lint | goimports |
-| **Python** | ty + ruff | ruff | ruff (imports, then format) |
-| **TypeScript / JavaScript** | tsc (TS 7 native) + ESLint | via the servers | prettier with a Prettier config, otherwise tsc |
-| **C** | clangd | clangd (+ clang-tidy) | clangd, in projects with a `.clang-format` |
-| **Bash / sh** | | shellcheck | shfmt |
-| **HTML** | VS Code's `html` | | prettier with a Prettier config, otherwise the server |
-| **CSS / SCSS / Less** | VS Code's `cssls` | the server | prettier with a Prettier config, otherwise the server |
-
-Pick the ones you want during `bud install`. The `minimal` profile (for SSH boxes and servers) starts with just Python and Bash, and needs no node.
-
 ## Install
 
 Linux or macOS, amd64 or arm64:
@@ -60,14 +27,12 @@ Linux or macOS, amd64 or arm64:
 curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh
 ```
 
-The script downloads the release for your platform, checks it against the release's SHA-256 checksums, puts `bud` in `~/.local/bin`, and asks before running `bud install`. That asks a few questions (profile, terminal, languages), installs any missing system packages through Homebrew, pacman, apt or dnf once you say yes, then sets up the config, plugins, parsers and language tools.
+The script downloads the release for your platform, checks its signature and checksum, puts `bud` in `~/.local/bin`, and offers to run `bud install`. That asks for a profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree, then sets up the config, plugins and language tools.
 
 <details>
 <summary><b>Read the script first, pass options, or build from source</b></summary>
 
 &nbsp;
-
-Read before running:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh -o install.sh
@@ -75,21 +40,17 @@ less install.sh
 sh install.sh
 ```
 
-Options go after `sh -s --`:
+Options go after `sh -s --`, e.g. `curl -fsSL .../install.sh | sh -s -- --profile minimal --yes`:
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh -s -- --profile minimal --yes
-```
+| Option             | Default        | What it does                                 |
+| ------------------ | -------------- | -------------------------------------------- |
+| `--version <tag>`  | latest release | Install a specific release                   |
+| `--bin-dir <dir>`  | `~/.local/bin` | Where to put the `bud` binary                |
+| `--profile <name>` | `full`         | `full` or `minimal`, handed to `bud install` |
+| `--yes`            | off            | Run `bud install` without asking             |
+| `--no-install`     | off            | Install the binary, skip `bud install`       |
 
-| Option             | Default        | What it does                                  |
-| ------------------ | -------------- | --------------------------------------------- |
-| `--version <tag>`  | latest release | Install a specific release                    |
-| `--bin-dir <dir>`  | `~/.local/bin` | Where to put the `bud` binary                 |
-| `--profile <name>` | `full`         | `full` or `minimal`, handed to `bud install`  |
-| `--yes`            | off            | Run `bud install` without asking              |
-| `--no-install`     | off            | Install the binary, skip `bud install`        |
-
-Without a terminal to ask on (say, a non-interactive SSH command) and without `--yes`, the script installs the binary and skips `bud install`.
+Without a terminal to ask on and without `--yes`, the script installs the binary and skips `bud install`.
 
 From source:
 
@@ -101,93 +62,147 @@ bud install
 
 </details>
 
-## Use it
+## What is it?
+
+Bud is a fast, reproducible IDE: Neovim plus a small Go CLI that installs, launches, updates and syncs it. The whole Neovim config ships inside the binary, so every machine gets exactly the same setup. It runs as its own Neovim (`NVIM_APPNAME=bud`) and never touches `~/.config/nvim`; `bud uninstall` removes it without a trace.
+
+## Features
+
+### The editor
+
+Neovim 0.12 with plugins pinned in a committed lockfile and lazy-loaded, inside a 50 ms budget to the first screen.
+
+- **Navigation:** fzf-lua for files, grep, buffers and symbols; two-key jumps (`gw`, `s`); a symbols outline; oil.nvim as the explorer; four pinned files per project.
+- **Editing:** blink.cmp completion, format on save, gitsigns and diffview, debugging with nvim-dap.
+- **Interface:** key hints as you type, a floating command line, breadcrumbs, Catppuccin Macchiato.
+- **Markdown:** `.md` files open rendered; `<leader>um` switches to plain text for editing.
+
+All keys: [docs/keys.md](docs/keys.md).
+
+### Languages
+
+One Lua file per language wires up its parsers, LSP server, linter and formatter. Eight ship with bud:
+
+| Language | Server | Lint | Format on save |
+| --- | --- | --- | --- |
+| **Go** | gopls | golangci-lint | goimports |
+| **Python** | ty + ruff | ruff | ruff |
+| **TypeScript / JavaScript** | tsc + ESLint | the servers | prettier, else tsc |
+| **C** | clangd | clangd + clang-tidy | clangd, with a `.clang-format` |
+| **Bash / sh** | | shellcheck | shfmt |
+| **HTML** | `html` | | prettier, else the server |
+| **CSS / SCSS / Less** | `cssls` | the server | prettier, else the server |
+| **Lua** | lua_ls | selene | stylua, with a `stylua.toml` |
+
+Prettier runs only in projects with a Prettier config. The `minimal` profile (for servers) starts with Python and Bash. Add your own with `bud lang add`: [docs/languages.md](docs/languages.md).
+
+### Layouts
+
+A layout names the panes that open around the editor: explorer, git, Claude Code, terminal, debugger. bud ships `default`, `focus`, `debug` and `review`; each project can have its own. [docs/layouts.md](docs/layouts.md).
+
+### Claude Code
+
+Each project gets one Claude Code session, shared by everything that uses it:
+
+- **The pane** (`<leader>ac`): Claude Code's own TUI beside your code.
+- **Inline actions:** explain, refactor or write tests for a selection; draft commit messages.
+- **Reviewed edits:** every change Claude proposes opens as a diff to accept or reject.
+- **Chat** (`<leader>ch`, `bud chat`): chat mode, outside any project.
+- **Issues:** turn a note into Linear issues, and have Claude fix one in a worktree.
+
+[docs/claude-code.md](docs/claude-code.md) explains how it fits together; [docs/issues.md](docs/issues.md), [docs/tools.md](docs/tools.md) and [docs/claude-tui.md](docs/claude-tui.md) go further.
+
+### Dashboard and projects
+
+Bare `bud` opens a dashboard: your projects with their git state, recent files, health and update banners. Opening a directory registers it as a project; `bud projects` pins and manages them.
+
+### Tools
+
+Small Neovim extensions in a directory of their own, loaded after the first screen. Write one, or have Claude write and test it with `:BudGen`. [docs/tools.md](docs/tools.md).
+
+### Updates and health
+
+- **`bud doctor`** checks dependencies, languages, config sync, startup time and Claude Code, with the fix for each problem.
+- **`bud update`** installs signed releases (stable or nightly), checks itself afterwards and rolls back if a check breaks. Stable updates install in the background.
+- **Honest installs:** bud shows the package manager command and asks first, and never upgrades anything behind your back.
+
+## Usage
 
 ```sh
+bud                 # the dashboard
 bud .               # open the current directory as a project
 bud ~/code/thing    # open a project
-bud main.go util.go # open files, from the project root they belong to
+bud main.go util.go # open files from the project they belong to
 ```
 
-| Command         | What it does |
-| --------------- | ------------ |
-| `bud open`      | Opens Neovim on a directory, or on files from their project root. `bud <path>` is the same thing |
-| `bud install`   | Asks for profile, terminal and languages, installs missing system packages, sets up the config, then runs `bud doctor`. `--yes` takes the defaults |
-| `bud update`    | Installs a newer release, syncs the config from it, restores pinned plugins, parsers and language tools, syncs the Claude Code kit (offering it if it isn't synced) and ends with `bud doctor`'s problems, if any (exiting 1 on a failure; `--no-doctor` skips it). `--check` says whether a newer release is out (`--channel stable` or `nightly`) |
-| `bud doctor`    | Health checks, including the startup budget (50 ms to the first screen); exits 1 when something's broken |
-| `bud version`   | Prints the version |
-| `bud lang`      | `ls` lists languages; `enable` / `disable` turn them on and off (enable installs their tools); `add <name>` starts your own spec from the template; `rm <name>` removes one of yours |
-| `bud projects`  | `ls` lists the projects bud knows (opening a dir registers it); `add`, `rm`, `pin`, `unpin` manage them |
-| `bud uninstall` | Lists everything bud put on the machine and removes it once you confirm. `--keep-config` keeps your settings |
-| `bud launch` | Opens bud in a new Kitty or Ghostty window (what the app runs). `bud bundle` installs the app |
-| `bud layout` | `ls` lists pane layouts; `set-default`, `set` and `unset` pick what projects open in |
-| `bud claude` | `status` and `setup`: is Claude Code installed and logged in, and fix it if not |
-| `bud chat` | Chats with Claude Code in chat mode, outside any project (`--resume` picks an earlier chat); `bud agent [path]` opens Claude Code in a project |
-| `bud tools` | Your tools and bud's: `ls`, `enable`, `disable`, `rm`, `promote`, and `gen "..."` to have Claude write one |
-| `bud kit` | Syncs bud's Claude Code setup (plugin marketplaces and plugins) into Claude Code: `status`, `sync`, `unsync`, `core` |
-| `bud config` | `ls`, `get`, `set`, `unset`, `edit`: machine config by dotted key |
-| `bud completion` | Shell completion: add `eval "$(bud completion zsh)"` to your shell rc |
+### Commands
 
-Global flags go before the command: `bud [--verbose] [--profile full|minimal] <command> [flags] [args]`.
+| Command | What it does |
+| --- | --- |
+| `bud install` | Set up: profile, terminal, languages, system packages, config |
+| `bud update` | Install a newer release and sync everything; `--check` only looks |
+| `bud doctor` | Health checks, each with its fix |
+| `bud lang` | List, enable, disable and add languages |
+| `bud layout` | List layouts and pick the default |
+| `bud projects` | List, add, remove and pin projects |
+| `bud config` | Read and write settings by key |
+| `bud claude` | Check and set up Claude Code |
+| `bud chat` · `bud agent` | Claude Code outside the editor |
+| `bud kit` | Sync bud's Claude Code plugins |
+| `bud tools` | Manage editor tools |
+| `bud launch` · `bud bundle` | Open bud in a new terminal window · install the desktop app |
+| `bud uninstall` | Remove everything bud installed |
 
-### A few keys to start with
+Global flags go before the command: `bud [--verbose] [--profile full|minimal] <command> [flags] [args]`. Every command and flag: [docs/commands.md](docs/commands.md). Shell completion: `eval "$(bud completion zsh)"`.
 
-Leader is <kbd>Space</kbd>. Press it and wait, and the keys that follow show up.
+### First keys
+
+Leader is <kbd>Space</kbd>; press it and wait to see what follows.
 
 | Keys | Does |
 | --- | --- |
-| <kbd>;</kbd> | The command line, with no <kbd>Shift</kbd> (<kbd>:</kbd> repeats the last <kbd>f</kbd>/<kbd>t</kbd> jump instead) |
-| <kbd>Space</kbd> <kbd>p</kbd> | Open a project |
-| <kbd>Space</kbd> <kbd>f</kbd> | Find a file in this project (or type a full path) |
+| <kbd>;</kbd> | The command line |
+| <kbd>Space</kbd> <kbd>p</kbd> · <kbd>Space</kbd> <kbd>f</kbd> | Open a project · find a file |
 | <kbd>Space</kbd> <kbd>/</kbd> | Grep the project |
-| <kbd>Space</kbd> <kbd>b</kbd> · <kbd>Space</kbd> <kbd>r</kbd> | Buffers · recent files |
-| <kbd>g</kbd> <kbd>w</kbd> · <kbd>s</kbd> | Jump to any word · jump by character |
-| <kbd>Space</kbd> <kbd>e</kbd> · <kbd>Space</kbd> <kbd>E</kbd> · <kbd>-</kbd> | Go to the explorer pane, or back from it · close it · edit the parent directory as a buffer |
-| <kbd>Space</kbd> <kbd>m</kbd> · <kbd>Space</kbd> <kbd>1</kbd>–<kbd>4</kbd> | Pin or unpin a file · jump to a pinned file |
-| <kbd>Space</kbd> <kbd>d</kbd> · <kbd>Space</kbd> <kbd>M</kbd> | Dashboard · Mason |
-| <kbd>Space</kbd> <kbd>t</kbd> | Show or hide a terminal along the bottom, under the editor and Claude Code's pane |
-| <kbd>j</kbd> <kbd>k</kbd> | Leave Insert mode, and in the terminal, Claude Code's pane or chat go to Normal mode, where their toggle closes them (Esc still works) |
-| <kbd>Space</kbd> <kbd>q</kbd> <kbd>q</kbd> · <kbd>w</kbd> · <kbd>Q</kbd> | Quit (asks about unsaved files) · save all and quit · quit without saving |
-| <kbd>Space</kbd> <kbd>w</kbd> | Window commands, as <kbd>Ctrl</kbd>-<kbd>w</kbd>: <kbd>h</kbd> <kbd>j</kbd> <kbd>k</kbd> <kbd>l</kbd> to move |
-| <kbd>Space</kbd> <kbd>o</kbd> · <kbd>Space</kbd> <kbd>S</kbd> | Symbols outline · workspace symbols |
-| <kbd>Space</kbd> <kbd>x</kbd> | Diagnostics |
-| <kbd>Space</kbd> <kbd>c</kbd> <kbd>f</kbd> | Format buffer |
-| <kbd>Space</kbd> <kbd>g</kbd> <kbd>d</kbd> | Diff the working tree |
-| <kbd>Space</kbd> <kbd>c</kbd> <kbd>h</kbd> | Chat: Claude Code in chat mode, in its own tab |
-| <kbd>Space</kbd> <kbd>a</kbd> <kbd>e</kbd> / <kbd>f</kbd> / <kbd>t</kbd> | Explain · refactor · write tests for the selection, in Claude Code's TUI |
-| <kbd>Space</kbd> <kbd>a</kbd> <kbd>c</kbd> | Claude Code's own TUI |
-| <kbd>g</kbd> <kbd>a</kbd> · <kbd>q</kbd> | In a proposed edit: accept · reject |
+| <kbd>Space</kbd> <kbd>e</kbd> · <kbd>Space</kbd> <kbd>t</kbd> | Explorer · terminal |
+| <kbd>Space</kbd> <kbd>a</kbd> <kbd>c</kbd> | Claude Code's pane |
+| <kbd>Space</kbd> <kbd>u</kbd> <kbd>m</kbd> | Rendered or plain markdown |
+| <kbd>j</kbd> <kbd>k</kbd> | Leave Insert mode |
 | <kbd>Space</kbd> <kbd>,</kbd> | Settings |
-| <kbd>F5</kbd> · <kbd>F9</kbd> · <kbd>Space</kbd> <kbd>D</kbd> | Debug: start or continue · breakpoint · the debugger panel |
+| <kbd>Space</kbd> <kbd>q</kbd> <kbd>q</kbd> | Quit |
+
+The rest: [docs/keys.md](docs/keys.md).
+
+### Settings
+
+`<leader>,` opens the settings screen; `bud config` does the same from the shell. Every key and its default: [docs/config.md](docs/config.md). When something's off, start with `bud doctor`, then [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Roadmap
 
-- [x] CLI skeleton, isolated config, installer, doctor, uninstall
-- [x] Plugin set, lazy loading, the language engine and seven languages
-- [x] `bud lang` to add, enable and disable languages
-- [x] A dashboard to land on (silly by default, minimal if you prefer) and a project registry
-- [x] Self-update in the background, with doctor-based rollback
-- [x] Signed releases and a nightly channel
-- [x] Pane layouts, a Kitty/Ghostty launcher, and app bundles
-- [x] **Claude Code built in:** one session per project, shared by Claude Code's own TUI, inline actions and a tool generator, with edits as diffs you accept, plus a chat mode outside any project
-- [x] Polish: settings screen, `bud config`, completions, docs, Lua, debugging
+- [x] CLI, isolated config, installer, doctor, uninstall
+- [x] Plugins, lazy loading, the language engine and eight languages
+- [x] Dashboard and project registry
+- [x] Background self-update with rollback, signed releases, nightly channel
+- [x] Layouts, a Kitty/Ghostty launcher, app bundles
+- [x] Claude Code built in: per-project sessions, its TUI, inline actions, reviewed edits, chat
+- [x] Settings screen, `bud config`, completions, docs, debugging
 
-The full plan and every decision made so far live in [`BASE.md`](BASE.md). How-tos and the config reference are in [`docs/`](docs/): [config](docs/config.md), [languages](docs/languages.md), [tools](docs/tools.md), [layouts](docs/layouts.md), [building a Claude TUI](docs/claude-tui.md) and [troubleshooting](docs/troubleshooting.md).
+The full plan and every decision are in [`BASE.md`](BASE.md).
 
 ## Hacking on Bud
 
-You'll need Go and [`just`](https://github.com/casey/just). Linting needs `stylua` and `selene` (`brew install stylua selene`).
+You'll need Go and [`just`](https://github.com/casey/just); linting needs `stylua` and `selene`.
 
 ```sh
 just                 # list recipes
-just check           # everything CI runs: lint, Go and Lua tests, headless smoke test
+just check           # everything CI runs
 just run update      # go run ./cmd/bud update
-just lang-check go   # install a language's tools in a temp dir and check it on a sample project
+just lang-check go   # check one language's tooling on a sample project
 ```
 
-The Go side uses the standard library only, and flags always go before positional arguments. [`CLAUDE.md`](CLAUDE.md) has the architecture tour.
+The Go side is standard library only, and flags go before positional arguments. [`CLAUDE.md`](CLAUDE.md) has the architecture tour. `bud dev link` points your editor at a checkout.
 
-To release, run Claude Code's `/bud:release` (the `bud:release` skill from [bud-plugins](https://github.com/jgarner9/bud-plugins), which `bud kit sync` installs). It runs a code review and a security review of everything since the last tag, goes through the findings with you, then changes `VERSION` (for example to `0.20.0`) on `main`. The release workflow checks it is newer than the last release, runs the tests, tags `v0.20.0`, and GoReleaser builds linux/darwin × amd64/arm64 and attaches the archives and `checksums.txt` to a GitHub release, where `install.sh` picks them up.
+Releases come from `VERSION`: run Claude Code's `/bud:release` (from [bud-plugins](https://github.com/jgarner9/bud-plugins)), which reviews everything since the last tag and bumps it on `main`; CI tags the release and GoReleaser builds it.
 
 ## License
 

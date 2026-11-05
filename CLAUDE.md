@@ -10,7 +10,7 @@ AI scope is **Claude Code only** (D26): one Claude Code session per project, sta
 
 ## Docs
 
-`docs/` holds the user docs: `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), and how-tos for languages, tools, layouts, building a Claude TUI and troubleshooting. Keep them in step when behaviour changes.
+`docs/` holds the user docs: `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), references for every command (`commands.md`) and key (`keys.md`), an overview of Claude Code in bud (`claude-code.md`), and how-tos for languages, tools, layouts, filing issues, building a Claude TUI and troubleshooting. The README keeps short descriptions and links to these. Keep them in step when behaviour changes.
 
 ## Commands
 

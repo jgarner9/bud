@@ -378,3 +378,30 @@ func TestSetupClodFailures(t *testing.T) {
 		t.Fatalf("err %v, installed %v", err, clodInstalled(e.p))
 	}
 }
+
+// the record names a GitHub remote owner/name, however it was cloned
+func TestGithubName(t *testing.T) {
+	for url, want := range map[string]string{
+		"https://github.com/jgarner9/clod.git": "jgarner9/clod",
+		"https://github.com/jgarner9/clod":     "jgarner9/clod",
+		"git@github.com:jgarner9/clod.git":     "jgarner9/clod",
+		"ssh://git@github.com/jgarner9/clod":   "jgarner9/clod",
+		"https://gitlab.com/me/clod.git":       "https://gitlab.com/me/clod.git",
+	} {
+		if got := githubName(url); got != want {
+			t.Errorf("githubName(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
+// with Claude Code turned off, bud update leaves clod alone, as bud install does
+func TestOfferClodAutostartOff(t *testing.T) {
+	e := newClodEnv(t, "jq")
+	e.checkout(t)
+	os.MkdirAll(e.p.State, 0o755)
+	os.WriteFile(e.p.MachineConfig(), []byte(`{"ai": {"claude": {"autostart": false}}}`), 0o644)
+	offerClod(e.p, yesPrompter("\n"))
+	if len(*e.ran) != 0 {
+		t.Fatalf("ran %q with ai.claude.autostart off", e.commands())
+	}
+}

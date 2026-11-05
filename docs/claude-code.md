@@ -18,7 +18,7 @@ bud kit sync         # bud's Claude Code plugins (bud, bud-ide, superpowers)
 2. if your repo doesn't exist yet, create it, private, from the [`jgarner9/clod-template`](https://github.com/jgarner9/clod-template) starter (asked separately, and only a typed `y` makes it: Enter, `--yes` and `bud bootstrap` never create a repo);
 3. clone it into `~/clod` and run its `install.sh`, which asks its own questions.
 
-`--yes` answers bud's other questions and passes `--yes` to `install.sh`. A no is remembered, so `bud update` stops asking; `bud install` and `bud claude setup` ask again. Any repo works as long as it has an `install.sh` at its root that takes `--yes`; start from the template to see the shape.
+`--yes` answers bud's other questions and passes `--yes` to `install.sh`. A no is remembered, so `bud update` stops asking (it also leaves clod alone while `ai.claude.autostart` is off, as `bud install` does); `bud install` and `bud claude setup` ask again. `bud uninstall` keeps `~/clod`, since it's your repo: `~/clod/install.sh uninstall` takes its setup out of Claude Code. Any repo works as long as it has an `install.sh` at its root that takes `--yes`; start from the template to see the shape.
 
 ## The project session
 

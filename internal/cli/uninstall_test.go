@@ -240,3 +240,21 @@ func TestPlanUninstallKit(t *testing.T) {
 		t.Errorf("bud's own dir listed on its own: %q", targets(removals))
 	}
 }
+
+// ~/clod is your repo: listed as kept, with how to take its setup out
+func TestPlanUninstallKeepsClod(t *testing.T) {
+	p, bin := fakeInstall(t)
+	if err := os.MkdirAll(p.Clod(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	removals, kept, err := planUninstall(p, false, bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(targets(removals), p.Clod()) {
+		t.Fatal("uninstall removes ~/clod")
+	}
+	if len(kept) != 1 || !strings.HasPrefix(kept[0], p.Clod()) || !strings.Contains(kept[0], "install.sh uninstall") {
+		t.Fatalf("kept %q", kept)
+	}
+}

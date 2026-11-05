@@ -48,9 +48,10 @@ var (
 	// stdinTerminal says whether someone is at a terminal to log in to
 	// GitHub: --yes skips bud's questions, not a login (bud bootstrap's ssh -t)
 	stdinTerminal = func() bool { return isTerminal(os.Stdin) }
-	// ghLoggedIn says whether gh can reach GitHub as you
+	// ghLoggedIn says whether gh can reach github.com as you; plain gh auth
+	// status fails when any other account or host it knows has a problem
 	ghLoggedIn = func() bool {
-		return exec.Command("gh", "auth", "status").Run() == nil
+		return exec.Command("gh", "auth", "status", "--hostname", "github.com").Run() == nil
 	}
 	// ghLogin is the GitHub account gh is logged in to
 	ghLogin = func() (string, error) {
@@ -108,26 +109,39 @@ func readClodRecord(p *paths.Paths) (clodRecord, bool) {
 	return r, true
 }
 
-// writeClodRecord records that repo's installer ran, at the checkout's commit
+// writeClodRecord records that repo's installer ran, at the checkout's commit.
+// git is asked only when ~/clod is a repo itself, or it would answer for one
+// around it (a home directory kept in git)
 func writeClodRecord(p *paths.Paths, repo string) error {
 	r := clodRecord{Repo: repo, InstalledAt: time.Now().UTC()}
-	if repo == "" {
-		// a checkout bud didn't clone: name it after where it came from
-		if out, err := exec.Command("git", "-C", p.Clod(), "config", "--get", "remote.origin.url").Output(); err == nil {
-			r.Repo = strings.TrimSpace(string(out))
+	if _, err := os.Stat(filepath.Join(p.Clod(), ".git")); err == nil {
+		if repo == "" {
+			// a checkout bud didn't clone: name it after where it came from
+			if out, err := exec.Command("git", "-C", p.Clod(), "config", "--get", "remote.origin.url").Output(); err == nil {
+				r.Repo = githubName(strings.TrimSpace(string(out)))
+			}
 		}
-	}
-	if out, err := exec.Command("git", "-C", p.Clod(), "rev-parse", "--short", "HEAD").Output(); err == nil {
-		r.Commit = strings.TrimSpace(string(out))
+		if out, err := exec.Command("git", "-C", p.Clod(), "rev-parse", "--short", "HEAD").Output(); err == nil {
+			r.Commit = strings.TrimSpace(string(out))
+		}
 	}
 	data, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(p.ClodRecord()), 0o755); err != nil {
-		return err
-	}
 	return atomicfile.WriteFile(p.ClodRecord(), append(data, '\n'), 0o644)
+}
+
+// githubName is owner/name for a GitHub remote URL (https or ssh), so the
+// record reads the same whether bud cloned the repo or you did; any other
+// remote is kept as it is
+func githubName(url string) string {
+	for _, prefix := range []string{"https://github.com/", "http://github.com/", "git@github.com:", "ssh://git@github.com/"} {
+		if rest, ok := strings.CutPrefix(url, prefix); ok {
+			return strings.TrimSuffix(strings.TrimSuffix(rest, "/"), ".git")
+		}
+	}
+	return url
 }
 
 // clodRepoFor is your clod: the clod.repo setting, else <gh login>/clod.
@@ -155,10 +169,16 @@ func clodRepoFor(p *paths.Paths) (string, error) {
 }
 
 // offerClod sets clod up when it's missing and you haven't said no to it, for
-// bud update. With nobody to ask it does nothing
+// bud update. With nobody to ask it does nothing, and with Claude Code turned
+// off (ai.claude.autostart), as bud install does, it leaves clod alone too
 func offerClod(p *paths.Paths, pr *prompter) {
 	if pr == nil || clodInstalled(p) || declinedClod(p) {
 		return
+	}
+	if f, err := config.Load(p.MachineConfig()); err == nil {
+		if s, err := f.Settings(); err == nil && !s.AI.Claude.Autostart {
+			return
+		}
 	}
 	if err := clodSetup(p, pr, false); err != nil {
 		clodWarn(err)
@@ -304,6 +324,7 @@ func createClod(p *paths.Paths, repo string, pr *prompter) (bool, error) {
 	if err := runOnTerminal(argv); err != nil {
 		return false, fmt.Errorf("%s: %w", strings.Join(argv, " "), err)
 	}
+	fmt.Println("Waiting for GitHub to fill it from the template (a few seconds).")
 	for range 15 {
 		if ghHasInstaller(repo) {
 			return true, nil

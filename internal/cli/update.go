@@ -121,7 +121,7 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 		}
 		return checkHealth()
 	}
-	if err := selfUpdate(g, p, channel); err != nil {
+	if err := selfUpdate(g, p, channel, noDoctor); err != nil {
 		return err
 	}
 	if err := applyConfig(); err != nil {
@@ -137,8 +137,8 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 
 // checkHealth runs the full doctor after bud update has synced everything,
 // so you see right away whether the Neovim config, Claude Code and the kit
-// are all right, and lists what isn't with its fix. A Fail makes bud update
-// exit 1, as bud doctor does, though the update itself is kept: only quick
+// are all right, and lists what isn't with its fix. A Fail, new or not, makes
+// bud update exit 1, as bud doctor does, though an update is kept: only quick
 // checks that broke roll it back (finishUpdate)
 func checkHealth() error {
 	fmt.Println("Checking everything with bud doctor...")
@@ -153,7 +153,7 @@ func checkHealth() error {
 		return nil
 	}
 	if err := report(problems); err != nil {
-		return fmt.Errorf("updated, but %w (bud doctor shows them all)", err)
+		return fmt.Errorf("%w (bud doctor shows them all)", err)
 	}
 
 	return nil
@@ -279,7 +279,7 @@ func swapIn(g *Globals, p *paths.Paths, r *updater.Release, target string) ([]st
 // the update (BASE.md 5.7 step 1), so it only returns when there's nothing to
 // install or this binary isn't bud's to replace (D20). Failing to reach
 // GitHub isn't an error: the sync still repairs this version's config
-func selfUpdate(g *Globals, p *paths.Paths, channel string) error {
+func selfUpdate(g *Globals, p *paths.Paths, channel string, noDoctor bool) error {
 	g.Logf("checking the %s channel", channel)
 	s, err := checkRelease(context.Background(), channel, version.String())
 	if errors.Is(err, updater.ErrNoRelease) {
@@ -313,7 +313,12 @@ func selfUpdate(g *Globals, p *paths.Paths, channel string) error {
 
 	// the new binary holds the new embedded config, so it does the sync
 	env := append(os.Environ(), updatedFromEnv+"="+s.Current, failingBeforeEnv+"="+strings.Join(before, ","))
-	if err := execBinary(target, updateArgs(g, target), env); err != nil {
+	args := updateArgs(g, target)
+	// only forward: a rollback execs an older bud, which may not know the flag
+	if noDoctor {
+		args = append(args, "--no-doctor")
+	}
+	if err := execBinary(target, args, env); err != nil {
 		return fmt.Errorf("starting the new bud: %w", err)
 	}
 

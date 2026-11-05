@@ -36,7 +36,8 @@ function M.geometry()
 end
 
 -- rows is how many rows the command line takes in a float width wide: its
--- type character, the text and the cursor cell after it, wrapped
+-- type character (or an input()'s prompt), the text and the cursor cell
+-- after it, wrapped
 function M.rows(text, width)
   return math.max(math.ceil((vim.fn.strdisplaywidth(text) + 2) / math.max(width, 1)), 1)
 end
@@ -56,7 +57,8 @@ function M.float(ui2)
   end
   -- where completion menus that read it (blink.cmp, as noice set it) open:
   -- (1, 0)-indexed, the first row under the bottom border. ui2 resizes the
-  -- float only after CmdlineChanged, so the rows come from the text
+  -- float only after CmdlineChanged, so the rows come from the text (its
+  -- height then is the last change's, a row out when the text shrinks)
   local function place_menu(w)
     local cfg = api.nvim_win_get_config(w)
     if cfg.relative ~= "editor" then
@@ -64,7 +66,9 @@ function M.float(ui2)
       vim.g.ui_cmdline_pos = nil
       return
     end
-    local rows = math.max(M.rows(vim.fn.getcmdline(), cfg.width), api.nvim_win_get_height(w))
+    local prompt = vim.fn.exists("*getcmdprompt") == 1 and vim.fn.getcmdprompt() or ""
+    -- a prompt replaces the type character, so it counts one less
+    local rows = M.rows((prompt ~= "" and prompt:sub(2) or "") .. vim.fn.getcmdline(), cfg.width)
     vim.g.ui_cmdline_pos = { cfg.row + 2 + rows, cfg.col + 1 }
   end
   local function show(type)

@@ -116,7 +116,7 @@ func install(g *Globals, args []string, yes bool) error {
 			}
 		}
 		if err := installKit(g, pr); err != nil {
-			fmt.Printf("The Claude Code kit didn't sync (%v); 'bud kit sync' tries again.\n", err)
+			kitWarn(err)
 		}
 	}
 
@@ -171,13 +171,22 @@ var syncKit = syncKitWith
 // installKit syncs the Claude Code kit once Claude Code is set up (JGA-132).
 // It waits for a login: plugins claude.ai syncs (bud's own among them) only
 // show up for a logged-in account, so syncing before that could install a
-// second copy
+// second copy. A kit you turned down or took out stays out until bud kit
+// sync, and a no here is remembered the same way (D87)
 func installKit(g *Globals, pr *prompter) error {
-	if !claudeLoggedIn() {
+	p, err := paths.Resolve()
+	if err != nil {
+		return err
+	}
+	if declinedKit(p) {
+		fmt.Println("The Claude Code kit was left out; 'bud kit sync' adds it.")
 		return nil
 	}
+	if ready, err := claudeLoggedIn(); err != nil || !ready {
+		return err
+	}
 
-	return syncKit(g, pr, false)
+	return syncOffered(g, p, pr)
 }
 
 // lookPath finds a binary on PATH; swappable in tests

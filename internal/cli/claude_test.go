@@ -217,6 +217,7 @@ func TestClaudeStatus(t *testing.T) {
 }
 
 func TestInstallKit(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	synced := 0
 	orig := syncKit
 	syncKit = func(*Globals, *prompter, bool) error { synced++; return nil }
@@ -237,6 +238,29 @@ func TestInstallKit(t *testing.T) {
 
 	fakeClaude(t, claudeReady)
 	if err := installKit(&Globals{}, nil); err != nil || synced != 1 {
+		t.Fatalf("err %v, synced %d", err, synced)
+	}
+
+	// a kit you turned down or took out stays out, even through an install
+	p, _ := paths.Resolve()
+	if err := markKitDeclined(p); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := installKit(&Globals{}, yesPrompter("y\n")); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if synced != 1 || !strings.Contains(out, "left out") {
+		t.Fatalf("synced %d after a no, out %q", synced, out)
+	}
+
+	// failing to check Claude Code is an error, not "log in"
+	os.Remove(p.KitDeclined())
+	origCheck := checkClaude
+	checkClaude = func() (claude.Status, error) { return claude.Status{}, errors.New("auth status: bad JSON") }
+	t.Cleanup(func() { checkClaude = origCheck })
+	if err := installKit(&Globals{}, nil); err == nil || synced != 1 {
 		t.Fatalf("err %v, synced %d", err, synced)
 	}
 }

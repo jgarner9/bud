@@ -106,20 +106,20 @@ func TestSelfUpdate(t *testing.T) {
 	executable = func() (string, error) { return installed, nil }
 
 	// no receipt: someone else owns this binary
-	out := captureStdout(t, func() { err = selfUpdate(&Globals{}, p, "stable") })
+	out := captureStdout(t, func() { err = selfUpdate(&Globals{}, p, "stable", false) })
 	if err != nil || fetched || !strings.Contains(out, "install.sh didn't install this bud") {
 		t.Fatalf("no receipt: %q, %v, fetched %v", out, err, fetched)
 	}
 
 	os.MkdirAll(filepath.Dir(p.InstallReceipt()), 0o755)
 	os.WriteFile(p.InstallReceipt(), []byte(`{"method":"install.sh","path":"/somewhere/else/bud"}`), 0o644)
-	out = captureStdout(t, func() { err = selfUpdate(&Globals{}, p, "stable") })
+	out = captureStdout(t, func() { err = selfUpdate(&Globals{}, p, "stable", false) })
 	if err != nil || fetched || !strings.Contains(out, "isn't the one install.sh installed") {
 		t.Fatalf("other binary: %q, %v, fetched %v", out, err, fetched)
 	}
 
 	os.WriteFile(p.InstallReceipt(), []byte(`{"method":"install.sh","path":"`+installed+`"}`), 0o644)
-	captureStdout(t, func() { err = selfUpdate(&Globals{Verbose: true}, p, "stable") })
+	captureStdout(t, func() { err = selfUpdate(&Globals{Verbose: true}, p, "stable", false) })
 	if err != nil || !fetched {
 		t.Fatalf("update: %v, fetched %v", err, fetched)
 	}
@@ -135,6 +135,13 @@ func TestSelfUpdate(t *testing.T) {
 		t.Errorf("env missing %s or %s", updatedFromEnv, failingBeforeEnv)
 	}
 
+	// --no-doctor rides along to the new binary, which runs the rest
+	os.WriteFile(installed, []byte("old"), 0o755)
+	captureStdout(t, func() { err = selfUpdate(&Globals{}, p, "stable", true) })
+	if want := []string{installed, "update", "--no-doctor"}; err != nil || !slices.Equal(execArgs, want) {
+		t.Errorf("exec %v (%v), want %v", execArgs, err, want)
+	}
+
 	// nothing newer, or GitHub unreachable: no download, and the sync goes on
 	fetched = false
 	for _, check := range []func(context.Context, string, string) (*updater.Status, error){
@@ -145,7 +152,7 @@ func TestSelfUpdate(t *testing.T) {
 		func(context.Context, string, string) (*updater.Status, error) { return nil, updater.ErrNoRelease },
 	} {
 		checkRelease = check
-		captureStdout(t, func() { err = selfUpdate(&Globals{}, p, "stable") })
+		captureStdout(t, func() { err = selfUpdate(&Globals{}, p, "stable", false) })
 		if err != nil || fetched {
 			t.Errorf("got %v, fetched %v", err, fetched)
 		}
@@ -243,7 +250,7 @@ func TestCheckHealth(t *testing.T) {
 		return []doctor.Result{{Name: "fzf", Status: doctor.Fail, Detail: "not found on PATH", Fix: "brew install fzf"}}
 	}
 	out = captureStdout(t, func() { err = checkHealth() })
-	if err == nil || !strings.Contains(err.Error(), "updated, but doctor found 1 problem") || !strings.Contains(out, "fix: brew install fzf") {
+	if err == nil || !strings.Contains(err.Error(), "doctor found 1 problem (bud doctor shows them all)") || !strings.Contains(out, "fix: brew install fzf") {
 		t.Fatalf("err %v, out %q", err, out)
 	}
 }

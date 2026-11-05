@@ -601,7 +601,14 @@ func kitWarn(err error) {
 // (confirmShared); into another dir it asks here. A no, either way, is
 // remembered, so the next update doesn't ask again
 func offerKit(g *Globals, p *paths.Paths, pr *prompter) {
-	if pr == nil || declinedKit(p) || !claudeLoggedIn() {
+	if pr == nil || declinedKit(p) {
+		return
+	}
+	ready, err := claudeLoggedIn()
+	if err != nil || !ready {
+		if err != nil {
+			kitWarn(err)
+		}
 		return
 	}
 	_, env, err := loadKit()
@@ -611,31 +618,47 @@ func offerKit(g *Globals, p *paths.Paths, pr *prompter) {
 	}
 	if home, err := homeClaudeDir(); err != nil || env.ClaudeDir != home {
 		ok, err := pr.confirm(fmt.Sprintf("The Claude Code kit isn't synced. Sync it into %s?", env.ClaudeDir))
-		if err != nil || !ok {
+		if err != nil {
+			kitWarn(err)
+			return
+		}
+		if !ok {
 			declineKit(p)
 			return
 		}
 	}
-	if err := syncKit(g, pr, false); err != nil {
+	if err := syncOffered(g, p, pr); err != nil {
 		kitWarn(err)
-		return
-	}
-	// a no to confirmShared syncs nothing, so there's still no ledger
-	if _, synced, err := kit.ReadLedger(p.KitLedger()); err == nil && !synced {
-		declineKit(p)
 	}
 }
 
-// claudeLoggedIn says whether Claude Code is installed and logged in, which a
-// kit sync needs (D72), and says when it will sync if not
-func claudeLoggedIn() bool {
-	s, err := checkClaude()
-	if err != nil || s.Bin == "" || !s.LoggedIn {
-		fmt.Println("The Claude Code kit syncs once Claude Code is logged in: run 'bud kit sync' then.")
-		return false
+// syncOffered syncs a kit you were offered (an update's or install's), and
+// remembers a no to confirmShared, which syncs nothing and leaves no ledger
+func syncOffered(g *Globals, p *paths.Paths, pr *prompter) error {
+	if err := syncKit(g, pr, false); err != nil {
+		return err
+	}
+	if _, synced, err := kit.ReadLedger(p.KitLedger()); err == nil && !synced && pr != nil {
+		declineKit(p)
 	}
 
-	return true
+	return nil
+}
+
+// claudeLoggedIn says whether Claude Code is installed and logged in, which a
+// kit sync needs (D72), and says when it will sync if not. An error is one
+// checking it, not being logged out
+func claudeLoggedIn() (bool, error) {
+	s, err := checkClaude()
+	if err != nil {
+		return false, err
+	}
+	if s.Bin == "" || !s.LoggedIn {
+		fmt.Println("The Claude Code kit syncs once Claude Code is logged in: run 'bud kit sync' then.")
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // declinedKit says whether you turned the kit down or took it out

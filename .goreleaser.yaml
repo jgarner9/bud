@@ -43,6 +43,12 @@ checksum:
 snapshot:
   version_template: '{{ if isEnvSet "NIGHTLY_VERSION" }}{{ .Env.NIGHTLY_VERSION }}{{ else }}{{ incpatch .Version }}-SNAPSHOT-{{ .ShortCommit }}{{ end }}'
 
+git:
+  # the rolling nightly tag (nightly.yml) is never a release: without this,
+  # a release cut after a nightly build lists only the commits since it
+  ignore_tags:
+    - nightly
+
 changelog:
   sort: asc
   filters:

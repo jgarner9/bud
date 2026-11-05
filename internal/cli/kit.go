@@ -26,14 +26,13 @@ func init() {
 }
 
 // Kit writes bud's Claude Code setup into Claude Code's user config (BASE.md
-// 4.1, D77): the plugin marketplace bud's plugins come from, the plugins, and
-// the output style it turns on
+// 4.1, D77): the plugin marketplace bud's plugins come from and the plugins
 func Kit() *Command {
 	var dryRun, yes, pasted bool
 	var repo string
 	return &Command{
 		Name:  "kit",
-		Usage: "Syncs bud's Claude Code setup (its plugins, their marketplace, the output style) into Claude Code",
+		Usage: "Syncs bud's Claude Code setup (its plugins and their marketplace) into Claude Code",
 		Subs: []*Command{
 			{
 				Name:  "sync",

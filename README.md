@@ -114,7 +114,7 @@ Each project gets one Claude Code session, shared by everything that uses it:
 
 ### Dashboard and projects
 
-Bare `bud` opens a dashboard: your projects with their git state, recent files, health and update banners. Opening a directory registers it as a project; `bud projects` pins and manages them.
+Bare `bud` opens a dashboard: your projects with their git state, a health line, and banners for doctor problems and updates, each with a one-key fix. Opening a directory registers it as a project; `bud projects` pins and manages them.
 
 ### Tools
 

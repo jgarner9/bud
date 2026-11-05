@@ -45,12 +45,12 @@ bud [global flags] <command> [command flags] [args]
 | `bud lang ls` | Every language spec, whether it's on, and why a broken one is broken. |
 | `bud lang enable [--yes] <name ...>` | Turns languages on and installs their system packages and tools. |
 | `bud lang disable <name ...>` | Turns languages off. Their tools stay installed until the next `bud update` trims them. |
-| `bud lang add <name>` / `rm <name>` | Starts a spec of your own from the template, or removes one. See [languages](languages.md). |
+| `bud lang add <name>` / `rm [--yes] <name>` | Starts a spec of your own from the template, or removes one after asking. See [languages](languages.md). |
 | `bud layout ls` | The layouts, marking the default and this project's. |
 | `bud layout set-default <name>` | The layout projects open in. |
 | `bud layout set <name> [project]` / `unset [project]` | One project's own layout, or back to the default. See [layouts](layouts.md). |
 | `bud projects ls` | Registered projects, pinned first. Opening a directory registers it. |
-| `bud projects add` / `rm` / `pin` / `unpin` | Manage the registry. `rm` forgets a project; its files are untouched. |
+| `bud projects add [--opened]` / `rm` / `pin` / `unpin` | Manage the registry. `add` registers a directory without opening it (`--opened` also records it as opened now); `rm` forgets a project, leaving its files alone. |
 
 ## Config
 
@@ -75,12 +75,14 @@ Every key and its default is in the [config reference](config.md).
 | `bud chat [--resume]` | Claude Code in chat mode, outside any project. `--resume` picks an earlier chat. |
 | `bud kit sync [--dry-run]` | Installs bud's Claude Code plugins and their marketplace into Claude Code. |
 | `bud kit status` / `ls` | Per item: synced, not synced, changed or skipped and why; or what the kit holds. |
-| `bud kit unsync` | Takes out everything the kit added, leaving what's yours. |
+| `bud kit unsync [--dry-run] [--yes]` | Takes out everything the kit added, leaving what's yours. |
 | `bud kit enable` / `disable <name>` | Keeps one kit entry in or out on this machine. |
 | `bud kit core [--pasted]` | Prints bud-plugins' `core.md` to paste into claude.ai's preferences; `--pasted` records that you did. |
 | `bud tools ls` | Your tools and bud's, and whether each is on. |
 | `bud tools gen "<description>"` | Has Claude write a tool or language spec, in the editor. See [tools](tools.md). |
-| `bud tools enable` / `disable [--reason]` / `rm` / `promote <name>` | Manage tools. `promote` moves one of yours into a bud checkout. |
+| `bud tools enable` / `disable [--reason] <name>` | Turns a tool on or off. |
+| `bud tools rm [--yes] <name>` | Deletes one of your tools, after asking. |
+| `bud tools promote [--repo dir] [--yes] <name>` | Moves one of yours into a bud checkout's `tools/`, commits and pushes it, after asking. `--repo` defaults to the `bud dev link` checkout. |
 | `bud issue target [--bud] [dir]` | Where an issue filed from the editor goes in Linear. |
 | `bud issue set --team T [--project P] [--global] [project]` / `unset [project]` | Sets or clears it. See [filing issues](issues.md). |
 
@@ -92,4 +94,5 @@ How the pieces fit together is in [Claude Code in bud](claude-code.md).
 | --- | --- |
 | `bud dev link [path]` | Points `~/.config/bud` at a checkout with symlinks, so edits show up on the next start. |
 | `bud dev unlink` | Goes back to the config this bud ships. |
-| `bud kit add` / `rm` | Edits the kit in a bud checkout. |
+| `bud kit add [--repo dir] plugin <name@marketplace>` | Lists a plugin in a checkout's kit (`add marketplace <name> <source>` for a marketplace). |
+| `bud kit rm [--repo dir] <name>` | Takes an entry out of the kit; the next sync removes it from Claude Code. |

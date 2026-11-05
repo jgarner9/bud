@@ -1,6 +1,6 @@
 # Layouts
 
-A layout says which panes open around the editor when a project opens. bud ships three in `layouts/`:
+A layout says which panes open around the editor when a project opens. bud ships four in `layouts/`:
 
 - `default`: the explorer (oil) on the left, focused; `<leader>ac` opens Claude Code's pane on the right and `<leader>t` the terminal along the bottom, under the editor and that pane and right of the explorer, whichever opens first.
 - `focus`: the editor alone.

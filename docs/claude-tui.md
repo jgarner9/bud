@@ -8,7 +8,7 @@ local claude = require("bud.ai.claude")
 claude.session()                                  -- this project's session, starting it if needed
 claude.send("explain this", { context = { "lua/x.lua#L10-20" } })
 claude.interrupt()                                -- stop the reply in progress
-claude.status()                                   -- "starting" | "ready" | "busy" | "stopped" | "missing" | "term"
+claude.status()                                   -- "starting" | "ready" | "busy" | "stopped" | "missing" | "auth" | "term"
 
 local off = claude.on("message", function(msg, session)
   -- msg.text: a block of the reply; session.root: which project
@@ -18,7 +18,7 @@ end)
 off()                                             -- stop listening
 ```
 
-Each event carries plain fields and, as `raw`, Claude Code's own stream-json event for anything more. `context` lists files (optionally `#L` ranges) that are mentioned with the message.
+Each event carries plain fields and, as `raw`, Claude Code's own stream-json event for anything more. `missing` means Claude Code isn't installed or logged in, `auth` that a cloud provider's login (AWS for Bedrock) ran out, which the next `send` starts over from, and `term` that the TUI pane has the session. `context` lists files (optionally `#L` ranges) that are mentioned with the message.
 
 ## What else you get
 

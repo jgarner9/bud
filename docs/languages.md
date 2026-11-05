@@ -25,6 +25,7 @@ Every field but `filetypes` is optional, and a field bud doesn't know is an erro
 - `system`: binaries it needs on PATH (`go`, `python3`, `node`), which `bud install` and `bud lang enable` install through your package manager.
 - `root`: files that mark a project root, ahead of `.git`.
 - `minimal = true`: part of the minimal profile's preset.
+- `dap`: the debug adapter's Mason name, installed with the rest. bud knows how to run `delve`, `debugpy`, `js-debug-adapter` and `codelldb`; another one installs but needs a definition in `bud.dap.adapters`.
 
 `bud lang ls` shows every spec, which are on, and why a broken one is broken. `bud doctor` checks them too.
 

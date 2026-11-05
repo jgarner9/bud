@@ -5,12 +5,14 @@ bud's AI is Claude Code and nothing else. Neovim starts and owns one Claude Code
 ## Setting it up
 
 ```sh
-bud claude status    # installed? logged in?
-bud claude setup     # install it with Anthropic's installer, then log in
+bud claude status    # installed? logged in? clod set up?
+bud claude setup     # install it with Anthropic's installer, log in, then set up clod
 bud kit sync         # bud's Claude Code plugins (bud, bud-ide, superpowers)
 ```
 
-`bud install` offers the first two. By default bud shares `~/.claude` with the `claude` you run yourself, so its sessions get your MCP servers, settings, rules and login; `ai.claude.config = "bud"` gives bud a config dir of its own instead. A cloud provider (Bedrock, Vertex, Foundry) set up in `~/.claude/settings.json` works when the dir is shared. [Troubleshooting](troubleshooting.md) covers the details.
+`bud install` does all three. By default bud shares `~/.claude` with the `claude` you run yourself, so its sessions get your MCP servers, settings, rules and login; `ai.claude.config = "bud"` gives bud a config dir of its own instead. A cloud provider (Bedrock, Vertex, Foundry) set up in `~/.claude/settings.json` works when the dir is shared. [Troubleshooting](troubleshooting.md) covers the details.
+
+**clod** is your private Claude Code setup (`jgarner9/clod`): the MCP servers, settings and rules bud's sessions use. When it's missing, `bud install`, `bud update` and `bud claude setup` offer to set it up (Enter is yes): they install `gh` and `jq` if needed, log in to GitHub with `gh auth login` (clod is private), clone it into `~/clod` and run its installer, which asks its own questions. `--yes` answers bud's question and clod's. A no is remembered, so `bud update` stops asking; `bud install` and `bud claude setup` ask again.
 
 ## The project session
 

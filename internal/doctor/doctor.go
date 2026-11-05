@@ -225,7 +225,7 @@ func checkClaudeSetup(dir string) (Result, bool) {
 	var details, fixes []string
 	if len(missing) > 0 {
 		details = append(details, "Claude Code's config has no "+strings.Join(missing, ", ")+", so bud's sessions go without")
-		fixes = append(fixes, "run clod's install (or add them to ~/.claude yourself)")
+		fixes = append(fixes, "bud claude setup sets clod up if it's missing; with clod there, clod sync (or add them to ~/.claude yourself)")
 	}
 	if len(failed) > 0 {
 		details = append(details, "can't connect to "+strings.Join(failed, "; "))

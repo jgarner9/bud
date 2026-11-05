@@ -115,6 +115,10 @@ func install(g *Globals, args []string, yes bool) error {
 				fmt.Printf("Headroom: %v; 'bud config set ai.claude.command' sets it.\n", err)
 			}
 		}
+		// clod before the kit, so the kit sees the plugins clod installs as its
+		if err := clodSetup(p, pr, yes); err != nil {
+			clodWarn(err)
+		}
 		if err := installKit(g, pr); err != nil {
 			kitWarn(err)
 		}

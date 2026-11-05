@@ -19,6 +19,7 @@ type Paths struct {
 	State  string // ~/.local/state/bud: machine config, project registry, kit ledger
 	Cache  string // ~/.cache/bud: Neovim's stdpath("cache"), logs and bytecode
 	BinDir string // ~/.local/bin: where install.sh puts bud unless told otherwise
+	Home   string // $HOME, for what lives outside bud's own dirs (clod's checkout)
 }
 
 // Resolve reads XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME and XDG_CACHE_HOME, falling back
@@ -35,6 +36,7 @@ func Resolve() (*Paths, error) {
 		State:  filepath.Join(xdg("XDG_STATE_HOME", home, ".local", "state"), AppName),
 		Cache:  filepath.Join(xdg("XDG_CACHE_HOME", home, ".cache"), AppName),
 		BinDir: filepath.Join(home, ".local", "bin"),
+		Home:   home,
 	}, nil
 }
 
@@ -107,6 +109,17 @@ func (p *Paths) Bin() string { return filepath.Join(p.Data, "bin") }
 
 // Mason is Mason's install root, its default under stdpath("data")
 func (p *Paths) Mason() string { return filepath.Join(p.Data, "mason") }
+
+// Clod is where bud clones clod, Jason's private Claude Code setup (D89),
+// where its README puts it too
+func (p *Paths) Clod() string { return filepath.Join(p.Home, "clod") }
+
+// ClodBin is the clod command its installer links in once it has run
+func (p *Paths) ClodBin() string { return filepath.Join(p.BinDir, "clod") }
+
+// ClodDeclined marks that you said no to setting clod up, so bud update stops
+// asking; bud install and bud claude setup ask again
+func (p *Paths) ClodDeclined() string { return filepath.Join(p.State, "clod-declined") }
 
 // PrevBinary is the binary a self-update replaced, kept for rollback
 func (p *Paths) PrevBinary() string { return filepath.Join(p.Data, "bud.prev") }

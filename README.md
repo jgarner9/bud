@@ -27,7 +27,7 @@ Linux or macOS, amd64 or arm64:
 curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh
 ```
 
-The script downloads the release for your platform, checks its signature and checksum, puts `bud` in `~/.local/bin`, and offers to run `bud install`. That asks for a profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree, then sets up the config, plugins and language tools.
+The script downloads the release for your platform, checks its signature and checksum, puts `bud` in `~/.local/bin`, and offers to run `bud install`. That asks for a profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree, then sets up the config, plugins and language tools, Claude Code and clod.
 
 <details>
 <summary><b>Read the script first, pass options, or build from source</b></summary>

@@ -667,10 +667,7 @@ func claudeLoggedIn() (bool, error) {
 }
 
 // declinedKit says whether you turned the kit down or took it out
-func declinedKit(p *paths.Paths) bool {
-	_, err := os.Stat(p.KitDeclined())
-	return err == nil
-}
+func declinedKit(p *paths.Paths) bool { return hasMarker(p.KitDeclined()) }
 
 // declineKit records a no, so updates stop offering the kit
 func declineKit(p *paths.Paths) {
@@ -682,12 +679,22 @@ func declineKit(p *paths.Paths) {
 }
 
 // markKitDeclined writes the KitDeclined marker
-func markKitDeclined(p *paths.Paths) error {
-	if err := os.MkdirAll(filepath.Dir(p.KitDeclined()), 0o755); err != nil {
+func markKitDeclined(p *paths.Paths) error { return setMarker(p.KitDeclined()) }
+
+// hasMarker says whether the empty marker file at path exists (a no that
+// bud remembers, like KitDeclined and ClodDeclined)
+func hasMarker(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// setMarker writes the empty marker file at path
+func setMarker(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(p.KitDeclined(), nil, 0o644)
+	return os.WriteFile(path, nil, 0o644)
 }
 
 // remindCore says when bud-plugins' core.md changed since you last pasted it

@@ -127,7 +127,9 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 	if err := applyConfig(); err != nil {
 		return err
 	}
-	resyncKit(g, p, updatePrompt())
+	pr := updatePrompt()
+	offerClod(p, pr)
+	resyncKit(g, p, pr)
 	if noDoctor {
 		return nil
 	}
@@ -177,6 +179,7 @@ func finishUpdate(g *Globals, p *paths.Paths, from string, failingBefore []strin
 		}
 		if len(broke) == 0 {
 			editState(g, p, func(st *updater.State) { st.Available, st.Installed = "", "" })
+			offerClod(p, pr)
 			resyncKit(g, p, pr)
 			return nil
 		}

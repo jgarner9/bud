@@ -69,8 +69,8 @@ Every key and its default is in the [config reference](config.md).
 
 | Command | What it does |
 | --- | --- |
-| `bud claude status` | Whether Claude Code is installed and logged in. |
-| `bud claude setup [--yes]` | Installs Claude Code with Anthropic's installer if it's missing, then runs its login. |
+| `bud claude status` | Whether Claude Code is installed and logged in, and whether clod is set up. |
+| `bud claude setup [--yes]` | Installs Claude Code with Anthropic's installer if it's missing, runs its login, then sets up clod if it's missing (gh login, clone into `~/clod`, its installer). See [Claude Code in bud](claude-code.md#setting-it-up). |
 | `bud agent [path]` | Claude Code's own TUI in a project, from the shell. |
 | `bud chat [--resume]` | Claude Code in chat mode, outside any project. `--resume` picks an earlier chat. |
 | `bud kit sync [--dry-run]` | Installs bud's Claude Code plugins and their marketplace into Claude Code. |

@@ -59,6 +59,10 @@ func (p *Paths) CorePasted() string { return filepath.Join(p.State, "core-pasted
 // KitLedger records everything `bud kit sync` wrote into Claude Code's config
 func (p *Paths) KitLedger() string { return filepath.Join(p.State, "kit-ledger.json") }
 
+// KitDeclined marks a kit you turned down or took out, so bud update stops
+// offering it until bud kit sync is run (D87)
+func (p *Paths) KitDeclined() string { return filepath.Join(p.State, "kit-declined") }
+
 // UpdateState records the last background update check (D9)
 func (p *Paths) UpdateState() string { return filepath.Join(p.State, "update.json") }
 

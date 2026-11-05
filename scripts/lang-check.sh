@@ -20,7 +20,7 @@ export XDG_STATE_HOME="$root/state"
 export XDG_CACHE_HOME="$root/cache"
 
 echo "lang-check: $(nvim --version | head -n 1)"
-"$root/bud" update
+"$root/bud" update --no-doctor
 echo "lang-check: Mason packages take $(du -sh "$XDG_DATA_HOME/bud/mason/packages" | cut -f1)"
 
 # the sample projects go under $root too, so the trap cleans them up

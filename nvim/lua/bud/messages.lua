@@ -35,21 +35,49 @@ function M.geometry()
   }
 end
 
+-- rows is how many rows the command line takes in a float width wide: its
+-- type character, the text and the cursor cell after it, wrapped
+function M.rows(text, width)
+  return math.max(math.ceil((vim.fn.strdisplaywidth(text) + 2) / math.max(width, 1)), 1)
+end
+
 -- float moves ui2's command-line window (ui2.wins.cmd) while the command line
 -- is open. A nested one (<C-r>= inside :) retitles it, and leaving that goes
--- back to the outer one's title, so only the last leave puts it back
+-- back to the outer one's title, so only the last leave puts it back, the way
+-- it was when the first one opened (its config and highlights as ui2 left them)
 function M.float(ui2)
   local api = vim.api
   local stack = {}
+  local saved
   local group = api.nvim_create_augroup("bud.messages.cmdline", {})
   local function win()
     local w = ui2.wins and ui2.wins.cmd
     return w and api.nvim_win_is_valid(w) and w or nil
   end
+  -- where completion menus that read it (blink.cmp, as noice set it) open:
+  -- (1, 0)-indexed, the first row under the bottom border. ui2 resizes the
+  -- float only after CmdlineChanged, so the rows come from the text
+  local function place_menu(w)
+    local cfg = api.nvim_win_get_config(w)
+    if cfg.relative ~= "editor" then
+      -- ui2 has taken it back to the bottom (an expanded message): follow it
+      vim.g.ui_cmdline_pos = nil
+      return
+    end
+    local rows = math.max(M.rows(vim.fn.getcmdline(), cfg.width), api.nvim_win_get_height(w))
+    vim.g.ui_cmdline_pos = { cfg.row + 2 + rows, cfg.col + 1 }
+  end
   local function show(type)
     local w = win()
     if not w then
       return
+    end
+    if not saved then
+      local cfg = api.nvim_win_get_config(w)
+      -- ui2 keeps these itself ('cmdheight' and the text decide them)
+      cfg.height, cfg.hide = nil, nil
+      cfg.title = cfg.title or ""
+      saved = { config = cfg, winhighlight = vim.wo[w].winhighlight }
     end
     local cfg = M.geometry()
     cfg.border = "rounded"
@@ -58,28 +86,18 @@ function M.float(ui2)
     -- the column the completion menu lines up with: past the left border
     cfg._cmdline_offset = 1
     api.nvim_win_set_config(w, cfg)
-    -- where completion menus that read it (blink.cmp, as noice set it) open:
-    -- (1, 0)-indexed, the first row under the bottom border
-    vim.g.ui_cmdline_pos = { cfg.row + 2 + api.nvim_win_get_height(w), cfg.col + 1 }
+    place_menu(w)
     vim.wo[w].winhighlight = "Normal:NormalFloat,FloatBorder:FloatBorder,Search:,CurSearch:,IncSearch:"
   end
   local function restore()
     vim.g.ui_cmdline_pos = nil
-    local w = win()
-    if not w then
+    local w, was = win(), saved
+    saved = nil
+    if not w or not was then
       return
     end
-    -- what ui2 opens it with (check_targets), so its own placement holds again
-    api.nvim_win_set_config(w, {
-      relative = "laststatus",
-      row = 1,
-      col = 0,
-      width = 10000,
-      border = "none",
-      title = "",
-      _cmdline_offset = 0,
-    })
-    vim.wo[w].winhighlight = "Normal:MsgArea,Search:,CurSearch:,IncSearch:"
+    api.nvim_win_set_config(w, was.config)
+    vim.wo[w].winhighlight = was.winhighlight
   end
   api.nvim_create_autocmd("CmdlineEnter", {
     group = group,
@@ -88,6 +106,15 @@ function M.float(ui2)
       table.insert(stack, type)
       if type then
         pcall(show, type)
+      end
+    end,
+  })
+  api.nvim_create_autocmd("CmdlineChanged", {
+    group = group,
+    callback = function()
+      local w = win()
+      if stack[#stack] and saved and w then
+        pcall(place_menu, w)
       end
     end,
   })

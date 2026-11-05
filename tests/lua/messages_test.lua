@@ -89,6 +89,26 @@ enter(">")
 assert(vim.api.nvim_win_get_config(cmd).relative == "laststatus", "floated a debug prompt")
 leave()
 
+-- leaving puts back what was there before, ui2's highlights or a user's
+vim.wo[cmd].winhighlight = "Normal:MsgArea,Search:"
+enter(":")
+assert(vim.wo[cmd].winhighlight:find("NormalFloat", 1, true), vim.wo[cmd].winhighlight)
+leave()
+assert(vim.wo[cmd].winhighlight == "Normal:MsgArea,Search:", vim.wo[cmd].winhighlight)
+
+-- a wrapped command takes more rows, so completion opens under all of them
+assert(messages.rows("", 80) == 1 and messages.rows(("x"):rep(78), 80) == 1, "one row")
+assert(messages.rows(("x"):rep(79), 80) == 2 and messages.rows(("x"):rep(200), 80) == 3, "wrapped rows")
+
+-- ui2 taking the window back mid-command (an expanded message): completion
+-- follows it to the bottom instead of opening where the float was
+enter(":")
+assert(vim.g.ui_cmdline_pos, "no menu position")
+vim.api.nvim_win_set_config(cmd, { relative = "laststatus", row = 1, col = 0, width = 10000 })
+vim.api.nvim_exec_autocmds("CmdlineChanged", { group = group, pattern = ":" })
+assert(vim.g.ui_cmdline_pos == nil, vim.inspect(vim.g.ui_cmdline_pos))
+leave()
+
 -- a narrow editor: the float fits inside it
 vim.o.columns = 50
 enter("/")

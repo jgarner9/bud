@@ -23,7 +23,7 @@ mkdir -p "$XDG_STATE_HOME/bud"
 echo '{"languages": []}' >"$XDG_STATE_HOME/bud/config.json"
 
 echo "smoke: $(nvim --version | head -n 1)"
-"$root/bud" update
+"$root/bud" update --no-doctor
 
 status=0
 NVIM_APPNAME=bud nvim --headless -c "luafile scripts/smoke.lua" 2>"$root/stderr" || status=$?

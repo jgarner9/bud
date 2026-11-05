@@ -377,6 +377,9 @@ func syncKitWith(g *Globals, pr *prompter, dryRun bool) error {
 		fmt.Printf("Synced the kit into Claude Code (%d changed).\n", changed)
 	}
 	if !dryRun {
+		if p, err := paths.Resolve(); err == nil {
+			os.Remove(p.KitDeclined())
+		}
 		remindCore(k, env)
 	}
 
@@ -420,6 +423,10 @@ func kitUnsync(args []string, dryRun, yes bool) error {
 		return err
 	}
 	fmt.Printf("Took the kit out of %s.\n", env.ClaudeDir)
+	// so a later bud update doesn't offer it back
+	if p, err := paths.Resolve(); err == nil {
+		_ = markKitDeclined(p)
+	}
 
 	return nil
 }
@@ -544,24 +551,24 @@ func kitLs(args []string) error {
 }
 
 // resyncKit runs the kit sync after an update. A kit you've synced (there's a
-// ledger) keeps up with the release; one you never synced, or took out with
-// bud kit unsync, is only offered on a terminal (pr), since bud doesn't write
-// into Claude Code's config unasked. With pr nil (a launch finishing a
-// background update) only a synced kit is kept up, and nothing is moved to
-// another config dir without asking. It only ever warns
+// ledger) keeps up with the release; one you never synced is only offered on
+// a terminal (pr), since bud doesn't write into Claude Code's config unasked,
+// and not again once you've said no or taken it out (KitDeclined). With pr
+// nil (a launch finishing a background update) only a synced kit is kept up,
+// and nothing is moved to another config dir without asking. It only warns
 func resyncKit(g *Globals, p *paths.Paths, pr *prompter) {
 	_, synced, err := kit.ReadLedger(p.KitLedger())
 	if err != nil {
-		fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+		kitWarn(err)
 		return
 	}
 	if !synced {
-		offerKit(g, pr)
+		offerKit(g, p, pr)
 		return
 	}
 	if pr != nil {
 		if err := syncKit(g, pr, false); err != nil {
-			fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+			kitWarn(err)
 		}
 		return
 	}
@@ -577,39 +584,82 @@ func resyncKit(g *Globals, p *paths.Paths, pr *prompter) {
 		_, err = kit.Sync(k, env, false)
 	}
 	if err != nil {
-		fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+		kitWarn(err)
 		return
 	}
 	g.Logf("synced the Claude Code kit")
 	remindCore(k, env)
 }
 
+// kitWarn says the kit didn't sync after an update or install, which only warns
+func kitWarn(err error) {
+	fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+}
+
 // offerKit asks to sync a kit that isn't synced, once Claude Code is logged
 // in (D72). Into ~/.claude the sync itself lists what it adds and asks
-// (confirmShared); into another dir it asks here
-func offerKit(g *Globals, pr *prompter) {
-	if pr == nil {
-		return
-	}
-	if s, err := checkClaude(); err != nil || s.Bin == "" || !s.LoggedIn {
-		fmt.Println("The Claude Code kit syncs once Claude Code is logged in: run 'bud kit sync' then.")
+// (confirmShared); into another dir it asks here. A no, either way, is
+// remembered, so the next update doesn't ask again
+func offerKit(g *Globals, p *paths.Paths, pr *prompter) {
+	if pr == nil || declinedKit(p) || !claudeLoggedIn() {
 		return
 	}
 	_, env, err := loadKit()
 	if err != nil {
-		fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+		kitWarn(err)
 		return
 	}
 	if home, err := homeClaudeDir(); err != nil || env.ClaudeDir != home {
 		ok, err := pr.confirm(fmt.Sprintf("The Claude Code kit isn't synced. Sync it into %s?", env.ClaudeDir))
 		if err != nil || !ok {
-			fmt.Println("Left the kit out; bud kit sync adds it.")
+			declineKit(p)
 			return
 		}
 	}
 	if err := syncKit(g, pr, false); err != nil {
-		fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+		kitWarn(err)
+		return
 	}
+	// a no to confirmShared syncs nothing, so there's still no ledger
+	if _, synced, err := kit.ReadLedger(p.KitLedger()); err == nil && !synced {
+		declineKit(p)
+	}
+}
+
+// claudeLoggedIn says whether Claude Code is installed and logged in, which a
+// kit sync needs (D72), and says when it will sync if not
+func claudeLoggedIn() bool {
+	s, err := checkClaude()
+	if err != nil || s.Bin == "" || !s.LoggedIn {
+		fmt.Println("The Claude Code kit syncs once Claude Code is logged in: run 'bud kit sync' then.")
+		return false
+	}
+
+	return true
+}
+
+// declinedKit says whether you turned the kit down or took it out
+func declinedKit(p *paths.Paths) bool {
+	_, err := os.Stat(p.KitDeclined())
+	return err == nil
+}
+
+// declineKit records a no, so updates stop offering the kit
+func declineKit(p *paths.Paths) {
+	if markKitDeclined(p) != nil {
+		fmt.Println("Left the kit out; bud kit sync adds it.")
+		return
+	}
+	fmt.Println("Left the kit out; bud update won't ask again, and bud kit sync adds it.")
+}
+
+// markKitDeclined writes the KitDeclined marker
+func markKitDeclined(p *paths.Paths) error {
+	if err := os.MkdirAll(filepath.Dir(p.KitDeclined()), 0o755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(p.KitDeclined(), nil, 0o644)
 }
 
 // remindCore says when bud-plugins' core.md changed since you last pasted it

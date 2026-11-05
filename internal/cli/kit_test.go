@@ -97,8 +97,13 @@ func TestKitCommands(t *testing.T) {
 	}
 	fakeClaude(t, claudeReady)
 	out = captureStdout(t, func() { resyncKit(&Globals{}, p, yesPrompter("n\n")) })
-	if len(f.ran) != 0 || !strings.Contains(out, "It would add:\n  plugin docs@market") {
+	if len(f.ran) != 0 || !strings.Contains(out, "It would add:\n  plugin docs@market") || !strings.Contains(out, "won't ask again") {
 		t.Fatalf("update offer on a no: ran %q, out %q", f.ran, out)
+	}
+	// and the no is remembered: the next update doesn't ask
+	out = captureStdout(t, func() { resyncKit(&Globals{}, p, yesPrompter("y\n")) })
+	if len(f.ran) != 0 || out != "" {
+		t.Fatalf("asked again after a no: ran %q, out %q", f.ran, out)
 	}
 
 	// the first sync into ~/.claude shows what it adds and needs a yes
@@ -166,11 +171,19 @@ func TestKitCommands(t *testing.T) {
 		t.Fatalf("update synced after unsync: %q", f.ran)
 	}
 
-	// on a terminal, an update offers it again, and a yes syncs it
+	// nor offers it on a terminal: unsync is a no until bud kit sync
 	f.ran = nil
 	out = captureStdout(t, func() { resyncKit(&Globals{}, p, yesPrompter("y\n")) })
-	if !slices.Equal(f.ran, []string{"plugin install --scope user docs@market"}) || !strings.Contains(out, "Synced the kit") {
-		t.Fatalf("update offer: ran %q, out %q", f.ran, out)
+	if len(f.ran) != 0 || out != "" {
+		t.Fatalf("update offered after unsync: ran %q, out %q", f.ran, out)
+	}
+	captureStdout(t, func() {
+		if err := syncKitWith(&Globals{}, yesPrompter("y\n"), false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if _, err := os.Stat(p.KitDeclined()); !os.IsNotExist(err) || !slices.Equal(f.ran, []string{"plugin install --scope user docs@market"}) {
+		t.Fatalf("sync after unsync: ran %q, marker %v", f.ran, err)
 	}
 	// and once synced, an update on a terminal says so
 	out = captureStdout(t, func() { resyncKit(&Globals{}, p, yesPrompter("")) })

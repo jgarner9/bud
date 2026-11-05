@@ -156,7 +156,7 @@ func TestListsColourLikePlain(t *testing.T) {
 			{Current: "dev", Dev: true, Release: &updater.Release{Version: "0.6.0"}},
 		} {
 			checkRelease = func(context.Context, string, string) (*updater.Status, error) { return st, nil }
-			colourMatchesPlain(t, "update --check", func() error { return update(&Globals{}, nil, true, false, "") })
+			colourMatchesPlain(t, "update --check", func() error { return update(&Globals{}, nil, true, false, false, "") })
 		}
 	})
 }

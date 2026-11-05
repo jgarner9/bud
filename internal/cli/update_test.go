@@ -55,7 +55,7 @@ func TestUpdateCheck(t *testing.T) {
 			return tt.status, tt.err
 		}
 		var err error
-		out := captureStdout(t, func() { err = update(&Globals{}, nil, true, false, "") })
+		out := captureStdout(t, func() { err = update(&Globals{}, nil, true, false, false, "") })
 		if err != nil || !strings.Contains(out, tt.want) {
 			t.Errorf("got %q, %v; want %q", out, err, tt.want)
 		}
@@ -65,7 +65,7 @@ func TestUpdateCheck(t *testing.T) {
 		}
 	}
 
-	captureStdout(t, func() { update(&Globals{}, nil, true, false, "nightly") })
+	captureStdout(t, func() { update(&Globals{}, nil, true, false, false, "nightly") })
 	if asked != "nightly" {
 		t.Errorf("--channel nightly checked %q", asked)
 	}
@@ -221,8 +221,9 @@ func TestCheckHealth(t *testing.T) {
 		opts = o
 		return []doctor.Result{{Name: "nvim", Status: doctor.OK, Detail: "0.12.6"}}
 	}
-	out := captureStdout(t, checkHealth)
-	if opts.Quick || !strings.Contains(out, "All checks pass.") || strings.Contains(out, "0.12.6") {
+	var err error
+	out := captureStdout(t, func() { err = checkHealth() })
+	if err != nil || opts.Quick || !strings.Contains(out, "All checks pass.") || strings.Contains(out, "0.12.6") {
 		t.Fatalf("quick %v, out %q", opts.Quick, out)
 	}
 
@@ -232,9 +233,18 @@ func TestCheckHealth(t *testing.T) {
 			{Name: "core.md", Status: doctor.Warn, Detail: "changed since you pasted it", Fix: "bud kit core"},
 		}
 	}
-	out = captureStdout(t, checkHealth)
-	if strings.Contains(out, "0.12.6") || !strings.Contains(out, "changed since you pasted it") || !strings.Contains(out, "fix: bud kit core") {
+	out = captureStdout(t, func() { err = checkHealth() })
+	if err != nil || strings.Contains(out, "0.12.6") || !strings.Contains(out, "changed since you pasted it") || !strings.Contains(out, "fix: bud kit core") {
 		t.Fatalf("out %q", out)
+	}
+
+	// a Fail makes bud update fail too, saying the update itself went in
+	doctorChecks = func(doctor.Options) []doctor.Result {
+		return []doctor.Result{{Name: "fzf", Status: doctor.Fail, Detail: "not found on PATH", Fix: "brew install fzf"}}
+	}
+	out = captureStdout(t, func() { err = checkHealth() })
+	if err == nil || !strings.Contains(err.Error(), "updated, but doctor found 1 problem") || !strings.Contains(out, "fix: brew install fzf") {
+		t.Fatalf("err %v, out %q", err, out)
 	}
 }
 
@@ -259,7 +269,7 @@ func TestUpdateSyncsAndChecks(t *testing.T) {
 	fakeClaude(t, claudeReady)
 
 	var err error
-	out := captureStdout(t, func() { err = update(&Globals{}, nil, false, false, "") })
+	out := captureStdout(t, func() { err = update(&Globals{}, nil, false, false, false, "") })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +295,7 @@ func TestUpdateAfterRollback(t *testing.T) {
 		return nil, nil
 	}
 
-	err := update(&Globals{}, nil, false, false, "")
+	err := update(&Globals{}, nil, false, false, false, "")
 	if !synced || err == nil || !strings.Contains(err.Error(), "0.6.0 was rolled back") || !strings.Contains(err.Error(), "doctor failed: nvim") {
 		t.Fatalf("synced %v, err %v", synced, err)
 	}

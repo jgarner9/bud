@@ -27,7 +27,7 @@ func init() {
 }
 
 func Update() *Command {
-	var check, background bool
+	var check, background, noDoctor bool
 	var channel string
 	return &Command{
 		Name:  "update",
@@ -35,9 +35,10 @@ func Update() *Command {
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&check, "check", false, "only report whether a newer release exists")
 			fs.BoolVar(&background, "background", false, "the check bud starts at launch: install a stable release (update.auto), or note it for the dashboard")
+			fs.BoolVar(&noDoctor, "no-doctor", false, "skip the full bud doctor at the end, for scripts that only want the sync")
 			fs.StringVar(&channel, "channel", "", "release channel to check: "+strings.Join(updater.Channels, " or ")+" (default: update.channel in config.json)")
 		},
-		Run: func(g *Globals, args []string) error { return update(g, args, check, background, channel) },
+		Run: func(g *Globals, args []string) error { return update(g, args, check, background, noDoctor, channel) },
 	}
 }
 
@@ -67,7 +68,7 @@ var (
 	updatePrompt  = func() *prompter { return terminalPrompter(false) }
 )
 
-func update(g *Globals, args []string, check, background bool, channel string) error {
+func update(g *Globals, args []string, check, background, noDoctor bool, channel string) error {
 	if len(args) > 0 {
 		return usageErrorf("update takes no arguments")
 	}
@@ -115,8 +116,10 @@ func update(g *Globals, args []string, check, background bool, channel string) e
 		if err := finishUpdate(g, p, from, strings.Split(before, ","), updatePrompt()); err != nil {
 			return err
 		}
-		checkHealth()
-		return nil
+		if noDoctor {
+			return nil
+		}
+		return checkHealth()
 	}
 	if err := selfUpdate(g, p, channel); err != nil {
 		return err
@@ -125,16 +128,19 @@ func update(g *Globals, args []string, check, background bool, channel string) e
 		return err
 	}
 	resyncKit(g, p, updatePrompt())
-	checkHealth()
+	if noDoctor {
+		return nil
+	}
 
-	return nil
+	return checkHealth()
 }
 
 // checkHealth runs the full doctor after bud update has synced everything,
 // so you see right away whether the Neovim config, Claude Code and the kit
-// are all right, and lists what isn't with its fix. Only the quick checks
-// that broke can roll an update back (finishUpdate); this only reports
-func checkHealth() {
+// are all right, and lists what isn't with its fix. A Fail makes bud update
+// exit 1, as bud doctor does, though the update itself is kept: only quick
+// checks that broke roll it back (finishUpdate)
+func checkHealth() error {
 	fmt.Println("Checking everything with bud doctor...")
 	var problems []doctor.Result
 	for _, r := range doctorChecks(doctor.Options{}) {
@@ -144,9 +150,13 @@ func checkHealth() {
 	}
 	if len(problems) == 0 {
 		fmt.Println("All checks pass.")
-		return
+		return nil
 	}
-	_ = report(problems)
+	if err := report(problems); err != nil {
+		return fmt.Errorf("updated, but %w (bud doctor shows them all)", err)
+	}
+
+	return nil
 }
 
 // finishUpdate runs in the freshly swapped-in binary: sync its config, then

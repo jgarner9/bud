@@ -173,12 +173,7 @@ var syncKit = syncKitWith
 // show up for a logged-in account, so syncing before that could install a
 // second copy
 func installKit(g *Globals, pr *prompter) error {
-	s, err := checkClaude()
-	if err != nil {
-		return err
-	}
-	if s.Bin == "" || !s.LoggedIn {
-		fmt.Println("The Claude Code kit syncs once Claude Code is logged in: run 'bud kit sync' then.")
+	if !claudeLoggedIn() {
 		return nil
 	}
 

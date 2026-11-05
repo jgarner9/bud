@@ -132,4 +132,21 @@ eq(vim.api.nvim_get_current_buf(), buf, "the same buffer comes back")
 eq(vim.b[buf].bud_markdown, true, "its choice is set up again")
 eq(vim.fn.maparg("<leader>um", "n", false, true).buffer, 1, "and its toggle")
 
+-- open hands the plugin's FileType handler each markdown file already open
+local handed = {}
+vim.api.nvim_create_autocmd("FileType", {
+  group = vim.api.nvim_create_augroup("RenderMarkdown", {}),
+  callback = function(ev)
+    table.insert(handed, ev.buf)
+  end,
+})
+local md_scratch = vim.api.nvim_create_buf(false, true)
+vim.bo[md_scratch].filetype = "markdown"
+handed = {}
+md.open()
+table.sort(handed)
+local want = { buf, off }
+table.sort(want)
+eq(handed, want, "open hands over the markdown files, not scratch buffers")
+
 print("markdown_test: ok")

@@ -54,7 +54,9 @@ return {
     -- bud.markdown decides which buffers render
     src = "MeanderingProgrammer/render-markdown.nvim",
     version = vim.version.range("8"),
-    ft = "markdown",
+    -- just after the first screen (D35): loading on ft = "markdown" cost a
+    -- markdown file about 4.5 ms before it showed, so it flashes as text instead
+    event = "UIEnter",
     -- the plugin reads this as it loads, so even the buffer that loads it gets
     -- bud's settings (setup() afterwards would be too late for that one)
     init = function()
@@ -62,6 +64,7 @@ return {
     end,
     config = function()
       require("bud.markdown").setup()
+      require("bud.markdown").open()
     end,
   },
 }

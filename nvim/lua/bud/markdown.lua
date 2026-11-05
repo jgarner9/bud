@@ -105,6 +105,17 @@ function M.config()
   }
 end
 
+-- open hands the plugin the markdown files opened before it loaded: it loads
+-- after the first screen, past their FileType, and by itself attaches only to
+-- the current buffer. It attaches once, so the current one is skipped there
+function M.open()
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype == "markdown" and M.file(buf) then
+      pcall(vim.api.nvim_exec_autocmds, "FileType", { group = "RenderMarkdown", buffer = buf, modeline = false })
+    end
+  end
+end
+
 -- setup follows windows going in and out of diff mode, once the plugin loaded
 function M.setup()
   local group = vim.api.nvim_create_augroup("bud.markdown", {})

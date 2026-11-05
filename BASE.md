@@ -551,7 +551,7 @@ These were the ideas; most are built now, each a `dashboard.*` toggle in config 
 - ~~**Recent chats**~~: dropped with bud's own chat (D81); Claude Code's `/resume` covers it.
 - ✅ **Health line:** startup time, plugin count, whether Claude Code is installed and logged in.
 - ✅ **Update and doctor banners**, each with a one-key fix.
-- **Tip of the day:** a random leader keybind, to help you learn your own setup (not built).
+- **Tip of the day:** a random leader keybind, to help you learn your own setup (built, then removed: JGA-157).
 - **Open PRs / review requests** on GitHub through the `gh` CLI (`dashboard.prs`, off by default, it's a network call).
 - **TODO/FIXME count** per project (`dashboard.todos`).
 - **Recently generated AI tools**, with quick enable/disable (not built).

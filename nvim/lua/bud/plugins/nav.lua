@@ -132,7 +132,20 @@ return {
           clue.gen_clues.windows({ submode_resize = true }),
           clue.gen_clues.z(),
         },
-        window = { delay = 300, config = { width = "auto", border = "rounded" } },
+        -- a narrow panel on the right, as which-key's was: as wide as its keys
+        -- and descriptions, but at most 40% of the editor (30 to 60 columns),
+        -- so a long list like g's never stretches across the bottom
+        window = {
+          delay = 300,
+          config = function(buf)
+            local need = 0
+            for _, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+              need = math.max(need, vim.fn.strdisplaywidth(line) + 1)
+            end
+            local cap = math.min(math.max(math.floor(vim.o.columns * 0.4), 30), 60)
+            return { width = math.min(need, cap), border = "rounded" }
+          end,
+        },
       })
     end,
   },

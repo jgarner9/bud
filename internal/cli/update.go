@@ -31,7 +31,7 @@ func Update() *Command {
 	var channel string
 	return &Command{
 		Name:  "update",
-		Usage: "Installs a newer release if there is one, then syncs the Bud Neovim config and restores pinned plugins; --check only looks",
+		Usage: "Installs a newer release if there is one, syncs the Bud Neovim config, restores pinned plugins, syncs the Claude Code kit and runs bud doctor; --check only looks",
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&check, "check", false, "only report whether a newer release exists")
 			fs.BoolVar(&background, "background", false, "the check bud starts at launch: install a stable release (update.auto), or note it for the dashboard")
@@ -63,6 +63,8 @@ var (
 	executable    = os.Executable
 	applyConfig   = nvim.Apply
 	failingChecks = failingNames
+	doctorChecks  = doctor.Run
+	updatePrompt  = func() *prompter { return terminalPrompter(false) }
 )
 
 func update(g *Globals, args []string, check, background bool, channel string) error {
@@ -110,7 +112,11 @@ func update(g *Globals, args []string, check, background bool, channel string) e
 		os.Unsetenv(updatedFromEnv)
 		os.Unsetenv(failingBeforeEnv)
 		fmt.Printf("Updated bud from %s to %s.\n", from, version.String())
-		return finishUpdate(g, p, from, strings.Split(before, ","))
+		if err := finishUpdate(g, p, from, strings.Split(before, ","), updatePrompt()); err != nil {
+			return err
+		}
+		checkHealth()
+		return nil
 	}
 	if err := selfUpdate(g, p, channel); err != nil {
 		return err
@@ -118,15 +124,36 @@ func update(g *Globals, args []string, check, background bool, channel string) e
 	if err := applyConfig(); err != nil {
 		return err
 	}
-	resyncKit(g, p)
+	resyncKit(g, p, updatePrompt())
+	checkHealth()
 
 	return nil
 }
 
+// checkHealth runs the full doctor after bud update has synced everything,
+// so you see right away whether the Neovim config, Claude Code and the kit
+// are all right, and lists what isn't with its fix. Only the quick checks
+// that broke can roll an update back (finishUpdate); this only reports
+func checkHealth() {
+	fmt.Println("Checking everything with bud doctor...")
+	var problems []doctor.Result
+	for _, r := range doctorChecks(doctor.Options{}) {
+		if r.Status != doctor.OK {
+			problems = append(problems, r)
+		}
+	}
+	if len(problems) == 0 {
+		fmt.Println("All checks pass.")
+		return
+	}
+	_ = report(problems)
+}
+
 // finishUpdate runs in the freshly swapped-in binary: sync its config, then
 // doctor. A sync error, or a check failing that passed before the swap,
-// puts bud.prev back and re-execs it to sync its own config (5.7 step 6)
-func finishUpdate(g *Globals, p *paths.Paths, from string, failingBefore []string) error {
+// puts bud.prev back and re-execs it to sync its own config (5.7 step 6).
+// pr is for the kit sync (resyncKit): nil when a launch finishes the update
+func finishUpdate(g *Globals, p *paths.Paths, from string, failingBefore []string, pr *prompter) error {
 	why := ""
 	if err := applyConfig(); err != nil {
 		why = "syncing its config failed: " + err.Error()
@@ -139,7 +166,7 @@ func finishUpdate(g *Globals, p *paths.Paths, from string, failingBefore []strin
 		}
 		if len(broke) == 0 {
 			editState(g, p, func(st *updater.State) { st.Available, st.Installed = "", "" })
-			resyncKit(g, p)
+			resyncKit(g, p, pr)
 			return nil
 		}
 		why = "bud doctor failed: " + strings.Join(broke, ", ")
@@ -345,7 +372,7 @@ func finishPendingUpdate(g *Globals, p *paths.Paths) error {
 
 	fmt.Printf("Finishing the update from %s to %s...\n", from, installed)
 
-	return finishUpdate(g, p, from, before)
+	return finishUpdate(g, p, from, before, nil)
 }
 
 // startUpdateCheck starts `bud update --background` detached, at most once a

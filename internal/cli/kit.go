@@ -543,11 +543,26 @@ func kitLs(args []string) error {
 	return nil
 }
 
-// resyncKit runs the kit sync after an update, but only once you've synced
-// it yourself (there's a ledger): bud doesn't write into Claude Code's config
-// unasked. It only ever warns
-func resyncKit(g *Globals, p *paths.Paths) {
-	if _, ok, err := kit.ReadLedger(p.KitLedger()); err != nil || !ok {
+// resyncKit runs the kit sync after an update. A kit you've synced (there's a
+// ledger) keeps up with the release; one you never synced, or took out with
+// bud kit unsync, is only offered on a terminal (pr), since bud doesn't write
+// into Claude Code's config unasked. With pr nil (a launch finishing a
+// background update) only a synced kit is kept up, and nothing is moved to
+// another config dir without asking. It only ever warns
+func resyncKit(g *Globals, p *paths.Paths, pr *prompter) {
+	_, synced, err := kit.ReadLedger(p.KitLedger())
+	if err != nil {
+		fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+		return
+	}
+	if !synced {
+		offerKit(g, pr)
+		return
+	}
+	if pr != nil {
+		if err := syncKit(g, pr, false); err != nil {
+			fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+		}
 		return
 	}
 	k, env, err := loadKit()
@@ -567,6 +582,34 @@ func resyncKit(g *Globals, p *paths.Paths) {
 	}
 	g.Logf("synced the Claude Code kit")
 	remindCore(k, env)
+}
+
+// offerKit asks to sync a kit that isn't synced, once Claude Code is logged
+// in (D72). Into ~/.claude the sync itself lists what it adds and asks
+// (confirmShared); into another dir it asks here
+func offerKit(g *Globals, pr *prompter) {
+	if pr == nil {
+		return
+	}
+	if s, err := checkClaude(); err != nil || s.Bin == "" || !s.LoggedIn {
+		fmt.Println("The Claude Code kit syncs once Claude Code is logged in: run 'bud kit sync' then.")
+		return
+	}
+	_, env, err := loadKit()
+	if err != nil {
+		fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+		return
+	}
+	if home, err := homeClaudeDir(); err != nil || env.ClaudeDir != home {
+		ok, err := pr.confirm(fmt.Sprintf("The Claude Code kit isn't synced. Sync it into %s?", env.ClaudeDir))
+		if err != nil || !ok {
+			fmt.Println("Left the kit out; bud kit sync adds it.")
+			return
+		}
+	}
+	if err := syncKit(g, pr, false); err != nil {
+		fmt.Printf("The Claude Code kit didn't sync (%v); bud kit sync tries again.\n", err)
+	}
 }
 
 // remindCore says when bud-plugins' core.md changed since you last pasted it

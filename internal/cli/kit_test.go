@@ -83,11 +83,22 @@ func TestKitCommands(t *testing.T) {
 	if !strings.Contains(out, "docs@market") || !strings.Contains(out, "not synced") {
 		t.Errorf("status before %q", out)
 	}
-	// an update doesn't sync a kit you never synced
+	// an update doesn't sync a kit you never synced: with nobody to ask it
+	// leaves it, logged out it says when, and on a no nothing changes
 	p, _ := paths.Resolve()
-	captureStdout(t, func() { resyncKit(&Globals{}, p) })
+	captureStdout(t, func() { resyncKit(&Globals{}, p, nil) })
 	if len(f.ran) != 0 {
 		t.Fatalf("update synced unasked: %q", f.ran)
+	}
+	fakeClaude(t, claudeLoggedOut)
+	out = captureStdout(t, func() { resyncKit(&Globals{}, p, yesPrompter("y\n")) })
+	if len(f.ran) != 0 || !strings.Contains(out, "once Claude Code is logged in") {
+		t.Fatalf("logged out: ran %q, out %q", f.ran, out)
+	}
+	fakeClaude(t, claudeReady)
+	out = captureStdout(t, func() { resyncKit(&Globals{}, p, yesPrompter("n\n")) })
+	if len(f.ran) != 0 || !strings.Contains(out, "It would add:\n  plugin docs@market") {
+		t.Fatalf("update offer on a no: ran %q, out %q", f.ran, out)
 	}
 
 	// the first sync into ~/.claude shows what it adds and needs a yes
@@ -150,9 +161,21 @@ func TestKitCommands(t *testing.T) {
 	if _, err := os.Stat(p.KitLedger()); !os.IsNotExist(err) {
 		t.Fatalf("ledger left: %v", err)
 	}
-	captureStdout(t, func() { resyncKit(&Globals{}, p) })
+	captureStdout(t, func() { resyncKit(&Globals{}, p, nil) })
 	if len(f.ran) != 1 {
 		t.Fatalf("update synced after unsync: %q", f.ran)
+	}
+
+	// on a terminal, an update offers it again, and a yes syncs it
+	f.ran = nil
+	out = captureStdout(t, func() { resyncKit(&Globals{}, p, yesPrompter("y\n")) })
+	if !slices.Equal(f.ran, []string{"plugin install --scope user docs@market"}) || !strings.Contains(out, "Synced the kit") {
+		t.Fatalf("update offer: ran %q, out %q", f.ran, out)
+	}
+	// and once synced, an update on a terminal says so
+	out = captureStdout(t, func() { resyncKit(&Globals{}, p, yesPrompter("")) })
+	if !strings.Contains(out, "already has the kit") {
+		t.Fatalf("update resync %q", out)
 	}
 }
 

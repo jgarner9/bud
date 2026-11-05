@@ -20,7 +20,7 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 **A kit item didn't sync.** `bud kit status` says why: usually something with the same name you set up yourself, which bud never touches. MCP servers aren't in the kit any more: they come from Claude Code's own config (`claude mcp list`), and the first sync after updating takes out the ones an older bud added.
 
-**An update went wrong.** bud checks itself after an update and goes back to the previous version if a check that passed before fails, saying why. `~/.cache/bud/update.log` has the background updates. `bud update` (or `:BudUpdate` in the editor) runs one by hand.
+**An update went wrong.** bud checks itself after an update and goes back to the previous version if a check that passed before fails, saying why. `~/.cache/bud/update.log` has the background updates. `bud update` (or `:BudUpdate` in the editor) runs one by hand, then syncs the Claude Code kit and runs the full `bud doctor`, listing anything that isn't right with its fix.
 
 **The app doesn't open.** `bud bundle` builds it again with your current `PATH` and bud; `bud launch` from a shell shows any error.
 

@@ -75,6 +75,8 @@ function M.open(opts)
   local argv = M.argv(bin, opts)
   vim.cmd.tabnew()
   state = { tab = vim.api.nvim_get_current_tabpage(), buf = vim.api.nvim_get_current_buf() }
+  -- Esc Esc to Normal mode, where <leader>ch goes back and <leader>w moves on
+  require("bud.termkeys").attach(state.buf)
   for opt, value in pairs({ number = false, relativenumber = false, signcolumn = "no" }) do
     vim.api.nvim_set_option_value(opt, value, { scope = "local", win = 0 })
   end

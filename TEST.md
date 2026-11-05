@@ -57,6 +57,7 @@ A hands-on pass over bud's editor UI, for a release that changes it (written for
 ## 9. Layout and panes
 
 - [ ] `bud <dir>` opens the layout. `:BudLayout <name>` switches and `:BudLayout reload` works.
+- [ ] `<leader>t` with the explorer and `<leader>ac` open (either order): the terminal sits under the editor and Claude Code's pane, right of the full-height explorer. In the terminal and Claude Code's pane, one Esc reaches the program (Esc stops a Claude reply), Esc Esc goes to Normal mode, then `<leader>t` / `<leader>ac` closes it and `<leader>w h`/`l` moves to the next window.
 - [ ] `<leader>e` tree, `<leader>t` terminal, `<leader>o` outline, `<leader>b` buffers, `<leader>f`/`<leader>p` pickers, `<leader>/` grep.
 - [ ] `<leader>m` pin a file, `<leader>0` unpin a file, `<leader>gd` diff, `<leader>gh`/`<leader>gH` history.
 - [ ] Quit and reopen the project: the session restores.

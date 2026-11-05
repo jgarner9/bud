@@ -79,6 +79,11 @@ local s = claude.session()
 -- opening the TUI stops the headless job and resumes its conversation
 local editor = vim.api.nvim_get_current_win()
 local win = term.open({ focus = false })
+-- a side pane (above the <leader>t terminal), with Esc Esc to Normal mode
+eq(vim.w[win].bud_side, true, "marked as a side pane")
+vim.api.nvim_buf_call(vim.api.nvim_win_get_buf(win), function()
+  eq(vim.fn.maparg("<Esc>", "t", false, true).buffer, 1, "Esc mapped in the pane")
+end)
 eq(vim.api.nvim_get_current_win(), editor, "focus stays in the editor")
 wait(function()
   return #argv_log() == 2

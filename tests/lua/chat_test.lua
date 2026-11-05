@@ -62,6 +62,7 @@ eq(runs()[1], "|" .. tmp .. "/chat|none", "no agent, in the chat dir, without BU
 eq(notes[1]:find("bud kit sync", 1, true) ~= nil, true, "says to sync the kit")
 eq(vim.api.nvim_get_current_tabpage() ~= home, true, "in its own tab")
 local chat_tab = vim.api.nvim_get_current_tabpage()
+eq(vim.fn.maparg("<Esc>", "t", false, true).buffer, 1, "Esc Esc to Normal mode in chat")
 
 -- toggle goes back and forth, and open again never starts a second one
 chat.toggle()

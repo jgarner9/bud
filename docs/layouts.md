@@ -2,7 +2,7 @@
 
 A layout says which panes open around the editor when a project opens. bud ships three in `layouts/`:
 
-- `default`: the explorer (oil) on the left, focused, with the `<leader>t` terminal along the bottom; `<leader>ac` opens chat.
+- `default`: the explorer (oil) on the left, focused; `<leader>ac` opens Claude Code's pane on the right and `<leader>t` the terminal along the bottom, under the editor and that pane and right of the explorer, whichever opens first.
 - `focus`: the editor alone.
 - `debug`: the file tree and the debugger panel along the bottom; F5 starts debugging.
 - `review`: the changed files on the left, and the working tree's diff in its own tab (`:DiffviewClose` gets back).

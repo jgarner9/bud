@@ -38,6 +38,9 @@ local function show(t, side)
   for opt, value in pairs({ winfixwidth = true, number = false, relativenumber = false, signcolumn = "no" }) do
     vim.api.nvim_set_option_value(opt, value, { scope = "local", win = win })
   end
+  -- a side pane: above the <leader>t terminal, beside the editor
+  vim.w[win].bud_side = true
+  require("bud.terminal").arrange()
   return win
 end
 
@@ -63,6 +66,8 @@ function M.open(opts)
     t = { buf = vim.api.nvim_create_buf(false, true), last_used = now() }
     terms[root] = t
     vim.bo[t.buf].bufhidden = "hide"
+    -- Esc Esc to Normal mode, where <leader>ac hides it and <leader>w moves on
+    require("bud.termkeys").attach(t.buf)
     win = show(t, opts.side)
     vim.api.nvim_win_call(win, function()
       t.job = vim.fn.jobstart(argv, {

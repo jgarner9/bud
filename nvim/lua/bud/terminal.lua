@@ -1,6 +1,8 @@
--- A terminal along the bottom of the screen that <leader>t shows and Esc Esc
--- (or <leader>t again) hides (JGA-110). Hiding keeps the shell running, so the
--- next press brings back the same session; it's only replaced once its shell exits.
+-- A terminal along the bottom that <leader>t shows and hides (JGA-110): under
+-- the editor and Claude Code's pane, right of the explorer (arrange). Esc Esc
+-- goes to Normal mode (bud.termkeys), where <leader>t hides it and <leader>w
+-- moves to another window. Hiding keeps the shell running, so the next press
+-- brings back the same session; it's only replaced once its shell exits.
 
 local M = {}
 
@@ -22,6 +24,56 @@ function M.is_open()
   return win ~= nil and vim.api.nvim_win_is_valid(win)
 end
 
+local function plain(w)
+  return vim.api.nvim_win_get_config(w).relative == ""
+end
+
+-- arrange lays out the current tab around the terminal: side panes (windows
+-- marked vim.w.bud_side, Claude Code's pane) beside the editor, the terminal
+-- under both, and the explorer the full height on the left. Nothing changes
+-- when the terminal isn't open in this tab
+function M.arrange()
+  if not M.is_open() or vim.api.nvim_win_get_tabpage(win) ~= vim.api.nvim_get_current_tabpage() then
+    return
+  end
+  local cur = vim.api.nvim_get_current_win()
+  local explorer = package.loaded["bud.explorer"]
+  local tree = explorer and explorer.win()
+  local sides, editor = {}, nil
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if w ~= win and w ~= tree and plain(w) then
+      if vim.w[w].bud_side then
+        table.insert(sides, w)
+      elseif not editor or w == cur then
+        editor = w
+      end
+    end
+  end
+  -- widths to put back: the explorer first, then side panes, which then
+  -- take what they need from the editor beside them
+  local order = vim.list_extend({ tree }, sides)
+  local widths = {}
+  for _, w in ipairs(order) do
+    widths[w] = vim.api.nvim_win_get_width(w)
+  end
+  if editor then
+    for _, w in ipairs(sides) do
+      vim.api.nvim_win_set_config(w, { split = "right", win = editor })
+    end
+  end
+  vim.api.nvim_win_set_config(win, { split = "below", win = -1 })
+  if tree then
+    vim.api.nvim_win_set_config(tree, { split = "left", win = -1 })
+  end
+  for _, w in ipairs(order) do
+    vim.api.nvim_win_set_width(w, widths[w])
+  end
+  vim.api.nvim_win_set_height(win, rows())
+  if vim.api.nvim_win_is_valid(cur) then
+    vim.api.nvim_set_current_win(cur)
+  end
+end
+
 function M.toggle()
   if M.is_open() then
     vim.api.nvim_win_hide(win)
@@ -32,14 +84,13 @@ function M.toggle()
   local fresh = not (buf and vim.api.nvim_buf_is_valid(buf))
   if fresh then
     buf = vim.api.nvim_create_buf(false, true)
-    -- buffer-local: fzf-lua's pickers are terminals too, and a global Esc Esc
-    -- would make a single Esc there wait for a second one
-    vim.keymap.set("t", "<Esc><Esc>", M.toggle, { buffer = buf, desc = "Hide terminal" })
+    require("bud.termkeys").attach(buf)
   end
   win = vim.api.nvim_open_win(buf, true, { split = "below", win = -1, height = rows() })
   for opt, value in pairs({ winfixheight = true, number = false, relativenumber = false, signcolumn = "no" }) do
     vim.api.nvim_set_option_value(opt, value, { scope = "local", win = win })
   end
+  M.arrange()
   if fresh then
     vim.fn.jobstart(vim.o.shell, {
       term = true,
@@ -67,7 +118,7 @@ end
 
 function M.setup()
   -- not <leader>t in terminal mode: every space typed in the shell would wait
-  -- to see if a t follows, so the terminal hides itself with Esc Esc instead
+  -- to see if a t follows, so Esc Esc goes to Normal mode first (bud.termkeys)
   vim.keymap.set("n", "<leader>t", M.toggle, { desc = "Terminal" })
 end
 

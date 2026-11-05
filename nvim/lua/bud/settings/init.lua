@@ -25,6 +25,7 @@ M.sections = {
     title = "Editor",
     rows = {
       { key = "ui.messages", label = "Messages in floats (restart)", kind = "bool" },
+      { key = "ui.cmdline_float", label = "Command line in a float (restart)", kind = "bool" },
       { key = "ui.breadcrumbs", label = "Breadcrumbs", kind = "bool" },
     },
   },

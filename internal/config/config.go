@@ -72,6 +72,9 @@ type UI struct {
 	// the command line and messages in floats: Neovim's own ui2 (JGA-137),
 	// experimental, so it can be turned off
 	Messages bool `json:"messages"`
+	// the command line in a centered float while you type (D86); with
+	// Messages off there's no ui2 to move, so it does nothing then
+	CmdlineFloat bool `json:"cmdline_float"`
 	// path and symbol breadcrumbs at the top of file windows (dropbar, JGA-139)
 	Breadcrumbs bool `json:"breadcrumbs"`
 }
@@ -124,7 +127,7 @@ func Defaults() Settings {
 		Update:       Update{Channel: "stable", Auto: true},
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
-		UI:           UI{Messages: true, Breadcrumbs: true},
+		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true},
 		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
 	}

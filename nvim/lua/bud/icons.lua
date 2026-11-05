@@ -40,4 +40,5 @@ return {
   modified = "", -- nf-fa-circle
   locked = "", -- nf-fa-lock
   lsp = "", -- nf-fa-cogs
+  command = "", -- nf-fa-terminal
 }

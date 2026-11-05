@@ -34,7 +34,7 @@ It lives in its own namespace (`NVIM_APPNAME=bud`), so your existing `~/.config/
 | **An isolated Neovim** | Plugins come from Neovim's built-in `vim.pack`, pinned in a committed lockfile and lazy-loaded where it counts. Headless startup is around 28 ms. |
 | **Languages as data** | One file per language in [`languages/`](languages/) wires up the LSP server, linter, formatter and tree-sitter parsers. Copy [`_template.lua`](languages/_template.lua) to add your own. |
 | **Easy navigation** | fzf-lua for files, grep, buffers and symbols; two-key jumps with `gw` and `s`; a symbols outline; oil.nvim, as a buffer and as the side pane; four pinned files per project. |
-| **Batteries included** | blink.cmp completion, gitsigns and diffview, mini.clue key hints, format on save, Catppuccin Macchiato. |
+| **Batteries included** | blink.cmp completion, gitsigns and diffview, mini.clue key hints, format on save, Catppuccin Macchiato. The command line opens as a float in the middle of the screen while you type, with completion under it. |
 | **A doctor** | `bud doctor` checks system deps, tool versions, config sync and machine config, and tells you the exact fix. |
 | **Honest installs** | `bud install` shows the package manager command and asks before running it. Nothing gets upgraded behind your back. |
 
@@ -136,6 +136,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and the keys that follow show up.
 
 | Keys | Does |
 | --- | --- |
+| <kbd>;</kbd> | The command line, with no <kbd>Shift</kbd> (<kbd>:</kbd> repeats the last <kbd>f</kbd>/<kbd>t</kbd> jump instead) |
 | <kbd>Space</kbd> <kbd>p</kbd> | Open a project |
 | <kbd>Space</kbd> <kbd>f</kbd> | Find a file in this project (or type a full path) |
 | <kbd>Space</kbd> <kbd>/</kbd> | Grep the project |
@@ -186,7 +187,7 @@ just lang-check go   # install a language's tools in a temp dir and check it on 
 
 The Go side uses the standard library only, and flags always go before positional arguments. [`CLAUDE.md`](CLAUDE.md) has the architecture tour.
 
-To release, change `VERSION` (for example to `0.19.0`) and merge it to `main`: the release workflow checks it is newer than the last release, runs the tests, tags `v0.19.0`, and GoReleaser builds linux/darwin × amd64/arm64 and attaches the archives and `checksums.txt` to a GitHub release, where `install.sh` picks them up.
+To release, run Claude Code's `/bud:release` (the `bud:release` skill from [bud-plugins](https://github.com/jgarner9/bud-plugins), which `bud kit sync` installs). It runs a code review and a security review of everything since the last tag, goes through the findings with you, then changes `VERSION` (for example to `0.20.0`) on `main`. The release workflow checks it is newer than the last release, runs the tests, tags `v0.20.0`, and GoReleaser builds linux/darwin × amd64/arm64 and attaches the archives and `checksums.txt` to a GitHub release, where `install.sh` picks them up.
 
 <div align="center">
 <sub>[o.o] beep boop, built one commit at a time</sub>

@@ -91,7 +91,11 @@ func claudeStatus(args []string) error {
 	fmt.Printf("Config: %s\n", paint(out, ansiDim, dir))
 	if p, err := paths.Resolve(); err == nil {
 		if clodInstalled(p) {
-			fmt.Printf("clod: %s\n", paint(out, ansiGreen, "set up"))
+			state := "set up"
+			if r, ok := readClodRecord(p); ok && r.Repo != "" {
+				state += " from " + r.Repo
+			}
+			fmt.Printf("clod: %s\n", paint(out, ansiGreen, state))
 		} else {
 			fmt.Printf("clod: %s: run bud claude setup\n", paint(out, ansiYellow, "not set up"))
 		}

@@ -71,6 +71,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `ai.issues.project` | unset | The Linear project in that team, if any. |
 | `ai.issues.bud.team` | `"JGA"` | Where issues about bud itself (`<leader>aB`) go: bud's own tracker. |
 | `ai.issues.bud.project` | `"Bud IDE"` | The Linear project in that team. |
+| `clod.repo` | unset | Your clod, the private repo with your Claude Code setup, as `owner/name`. Unset, it's `<your gh login>/clod`. Set it when gh is logged in to another account (a work one) or your repo has another name; `bud bootstrap --config` copies it across. |
 
 ## Tools and the kit
 

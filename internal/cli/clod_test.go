@@ -20,6 +20,8 @@ type clodEnv struct {
 	ran      *[][]string
 	deps     []string
 	loggedIn bool
+	login    string          // the GitHub account gh is logged in to
+	repos    map[string]bool // the repos that exist on GitHub
 }
 
 func newClodEnv(t *testing.T, bins ...string) *clodEnv {
@@ -41,7 +43,7 @@ func newClodEnv(t *testing.T, bins ...string) *clodEnv {
 		t.Fatal(err)
 	}
 
-	e := &clodEnv{p: p}
+	e := &clodEnv{p: p, login: "jgarner9", repos: map[string]bool{"jgarner9/clod": true}}
 	e.ran = fakeClaude(t, claudeReady)
 	run := runOnTerminal
 	runOnTerminal = func(argv []string) error {
@@ -49,6 +51,8 @@ func newClodEnv(t *testing.T, bins ...string) *clodEnv {
 		case strings.HasSuffix(argv[0], "install.sh"):
 			os.MkdirAll(p.BinDir, 0o755)
 			os.WriteFile(p.ClodBin(), nil, 0o755)
+		case len(argv) > 3 && argv[1] == "repo" && argv[2] == "create":
+			e.repos[argv[3]] = true
 		case len(argv) == 5 && argv[1] == "repo" && argv[2] == "clone":
 			os.MkdirAll(argv[4], 0o755)
 			os.WriteFile(filepath.Join(argv[4], "install.sh"), []byte("#!/bin/sh\n"), 0o755)
@@ -57,8 +61,13 @@ func newClodEnv(t *testing.T, bins ...string) *clodEnv {
 	}
 	// TestMain turns clod's setup off for every other test
 	origSetup, origDeps, origGh, origTerm := clodSetup, installClodDeps, ghLoggedIn, stdinTerminal
+	origLogin, origExists, origHas, origWait := ghLogin, ghRepoExists, ghHasInstaller, clodWait
 	clodSetup = setupClod
 	stdinTerminal = func() bool { return false }
+	ghLogin = func() (string, error) { return e.login, nil }
+	ghRepoExists = func(repo string) (bool, error) { return e.repos[repo], nil }
+	ghHasInstaller = func(repo string) bool { return e.repos[repo] }
+	clodWait = 0
 	installClodDeps = func(deps []installer.Dep, _ *prompter, _ bool) error {
 		for _, d := range deps {
 			e.deps = append(e.deps, d.Name)
@@ -69,6 +78,7 @@ func newClodEnv(t *testing.T, bins ...string) *clodEnv {
 	ghLoggedIn = func() bool { return e.loggedIn }
 	t.Cleanup(func() {
 		clodSetup, installClodDeps, ghLoggedIn, stdinTerminal = origSetup, origDeps, origGh, origTerm
+		ghLogin, ghRepoExists, ghHasInstaller, clodWait = origLogin, origExists, origHas, origWait
 	})
 
 	return e
@@ -113,8 +123,97 @@ func TestSetupClodFresh(t *testing.T) {
 	if !slices.Equal(e.commands(), want) {
 		t.Fatalf("ran %q, want %q", e.commands(), want)
 	}
+	if r, ok := readClodRecord(e.p); !ok || r.Repo != "jgarner9/clod" || !clodInstalled(e.p) {
+		t.Fatalf("record %+v (%v), installed %v", r, ok, clodInstalled(e.p))
+	}
+}
+
+// someone without a clod: theirs is made from the template, then set up
+func TestSetupClodCreates(t *testing.T) {
+	e := newClodEnv(t, "gh", "jq")
+	e.loggedIn, e.login = true, "alice"
+	var err error
+	out := captureStdout(t, func() { err = setupClod(e.p, yesPrompter("\ny\n"), false) })
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	want := []string{
+		"gh repo create alice/clod --private --template " + clodTemplate,
+		"gh repo clone alice/clod " + e.p.Clod() + ".clone",
+		filepath.Join(e.p.Clod(), "install.sh"),
+	}
+	if !slices.Equal(e.commands(), want) {
+		t.Fatalf("ran %q, want %q", e.commands(), want)
+	}
+	if r, _ := readClodRecord(e.p); r.Repo != "alice/clod" {
+		t.Fatalf("record %+v", r)
+	}
+
+	// Enter is no to making a repo, and a no is a no to clod, so updates stop asking
+	e = newClodEnv(t, "gh", "jq")
+	e.loggedIn, e.login = true, "bob"
+	out = captureStdout(t, func() { err = setupClod(e.p, yesPrompter("\n\n"), false) })
+	if err != nil || len(*e.ran) != 0 || !declinedClod(e.p) || !strings.Contains(out, "Nothing created") {
+		t.Fatalf("err %v, ran %q, declined %v, out %q", err, e.commands(), declinedClod(e.p), out)
+	}
+
+	// --yes (bud bootstrap) never makes a repo on GitHub
+	e = newClodEnv(t, "gh", "jq")
+	e.loggedIn, e.login = true, "carol"
+	err = setupClod(e.p, nil, true)
+	if err == nil || !strings.Contains(err.Error(), "bud claude setup") || len(*e.ran) != 0 {
+		t.Fatalf("err %v, ran %q", err, e.commands())
+	}
+}
+
+// clod.repo picks the repo, whoever gh is logged in as
+func TestSetupClodRepoSetting(t *testing.T) {
+	e := newClodEnv(t, "gh", "jq")
+	e.loggedIn, e.login = true, "work-account"
+	e.repos["me/claude-setup"] = true
+	os.MkdirAll(e.p.State, 0o755)
+	os.WriteFile(e.p.MachineConfig(), []byte(`{"clod": {"repo": "me/claude-setup"}}`), 0o644)
+	if err := setupClod(e.p, nil, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.commands(); len(got) == 0 || got[0] != "gh repo clone me/claude-setup "+e.p.Clod()+".clone" {
+		t.Fatalf("ran %q", got)
+	}
+}
+
+// a repo with no install.sh at its root isn't moved in
+func TestSetupClodNoInstaller(t *testing.T) {
+	e := newClodEnv(t, "gh", "jq")
+	e.loggedIn = true
+	run := runOnTerminal
+	runOnTerminal = func(argv []string) error {
+		if len(argv) == 5 && argv[2] == "clone" {
+			return os.MkdirAll(argv[4], 0o755) // an empty repo
+		}
+		return run(argv)
+	}
+	err := setupClod(e.p, nil, true)
+	if err == nil || !strings.Contains(err.Error(), "no install.sh") {
+		t.Fatalf("err %v", err)
+	}
+	if _, err := os.Stat(e.p.Clod()); err == nil {
+		t.Fatal("an empty clone was moved into ~/clod")
+	}
+}
+
+// bud's record counts only while the checkout is there
+func TestClodInstalledRecord(t *testing.T) {
+	e := newClodEnv(t)
+	e.checkout(t)
+	if err := writeClodRecord(e.p, "me/clod"); err != nil {
+		t.Fatal(err)
+	}
 	if !clodInstalled(e.p) {
-		t.Fatal("clod isn't installed after its installer ran")
+		t.Fatal("record and checkout: not installed")
+	}
+	os.RemoveAll(e.p.Clod())
+	if clodInstalled(e.p) {
+		t.Fatal("record without the checkout counts as installed")
 	}
 }
 
@@ -239,7 +338,7 @@ func TestSetupClodNoTerminal(t *testing.T) {
 }
 
 // something else at ~/clod is left alone, a clone cut short leaves nothing
-// behind, and an installer that doesn't leave clod behind is an error
+// behind, and an installer that fails isn't recorded
 func TestSetupClodFailures(t *testing.T) {
 	e := newClodEnv(t)
 	e.loggedIn = true
@@ -271,10 +370,11 @@ func TestSetupClodFailures(t *testing.T) {
 		t.Fatal("a dangling clod link counts as installed")
 	}
 
+	// an installer that fails isn't recorded
 	e = newClodEnv(t, "jq")
 	e.checkout(t)
-	runOnTerminal = func([]string) error { return nil }
-	if err := setupClod(e.p, nil, true); err == nil || !strings.Contains(err.Error(), "isn't there") {
-		t.Fatalf("err %v", err)
+	runOnTerminal = func([]string) error { return errors.New("exit status 1") }
+	if err := setupClod(e.p, nil, true); err == nil || clodInstalled(e.p) {
+		t.Fatalf("err %v, installed %v", err, clodInstalled(e.p))
 	}
 }

@@ -12,7 +12,13 @@ bud kit sync         # bud's Claude Code plugins (bud, bud-ide, superpowers)
 
 `bud install` does all three. By default bud shares `~/.claude` with the `claude` you run yourself, so its sessions get your MCP servers, settings, rules and login; `ai.claude.config = "bud"` gives bud a config dir of its own instead. A cloud provider (Bedrock, Vertex, Foundry) set up in `~/.claude/settings.json` works when the dir is shared. [Troubleshooting](troubleshooting.md) covers the details.
 
-**clod** is your private Claude Code setup (`jgarner9/clod`): the MCP servers, settings and rules bud's sessions use. When it's missing, `bud install`, `bud update` and `bud claude setup` offer to set it up (Enter is yes): they install `gh` and `jq` if needed, log in to GitHub with `gh auth login` (clod is private), clone it into `~/clod` and run its installer, which asks its own questions. `--yes` answers bud's question and clod's. A no is remembered, so `bud update` stops asking; `bud install` and `bud claude setup` ask again.
+**clod** is your Claude Code setup, kept in a private GitHub repo of your own: the MCP servers, settings and rules bud's sessions use. It's `<your gh login>/clod` unless `clod.repo` names another. When it isn't set up here, `bud install`, `bud update` and `bud claude setup` offer to (Enter is yes):
+
+1. install `gh`, `jq` and `bash` if they're missing, and log in to GitHub with `gh auth login`;
+2. if your repo doesn't exist yet, create it, private, from the [`jgarner9/clod-template`](https://github.com/jgarner9/clod-template) starter (asked separately, and only a typed `y` makes it: Enter, `--yes` and `bud bootstrap` never create a repo);
+3. clone it into `~/clod` and run its `install.sh`, which asks its own questions.
+
+`--yes` answers bud's other questions and passes `--yes` to `install.sh`. A no is remembered, so `bud update` stops asking; `bud install` and `bud claude setup` ask again. Any repo works as long as it has an `install.sh` at its root that takes `--yes`; start from the template to see the shape.
 
 ## The project session
 

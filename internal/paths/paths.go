@@ -110,12 +110,14 @@ func (p *Paths) Bin() string { return filepath.Join(p.Data, "bin") }
 // Mason is Mason's install root, its default under stdpath("data")
 func (p *Paths) Mason() string { return filepath.Join(p.Data, "mason") }
 
-// Clod is where bud clones clod, Jason's private Claude Code setup (D89),
-// where its README puts it too
+// Clod is where bud clones your clod, a private Claude Code setup repo (D89)
 func (p *Paths) Clod() string { return filepath.Join(p.Home, "clod") }
 
-// ClodBin is the clod command its installer links in once it has run
+// ClodBin is the clod command Jason's clod links in once its installer has run
 func (p *Paths) ClodBin() string { return filepath.Join(p.BinDir, "clod") }
+
+// ClodRecord is bud's record of the clod whose installer ran here (D90)
+func (p *Paths) ClodRecord() string { return filepath.Join(p.State, "clod.json") }
 
 // ClodDeclined marks that you said no to setting clod up, so bud update stops
 // asking; bud install and bud claude setup ask again

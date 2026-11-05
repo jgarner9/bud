@@ -1,5 +1,10 @@
 local map = vim.keymap.set
 
+-- ; and : swap (D85): ; opens the command line with no Shift, and : repeats
+-- the last f/t/F/T jump. Normal and Visual only, so d; and c; keep their meaning
+map({ "n", "x" }, ";", ":", { desc = "Command line" })
+map({ "n", "x" }, ":", ";", { desc = "Repeat f/t" })
+
 -- <leader>w is <C-w>: window moves (h j k l, w, s, v, q, ...) from any
 -- window, Normal mode in a terminal pane included (jk gets there)
 map("n", "<leader>w", "<C-w>", { desc = "+window" })

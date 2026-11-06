@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -98,8 +99,11 @@ func probeConfig(t *testing.T, init string) string {
 
 func TestStartupTimeDrawsAFirstScreen(t *testing.T) {
 	// the probe is told, and a filetype gets a buffer of its own
+	// a bud session's own variables don't reach it
+	t.Setenv("BUD_OPEN", "project")
 	root := probeConfig(t, `
 assert(vim.env.BUD_STARTUP_PROBE == "1", "BUD_STARTUP_PROBE unset")
+assert(vim.env.BUD_OPEN == nil, "BUD_OPEN inherited")
 vim.api.nvim_create_autocmd("FileType", { pattern = "lua", callback = function() vim.g.lua_seen = true end })
 vim.o.laststatus = 3`)
 
@@ -118,9 +122,28 @@ vim.o.laststatus = 3`)
 	}
 }
 
-func TestStartupTimeReportsAnEarlyExit(t *testing.T) {
-	probeConfig(t, `io.stderr:write("broken config\n") vim.cmd("cquit 3")`)
-	if _, err := StartupTime(""); err == nil || !strings.Contains(err.Error(), "exited before its first screen") {
+func TestStartupTimeReportsAnEarlyExitAndStopsWhatItStarted(t *testing.T) {
+	// the config leaves a process behind (nvim doesn't track it), then quits
+	pidfile := filepath.Join(t.TempDir(), "pid")
+	probeConfig(t, `os.execute("sh -c 'echo $$ > `+pidfile+`; exec sleep 30' &")
+vim.wait(2000, function() return vim.uv.fs_stat("`+pidfile+`") ~= nil end)
+io.stderr:write("broken config\n")
+vim.cmd("cquit 3")`)
+	_, err := StartupTime("")
+	if err == nil || !strings.Contains(err.Error(), "exited before its first screen") || !strings.Contains(err.Error(), "broken config") {
 		t.Fatalf("got %v", err)
+	}
+	data, err := os.ReadFile(pidfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(data)))
+	deadline := time.Now().Add(2 * time.Second)
+	for syscall.Kill(pid, 0) == nil {
+		if time.Now().After(deadline) {
+			syscall.Kill(pid, syscall.SIGKILL)
+			t.Fatalf("process %d the config started is still running", pid)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

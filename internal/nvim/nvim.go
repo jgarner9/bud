@@ -4,6 +4,7 @@ package nvim
 import (
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -63,6 +64,19 @@ func launchEnv(layout string, project bool) []string {
 
 func env() []string {
 	return setEnv(os.Environ(), "NVIM_APPNAME", AppName)
+}
+
+// withoutEnv returns vars without the given keys
+func withoutEnv(vars []string, keys ...string) []string {
+	out := make([]string, 0, len(vars))
+	for _, kv := range vars {
+		k, _, _ := strings.Cut(kv, "=")
+		if !slices.Contains(keys, k) {
+			out = append(out, kv)
+		}
+	}
+
+	return out
 }
 
 // setEnv returns vars with key set to value, dropping any earlier value

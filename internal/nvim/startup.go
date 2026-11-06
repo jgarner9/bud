@@ -1,11 +1,9 @@
 package nvim
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -48,12 +46,25 @@ func StartupTime(filetype string) (time.Duration, error) {
 	cmd := exec.Command("nvim", argv...)
 	// in the temp dir, so quitting can't save a session over a real project's
 	cmd.Dir = dir
-	cmd.Env = setEnv(env(), "BUD_STARTUP_PROBE", "1")
+	// what a bud session hands down (bud doctor run from bud's own terminal)
+	// would change what's timed: BUD_OPEN=project skips the dashboard
+	vars := withoutEnv(env(), "BUD_OPEN", "BUD_LAYOUT", "BUD_GEN", "BUD_LAUNCHED")
+	cmd.Env = setEnv(vars, "BUD_STARTUP_PROBE", "1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	// the redraws nvim sends the screen are read and dropped
-	cmd.Stdout = io.Discard
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	// files, not pipes: the redraws nvim sends the screen are dropped, and
+	// with no copying to wait for, Wait returns when nvim exits even if
+	// something it started still holds them
+	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer devnull.Close()
+	stderr, err := os.Create(filepath.Join(dir, "stderr"))
+	if err != nil {
+		return 0, err
+	}
+	defer stderr.Close()
+	cmd.Stdout, cmd.Stderr = devnull, stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return 0, err
@@ -80,7 +91,17 @@ func StartupTime(filetype string) (time.Duration, error) {
 	for {
 		select {
 		case err := <-exited:
-			return 0, fmt.Errorf("nvim exited before its first screen: %v: %s", err, strings.TrimSpace(stderr.String()))
+			// what it started goes too
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			why := "nvim exited before its first screen"
+			if err != nil {
+				why += ": " + err.Error()
+			}
+			out, _ := os.ReadFile(stderr.Name())
+			if msg := strings.TrimSpace(string(out)); msg != "" {
+				why += ": " + msg
+			}
+			return 0, errors.New(why)
 		case <-deadline:
 			stop()
 			return 0, fmt.Errorf("nvim drew no first screen within %s", startupTimeout)

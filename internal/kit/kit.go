@@ -380,6 +380,12 @@ func removeMarketplaces(k *Kit, env Env, ledger *Ledger, registered []string, dr
 		if _, keep := k.Marketplaces[name]; keep {
 			continue
 		}
+		// a plugin of bud's from it is still in (kept until its replacement
+		// installs, or its uninstall failed): the marketplace stays with it
+		if id := fromMarketplace(ledger, name); id != "" {
+			*actions = append(*actions, Action{"marketplace", name, "skip", "kept while " + id + " is"})
+			continue
+		}
 		*actions = append(*actions, Action{"marketplace", name, "remove", "no longer in the kit"})
 		if dryRun {
 			continue
@@ -392,6 +398,16 @@ func removeMarketplaces(k *Kit, env Env, ledger *Ledger, registered []string, dr
 		}
 		delete(ledger.Marketplaces, name)
 	}
+}
+
+// fromMarketplace is a plugin of bud's installed from the marketplace name, if any
+func fromMarketplace(ledger *Ledger, name string) string {
+	for _, id := range sortedKeys(ledger.Plugins) {
+		if strings.HasSuffix(id, "@"+name) {
+			return id
+		}
+	}
+	return ""
 }
 
 // removeLegacy takes out what an older bud synced that the plugins and

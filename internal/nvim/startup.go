@@ -47,9 +47,10 @@ func StartupTime(filetype string) (time.Duration, error) {
 	// in the temp dir, so quitting can't save a session over a real project's
 	cmd.Dir = dir
 	// what a bud session hands down (bud doctor run from bud's own terminal)
-	// would change what's timed: BUD_OPEN=project skips the dashboard
-	vars := withoutEnv(env(), "BUD_OPEN", "BUD_LAYOUT", "BUD_GEN", "BUD_LAUNCHED")
-	cmd.Env = setEnv(vars, "BUD_STARTUP_PROBE", "1")
+	// would change what's timed (BUD_OPEN=project skips the dashboard,
+	// BUD_PACK_RESTORE every plugin's config), so only BUD_BIN, which a real
+	// launch sets too, goes through
+	cmd.Env = setEnv(withoutBud(env()), "BUD_STARTUP_PROBE", "1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	// files, not pipes: the redraws nvim sends the screen are dropped, and
 	// with no copying to wait for, Wait returns when nvim exits even if

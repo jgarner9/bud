@@ -101,9 +101,12 @@ func TestStartupTimeDrawsAFirstScreen(t *testing.T) {
 	// the probe is told, and a filetype gets a buffer of its own
 	// a bud session's own variables don't reach it
 	t.Setenv("BUD_OPEN", "project")
+	t.Setenv("BUD_PACK_RESTORE", "1")
+	t.Setenv("BUD_BIN", "/bin/true")
 	root := probeConfig(t, `
 assert(vim.env.BUD_STARTUP_PROBE == "1", "BUD_STARTUP_PROBE unset")
-assert(vim.env.BUD_OPEN == nil, "BUD_OPEN inherited")
+assert(vim.env.BUD_OPEN == nil and vim.env.BUD_PACK_RESTORE == nil, "a session's BUD_* inherited")
+assert(vim.env.BUD_BIN == "/bin/true", "BUD_BIN dropped")
 vim.api.nvim_create_autocmd("FileType", { pattern = "lua", callback = function() vim.g.lua_seen = true end })
 vim.o.laststatus = 3`)
 

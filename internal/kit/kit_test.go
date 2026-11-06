@@ -204,6 +204,26 @@ func TestPluginMovesToTheKitsMarketplaceUnlessYouInstalledItElsewhere(t *testing
 		t.Fatalf("next sync: ran %q, installed %v; want %q", f.ran, f.installed, want)
 	}
 
+	// the kit drops the old copy's marketplace too: it stays while the copy does
+	f = &fakeMarketplaces{}
+	env = f.env(t.TempDir())
+	src := "https://github.com/jgarner9/bud-plugins.git"
+	if _, err := Sync(&Kit{Marketplaces: map[string]string{"bud-plugins": src}, Plugins: []string{"docs@bud-plugins"}}, env, false); err != nil {
+		t.Fatal(err)
+	}
+	f.fail = "plugin install --scope user docs@other"
+	Sync(&Kit{Plugins: []string{"docs@other"}}, env, false)
+	if !slices.Equal(f.registered, []string{"bud-plugins"}) || !slices.Equal(f.installed, []string{"docs@bud-plugins"}) {
+		t.Fatalf("registered %v, installed %v; want the old copy and its marketplace kept", f.registered, f.installed)
+	}
+	f.fail = ""
+	if _, err := Sync(&Kit{Plugins: []string{"docs@other"}}, env, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.registered) != 0 || !slices.Equal(f.installed, []string{"docs@other"}) {
+		t.Fatalf("next sync: registered %v, installed %v; want both old ones gone", f.registered, f.installed)
+	}
+
 	// one you installed yourself from another marketplace stays, and bud
 	// doesn't add a second copy beside it
 	f = &fakeMarketplaces{installed: []string{"superpowers@anthropic-plugin-directory"}}

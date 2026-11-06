@@ -4,7 +4,6 @@ package nvim
 import (
 	"os"
 	"os/exec"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -66,12 +65,11 @@ func env() []string {
 	return setEnv(os.Environ(), "NVIM_APPNAME", AppName)
 }
 
-// withoutEnv returns vars without the given keys
-func withoutEnv(vars []string, keys ...string) []string {
+// withoutBud returns vars without bud's own BUD_* variables, but for BUD_BIN
+func withoutBud(vars []string) []string {
 	out := make([]string, 0, len(vars))
 	for _, kv := range vars {
-		k, _, _ := strings.Cut(kv, "=")
-		if !slices.Contains(keys, k) {
+		if !strings.HasPrefix(kv, "BUD_") || strings.HasPrefix(kv, "BUD_BIN=") {
 			out = append(out, kv)
 		}
 	}

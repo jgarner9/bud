@@ -15,13 +15,10 @@ local restore_timeout = 600000
 vim.env.MASON = vim.fn.stdpath("data") .. "/mason"
 vim.env.PATH = vim.env.MASON .. "/bin:" .. vim.env.PATH
 
--- the enabled languages' filetypes, which the LSP and lint sides load on; nil with
--- none, since an empty ft list would never load the plugin
+-- the enabled languages' filetypes, which the LSP and lint sides load on. With
+-- none enabled the list is empty, so they never load: there's nothing to set up
 local filetypes = vim.tbl_keys(require("bud.lang").filetypes())
 table.sort(filetypes)
-if #filetypes == 0 then
-  filetypes = nil
-end
 
 return {
   {
@@ -135,7 +132,7 @@ return {
     -- main is the rewrite for Neovim 0.12; master is frozen
     version = "main",
     config = function()
-      if not filetypes then
+      if #filetypes == 0 then
         return
       end
       vim.api.nvim_create_autocmd("FileType", {

@@ -32,7 +32,10 @@ vim.bo.buftype = "nofile"
 vim.bo.filetype = "neo-tree"
 eq(sl.file(), "neo-tree", "special buffer")
 
--- no language server, nothing to show
+-- no language server, nothing to show, and vim.lsp isn't loaded to find that out
 eq(sl.lsp(), "", "no lsp")
+eq(package.loaded["vim.lsp"], nil, "vim.lsp left unloaded")
+local _ = vim.lsp.get_clients
+eq(sl.lsp(), "", "no lsp once it's loaded")
 
 print("statusline_test: ok")

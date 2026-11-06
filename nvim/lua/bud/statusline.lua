@@ -52,8 +52,13 @@ function M.file(short)
   return name
 end
 
--- lsp names the language servers attached to the current buffer
+-- lsp names the language servers attached to the current buffer. Until
+-- something has loaded vim.lsp no server can be attached, and touching it here
+-- would load it (~4 ms) on the first screen
 function M.lsp()
+  if not package.loaded["vim.lsp"] then
+    return ""
+  end
   local names = {}
   for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
     table.insert(names, client.name)

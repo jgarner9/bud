@@ -12,7 +12,7 @@
 --     -- any of these makes the plugin lazy: its plugin/ scripts and config
 --     -- wait for the first trigger instead of running at startup
 --     event = "InsertEnter",                -- autocmd event(s)
---     ft = "go",                            -- filetype(s)
+--     ft = "go",                            -- filetype(s); an empty list never loads it
 --     cmd = "Name",                         -- user command(s), stubbed until then
 --     keys = { { "<leader>x", desc = "...", mode = "n" } },  -- keys, stubbed until then
 --   }
@@ -119,9 +119,18 @@ local function stub_events(name, entry, events, pattern)
     once = true,
     desc = "load " .. name,
     callback = function(ev)
-      local before = groups(ev.event)
-      M.load(name)
-      replay(ev, before)
+      local function run()
+        local before = groups(ev.event)
+        M.load(name)
+        replay(ev, before)
+      end
+      -- Neovim runs UIEnter before it draws the first screen, so a plugin
+      -- meant for "just after the first screen" (D35) waits one more tick
+      if ev.event == "UIEnter" then
+        vim.schedule(run)
+      else
+        run()
+      end
     end,
   })
   table.insert(entry.stubs, function()
@@ -221,7 +230,8 @@ function M.setup(specs)
       if spec.event then
         stub_events(name, entry, list(spec.event), nil)
       end
-      if spec.ft then
+      -- an empty ft list leaves it for an explicit load()
+      if #list(spec.ft) > 0 then
         stub_events(name, entry, { "FileType" }, list(spec.ft))
       end
       for _, cmd in ipairs(list(spec.cmd)) do

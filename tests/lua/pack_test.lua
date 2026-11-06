@@ -57,6 +57,15 @@ vim.api.nvim_create_autocmd("InsertEnter", {
 })]],
 })
 local bykey = repo("bykey", { ["lua/bykey.lua"] = "return {}" })
+local noft = repo("noft", { ["plugin/noft.lua"] = "vim.g.noft_sourced = true" })
+local byui = repo("byui", {
+  ["plugin/byui.lua"] = [[
+vim.g.byui_seen = 0
+vim.api.nvim_create_autocmd("UIEnter", {
+  group = vim.api.nvim_create_augroup("byui", {}),
+  callback = function() vim.g.byui_seen = vim.g.byui_seen + 1 end,
+})]],
+})
 
 -- something else listening on InsertEnter, which the replay must not run again
 local others = 0
@@ -108,6 +117,20 @@ pack.setup({
     end,
   },
   {
+    src = noft,
+    ft = {},
+    config = function()
+      configs.noft = true
+    end,
+  },
+  {
+    src = byui,
+    event = "UIEnter",
+    config = function()
+      configs.byui = true
+    end,
+  },
+  {
     src = repo("broken", { ["lua/broken.lua"] = "return {}" }),
     config = function()
       error("boom")
@@ -148,6 +171,21 @@ eq({ configs.byevent, vim.g.byevent_seen }, { true, 1 }, "loaded and replayed on
 eq(others, 1, "replay leaves other handlers alone")
 vim.api.nvim_exec_autocmds("InsertEnter", {})
 eq({ vim.g.byevent_seen, others }, { 2, 2 }, "later events reach it normally")
+
+-- UIEnter: Neovim runs it before the first screen, so the load waits a tick,
+-- then the plugin still sees the event once
+vim.api.nvim_exec_autocmds("UIEnter", {})
+eq(configs.byui, nil, "not loaded inside UIEnter")
+vim.wait(1000, function()
+  return configs.byui == true
+end)
+eq({ configs.byui, vim.g.byui_seen }, { true, 1 }, "loaded on the next tick and replayed once")
+
+-- an empty ft list: lazy, with nothing that loads it but load()
+vim.api.nvim_exec_autocmds("FileType", { pattern = "go" })
+eq({ vim.g.noft_sourced, configs.noft }, {}, "no filetype loads it")
+pack.load("noft")
+eq({ vim.g.noft_sourced, configs.noft }, { true, true }, "load() still does")
 
 -- keys: the stub loads the plugin and the key reaches the real mapping
 vim.api.nvim_feedkeys("gz", "mx", false)

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -236,5 +237,34 @@ func TestKitCore(t *testing.T) {
 	})
 	if out := sync(); strings.Contains(out, "core.md changed") {
 		t.Fatalf("reminded after pasting: %q", out)
+	}
+}
+
+func TestKitEnableClearsTheIDTheKitMovedAwayFrom(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["docs@market"]}`)}})
+	p, _ := paths.Resolve()
+	f, err := config.Load(p.MachineConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// turned off before the kit moved docs to another marketplace
+	if err := f.Set("kit.disabled", []any{"docs@old", "other@old"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	captureStdout(t, func() {
+		if err := kitToggle([]string{"docs@market"}, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	f, _ = config.Load(p.MachineConfig())
+	if got := kitDisabled(f); !slices.Equal(got, []string{"other@old"}) {
+		t.Fatalf("kit.disabled %q, want only other@old", got)
 	}
 }

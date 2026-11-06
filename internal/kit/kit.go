@@ -135,7 +135,9 @@ func (k *Kit) without(names []string) *Kit {
 		return k
 	}
 	out := *k
-	out.Plugins = slices.DeleteFunc(slices.Clone(k.Plugins), func(n string) bool { return slices.Contains(names, n) })
+	out.Plugins = slices.DeleteFunc(slices.Clone(k.Plugins), func(id string) bool {
+		return slices.ContainsFunc(names, func(n string) bool { return Turns(n, id) })
+	})
 	if len(k.Marketplaces) > 0 {
 		out.Marketplaces = map[string]string{}
 		for name, src := range k.Marketplaces {
@@ -146,6 +148,16 @@ func (k *Kit) without(names []string) *Kit {
 	}
 
 	return &out
+}
+
+// Turns says whether the kit.disabled entry name turns off the kit entry id:
+// the same name, or a plugin of the same name from another marketplace, so
+// one turned off stays off when the kit moves it (D91)
+func Turns(name, id string) bool {
+	if name == id {
+		return true
+	}
+	return strings.Contains(name, "@") && strings.Contains(id, "@") && pluginName(name) == pluginName(id)
 }
 
 // Action is one thing sync does, or would do with --dry-run
@@ -239,9 +251,13 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			errs = append(errs, fmt.Errorf("listing plugins: %w", err))
 		}
 	}
+	// plugins that didn't install, by name: bud's copy from a marketplace
+	// the kit moved away from stays until its replacement is in
+	failed := map[string]string{}
 	for _, id := range k.Plugins {
 		_, owned := ledger.Plugins[id]
 		synced := pluginName(id) + "@synced"
+		other := elsewhere(installed, id, ledger)
 		switch {
 		case slices.Contains(installed, synced) && owned:
 			*actions = append(*actions, Action{"plugin", id, "remove", "claude.ai syncs it"})
@@ -267,9 +283,9 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			_ = env.Claude("plugin", "update", "--scope", "user", id)
 		case slices.Contains(installed, id):
 			*actions = append(*actions, Action{"plugin", id, "skip", "you installed it yourself"})
-		case elsewhere(installed, id, ledger) != "":
+		case other != "":
 			// a second copy under the same name would load every skill twice
-			*actions = append(*actions, Action{"plugin", id, "skip", "you installed " + elsewhere(installed, id, ledger)})
+			*actions = append(*actions, Action{"plugin", id, "skip", "you installed " + other})
 		default:
 			*actions = append(*actions, Action{"plugin", id, "add", ""})
 			if dryRun {
@@ -277,6 +293,7 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			}
 			if err := env.Claude("plugin", "install", "--scope", "user", id); err != nil {
 				errs = append(errs, fmt.Errorf("installing %s: %w", id, err))
+				failed[pluginName(id)] = id
 				continue
 			}
 			ledger.Plugins[id] = "installed"
@@ -284,6 +301,10 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 	}
 	for _, id := range sortedKeys(ledger.Plugins) {
 		if slices.Contains(k.Plugins, id) {
+			continue
+		}
+		if next, ok := failed[pluginName(id)]; ok {
+			*actions = append(*actions, Action{"plugin", id, "skip", "kept until " + next + " installs"})
 			continue
 		}
 		*actions = append(*actions, Action{"plugin", id, "remove", "no longer in the kit"})
@@ -488,7 +509,6 @@ func ParseMarketplaces(out []byte) ([]string, error) {
 	return names, nil
 }
 
-// pluginName is the name in a plugin id, name@marketplace
 // elsewhere is the installed plugin of id's name from another marketplace that
 // bud didn't install, if there is one. bud's own copy from a marketplace the
 // kit moved away from doesn't count: sync takes that one out
@@ -502,6 +522,7 @@ func elsewhere(installed []string, id string, ledger *Ledger) string {
 	return ""
 }
 
+// pluginName is the name in a plugin id, name@marketplace
 func pluginName(id string) string {
 	name, _, _ := strings.Cut(id, "@")
 	return name

@@ -214,7 +214,8 @@ func kitToggle(args []string, on bool) error {
 	}
 	disabled := kitDisabled(f)
 	if on {
-		disabled = slices.DeleteFunc(disabled, func(n string) bool { return n == name })
+		// also one naming the plugin from a marketplace the kit moved away from
+		disabled = slices.DeleteFunc(disabled, func(n string) bool { return kit.Turns(n, name) })
 	} else if !slices.Contains(disabled, name) {
 		disabled = append(disabled, name)
 	}

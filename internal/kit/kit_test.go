@@ -182,10 +182,32 @@ func TestPluginMovesToTheKitsMarketplaceUnlessYouInstalledItElsewhere(t *testing
 		t.Fatalf("ran %q, installed %v; want %q", f.ran, f.installed, want)
 	}
 
+	// the new one fails to install: bud's old copy stays until it's in
+	f = &fakeMarketplaces{}
+	env = f.env(t.TempDir())
+	if _, err := Sync(&Kit{Plugins: []string{"superpowers@anthropic-plugin-directory"}}, env, false); err != nil {
+		t.Fatal(err)
+	}
+	f.ran, f.fail = nil, "plugin install --scope user superpowers@bud-plugins"
+	actions, err := Sync(&Kit{Plugins: []string{"superpowers@bud-plugins"}}, env, false)
+	if err == nil || !slices.Equal(f.installed, []string{"superpowers@anthropic-plugin-directory"}) {
+		t.Fatalf("err %v, installed %v; want the failure and the old copy kept", err, f.installed)
+	}
+	if last := actions[len(actions)-1]; last.Do != "skip" || last.Name != "superpowers@anthropic-plugin-directory" {
+		t.Fatalf("actions %v; want the old copy skipped", actions)
+	}
+	f.ran, f.fail = nil, ""
+	if _, err := Sync(&Kit{Plugins: []string{"superpowers@bud-plugins"}}, env, false); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(f.ran, want) || !slices.Equal(f.installed, []string{"superpowers@bud-plugins"}) {
+		t.Fatalf("next sync: ran %q, installed %v; want %q", f.ran, f.installed, want)
+	}
+
 	// one you installed yourself from another marketplace stays, and bud
 	// doesn't add a second copy beside it
 	f = &fakeMarketplaces{installed: []string{"superpowers@anthropic-plugin-directory"}}
-	actions, err := Sync(&Kit{Plugins: []string{"superpowers@bud-plugins"}}, f.env(t.TempDir()), false)
+	actions, err = Sync(&Kit{Plugins: []string{"superpowers@bud-plugins"}}, f.env(t.TempDir()), false)
 	if err != nil {
 		t.Fatal(err)
 	}

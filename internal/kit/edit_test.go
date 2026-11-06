@@ -74,4 +74,27 @@ func TestSyncSkipsDisabled(t *testing.T) {
 	if _, err := Sync(k, env, false); err != nil || len(ran) != 0 {
 		t.Fatalf("synced a disabled entry: %q %v", ran, err)
 	}
+
+	// turned off under the marketplace the kit moved it away from: still off
+	env.Disabled = []string{"docs@elsewhere"}
+	if _, err := Sync(k, env, false); err != nil || len(ran) != 0 {
+		t.Fatalf("synced a plugin disabled under its old id: %q %v", ran, err)
+	}
+}
+
+func TestTurns(t *testing.T) {
+	for _, c := range []struct {
+		name, id string
+		want     bool
+	}{
+		{"docs@market", "docs@market", true},
+		{"docs@old", "docs@market", true},
+		{"other@market", "docs@market", false},
+		{"bud-plugins", "bud-plugins", true},
+		{"docs", "docs@market", false},
+	} {
+		if got := Turns(c.name, c.id); got != c.want {
+			t.Errorf("Turns(%q, %q) = %v, want %v", c.name, c.id, got, c.want)
+		}
+	}
 }

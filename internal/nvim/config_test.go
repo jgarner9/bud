@@ -8,6 +8,11 @@ import (
 	"testing/fstest"
 )
 
+// changed says whether a sync touched anything
+func changed(r *SyncResult) bool {
+	return len(r.Added)+len(r.Updated)+len(r.Removed) > 0
+}
+
 func TestSyncConfig(t *testing.T) {
 	dst := t.TempDir()
 
@@ -37,7 +42,7 @@ func TestSyncConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Changed() {
+	if changed(res) {
 		t.Fatalf("no-op sync changed files: %+v", res)
 	}
 

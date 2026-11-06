@@ -66,7 +66,7 @@ func TestLinkUnlink(t *testing.T) {
 
 	// sync and check leave a link alone
 	res, err := SyncConfig(src, dst)
-	if err != nil || res.Changed() {
+	if err != nil || changed(res) {
 		t.Fatalf("sync touched a dev link: %+v, %v", res, err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(repo, "nvim/init.lua")); string(b) != "-- edited" {

@@ -29,7 +29,6 @@ return {
   tip = "", -- nf-fa-lightbulb_o
   tool = "", -- nf-fa-wrench
   chat = "", -- nf-fa-comments
-  search = "", -- nf-fa-search
   settings = "", -- nf-fa-cog
   pr = "", -- nf-oct-git_pull_request
   review = "", -- nf-fa-eye

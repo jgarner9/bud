@@ -906,7 +906,6 @@ function M.setup()
     vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
   end, { desc = "Share the selection with Claude Code" })
   require("bud.statusline").add(M.statusline)
-  require("bud.statusline").add(require("bud.ai.index").statusline)
   require("bud.ai.actions").setup()
   require("bud.ai.issue").setup()
 

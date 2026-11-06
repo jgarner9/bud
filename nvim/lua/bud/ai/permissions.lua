@@ -239,11 +239,6 @@ function M.request(req)
   show_next()
 end
 
--- forget drops the session's "allow for this session" answers
-function M.forget(root)
-  remembered[root or ""] = nil
-end
-
 -- pending is how many questions are waiting, the one on screen included
 function M.pending()
   return #queue + (showing and 1 or 0)

@@ -31,7 +31,8 @@ return {
   {
     -- maintained fork of diffview.nvim; same module and commands. Loads on its
     -- first command (~3 ms otherwise). No setup() call: the defaults suit bud.
-    -- Its session-restore hook waits too, which is fine until bud has sessions
+    -- Its session hooks (SessionLoadPost, SessionWritePost) are added by
+    -- setup(), so bud.sessions saves and restores a diffview tab without them
     src = "dlyongemallo/diffview-plus.nvim",
     cmd = {
       "DiffviewOpen",

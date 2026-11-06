@@ -29,10 +29,6 @@ type SyncResult struct {
 	Removed []string
 }
 
-func (r *SyncResult) Changed() bool {
-	return len(r.Added)+len(r.Updated)+len(r.Removed) > 0
-}
-
 func Apply() error {
 	fmt.Println("Configuring Neovim...")
 

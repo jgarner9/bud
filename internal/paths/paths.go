@@ -104,12 +104,6 @@ func (p *Paths) Layouts() string { return filepath.Join(p.Config, "layouts") }
 // synced config since that's bud's (D21, D34)
 func (p *Paths) UserLanguageSpecs() string { return filepath.Join(p.UserTools(), "languages") }
 
-// Bin holds binaries bud downloads itself, as opposed to the system package manager
-func (p *Paths) Bin() string { return filepath.Join(p.Data, "bin") }
-
-// Mason is Mason's install root, its default under stdpath("data")
-func (p *Paths) Mason() string { return filepath.Join(p.Data, "mason") }
-
 // Clod is where bud clones your clod, a private Claude Code setup repo (D89)
 func (p *Paths) Clod() string { return filepath.Join(p.Home, "clod") }
 

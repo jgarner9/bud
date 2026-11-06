@@ -59,7 +59,7 @@ func TestComplete(t *testing.T) {
 	if got := completions(t, "layout", "set-default", ""); !has(got, "default", "focus") {
 		t.Errorf("layout names: %v", got)
 	}
-	if got := completions(t, "kit", "rm", ""); !has(got, "superpowers@anthropic-plugin-directory") {
+	if got := completions(t, "kit", "rm", ""); !has(got, "superpowers@bud-plugins") {
 		t.Errorf("kit names: %v", got)
 	}
 	// a path: nothing, so the shell completes file names

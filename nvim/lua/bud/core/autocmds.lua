@@ -1,5 +1,9 @@
 local group = vim.api.nvim_create_augroup("bud", { clear = true })
 
+-- bud doctor's startup timing (nvim.StartupTime) sets BUD_STARTUP_PROBE: it
+-- times the first screen and quits, so nothing that comes after it should run
+local probe = vim.env.BUD_STARTUP_PROBE == "1"
+
 vim.api.nvim_create_autocmd("TextYankPost", {
   group = group,
   desc = "Briefly highlight yanked text",
@@ -12,9 +16,6 @@ vim.api.nvim_create_autocmd("VimEnter", {
   group = group,
   desc = "Show the dashboard for bare bud",
   callback = function()
-    if vim.g.bud_start_ns then
-      vim.g.bud_startup_ms = math.floor((vim.uv.hrtime() - vim.g.bud_start_ns) / 1e6)
-    end
     -- bare `bud` only: no files, nothing typed into the empty buffer, nothing
     -- piped in, and a screen to show it on (headless runs are scripts)
     local buf = vim.api.nvim_get_current_buf()
@@ -24,7 +25,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
     local headless = vim.tbl_contains(vim.v.argv, "--headless")
     -- bud sets BUD_OPEN=project for `bud <dir>`, which gets a layout, not the dashboard
     local project = vim.env.BUD_OPEN == "project"
-    if not headless then
+    if not headless and not probe then
       -- after the first screen, like the panes (BASE.md 4.2)
       vim.schedule(function()
         require("bud.ai.claude").setup()
@@ -40,7 +41,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
     local gen = vim.env.BUD_OPEN == "gen"
     if vim.fn.argc() == 0 and empty and not headless and not project and not gen then
       require("bud.dashboard").open()
-    elseif not headless and vim.env.BUD_BIN and (project or vim.fn.argc() > 0) then
+    elseif not headless and not probe and vim.env.BUD_BIN and (project or vim.fn.argc() > 0) then
       -- after the first screen, so panes never count against startup (D35)
       vim.schedule(function()
         require("bud.layout").open_project(vim.fn.getcwd(), { files = vim.fn.argc() > 0 })
@@ -53,7 +54,9 @@ vim.api.nvim_create_autocmd("VimLeavePre", {
   group = group,
   desc = "Save the project's session (dashboard.sessions)",
   callback = function()
-    require("bud.sessions").save()
+    if not probe then
+      require("bud.sessions").save()
+    end
   end,
 })
 

@@ -413,10 +413,10 @@ func checkStartup(p *paths.Paths, enabled []lang.Spec) (Result, bool) {
 
 	r := Result{Name: "startup"}
 	// the median of three, so one slow run doesn't count
-	median := func(args ...string) (time.Duration, error) {
+	median := func(filetype string) (time.Duration, error) {
 		var runs []time.Duration
 		for range 3 {
-			d, err := startupTime(args...)
+			d, err := startupTime(filetype)
 			if err != nil {
 				return 0, err
 			}
@@ -426,7 +426,7 @@ func checkStartup(p *paths.Paths, enabled []lang.Spec) (Result, bool) {
 		return runs[1], nil
 	}
 
-	boot, err := median()
+	boot, err := median("")
 	if err != nil {
 		r.Status = Warn
 		r.Detail = err.Error()
@@ -436,10 +436,10 @@ func checkStartup(p *paths.Paths, enabled []lang.Spec) (Result, bool) {
 	// one run per language is enough unless it's over budget
 	slowName, slow := "", time.Duration(0)
 	for _, spec := range enabled {
-		args := []string{"-c", "setfiletype " + spec.Filetypes[0]}
-		d, err := startupTime(args...)
+		ft := spec.Filetypes[0]
+		d, err := startupTime(ft)
 		if err == nil && d > StartupBudget {
-			d, err = median(args...)
+			d, err = median(ft)
 		}
 		if err != nil {
 			r.Status = Warn

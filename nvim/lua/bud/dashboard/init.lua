@@ -547,6 +547,18 @@ function M.open(opts)
     buffer = buf,
     callback = draw,
   })
+  -- the startup time is known only once the first screen has drawn (bud.startup)
+  if not vim.g.bud_startup_ms then
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "BudStartup",
+      once = true,
+      callback = function()
+        if current and current.buf == buf then
+          draw()
+        end
+      end,
+    })
+  end
   vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, { buffer = buf, callback = hide_cursor })
   vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, { buffer = buf, callback = show_cursor })
   vim.api.nvim_create_autocmd("BufWipeout", {

@@ -366,10 +366,9 @@ func withStartup(t *testing.T, times map[string]time.Duration) *[]string {
 	t.Helper()
 	var calls []string
 	orig := startupTime
-	startupTime = func(args ...string) (time.Duration, error) {
-		key := strings.Join(args, " ")
-		calls = append(calls, key)
-		return times[key], nil
+	startupTime = func(filetype string) (time.Duration, error) {
+		calls = append(calls, filetype)
+		return times[filetype], nil
 	}
 	t.Cleanup(func() { startupTime = orig })
 	return &calls
@@ -389,7 +388,7 @@ func TestCheckStartup(t *testing.T) {
 
 	t.Run("within budget", func(t *testing.T) {
 		fakePath(t, "nvim")
-		calls := withStartup(t, map[string]time.Duration{"": 28 * ms, "-c setfiletype go": 40 * ms, "-c setfiletype html": 45 * ms})
+		calls := withStartup(t, map[string]time.Duration{"": 28 * ms, "go": 40 * ms, "html": 45 * ms})
 		r, ok := checkStartup(synced(t), specs)
 		if !ok || r.Status != OK || r.Detail != "28 ms, slowest language html 45 ms" {
 			t.Fatalf("got %+v", r)
@@ -402,7 +401,7 @@ func TestCheckStartup(t *testing.T) {
 
 	t.Run("over budget warns, after measuring again", func(t *testing.T) {
 		fakePath(t, "nvim")
-		calls := withStartup(t, map[string]time.Duration{"": 28 * ms, "-c setfiletype go": 130 * ms})
+		calls := withStartup(t, map[string]time.Duration{"": 28 * ms, "go": 130 * ms})
 		r, _ := checkStartup(synced(t), specs[:1])
 		if r.Status != Warn || !strings.Contains(r.Detail, "go 130 ms, over the 50 ms budget") || r.Fix == "" {
 			t.Fatalf("got %+v", r)

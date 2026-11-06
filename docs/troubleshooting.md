@@ -4,7 +4,7 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 ## Common problems
 
-**bud is slow to start.** `bud doctor` times the first screen, empty and on a file of each language; the budget is 50 ms. A language's tooling that's slow the first time runs in the background, so a slow start is usually a plugin or a tool you added. `bud tools disable <name>` rules out tools, one at a time.
+**bud is slow to start.** `bud doctor` times the first screen, empty and on a file of each language; the budget is 50 ms. The dashboard's health line shows the same thing for the start you just made, counted from when `bud` started. A language's tooling that's slow the first time runs in the background, so a slow start is usually a plugin or a tool you added. `bud tools disable <name>` rules out tools, one at a time.
 
 **A language has no highlighting, LSP or formatting.** `bud lang ls` says whether it's on and whether its spec is broken. `bud update` builds parsers and installs Mason packages; `:Mason` shows what's installed. Formatting on save only happens in projects with the spec's `format_markers`, when it has them.
 

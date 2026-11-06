@@ -48,7 +48,7 @@ bud config edit                           # open it in bud's editor, then check 
 | --- | --- | --- |
 | `dashboard.style` | `"silly"` | `"silly"` (the robot, icons, projects with git) or `"minimal"`. `t` on the dashboard switches for now. |
 | `dashboard.git` | `true` | Branch, changes and ahead/behind for each listed project. |
-| `dashboard.health` | `true` | The line with the startup time, plugins and Claude Code. |
+| `dashboard.health` | `true` | The line with the startup time (from `bud` starting to the first screen), plugins and Claude Code. |
 | `dashboard.banners` | `true` | Doctor problems and updates, each with a key to fix it. |
 | `dashboard.scratchpad` | `false` | `x` opens one notes file in bud's data dir. |
 | `dashboard.prs` | `false` | Open PRs per project, and how many ask you for a review, through `gh`. |

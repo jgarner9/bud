@@ -21,7 +21,7 @@ func TestShippedKit(t *testing.T) {
 	if k.Marketplaces["bud-plugins"] != "https://github.com/jgarner9/bud-plugins.git" {
 		t.Errorf("marketplaces %v", k.Marketplaces)
 	}
-	for _, id := range []string{"bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@anthropic-plugin-directory"} {
+	for _, id := range []string{"bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@bud-plugins"} {
 		if !slices.Contains(k.Plugins, id) {
 			t.Errorf("no %s in %v", id, k.Plugins)
 		}
@@ -159,6 +159,38 @@ func TestSyncPlugins(t *testing.T) {
 	Sync(k, env, false)
 	if !slices.Equal(ran, []string{"plugin uninstall --scope user superpowers@claude-plugins-official"}) || !slices.Contains(installed, "mine@somewhere") {
 		t.Fatalf("ran %q, installed %v", ran, installed)
+	}
+}
+
+func TestPluginMovesToTheKitsMarketplaceUnlessYouInstalledItElsewhere(t *testing.T) {
+	// bud's own copy from the old marketplace: the new one goes in, the old
+	// one comes out, all in one sync
+	f := &fakeMarketplaces{}
+	env := f.env(t.TempDir())
+	if _, err := Sync(&Kit{Plugins: []string{"superpowers@anthropic-plugin-directory"}}, env, false); err != nil {
+		t.Fatal(err)
+	}
+	f.ran = nil
+	if _, err := Sync(&Kit{Plugins: []string{"superpowers@bud-plugins"}}, env, false); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"plugin install --scope user superpowers@bud-plugins",
+		"plugin uninstall --scope user superpowers@anthropic-plugin-directory",
+	}
+	if !slices.Equal(f.ran, want) || !slices.Equal(f.installed, []string{"superpowers@bud-plugins"}) {
+		t.Fatalf("ran %q, installed %v; want %q", f.ran, f.installed, want)
+	}
+
+	// one you installed yourself from another marketplace stays, and bud
+	// doesn't add a second copy beside it
+	f = &fakeMarketplaces{installed: []string{"superpowers@anthropic-plugin-directory"}}
+	actions, err := Sync(&Kit{Plugins: []string{"superpowers@bud-plugins"}}, f.env(t.TempDir()), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.ran) != 0 || len(actions) != 1 || actions[0].Do != "skip" {
+		t.Fatalf("ran %q, actions %v; want one skip and nothing run", f.ran, actions)
 	}
 }
 

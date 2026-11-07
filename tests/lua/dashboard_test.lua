@@ -139,29 +139,64 @@ has(joined, "├─ Status ", "tight boxes share a divider")
 eq(#box_widths(joined), 1, "joined boxes the same width")
 
 -- the robot's moves only change the robot, and never its size
-local moves = vim.deepcopy(view.moves)
-moves.snore = view.snore
-for name, frames in pairs(moves) do
-  for i, frame in ipairs(frames) do
-    local mood = name == "snore" and "sleepy" or "normal"
-    local base = view.build(vim.tbl_extend("force", data, { mood = mood }), 100, 40)
-    local moved = view.build(vim.tbl_extend("force", data, { mood = mood, frame = frame }), 100, 40)
-    eq(#moved, #base, name .. " frame " .. i .. " line count")
-    for row = 1, #base do
-      if base[row]:find("[_]", 1, true) or base[row]:find("hey bud.", 1, true) or base[row]:find("___", 1, true) then
-        eq(vim.fn.strdisplaywidth(moved[row]), vim.fn.strdisplaywidth(base[row]), name .. " frame " .. i .. " width")
-      else
-        eq(moved[row], base[row], name .. " frame " .. i .. " leaves line " .. row)
+local moves = require("bud.dashboard.moves")
+local base = view.build(vim.tbl_extend("force", data, { mood = "normal" }), 100, 40)
+local first_box
+for row, line in ipairs(base) do
+  if line:find("╭─", 1, true) then
+    first_box = first_box or row
+  end
+end
+eq(#moves.names, 18, "every move listed")
+for _, name in ipairs(moves.names) do
+  for i, frame in ipairs(moves.moves[name]) do
+    local what = name .. " frame " .. i
+    local rows, clipped = moves.draw(frame, "o.o")
+    eq(clipped, 0, what .. " fits the canvas")
+    eq(#rows, moves.height, what .. " canvas height")
+    for _, runs in ipairs(rows) do
+      local cells = 0
+      for _, run in ipairs(runs) do
+        cells = cells + vim.fn.strdisplaywidth(run[1])
       end
+      eq(cells, moves.width, what .. " canvas width")
+    end
+    local moved = view.build(vim.tbl_extend("force", data, { mood = "normal", frame = frame }), 100, 40)
+    eq(#moved, #base, what .. " line count")
+    for row = first_box - 1, #base do
+      eq(moved[row], base[row], what .. " leaves line " .. row)
     end
   end
 end
+has(base, "[o.o]  ", "standing still")
+has(base, "hey bud.", "title beside him")
+has(view.build(vim.tbl_extend("force", data, { mood = "happy" }), 100, 40), "[^.^]", "the mood's face")
 has(
-  view.build(vim.tbl_extend("force", data, { mood = "normal", frame = view.moves.blink[1] }), 100, 40),
-  "[-.-]",
-  "blink"
+  view.build(vim.tbl_extend("force", data, { mood = "happy", frame = moves.moves.wave[1] }), 100, 40),
+  "[^.^]",
+  "a move's neutral face is the mood's"
 )
-has(view.build(vim.tbl_extend("force", data, { mood = "normal", frame = { wave = true } }), 100, 40), "[o.o]/", "wave")
+has(view.build(vim.tbl_extend("force", data, { mood = "sleepy" }), 100, 40), "[-.-]  z", "asleep")
+has(
+  view.build(vim.tbl_extend("force", data, { mood = "normal", frame = moves.moves.wave[3] }), 100, 40),
+  "[^.^]/",
+  "wave"
+)
+
+-- the cycle starts anywhere, plays each move once, then repeats that order
+dashboard.order = nil
+local cycle = {}
+for i = 1, #moves.names do
+  cycle[i] = dashboard.next_move()
+end
+local sorted = vim.deepcopy(cycle)
+table.sort(sorted)
+local names = vim.deepcopy(moves.names)
+table.sort(names)
+eq(sorted, names, "one cycle plays every move once")
+for i = 1, #moves.names * 2 do
+  eq(dashboard.next_move(), cycle[(i - 1) % #cycle + 1], "the order repeats, move " .. i)
+end
 
 -- optional extras (JGA-97)
 local extra = vim.deepcopy(data)
@@ -294,10 +329,8 @@ f = assert(io.open(tmp .. "/config.json", "w"))
 f:write('{"dashboard": {"scratchpad": true}}')
 f:close()
 -- the buddy moves now and then, and settles back between moves (JGA-155)
-dashboard.idle_ms = function()
-  return 20
-end
-dashboard.frame_ms = 20
+dashboard.pause_ms = 20
+dashboard.tick_ms = 2
 buf = dashboard.open({ offline = true })
 local still = dashboard.lines()
 if not vim.wait(2000, function()

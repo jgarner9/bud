@@ -13,6 +13,7 @@ M.faces = {
 }
 
 local icons = require("bud.icons")
+local moves = require("bud.dashboard.moves")
 local menu_width = 30
 
 -- a line is a list of { text, group } segments; group may be nil
@@ -32,39 +33,24 @@ local function pad(text, cols)
   return text .. string.rep(" ", math.max(0, cols - vim.fn.strdisplaywidth(text)))
 end
 
--- the buddy's idle moves (JGA-155): each is a list of frames, shown about
--- 150 ms apart, that change a part of the art; the mood face shows between
--- them. A frame never changes the art's width, so nothing around it moves
-M.moves = {
-  blink = { { face = "[-.-]" } },
-  look = { { face = "[<.<]" }, { face = "[<.<]" }, { face = "[>.>]" }, { face = "[>.>]" } },
-  antenna = { { top = "_*_" }, { top = "___" }, { top = "_*_" } },
-  wave = { { wave = true }, {}, { wave = true }, {}, { wave = true } },
-}
--- asleep, it only snores
-M.snore = { { z = "Z" }, {}, { z = "Z" } }
-
+-- art is the buddy's canvas (bud.dashboard.moves) showing data.frame, or
+-- standing still with the mood's face, with the title and tagline beside his
+-- face and body. The canvas is a fixed size, so no frame moves anything else
 local function art(data)
-  local frame = data.frame or {}
-  local face = frame.face or M.faces[data.mood] or M.faces.normal
-  local sleepy = data.mood == "sleepy"
-  local z = frame.z or "z"
-  return {
-    { seg("   " .. (frame.top or "___"), "BudDashboardArt"), seg(sleepy and "     " .. z or "", "BudDashboardDim") },
-    {
-      seg("  " .. face, "BudDashboardArt"),
-      -- the raised arm takes the spacer's first cell
-      seg(frame.wave and "/" or "", "BudDashboardArt"),
-      seg(sleepy and "  " .. z .. "     " or (frame.wave and "       " or "        "), "BudDashboardDim"),
-      seg("hey bud.", "BudDashboardTitle"),
-    },
-    {
-      seg(frame.wave and "  /[_] " or "  /[_]\\", "BudDashboardArt"),
-      seg("        "),
-      seg('"' .. data.tagline .. '"', "BudDashboardDim"),
-    },
-    { seg("   ] [", "BudDashboardArt") },
-  }
+  local face = (M.faces[data.mood] or M.faces.normal):sub(2, -2)
+  local rows = moves.draw(data.frame, face, data.mood == "sleepy")
+  local groups = { bot = "BudDashboardArt", fx = "BudDashboardSpark" }
+  local out = {}
+  for y, runs in ipairs(rows) do
+    local line = { seg("  ") }
+    for _, run in ipairs(runs) do
+      table.insert(line, seg(run[1], groups[run[2]]))
+    end
+    out[y] = line
+  end
+  table.insert(out[moves.height - 2], seg("  hey bud.", "BudDashboardTitle"))
+  table.insert(out[moves.height - 1], seg('  "' .. data.tagline .. '"', "BudDashboardDim"))
+  return out
 end
 
 -- menu is two columns of key, icon and label; roomy puts a blank line

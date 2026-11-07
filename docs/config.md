@@ -54,7 +54,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `dashboard.prs` | `false` | Open PRs per project, and how many ask you for a review, through `gh`. |
 | `dashboard.todos` | `false` | How many TODO and FIXME comments each project has, through `rg`. |
 | `dashboard.clock` | `false` | The date and time under the robot. |
-| `dashboard.animate` | `true` | The robot blinks, looks around and waves now and then (it only snores after midnight). |
+| `dashboard.animate` | `true` | The robot plays his moves one after another (wave, backflip, juggling, fireworks and more), in a random order that then repeats; after midnight he only snores. |
 | `dashboard.sessions` | `false` | Save a project's open files on exit and restore them when you open it from the dashboard. |
 
 ## Claude Code

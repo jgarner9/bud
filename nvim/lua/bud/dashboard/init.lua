@@ -4,6 +4,7 @@
 -- in the background and redraws when it's back, so opening it costs a few ms.
 
 local view = require("bud.dashboard.view")
+local moves = require("bud.dashboard.moves")
 local projects = require("bud.projects")
 local config = require("bud.config")
 
@@ -202,14 +203,33 @@ local function draw()
   render(win)
 end
 
--- animate plays one of the buddy's moves every few seconds while the
--- dashboard is on screen (JGA-155): each frame redraws from the data already
+-- animate plays the buddy's moves one after another while the dashboard is on
+-- screen (JGA-155, JGA-181): each frame redraws from the data already
 -- gathered, so nothing runs again; asleep, it only snores
--- how long the buddy waits between moves, and shows each frame; swapped in tests
-M.idle_ms = function()
-  return math.random(4000, 9000)
+-- one tick is how long a frame's hold counts in, pause is the breath between
+-- moves; swapped in tests
+M.tick_ms = 80
+M.pause_ms = 640
+
+-- order is every move shuffled on first use, then repeated as is, so the
+-- first move is a random one and each comes round once per cycle; at is the
+-- one last played. Kept for the whole nvim, so reopening the dashboard
+-- carries on the cycle
+M.order, M.at = nil, 0
+
+--- next_move returns the name of the next move in the cycle.
+function M.next_move()
+  if not M.order then
+    M.order = vim.deepcopy(moves.names)
+    for i = #M.order, 2, -1 do
+      local j = math.random(i)
+      M.order[i], M.order[j] = M.order[j], M.order[i]
+    end
+    M.at = 0
+  end
+  M.at = M.at % #M.order + 1
+  return M.order[M.at]
 end
-M.frame_ms = 150
 
 local function animate()
   local timer = vim.uv.new_timer()
@@ -232,29 +252,24 @@ local function animate()
   local function play(frames, i)
     current.frame = frames[i]
     render()
-    if i < #frames then
-      after(M.frame_ms, function()
-        play(frames, i + 1)
-      end)
-    else
-      after(M.frame_ms, function()
-        current.frame = nil
-        render()
-        idle()
-      end)
-    end
+    after(frames[i].hold * M.tick_ms, function()
+      if i < #frames then
+        return play(frames, i + 1)
+      end
+      current.frame = nil
+      render()
+      idle()
+    end)
   end
   idle = function()
-    after(M.idle_ms(), function()
+    after(M.pause_ms, function()
       if current.style == "minimal" or vim.fn.bufwinid(current.buf) == -1 then
         return idle()
       end
       if current.data and current.data.mood == "sleepy" then
-        return play(view.snore, 1)
+        return play(moves.moves.sleep, 1)
       end
-      local names = vim.tbl_keys(view.moves)
-      table.sort(names)
-      play(view.moves[names[math.random(#names)]], 1)
+      play(moves.moves[M.next_move()], 1)
     end)
   end
   idle()
@@ -458,6 +473,7 @@ end
 local function highlights()
   local links = {
     BudDashboardArt = "Function",
+    BudDashboardSpark = "DiagnosticWarn",
     BudDashboardTitle = "Title",
     BudDashboardKey = "Keyword",
     BudDashboardIcon = "Special",

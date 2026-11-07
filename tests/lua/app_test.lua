@@ -22,52 +22,90 @@ local quits = 0
 app.quit = function()
   quits = quits + 1
 end
+local now = 1000
+app.launched = function()
+  return now
+end
 
--- the dashboard, as bud shows it
+-- the dashboard, as bud shows it, with a float like ui2's message window beside it
 vim.bo.filetype = "bud-dashboard"
+vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false, {
+  relative = "editor",
+  row = 0,
+  col = 0,
+  width = 10,
+  height = 1,
+  hide = true,
+})
 
--- a drop leaves its marker, making the state dir if it has to, and BUD_APP
--- goes, so a bud started in Bud's terminal doesn't inherit it
+-- headless (a background update's nvim) only clears BUD_APP
+vim.env.BUD_APP = "drop"
+app.setup({ headless = true })
+eq({ vim.fn.filereadable(marker), vim.env.BUD_APP }, { 0, nil }, "nothing left headless")
+
+-- a drop leaves when its bud started and its pid, making the state dir if it
+-- has to, and BUD_APP goes, so a bud started in Bud's terminal doesn't inherit it
 vim.env.BUD_APP = "drop"
 app.setup()
-eq(vim.fn.filereadable(marker), 1, "a drop leaves its marker")
+eq(app.drop(), { launched = 1000, pid = vim.fn.getpid() }, "a drop leaves its marker")
 eq(vim.env.BUD_APP, nil, "BUD_APP cleared")
 
--- a cold start's dashboard quits when a drop arrives in its first seconds
-vim.env.BUD_APP = "start"
-app.setup()
-vim.fn.writefile({}, marker)
-vim.wait(1000, function()
-  return quits > 0
-end)
+-- start runs the watch, as a cold start's dashboard
+local function start(launched)
+  now = launched
+  vim.env.BUD_APP = "start"
+  app.setup()
+end
+-- drop writes a marker as a drop that started at launched, in process pid
+local function drop(launched, pid)
+  vim.fn.writefile({ tostring(launched), tostring(pid) }, marker)
+end
+local function settle()
+  vim.wait(app.window + 200, function()
+    return quits > 0
+  end)
+end
+
+-- a drop that started with it, already there: the dashboard makes way, ui2's float or not
+start(1000.5)
+settle()
 eq(quits, 1, "the dashboard made way for the drop")
 
--- with no drop it stays, and stops watching
+-- one that turns up later, while the dashboard is still watching
 quits = 0
-local old = os.time() - 3600
-vim.uv.fs_utime(marker, old, old)
-vim.env.BUD_APP = "start"
-app.setup()
-vim.wait(app.window + 200)
-eq(quits, 0, "a marker from an old drop is ignored")
-vim.fn.writefile({}, marker)
-vim.wait(200)
-eq(quits, 0, "a drop after the window is a drop while Bud runs")
+vim.fn.delete(marker)
+start(2000)
+vim.defer_fn(function()
+  drop(2000.3, vim.fn.getpid())
+end, 150)
+settle()
+eq(quits, 1, "a drop that arrives a moment later")
+
+-- a marker from an earlier launch, or from a drop whose window is gone, is
+-- ignored, or Bud would quit with no window left
+quits = 0
+drop(1000, vim.fn.getpid())
+start(3000)
+settle()
+eq(quits, 0, "a drop from an earlier launch is ignored")
+-- a pid past the largest macOS and Linux hand out by default
+drop(4000, 4194305)
+start(4000)
+settle()
+eq(quits, 0, "a drop whose window has closed is ignored")
 
 -- nothing is closed once you've started using the window
-vim.uv.fs_utime(marker, old, old)
-vim.env.BUD_APP = "start"
-app.setup()
+drop(5000, vim.fn.getpid())
 vim.cmd.vsplit()
-vim.fn.writefile({}, marker)
-vim.wait(app.window + 200)
+start(5000)
+settle()
 eq(quits, 0, "a dashboard you've split is kept")
 vim.cmd.only()
 
 -- outside Bud.app nothing happens at all
 vim.env.BUD_APP = nil
 app.setup()
-vim.wait(app.window + 100)
+settle()
 eq(quits, 0, "no BUD_APP, nothing watched")
 
 vim.fn.delete(dir, "rf")

@@ -25,7 +25,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
     local headless = vim.tbl_contains(vim.v.argv, "--headless")
     -- started from Bud.app: a cold start's dashboard makes way for a drop (JGA-186)
     if vim.env.BUD_APP then
-      require("bud.app").setup()
+      require("bud.app").setup({ headless = headless })
     end
     -- bud sets BUD_OPEN=project for `bud <dir>`, which gets a layout, not the dashboard
     local project = vim.env.BUD_OPEN == "project"

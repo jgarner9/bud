@@ -23,7 +23,7 @@ just run <args>      # go run ./cmd/bud <args>, e.g. just run update
 just build           # ./bud (gitignored)
 just fmt             # gofmt -w .
 just lua-fmt         # stylua over nvim/ and scripts/
-just lua-test        # headless Lua tests in tests/lua (plain asserts, no framework)
+just lua-test        # headless Lua tests in tests/lua (plain asserts, no framework), 60 s limit each
 just install-test    # install.sh's checks against fake releases signed with a throwaway key
 just release-plan-test # release-plan.sh's decisions against throwaway repos with a fake gh
 just smoke           # sync the config into temp XDG dirs, restore plugins, start nvim headless (needs network)

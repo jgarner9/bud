@@ -66,7 +66,7 @@ jobs:
           curl -fsSL "https://github.com/neovim/neovim/releases/download/${{ matrix.nvim }}/nvim-linux-x86_64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
       - name: lua tests
-        run: for t in tests/lua/*_test.lua; do nvim --clean --headless -l "$t" || exit 1; done
+        run: sh scripts/lua-test.sh
       # the go job has no nvim, so the tests that read specs through it skip there
       - name: go tests that need nvim
         run: go test ./internal/lang

@@ -43,9 +43,9 @@ lint: fmt-check lua-lint
   go vet ./...
   shellcheck install.sh scripts/*.sh
 
-# run the headless Lua tests in tests/lua
-lua-test:
-  for t in tests/lua/*_test.lua; do nvim --clean --headless -l "$t" || exit 1; done
+# run the headless Lua tests in tests/lua (or the files given), 60 s each
+lua-test *tests:
+  sh scripts/lua-test.sh "$@"
 
 # rotate-release-key.sh against a throwaway repo, with fake op and gh
 rotate-test:

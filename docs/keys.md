@@ -76,7 +76,7 @@ Markdown files open rendered: headings, lists, code blocks, tables and checkboxe
 | `<leader>ar` | Restart this project's session. |
 | `<leader>ch` | Chat: Claude Code in chat mode, in its own tab. |
 | `<leader>ai` · `<leader>aB` · `<leader>aw` | File an issue about this project · about bud · have Claude fix one. |
-| `ga` (or `:w`) · `q` | In a proposed edit: accept · reject. |
+| `ga` (or `:w`) · `q` | In a proposed edit: accept · reject (closing it any other way rejects it too). |
 | `y` · `a` · `n` · `r` | In a permission prompt: allow · allow for this session · deny · deny and say why. |
 
 ## Debugging

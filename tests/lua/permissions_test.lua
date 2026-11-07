@@ -141,5 +141,17 @@ ask("Write", { file_path = tmp .. "/new.txt", content = "hi\n" })
 vim.api.nvim_feedkeys("q", "x", false)
 eq(result.behavior, "deny", "write rejected")
 
+-- closing the diff any other way (:q in it, :tabclose) is a no, and says so
+for _, close in ipairs({ "quit", "tabclose" }) do
+  result = nil
+  ask("Write", { file_path = tmp .. "/new.txt", content = "hi\n" })
+  vim.cmd(close)
+  vim.wait(1000, function()
+    return result ~= nil
+  end)
+  eq(result and result.behavior, "deny", "rejected by :" .. close)
+  eq(vim.api.nvim_get_current_tabpage(), tab, "and its tab gone, after :" .. close)
+end
+
 vim.fn.delete(tmp, "rf")
 print("permissions_test: ok")

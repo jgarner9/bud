@@ -118,9 +118,15 @@ local function finish(d, accepted)
     return
   end
   d.done = true
-  local lines = vim.api.nvim_buf_get_lines(d.proposed, 0, -1, false)
+  -- closed some other way (:q in it, :tabclose), the proposal is already
+  -- wiped: that's a no, and there's no text left to send
+  local open = vim.api.nvim_buf_is_valid(d.proposed)
+  local proposal = ""
+  if open then
+    proposal = table.concat(vim.api.nvim_buf_get_lines(d.proposed, 0, -1, false), "\n") .. (d.eol and "\n" or "")
+  end
   -- answered first, so nothing going wrong closing the tab can lose it
-  d.on_done(accepted, table.concat(lines, "\n") .. (d.eol and "\n" or ""))
+  d.on_done(accepted and open, proposal)
   close_diff(d)
 end
 

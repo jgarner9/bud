@@ -100,3 +100,18 @@ func execArg(s string) string {
 func desktopValue(s string) string {
 	return strings.NewReplacer(`\`, `\\`, "\n", `\n`, "\t", `\t`).Replace(s)
 }
+
+// LinuxVersion is the bud version that wrote the desktop entry at path, ""
+// when it can't tell
+func LinuxVersion(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if v, ok := strings.CutPrefix(line, linuxMarker); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}

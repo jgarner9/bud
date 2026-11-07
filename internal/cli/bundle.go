@@ -129,6 +129,46 @@ func userKitty(home string) (dir, conf string) {
 	return dirs[0], ""
 }
 
+// refreshBundles builds the app again where bud bundle put it before, when
+// it's out of date (JGA-187): Bud.app built by another bud, copied from a
+// kitty that has been updated, moved, or the wrong kind for the terminal now
+// (bundle.MacStale), or a bud.desktop another bud wrote. Never run bud bundle,
+// and there's nothing to do. A failure only says so: the app still opens
+// bud, and bud bundle tries again. TestMain turns it off, so no test
+// rebuilds this machine's app
+var refreshBundles = refreshBundlesFor
+
+// swappable in tests
+var (
+	macStale     = bundle.MacStale
+	linuxVersion = bundle.LinuxVersion
+)
+
+func refreshBundlesFor(g *Globals, p *paths.Paths) {
+	for _, b := range findBundles(p) {
+		why, dest := "", b.Path
+		switch bundleGOOS {
+		case "darwin":
+			why = macStale(b.Path, version.String(), bundleKitty(p) != "")
+		case "linux":
+			if v := linuxVersion(b.Path); v != version.String() {
+				why = "bud " + v + " wrote it"
+			}
+			// bud bundle with no --dest writes the icons into the icon theme
+			if b.Path == p.DesktopEntry() {
+				dest = ""
+			}
+		}
+		if why == "" {
+			continue
+		}
+		fmt.Printf("Rebuilding %s (%s)...\n", b.Path, why)
+		if err := bundleCmd(g, nil, false, false, dest); err != nil {
+			fmt.Printf("Couldn't rebuild it (%v); 'bud bundle' tries again.\n", err)
+		}
+	}
+}
+
 // bundleBin is the bud the app runs: the one install.sh put in place, whose
 // path a self-update keeps, else this one
 func bundleBin() (string, error) {

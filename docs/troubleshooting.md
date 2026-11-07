@@ -30,7 +30,7 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 **The app doesn't open.** `bud bundle` builds it again with your current `PATH` and bud; `bud launch` from a shell shows any error.
 
-**Bud.app is out of date with kitty.** On macOS with Kitty, Bud.app is a copy of kitty.app, so it doesn't follow kitty's updates. `bud doctor` warns (`Bud app`) when kitty has moved on; `bud bundle` copies it again.
+**Bud.app is out of date with kitty.** On macOS with Kitty, Bud.app is a copy of kitty.app, so it doesn't follow kitty's updates. `bud update` copies it again by itself; between updates, `bud doctor` warns (`Bud app`) when kitty has moved on, and `bud bundle` copies it again.
 
 ## Starting over
 

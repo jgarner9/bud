@@ -91,6 +91,12 @@ func TestBuild(t *testing.T) {
 	if entries, _ := os.ReadDir(filepath.Dir(dest)); len(entries) != 1 {
 		t.Fatalf("left behind %v", entries)
 	}
+	if got := MacStale(dest, "1.2.3", false); got != "" {
+		t.Errorf("an up-to-date droplet is stale: %q", got)
+	}
+	if got := MacStale(dest, "1.2.3", true); got != "kitty is the terminal now" {
+		t.Errorf("a droplet with kitty the terminal: %q", got)
+	}
 
 	other := filepath.Join(dir, "Apps", "Other.app")
 	os.MkdirAll(filepath.Join(other, "Contents"), 0o755)
@@ -238,11 +244,24 @@ func TestBuildKittyCopy(t *testing.T) {
 	if err := exec.Command("codesign", "--verify", "--deep", dest).Run(); err != nil {
 		t.Errorf("signature: %v", err)
 	}
-	if info, err := ReadMac(dest); err != nil || info != (MacInfo{Kitty: kitty, KittyVersion: "0.50.0", ConfigDir: ConfigDirFor(dest)}) {
+	if info, err := ReadMac(dest); err != nil || info != (MacInfo{Version: "1.2.3", Kitty: kitty, KittyVersion: "0.50.0", ConfigDir: ConfigDirFor(dest)}) {
 		t.Errorf("ReadMac = %+v, %v", info, err)
 	}
 	if entries, _ := os.ReadDir(filepath.Dir(dest)); len(entries) != 1 {
 		t.Errorf("left behind %v", entries)
+	}
+	for _, c := range []struct {
+		version   string
+		wantKitty bool
+		want      string
+	}{
+		{"1.2.3", true, ""},
+		{"1.3.0", true, "bud 1.2.3 built it"},
+		{"1.2.3", false, "kitty isn't the terminal any more"},
+	} {
+		if got := MacStale(dest, c.version, c.wantKitty); got != c.want {
+			t.Errorf("MacStale(%s, %v) = %q, want %q", c.version, c.wantKitty, got, c.want)
+		}
 	}
 	// kitty itself is untouched
 	if id, _ := MacBundleID(kitty); id != "net.kovidgoyal.kitty" {

@@ -133,3 +133,56 @@ func TestUserKittyLooksWhereKittyDoes(t *testing.T) {
 	t.Setenv("KITTY_CONFIG_DIRECTORY", home+"/set")
 	check("yours wins", home+"/set", set)
 }
+
+func TestUpdateRebuildsAStaleBundleWhereItIs(t *testing.T) {
+	mac, linux, _ := fakeBundles(t, "darwin")
+	origFind, origStale, origLinux := findBundles, macStale, linuxVersion
+	t.Cleanup(func() { findBundles, macStale, linuxVersion = origFind, origStale, origLinux })
+	findBundles = func(*paths.Paths) []bundle.Installed {
+		return []bundle.Installed{{Path: "/Users/j/Applications/Bud.app"}}
+	}
+	p := &paths.Paths{Data: "/data"}
+
+	// up to date: nothing built
+	macStale = func(string, string, bool) string { return "" }
+	out := captureStdout(t, func() { refreshBundlesFor(&Globals{}, p) })
+	if len(*mac) != 0 || out != "" {
+		t.Fatalf("rebuilt an up-to-date app: %v %q", *mac, out)
+	}
+
+	// stale: built again in the same place, saying why
+	var wantKitty bool
+	bundleKitty = func(*paths.Paths) string { return "/Applications/kitty.app" }
+	macStale = func(_, _ string, kitty bool) string { wantKitty = kitty; return "bud 0.25.2 built it" }
+	out = captureStdout(t, func() { refreshBundlesFor(&Globals{}, p) })
+	if len(*mac) != 1 || (*mac)[0] != "/Users/j/Applications/Bud.app" || !wantKitty {
+		t.Fatalf("built %v (want kitty %v)", *mac, wantKitty)
+	}
+	if !strings.Contains(out, "Rebuilding /Users/j/Applications/Bud.app (bud 0.25.2 built it)") {
+		t.Fatalf("output %q", out)
+	}
+
+	// a failed build only says so
+	buildMac = func(bundle.Mac, string) error { return errors.New("codesign failed") }
+	out = captureStdout(t, func() { refreshBundlesFor(&Globals{}, p) })
+	if !strings.Contains(out, "Couldn't rebuild it (codesign failed); 'bud bundle' tries again.") {
+		t.Fatalf("output %q", out)
+	}
+
+	// never run bud bundle: nothing to do
+	findBundles = func(*paths.Paths) []bundle.Installed { return nil }
+	macStale = func(string, string, bool) string { t.Fatal("checked a bundle that isn't there"); return "" }
+	refreshBundlesFor(&Globals{}, p)
+
+	// Linux: the entry another bud wrote, rewritten with its icons where bud bundle puts them
+	bundleGOOS = "linux"
+	t.Setenv("XDG_DATA_HOME", "/data")
+	entry := filepath.Join("/data", "applications", "bud.desktop")
+	findBundles = func(*paths.Paths) []bundle.Installed { return []bundle.Installed{{Path: entry}} }
+	linuxVersion = func(string) string { return "0.25.2" }
+	lp, _ := paths.Resolve()
+	captureStdout(t, func() { refreshBundlesFor(&Globals{}, lp) })
+	if len(*linux) != 2 || (*linux)[0] != entry || (*linux)[1] != "/data/icons/hicolor/256x256/apps/bud.png" {
+		t.Fatalf("installed %v", *linux)
+	}
+}

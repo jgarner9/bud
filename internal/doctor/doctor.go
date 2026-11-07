@@ -189,7 +189,7 @@ func checkBudApp(p *paths.Paths) (Result, bool) {
 		r := Result{Name: "Bud app", Status: Warn, Fix: "bud bundle"}
 		now, err := kittyVersion(info.Kitty)
 		switch {
-		case !sameDir(info.ConfigDir, bundle.ConfigDirFor(b.Path)):
+		case !bundle.SameDir(info.ConfigDir, bundle.ConfigDirFor(b.Path)):
 			r.Detail = b.Path + " was moved, so it opens a plain kitty without bud"
 		case err != nil:
 			r.Detail = b.Path + " is a copy of " + info.Kitty + ", which isn't there any more"
@@ -324,7 +324,7 @@ func checkSyncedPlugins(p *paths.Paths, cfg config.Settings, dir string) (Result
 		return Result{}, false
 	}
 	ledger, _, _ := kit.ReadLedger(p.KitLedger())
-	if ledger != nil && !sameDir(ledgerDir(ledger), dir) {
+	if ledger != nil && !bundle.SameDir(ledgerDir(ledger), dir) {
 		// written for another config dir: nothing in this one is bud's
 		ledger = nil
 	}
@@ -366,17 +366,6 @@ func ledgerDir(l *kit.Ledger) string {
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".claude")
-}
-
-// sameDir says whether a and b name one dir, links resolved where they can be
-func sameDir(a, b string) bool {
-	resolve := func(d string) string {
-		if r, err := filepath.EvalSymlinks(d); err == nil {
-			return r
-		}
-		return filepath.Clean(d)
-	}
-	return resolve(a) == resolve(b)
 }
 
 // parseMCPList reads claude mcp list's output: each server's statuses by

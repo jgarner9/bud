@@ -35,7 +35,7 @@ func Update() *Command {
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&check, "check", false, "only report whether a newer release exists")
 			fs.BoolVar(&background, "background", false, "the check bud starts at launch: install a stable release (update.auto), or note it for the dashboard")
-			fs.BoolVar(&noDoctor, "no-doctor", false, "skip the full bud doctor at the end, for scripts that only want the sync")
+			fs.BoolVar(&noDoctor, "no-doctor", false, "skip the full bud doctor and the app rebuild at the end, for scripts that only want the sync")
 			fs.StringVar(&channel, "channel", "", "release channel to check: "+strings.Join(updater.Channels, " or ")+" (default: update.channel in config.json)")
 		},
 		Run: func(g *Globals, args []string) error { return update(g, args, check, background, noDoctor, channel) },
@@ -119,6 +119,8 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 		if noDoctor {
 			return nil
 		}
+		// here, not in finishUpdate: a launch finishing an update never waits on it
+		refreshBundles(g, p)
 		return checkHealth("updated to " + version.String() + ", but ")
 	}
 	if err := selfUpdate(g, p, channel, noDoctor); err != nil {
@@ -130,9 +132,12 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 	pr := updatePrompt()
 	offerClod(p, pr)
 	resyncKit(g, p, pr)
+	// --no-doctor is for scripts (the smoke test, lang-check), which sync into
+	// throwaway dirs and must never rebuild this machine's app
 	if noDoctor {
 		return nil
 	}
+	refreshBundles(g, p)
 
 	return checkHealth("")
 }

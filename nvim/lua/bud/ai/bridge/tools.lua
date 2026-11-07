@@ -155,7 +155,14 @@ function M.review(opts, on_done)
   vim.api.nvim_buf_set_lines(d.proposed, 0, -1, false, vim.split(body, "\n", { plain = true }))
   vim.bo[d.proposed].buftype = "acwrite"
   vim.bo[d.proposed].bufhidden = "wipe"
-  vim.bo[d.proposed].filetype = vim.bo[vim.api.nvim_win_get_buf(old_win)].filetype
+  -- a big file's proposed side gets its real filetype's syntax and nothing
+  -- else, as the file itself does (D94)
+  local orig = vim.api.nvim_win_get_buf(old_win)
+  if vim.bo[orig].filetype == "bigfile" then
+    vim.bo[d.proposed].syntax = require("bud.bigfile").filetype(orig)
+  else
+    vim.bo[d.proposed].filetype = vim.bo[orig].filetype
+  end
   vim.bo[d.proposed].modified = false
   pcall(vim.api.nvim_buf_set_name, d.proposed, "bud://" .. name .. " (proposed) " .. vim.fs.basename(old or name))
   vim.cmd.diffthis()
@@ -258,7 +265,7 @@ M.tools = {
         respond({
           success = true,
           filePath = path,
-          languageId = vim.bo.filetype,
+          languageId = require("bud.bigfile").filetype(0),
           lineCount = vim.api.nvim_buf_line_count(0),
         })
       else
@@ -318,7 +325,7 @@ M.tools = {
             uri = uri(name),
             isActive = buf == current,
             label = vim.fs.basename(name),
-            languageId = vim.bo[buf].filetype,
+            languageId = require("bud.bigfile").filetype(buf),
             isDirty = vim.bo[buf].modified,
           })
         end

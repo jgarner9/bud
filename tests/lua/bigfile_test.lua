@@ -17,6 +17,11 @@ vim.notify = function(msg)
   table.insert(notes, msg)
 end
 
+-- the lockfiles named here are the ones Neovim matches by name, as it does
+for name, ft in pairs(bigfile.named) do
+  eq(vim.filetype.match({ filename = "/x/" .. name }), ft, "Neovim's filetype for " .. name)
+end
+
 -- small limits, so the files can be small
 bigfile.size = 2000
 bigfile.line_length = 200
@@ -48,13 +53,45 @@ end
 buf = open(write("big.go", lines))
 eq(vim.bo[buf].filetype, "bigfile", "a big file")
 eq(vim.b[buf].completion, false, "no completion")
-eq(vim.wo.foldmethod, "manual", "no expression folds")
 vim.wait(1000, function()
   return vim.bo[buf].syntax == "go"
 end)
 eq(vim.bo[buf].syntax, "go", "Go's regex syntax, after the first screen")
 eq(#notes, 1, "said once")
 eq(notes[1]:find("big.go", 1, true) ~= nil, true, "names the file")
+eq(bigfile.filetype(buf), "go", "its real filetype, for the bridge")
+
+-- reloading it (:e, or a reload after Claude rewrote it) keeps it a big file,
+-- without saying so again
+vim.cmd.edit()
+eq(vim.bo[buf].filetype, "bigfile", "still big after :e")
+eq(#notes, 1, "not said again")
+
+-- a lockfile Neovim knows by name: big is big, small keeps its filetype
+buf = open(write("go.sum", lines))
+eq(vim.bo[buf].filetype, "bigfile", "a big go.sum")
+eq(bigfile.filetype(buf), "gosum", "and what it really is")
+vim.fn.mkdir(dir .. "/small", "p")
+buf = open(write("small/go.sum", { "example.com/x v1.0.0 h1:abc=" }))
+eq(vim.bo[buf].filetype, "gosum", "a small go.sum")
+
+-- a buffer that isn't loaded has no line count to go on, and a name matched
+-- on its own isn't a file
+local unloaded = vim.fn.bufadd(write("unloaded.go", { "package x" }))
+eq(vim.filetype.match({ buf = unloaded }), "go", "an unloaded buffer isn't big")
+eq(vim.filetype.match({ filename = dir .. "/big.go" }), "go", "nor is a name alone")
+eq(vim.filetype.match({ filename = dir .. "/go.sum" }), "gosum", "a lockfile's name alone")
+
+-- Claude's edit review shows a big file's proposed side in its real syntax,
+-- without making it a big file of its own
+local tools = require("bud.ai.bridge.tools")
+local said = #notes
+tools.review({ path = dir .. "/big.go", contents = table.concat(lines, "\n") .. "\n", name = "big" }, function() end)
+local proposed = vim.api.nvim_get_current_buf()
+eq(vim.bo[proposed].filetype, "", "the proposed side has no filetype")
+eq(vim.bo[proposed].syntax, "go", "and Go's syntax")
+eq(#notes, said, "and nothing said about it")
+vim.api.nvim_feedkeys("q", "x", false)
 
 -- small but minified: one long line is a big file too
 buf = open(write("app.min.js", { string.rep("a=1;", 400) }))

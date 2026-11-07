@@ -75,7 +75,7 @@ Neovim 0.12 with plugins pinned in a committed lockfile and lazy-loaded, inside 
 - **Navigation:** fzf-lua for files, grep, buffers and symbols; two-key jumps (`gw`, `s`); a symbols outline; oil.nvim as the explorer; four pinned files per project.
 - **Editing:** blink.cmp completion, format on save, gitsigns and diffview, debugging with nvim-dap.
 - **Interface:** key hints as you type, a floating command line, breadcrumbs, Catppuccin Macchiato.
-- **Markdown:** `.md` files open rendered; `<leader>um` switches to plain text for editing (`ui.markdown` turns rendering off).
+- **Markdown:** `.md` files open rendered (up to 250 KB); `<leader>um` switches to plain text for editing (`ui.markdown` turns rendering off).
 
 All keys: [docs/keys.md](docs/keys.md).
 

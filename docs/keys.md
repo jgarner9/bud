@@ -63,7 +63,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that f
 | --- | --- |
 | `<leader>um` | Switch this markdown file between rendered and plain text. |
 
-Markdown files open rendered: headings, lists, code blocks, tables and checkboxes are drawn in place. In Normal mode the line under the cursor shows as written, and Insert mode shows the whole file as text, so small edits don't need the toggle. A diff (Claude's edit review, `<leader>gd`) always shows the text. `bud config set ui.markdown false` opens markdown as text instead; `<leader>um` still renders one.
+Markdown files open rendered: headings, lists, code blocks, tables and checkboxes are drawn in place. In Normal mode the line under the cursor shows as written, and Insert mode shows the whole file as text, so small edits don't need the toggle. A diff (Claude's edit review, `<leader>gd`) always shows the text, and so does a file over 250 KB, since rendering one that size freezes the editor for a moment; there `<leader>um` isn't mapped. `bud config set ui.markdown false` opens markdown as text instead; `<leader>um` still renders one.
 
 ## Claude Code
 

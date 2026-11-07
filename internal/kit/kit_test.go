@@ -428,6 +428,58 @@ func TestSyncPluginFromClaudeAI(t *testing.T) {
 	}
 }
 
+// JGA-183: a project or local copy loads in one project only, so it neither
+// keeps bud from installing the kit's plugin nor is bud's to uninstall
+func TestSyncCountsOnlyCopiesThatLoadInEveryProject(t *testing.T) {
+	dir := t.TempDir()
+	installed := []Plugin{
+		{ID: "bud@bud-plugins", Scope: "local", Project: "/w"},
+		{ID: "corp@x", Scope: "managed"},
+		{ID: "old@bud-plugins", Scope: "project", Project: "/p"},
+		{ID: "gone@bud-plugins", Scope: "managed"},
+	}
+	var ran []string
+	env := Env{
+		ClaudeDir: filepath.Join(dir, ".claude"), ClaudeJSON: filepath.Join(dir, ".claude.json"), Ledger: filepath.Join(dir, "l.json"),
+		Claude: func(a ...string) error {
+			ran = append(ran, strings.Join(a, " "))
+			return nil
+		},
+		InstalledPlugins: func() ([]Plugin, error) { return installed, nil },
+	}
+	// old is bud's but dropped from the kit, gone is bud's with only a policy copy left
+	os.WriteFile(env.Ledger, []byte(`{"plugins": {"old@bud-plugins": "installed", "gone@bud-plugins": "installed"}}`), 0o644)
+	k := &Kit{Plugins: []string{"bud@bud-plugins", "corp@x", "gone@bud-plugins"}}
+
+	actions, err := Sync(k, env, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ran, []string{"plugin install --scope user bud@bud-plugins"}) {
+		t.Fatalf("ran %q (%v)", ran, actions)
+	}
+	for _, want := range []Action{
+		{"plugin", "bud@bud-plugins", "add", "only in some projects so far: bud@bud-plugins (local, /w)"},
+		{"plugin", "corp@x", "skip", "your organisation's policy installs it"},
+		{"plugin", "gone@bud-plugins", "skip", "your organisation's policy installs it"},
+		{"plugin", "old@bud-plugins", "remove", "no longer in the kit"},
+	} {
+		if !slices.Contains(actions, want) {
+			t.Errorf("no %v in %v", want, actions)
+		}
+	}
+	l, _, _ := ReadLedger(env.Ledger)
+	if _, ok := l.Plugins["old@bud-plugins"]; ok {
+		t.Errorf("ledger kept old, whose only copy is a project's: %v", l.Plugins)
+	}
+	if _, ok := l.Plugins["gone@bud-plugins"]; ok {
+		t.Errorf("ledger kept gone, whose only copy is the policy's: %v", l.Plugins)
+	}
+	if l.Plugins["bud@bud-plugins"] != "installed" {
+		t.Errorf("ledger lacks bud: %v", l.Plugins)
+	}
+}
+
 func TestParseMarketplaces(t *testing.T) {
 	out := `[{"name": "bud-plugins", "source": "git", "url": "https://github.com/jgarner9/bud-plugins.git", "installLocation": "/x"}, {"name": "local", "source": "directory"}]`
 	names, err := ParseMarketplaces([]byte(out))

@@ -251,7 +251,10 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			errs = append(errs, fmt.Errorf("listing plugins: %w", err))
 		}
 	}
-	installed := IDs(plugins)
+	// only a copy that loads in every project counts as installed (JGA-183): a
+	// project or local one is named in the reason, and bud's own is at user scope
+	installed := IDs(slices.DeleteFunc(slices.Clone(plugins), func(p Plugin) bool { return !p.machineWide() }))
+	atUser := IDs(slices.DeleteFunc(slices.Clone(plugins), func(p Plugin) bool { return !p.atUser() }))
 	// plugins that didn't install, by name: bud's copy from a marketplace
 	// the kit moved away from stays until its replacement is in
 	failed := map[string]string{}
@@ -267,7 +270,7 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			if dryRun {
 				continue
 			}
-			if slices.Contains(installed, id) {
+			if slices.Contains(atUser, id) {
 				if err := env.Claude("plugin", "uninstall", "--scope", "user", id); err != nil {
 					errs = append(errs, fmt.Errorf("uninstalling %s: %w", id, err))
 					continue
@@ -278,7 +281,7 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			// a copy bud didn't install hides the synced one, and is yours to remove
 			why := "claude.ai syncs it" + shadowNote(Shadowed(&Kit{Plugins: []string{id}}, plugins, ledger))
 			*actions = append(*actions, Action{"plugin", id, "skip", why})
-		case slices.Contains(installed, id) && owned:
+		case slices.Contains(atUser, id) && owned:
 			*actions = append(*actions, Action{"plugin", id, "ok", ""})
 			if dryRun {
 				continue
@@ -287,12 +290,20 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			// next time
 			_ = env.Claude("plugin", "update", "--scope", "user", id)
 		case slices.Contains(installed, id):
-			*actions = append(*actions, Action{"plugin", id, "skip", "you installed it yourself"})
+			why := "you installed it yourself"
+			if !slices.Contains(atUser, id) {
+				why = "your organisation's policy installs it"
+			}
+			*actions = append(*actions, Action{"plugin", id, "skip", why})
+			// bud's own copy is gone, so the ledger lets go of it
+			if owned && !dryRun {
+				delete(ledger.Plugins, id)
+			}
 		case other != "":
 			// a second copy under the same name would load every skill twice
 			*actions = append(*actions, Action{"plugin", id, "skip", "you installed " + other})
 		default:
-			*actions = append(*actions, Action{"plugin", id, "add", ""})
+			*actions = append(*actions, Action{"plugin", id, "add", localNote(plugins, id)})
 			if dryRun {
 				continue
 			}
@@ -316,7 +327,8 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 		if dryRun {
 			continue
 		}
-		if slices.Contains(installed, id) {
+		// only bud's user-scope copy: one at project or local scope isn't bud's
+		if slices.Contains(atUser, id) {
 			if err := env.Claude("plugin", "uninstall", "--scope", "user", id); err != nil {
 				errs = append(errs, fmt.Errorf("uninstalling %s: %w", id, err))
 				continue
@@ -574,6 +586,32 @@ func IDs(plugins []Plugin) []string {
 func SyncsAny(k *Kit, installed []Plugin) bool {
 	ids := IDs(installed)
 	return slices.ContainsFunc(k.Plugins, func(id string) bool { return slices.Contains(ids, pluginName(id)+"@synced") })
+}
+
+// atUser says whether p is installed at user scope, where bud installs
+func (p Plugin) atUser() bool {
+	return (p.Scope == "" || p.Scope == "user") && !strings.HasSuffix(p.ID, "@synced")
+}
+
+// machineWide says whether p loads in every project: at user scope, synced by
+// claude.ai, or installed by an organisation's policy (managed)
+func (p Plugin) machineWide() bool {
+	return p.atUser() || p.synced() || p.Scope == "managed"
+}
+
+// localNote names the project and local copies of id's name, which don't count
+// as installed but are worth knowing about, or is empty
+func localNote(plugins []Plugin, id string) string {
+	var local []Plugin
+	for _, p := range plugins {
+		if pluginName(p.ID) == pluginName(id) && !p.machineWide() {
+			local = append(local, p)
+		}
+	}
+	if len(local) == 0 {
+		return ""
+	}
+	return "only in some projects so far: " + Labels(local)
 }
 
 // synced says whether p is a copy claude.ai syncs

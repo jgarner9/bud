@@ -233,7 +233,9 @@ func ConfigDirFor(app string) string {
 // kittyFiles is Bud's kitty config dir: kitty.conf, which includes yours and
 // quits Bud with its last window; macos-launch-services-cmdline, what kitty
 // runs when the app is opened from the Dock or Finder; and launch-actions.conf,
-// which opens a file or folder dropped on the icon in a new Bud window
+// which opens a file or folder dropped on the icon in a new Bud window. Each
+// tells bud which it is in BUD_APP, so the dashboard a cold start shows can make
+// way for a drop that came with it (bud.app, JGA-186)
 func (m Mac) kittyFiles() map[string]string {
 	conf := "# Bud's kitty settings, written by bud bundle: yours first, then Bud's\n"
 	if m.KittyConf != "" {
@@ -245,14 +247,23 @@ func (m Mac) kittyFiles() map[string]string {
 			"env KITTY_CONFIG_DIRECTORY=" + m.KittyHome + "\n"
 	}
 
-	run := shellJoin(m.Launch)
 	return map[string]string{
 		"kitty.conf":                    conf,
-		"macos-launch-services-cmdline": "--directory=" + shellQuote(m.Home) + " --title=bud " + run + "\n",
+		"macos-launch-services-cmdline": "--directory=" + shellQuote(m.Home) + " --title=bud " + shellJoin(withApp(m.Launch, "start")) + "\n",
 		"launch-actions.conf": "# a file or folder dropped on Bud's icon opens in bud (written by bud bundle)\n" +
 			"protocol file\n" +
-			"action launch --type=os-window --cwd=" + shellQuote(m.Home) + " " + run + " ${FILE_PATH}\n",
+			"action launch --type=os-window --cwd=" + shellQuote(m.Home) + " " + shellJoin(withApp(m.Launch, "drop")) + " ${FILE_PATH}\n",
 	}
+}
+
+// withApp is argv run with BUD_APP=kind, through the /usr/bin/env it starts
+// with when it has one
+func withApp(argv []string, kind string) []string {
+	set := "BUD_APP=" + kind
+	if len(argv) > 0 && argv[0] == "/usr/bin/env" {
+		return append([]string{argv[0], set}, argv[1:]...)
+	}
+	return append([]string{"/usr/bin/env", set}, argv...)
 }
 
 // shellJoin quotes each word for a shell and joins them

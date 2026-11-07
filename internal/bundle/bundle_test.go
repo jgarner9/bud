@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -110,6 +111,18 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+func TestWithAppSetsBudAppThroughEnv(t *testing.T) {
+	got := withApp([]string{"/usr/local/bin/bud", "open"}, "drop")
+	if want := []string{"/usr/bin/env", "BUD_APP=drop", "/usr/local/bin/bud", "open"}; !slices.Equal(got, want) {
+		t.Errorf("without env: %q, want %q", got, want)
+	}
+	launch := []string{"/usr/bin/env", "PATH=/bin", "bud", "open"}
+	got = withApp(launch, "start")
+	if want := []string{"/usr/bin/env", "BUD_APP=start", "PATH=/bin", "bud", "open"}; !slices.Equal(got, want) || launch[1] != "PATH=/bin" {
+		t.Errorf("with env: %q, want %q (launch now %q)", got, want, launch)
+	}
+}
+
 func TestKittyFiles(t *testing.T) {
 	m := Mac{
 		Launch:    []string{"/usr/bin/env", "PATH=/bin:/my dir", "/Users/j/.local/bin/bud", "open"},
@@ -125,11 +138,11 @@ func TestKittyFiles(t *testing.T) {
 			"env KITTY_CONFIG_DIRECTORY=/Users/j/.config/kitty\n",
 		},
 		"macos-launch-services-cmdline": {
-			"--directory=/Users/j --title=bud /usr/bin/env 'PATH=/bin:/my dir' /Users/j/.local/bin/bud open\n",
+			"--directory=/Users/j --title=bud /usr/bin/env BUD_APP=start 'PATH=/bin:/my dir' /Users/j/.local/bin/bud open\n",
 		},
 		"launch-actions.conf": {
 			"protocol file\n",
-			"action launch --type=os-window --cwd=/Users/j /usr/bin/env 'PATH=/bin:/my dir' /Users/j/.local/bin/bud open ${FILE_PATH}\n",
+			"action launch --type=os-window --cwd=/Users/j /usr/bin/env BUD_APP=drop 'PATH=/bin:/my dir' /Users/j/.local/bin/bud open ${FILE_PATH}\n",
 		},
 	}
 	if len(files) != len(want) {

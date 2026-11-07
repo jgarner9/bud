@@ -11,6 +11,7 @@ import (
 	"testing/fstest"
 
 	"jgarner.dev/bud/internal/config"
+	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -55,7 +56,13 @@ func fakeKit(t *testing.T, files fstest.MapFS) *kitFake {
 		}
 		return nil
 	}
-	installedPlugins = func() ([]string, error) { return slices.Clone(f.installed[dir()]), nil }
+	installedPlugins = func() ([]kit.Plugin, error) {
+		var out []kit.Plugin
+		for _, id := range f.installed[dir()] {
+			out = append(out, kit.Plugin{ID: id, Scope: "user"})
+		}
+		return out, nil
+	}
 	kitMarketplaces = func() ([]string, error) { return nil, nil }
 	t.Cleanup(func() {
 		kitFS, kitClaude, installedPlugins, kitMarketplaces = origFS, origClaude, origPlugins, origMarkets

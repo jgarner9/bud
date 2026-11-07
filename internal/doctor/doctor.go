@@ -4,7 +4,6 @@
 package doctor
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -91,9 +90,8 @@ var (
 	}
 )
 
-// pluginList is the ids claude plugin list --json shows, synced ones as
-// name@synced
-var pluginList = func() ([]string, error) {
+// pluginList is what claude plugin list --json shows
+var pluginList = func() ([]kit.Plugin, error) {
 	bin := claude.Find()
 	if bin == "" {
 		return nil, nil
@@ -102,17 +100,7 @@ var pluginList = func() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var list []struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(out, &list); err != nil {
-		return nil, err
-	}
-	ids := make([]string, len(list))
-	for i, p := range list {
-		ids[i] = p.ID
-	}
-	return ids, nil
+	return kit.ParsePlugins(out)
 }
 
 // Options picks which checks Run does
@@ -162,7 +150,7 @@ func Run(opts Options) []Result {
 		if r, ok := checkClaudeSetup(claudeDir()); ok {
 			results = append(results, r)
 		}
-		if r, ok := checkSyncedPlugins(); ok {
+		if r, ok := checkSyncedPlugins(p, cfg); ok {
 			results = append(results, r)
 		}
 	}
@@ -272,37 +260,36 @@ func checkClaudeSetup(dir string) (Result, bool) {
 // checkSyncedPlugins warns when another copy of a kit plugin claude.ai syncs
 // is installed (JGA-182): Claude Code loads that one instead, so the synced
 // one's updates (new skills) never show up, and kit sync leaves a copy bud
-// didn't install alone. Nothing to say when claude.ai syncs none of them
-func checkSyncedPlugins() (Result, bool) {
+// didn't install alone. Plugins turned off with kit.disabled, bud's own
+// copies (sync takes those out) and a list claude can't give (the claude
+// code check covers a broken claude) leave nothing to say, as does claude.ai
+// syncing none of them
+func checkSyncedPlugins(p *paths.Paths, cfg config.Settings) (Result, bool) {
 	k, err := kit.Load(kitFS())
-	if err != nil || len(k.Plugins) == 0 {
-		return Result{}, false
-	}
-	r := Result{Name: "synced plugins"}
-	installed, err := pluginList()
 	if err != nil {
-		r.Status, r.Detail = Warn, "couldn't list Claude Code's plugins: "+err.Error()
-		return r, true
-	}
-	synced := false
-	for _, id := range k.Plugins {
-		name, _, _ := strings.Cut(id, "@")
-		synced = synced || slices.Contains(installed, name+"@synced")
-	}
-	if !synced {
 		return Result{}, false
 	}
-	shadows := kit.Shadowed(k, installed)
+	k = k.Without(cfg.Kit.Disabled)
+	if len(k.Plugins) == 0 {
+		return Result{}, false
+	}
+	installed, err := pluginList()
+	if err != nil || !kit.SyncsAny(k, installed) {
+		return Result{}, false
+	}
+	ledger, _, _ := kit.ReadLedger(p.KitLedger())
+	r := Result{Name: "synced plugins"}
+	shadows := kit.Shadowed(k, installed, ledger)
 	if len(shadows) == 0 {
 		r.Detail = "the plugins claude.ai syncs are the ones that load"
 		return r, true
 	}
 	fixes := make([]string, len(shadows))
-	for i, id := range shadows {
-		fixes[i] = kit.UninstallHint(id)
+	for i, s := range shadows {
+		fixes[i] = kit.UninstallHint(s)
 	}
 	r.Status = Warn
-	r.Detail = strings.Join(shadows, ", ") + " loads instead of the copy claude.ai syncs, so its updates never reach you"
+	r.Detail = strings.Join(kit.IDs(shadows), ", ") + " loads instead of the copy claude.ai syncs, so its updates never reach you"
 	r.Fix = strings.Join(fixes, "; ") + ", then restart Claude Code"
 	return r, true
 }

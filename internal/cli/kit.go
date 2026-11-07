@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -268,7 +267,7 @@ var kitMarketplaces = func() ([]string, error) {
 }
 
 // installedPlugins asks claude which plugins are installed
-var installedPlugins = func() ([]string, error) {
+var installedPlugins = func() ([]kit.Plugin, error) {
 	bin := claude.Find()
 	if bin == "" {
 		return nil, nil
@@ -277,18 +276,8 @@ var installedPlugins = func() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var list []struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(out, &list); err != nil {
-		return nil, err
-	}
-	ids := make([]string, len(list))
-	for i, p := range list {
-		ids[i] = p.ID
-	}
 
-	return ids, nil
+	return kit.ParsePlugins(out)
 }
 
 // kitEnv is where the kit goes on this machine

@@ -36,7 +36,7 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 ## A skill from bud-plugins is missing in Claude Code
 
-When claude.ai syncs a bud-plugins plugin (`bud`, `bud-ide`, `superpowers`) and another copy of it is also installed, Claude Code loads that other copy, so skills added since it was installed don't show up. `bud doctor` warns about this under `synced plugins`, and `bud kit sync` names the copy. bud leaves a copy it didn't install alone, so take it out yourself and restart Claude Code:
+When claude.ai syncs a bud-plugins plugin (`bud`, `bud-ide`, `superpowers`) and another copy of it is also installed, Claude Code loads that other copy, so skills added since it was installed don't show up. `bud doctor` warns about this under `synced plugins`, and `bud kit sync` names the copy. bud leaves a copy it didn't install alone, so take it out yourself with the command they print (it has the copy's scope, and a `cd` into its project for a project or local one), then restart Claude Code. For a copy at user scope:
 
 ```sh
 claude plugin uninstall --scope user bud@bud-plugins

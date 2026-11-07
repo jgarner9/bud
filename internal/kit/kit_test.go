@@ -143,7 +143,7 @@ func TestSyncPlugins(t *testing.T) {
 			}
 			return nil
 		},
-		InstalledPlugins: func() ([]string, error) { return slices.Clone(installed), nil },
+		InstalledPlugins: func() ([]Plugin, error) { return asPlugins(installed), nil },
 	}
 	k := &Kit{Plugins: []string{"superpowers@claude-plugins-official", "mine@somewhere"}}
 	actions, err := Sync(k, env, false)
@@ -267,7 +267,7 @@ func (f *fakeMarketplaces) env(dir string) Env {
 			}
 			return nil
 		},
-		InstalledPlugins: func() ([]string, error) { return slices.Clone(f.installed), nil },
+		InstalledPlugins: func() ([]Plugin, error) { return asPlugins(f.installed), nil },
 		Marketplaces:     func() ([]string, error) { return slices.Clone(f.registered), nil },
 	}
 }
@@ -441,8 +441,8 @@ func TestParseMarketplaces(t *testing.T) {
 
 func TestASyncedPluginHiddenByYourOwnCopyNamesTheUninstall(t *testing.T) {
 	dir := t.TempDir()
-	// claude.ai syncs bud, but a copy bud's ledger doesn't hold is installed too
-	f := &fakeMarketplaces{registered: []string{"bud-plugins"}, installed: []string{"bud@synced", "bud@bud-plugins", "bud-ide@synced"}}
+	// claude.ai syncs bud, but copies bud's ledger doesn't hold are installed too
+	f := &fakeMarketplaces{registered: []string{"bud-plugins"}, installed: []string{"bud@synced", "bud@bud-plugins", "bud@clod", "bud-ide@synced"}}
 	env := f.env(dir)
 	os.WriteFile(env.Ledger, []byte(`{"marketplaces": {"bud-plugins": "x"}}`), 0o644)
 	k := &Kit{
@@ -454,21 +454,42 @@ func TestASyncedPluginHiddenByYourOwnCopyNamesTheUninstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Action{"plugin", "bud@bud-plugins", "skip", "claude.ai syncs it, but bud@bud-plugins loads instead: claude plugin uninstall --scope user bud@bud-plugins"}
+	// every copy that hides it, each with its command
+	want := Action{"plugin", "bud@bud-plugins", "skip", "claude.ai syncs it, but bud@bud-plugins, bud@clod load instead: " +
+		"claude plugin uninstall --scope user bud@bud-plugins; claude plugin uninstall --scope user bud@clod"}
 	if !slices.Contains(actions, want) {
 		t.Fatalf("actions %v, want %v", actions, want)
 	}
 	if !slices.Contains(actions, Action{"plugin", "bud-ide@bud-plugins", "skip", "claude.ai syncs it"}) {
 		t.Fatalf("bud-ide has no other copy: %v", actions)
 	}
-	// it isn't bud's, so bud doesn't take it out
+	// they aren't bud's, so bud doesn't take them out
 	if slices.ContainsFunc(f.ran, func(r string) bool { return strings.Contains(r, "uninstall") }) {
 		t.Fatalf("uninstalled a copy bud didn't install: %q", f.ran)
 	}
 }
 
+func TestRemovingBudsCopyStillNamesYoursThatHidesTheSyncedOne(t *testing.T) {
+	dir := t.TempDir()
+	f := &fakeMarketplaces{registered: []string{"bud-plugins"}, installed: []string{"bud@synced", "bud@bud-plugins", "bud@clod"}}
+	env := f.env(dir)
+	os.WriteFile(env.Ledger, []byte(`{"plugins": {"bud@bud-plugins": "installed"}, "marketplaces": {"bud-plugins": "x"}}`), 0o644)
+	k := &Kit{Marketplaces: map[string]string{"bud-plugins": "x"}, Plugins: []string{"bud@bud-plugins"}}
+
+	actions, err := Sync(k, env, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Action{"plugin", "bud@bud-plugins", "remove", "claude.ai syncs it, but bud@clod loads instead: claude plugin uninstall --scope user bud@clod"}
+	if !slices.Contains(actions, want) || !slices.Contains(f.ran, "plugin uninstall --scope user bud@bud-plugins") {
+		t.Fatalf("actions %v, ran %q", actions, f.ran)
+	}
+}
+
 func TestShadowed(t *testing.T) {
 	k := &Kit{Plugins: []string{"bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@bud-plugins"}}
+	// bud's own copy from a marketplace the kit left: sync takes it out, so it isn't yours to
+	ledger := &Ledger{Plugins: map[string]string{"bud@old-market": "installed"}}
 	cases := []struct {
 		installed []string
 		want      []string
@@ -476,12 +497,52 @@ func TestShadowed(t *testing.T) {
 		{[]string{"bud@synced", "bud-ide@synced"}, nil},
 		{[]string{"bud@synced", "bud@bud-plugins"}, []string{"bud@bud-plugins"}},
 		{[]string{"superpowers@synced", "superpowers@claude-plugins-official"}, []string{"superpowers@claude-plugins-official"}},
+		{[]string{"bud@synced", "bud@old-market"}, nil},
 		// not synced: the installed copy is the only one, nothing hidden
 		{[]string{"bud@bud-plugins"}, nil},
 	}
 	for _, c := range cases {
-		if got := Shadowed(k, c.installed); !slices.Equal(got, c.want) {
+		if got := IDs(Shadowed(k, asPlugins(c.installed), ledger)); !slices.Equal(got, c.want) {
 			t.Errorf("Shadowed(%v) = %v, want %v", c.installed, got, c.want)
 		}
 	}
+}
+
+func TestUninstallHintUsesThePluginsScope(t *testing.T) {
+	cases := map[Plugin]string{
+		{ID: "bud@clod"}:                                         "claude plugin uninstall --scope user bud@clod",
+		{ID: "bud@clod", Scope: "user"}:                          "claude plugin uninstall --scope user bud@clod",
+		{ID: "bud@clod", Scope: "local", Project: "/home/j/app"}: "cd /home/j/app && claude plugin uninstall --scope local bud@clod",
+		{ID: "bud@clod", Scope: "project", Project: "/x/my app"}: "cd '/x/my app' && claude plugin uninstall --scope project bud@clod",
+	}
+	for p, want := range cases {
+		if got := UninstallHint(p); got != want {
+			t.Errorf("UninstallHint(%+v) = %q, want %q", p, got, want)
+		}
+	}
+}
+
+func TestParsePlugins(t *testing.T) {
+	out := `[{"id": "bud@synced", "scope": "synced"}, {"id": "headroom@hm", "scope": "local", "projectPath": "/Users/j", "enabled": true}]`
+	got, err := ParsePlugins([]byte(out))
+	want := []Plugin{{ID: "bud@synced", Scope: "synced"}, {ID: "headroom@hm", Scope: "local", Project: "/Users/j"}}
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("got %v (%v), want %v", got, err, want)
+	}
+	if _, err := ParsePlugins([]byte("nope")); err == nil {
+		t.Fatal("bad JSON read")
+	}
+}
+
+// asPlugins is ids as claude plugin list shows them: name@synced ones in scope
+// synced, the rest at user scope
+func asPlugins(ids []string) []Plugin {
+	out := make([]Plugin, len(ids))
+	for i, id := range ids {
+		out[i] = Plugin{ID: id, Scope: "user"}
+		if strings.HasSuffix(id, "@synced") {
+			out[i].Scope = "synced"
+		}
+	}
+	return out
 }

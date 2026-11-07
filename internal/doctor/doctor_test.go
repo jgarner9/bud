@@ -655,29 +655,44 @@ func TestParseMCPListSkipsTheDiagnostics(t *testing.T) {
 func TestCheckSyncedPluginsWarnsWhenAnotherCopyLoads(t *testing.T) {
 	origFS, origList := kitFS, pluginList
 	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["bud@bud-plugins", "bud-ide@bud-plugins"]}`)}}
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@bud-plugins"]}`)}}
 	}
 	t.Cleanup(func() { kitFS, pluginList = origFS, origList })
+	p := &paths.Paths{State: t.TempDir()}
+	cfg := config.Defaults()
+	list := func(ps ...kit.Plugin) func() ([]kit.Plugin, error) {
+		return func() ([]kit.Plugin, error) { return ps, nil }
+	}
+	synced := func(name string) kit.Plugin { return kit.Plugin{ID: name + "@synced", Scope: "synced"} }
 
-	pluginList = func() ([]string, error) { return []string{"bud@synced", "bud@bud-plugins", "bud-ide@synced"}, nil }
-	r, ok := checkSyncedPlugins()
-	if !ok || r.Status != Warn || !strings.Contains(r.Detail, "bud@bud-plugins loads instead") || !strings.Contains(r.Fix, "claude plugin uninstall --scope user bud@bud-plugins") {
+	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@clod", Scope: "local", Project: "/w"}, synced("bud-ide"))
+	r, ok := checkSyncedPlugins(p, cfg)
+	if !ok || r.Status != Warn || !strings.Contains(r.Detail, "bud@clod loads instead") || !strings.Contains(r.Fix, "cd /w && claude plugin uninstall --scope local bud@clod") {
 		t.Fatalf("hidden synced copy: %+v", r)
 	}
 
-	pluginList = func() ([]string, error) { return []string{"bud@synced", "bud-ide@synced"}, nil }
-	if r, ok := checkSyncedPlugins(); !ok || r.Status != OK {
-		t.Fatalf("only synced copies: %+v", r)
+	// bud's own copy is sync's to take out, not yours
+	os.WriteFile(p.KitLedger(), []byte(`{"plugins": {"bud@bud-plugins": "installed"}}`), 0o644)
+	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@bud-plugins", Scope: "user"})
+	if r, ok := checkSyncedPlugins(p, cfg); !ok || r.Status != OK {
+		t.Fatalf("bud's own copy: %+v", r)
 	}
 
-	// nothing synced: nothing to say
-	pluginList = func() ([]string, error) { return []string{"bud@bud-plugins"}, nil }
-	if _, ok := checkSyncedPlugins(); ok {
+	// one you turned off in bud and installed yourself is your choice
+	off := cfg
+	off.Kit.Disabled = []string{"superpowers@bud-plugins"}
+	pluginList = list(synced("superpowers"), kit.Plugin{ID: "superpowers@claude-plugins-official", Scope: "user"})
+	if _, ok := checkSyncedPlugins(p, off); ok {
+		t.Fatal("warned about a plugin turned off with kit.disabled")
+	}
+
+	// nothing synced, or no list: nothing to say
+	pluginList = list(kit.Plugin{ID: "bud@bud-plugins", Scope: "user"})
+	if _, ok := checkSyncedPlugins(p, cfg); ok {
 		t.Fatal("reported with nothing synced")
 	}
-
-	pluginList = func() ([]string, error) { return nil, errors.New("boom") }
-	if r, _ := checkSyncedPlugins(); r.Status != Warn || !strings.Contains(r.Detail, "boom") {
-		t.Fatalf("list failed: %+v", r)
+	pluginList = func() ([]kit.Plugin, error) { return nil, errors.New("boom") }
+	if _, ok := checkSyncedPlugins(p, cfg); ok {
+		t.Fatal("reported a failed list")
 	}
 }

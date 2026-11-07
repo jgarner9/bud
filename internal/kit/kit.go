@@ -122,7 +122,7 @@ type Env struct {
 	Ledger     string
 	Claude     func(args ...string) error // runs claude
 	// lists the installed plugins (claude plugin list --json); nil means none
-	InstalledPlugins func() ([]string, error)
+	InstalledPlugins func() ([]Plugin, error)
 	// lists the plugin marketplaces Claude Code has, by name (claude plugin
 	// marketplace list --json); nil means none
 	Marketplaces func() ([]string, error)
@@ -130,7 +130,8 @@ type Env struct {
 }
 
 // without is k minus the named entries
-func (k *Kit) without(names []string) *Kit {
+// Without is k with the plugins and marketplaces names turns off (kit.disabled) left out
+func (k *Kit) Without(names []string) *Kit {
 	if len(names) == 0 {
 		return k
 	}
@@ -186,7 +187,7 @@ func hash(b []byte) string {
 // says what it would do. It keeps going past one item failing, and returns
 // every failure at the end
 func Sync(k *Kit, env Env, dryRun bool) ([]Action, error) {
-	k = k.without(env.Disabled)
+	k = k.Without(env.Disabled)
 	ledger, _, err := ReadLedger(env.Ledger)
 	if err != nil {
 		return nil, err
@@ -243,14 +244,15 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 	if len(k.Plugins) == 0 && len(ledger.Plugins) == 0 {
 		return nil
 	}
-	var installed []string
+	var plugins []Plugin
 	var err error
 	var errs []error
 	if env.InstalledPlugins != nil {
-		if installed, err = env.InstalledPlugins(); err != nil {
+		if plugins, err = env.InstalledPlugins(); err != nil {
 			errs = append(errs, fmt.Errorf("listing plugins: %w", err))
 		}
 	}
+	installed := IDs(plugins)
 	// plugins that didn't install, by name: bud's copy from a marketplace
 	// the kit moved away from stays until its replacement is in
 	failed := map[string]string{}
@@ -260,7 +262,9 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 		other := elsewhere(installed, id, ledger)
 		switch {
 		case slices.Contains(installed, synced) && owned:
-			*actions = append(*actions, Action{"plugin", id, "remove", "claude.ai syncs it"})
+			// bud takes its own copy out, but one of yours would still hide the synced one
+			why := "claude.ai syncs it" + shadowNote(Shadowed(&Kit{Plugins: []string{id}}, plugins, ledger))
+			*actions = append(*actions, Action{"plugin", id, "remove", why})
 			if dryRun {
 				continue
 			}
@@ -272,11 +276,8 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			}
 			delete(ledger.Plugins, id)
 		case slices.Contains(installed, synced):
-			why := "claude.ai syncs it"
 			// a copy bud didn't install hides the synced one, and is yours to remove
-			if shadows := Shadowed(&Kit{Plugins: []string{id}}, installed); len(shadows) > 0 {
-				why += ", but " + shadows[0] + " loads instead: " + UninstallHint(shadows[0])
-			}
+			why := "claude.ai syncs it" + shadowNote(Shadowed(&Kit{Plugins: []string{id}}, plugins, ledger))
 			*actions = append(*actions, Action{"plugin", id, "skip", why})
 		case slices.Contains(installed, id) && owned:
 			*actions = append(*actions, Action{"plugin", id, "ok", ""})
@@ -543,28 +544,100 @@ func elsewhere(installed []string, id string, ledger *Ledger) string {
 	return ""
 }
 
+// Plugin is one entry of claude plugin list --json. A plugin claude.ai syncs
+// is name@synced, with scope "synced"; Project is the dir a project or local
+// one was installed in
+type Plugin struct {
+	ID      string `json:"id"`
+	Scope   string `json:"scope"`
+	Project string `json:"projectPath"`
+}
+
+// ParsePlugins reads claude plugin list --json
+func ParsePlugins(out []byte) ([]Plugin, error) {
+	var list []Plugin
+	if err := json.Unmarshal(out, &list); err != nil {
+		return nil, fmt.Errorf("reading claude plugin list: %w", err)
+	}
+	return list, nil
+}
+
+// IDs is the plugins' ids, in order
+func IDs(plugins []Plugin) []string {
+	ids := make([]string, len(plugins))
+	for i, p := range plugins {
+		ids[i] = p.ID
+	}
+	return ids
+}
+
+// SyncsAny says whether claude.ai syncs any of the kit's plugins
+func SyncsAny(k *Kit, installed []Plugin) bool {
+	ids := IDs(installed)
+	return slices.ContainsFunc(k.Plugins, func(id string) bool { return slices.Contains(ids, pluginName(id)+"@synced") })
+}
+
 // Shadowed lists the installed copies that hide a kit plugin claude.ai syncs
 // (JGA-182): Claude Code loads one plugin of a name, and with another copy
 // installed it isn't the synced one, so claude.ai's updates never arrive.
-// Sync only takes out bud's own copy, so the others are yours to uninstall
-func Shadowed(k *Kit, installed []string) []string {
-	var out []string
+// Copies in ledger are bud's, which sync takes out itself, so they're left
+// out; the rest are yours to uninstall. A nil ledger leaves none out
+func Shadowed(k *Kit, installed []Plugin, ledger *Ledger) []Plugin {
+	ids := IDs(installed)
+	var out []Plugin
 	for _, id := range k.Plugins {
-		if !slices.Contains(installed, pluginName(id)+"@synced") {
+		if !slices.Contains(ids, pluginName(id)+"@synced") {
 			continue
 		}
-		for _, other := range installed {
-			if pluginName(other) == pluginName(id) && !strings.HasSuffix(other, "@synced") && !slices.Contains(out, other) {
-				out = append(out, other)
+		for _, p := range installed {
+			owned := false
+			if ledger != nil {
+				_, owned = ledger.Plugins[p.ID]
+			}
+			if pluginName(p.ID) == pluginName(id) && p.Scope != "synced" && !strings.HasSuffix(p.ID, "@synced") && !owned && !slices.Contains(out, p) {
+				out = append(out, p)
 			}
 		}
 	}
 	return out
 }
 
-// UninstallHint is the command that takes out a copy Shadowed found
-func UninstallHint(id string) string {
-	return "claude plugin uninstall --scope user " + id
+// UninstallHint is the command that takes out a copy Shadowed found, in its
+// own scope; a project or local one is uninstalled from its project's dir
+func UninstallHint(p Plugin) string {
+	scope := p.Scope
+	if scope == "" {
+		scope = "user"
+	}
+	cmd := "claude plugin uninstall --scope " + scope + " " + p.ID
+	if (scope == "project" || scope == "local") && p.Project != "" {
+		cmd = "cd " + shellWord(p.Project) + " && " + cmd
+	}
+	return cmd
+}
+
+// shadowNote is what sync adds to a plugin's reason when copies hide the synced one
+func shadowNote(shadows []Plugin) string {
+	if len(shadows) == 0 {
+		return ""
+	}
+	ids, hints := IDs(shadows), make([]string, len(shadows))
+	for i, p := range shadows {
+		hints[i] = UninstallHint(p)
+	}
+	verb := " loads"
+	if len(shadows) > 1 {
+		verb = " load"
+	}
+	return ", but " + strings.Join(ids, ", ") + verb + " instead: " + strings.Join(hints, "; ")
+}
+
+// shellWord quotes s for a shell when it needs it, so a pasted command works
+func shellWord(s string) string {
+	if s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-~+") == "" {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // pluginName is the name in a plugin id, name@marketplace

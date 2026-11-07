@@ -141,17 +141,47 @@ ask("Write", { file_path = tmp .. "/new.txt", content = "hi\n" })
 vim.api.nvim_feedkeys("q", "x", false)
 eq(result.behavior, "deny", "write rejected")
 
--- closing the diff any other way (:q in it, :tabclose) is a no, and says so
-for _, close in ipairs({ "quit", "tabclose" }) do
+-- closing the diff any other way is a no, said at once: the proposal (:q,
+-- its buffer wiped), the file's side, <C-w>o in the proposal, the whole tab
+local closes = {
+  quit = function()
+    vim.cmd.quit()
+  end,
+  ["the file's side"] = function()
+    vim.cmd.wincmd("h")
+    vim.cmd.quit()
+  end,
+  only = function()
+    vim.cmd.only()
+  end,
+  tabclose = function()
+    vim.cmd.tabclose()
+  end,
+  bwipeout = function()
+    vim.cmd("bwipeout!")
+  end,
+}
+for how, close in pairs(closes) do
   result = nil
   ask("Write", { file_path = tmp .. "/new.txt", content = "hi\n" })
-  vim.cmd(close)
-  vim.wait(1000, function()
-    return result ~= nil
-  end)
-  eq(result and result.behavior, "deny", "rejected by :" .. close)
-  eq(vim.api.nvim_get_current_tabpage(), tab, "and its tab gone, after :" .. close)
+  close()
+  eq(result and result.behavior, "deny", "rejected at once by " .. how)
+  wait(function()
+    return vim.api.nvim_get_current_tabpage() == tab
+  end, "the diff's tab to go after " .. how)
 end
+
+-- :wq accepts and closes the diff, and only the diff: the quit doesn't land
+-- on one of your windows (here the only one, which would quit Neovim)
+local wins = vim.api.nvim_tabpage_list_wins(tab)
+result = nil
+ask("Write", { file_path = tmp .. "/new.txt", content = "hi\n" })
+vim.cmd.wq()
+eq(result and result.behavior, "allow", ":wq accepts")
+wait(function()
+  return vim.api.nvim_get_current_tabpage() == tab
+end, "the diff's tab to go after :wq")
+eq(vim.api.nvim_tabpage_list_wins(tab), wins, "your windows untouched")
 
 vim.fn.delete(tmp, "rf")
 print("permissions_test: ok")

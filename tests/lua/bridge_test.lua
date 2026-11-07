@@ -233,6 +233,27 @@ vim.api.nvim_feedkeys("q", "x", false)
 local rejected = recv(c, "the rejected diff")
 eq({ rejected.result.content[1].text, rejected.result.content[2].text }, { "DIFF_REJECTED", "edit-2" }, "rejected")
 
+-- closing it some other way rejects it too, straight away
+send(c, {
+  jsonrpc = "2.0",
+  id = 8,
+  method = "tools/call",
+  params = {
+    name = "openDiff",
+    arguments = { old_file_path = file, new_file_path = file, new_file_contents = "y\n", tab_name = "edit-3" },
+  },
+})
+wait(function()
+  return require("bud.ai.bridge.tools").open_diffs()["edit-3"] ~= nil
+end, "the third diff")
+vim.cmd.tabclose()
+local closed = recv(c, "the diff closed with :tabclose")
+eq(
+  { closed.result.content[1].text, closed.result.content[2].text },
+  { "DIFF_REJECTED", "edit-3" },
+  "closed is rejected"
+)
+
 -- mentions reach the TUI
 bridge.mention(file, 0, 2)
 eq(recv(c, "at_mentioned").params, { filePath = file, lineStart = 0, lineEnd = 2 }, "at_mentioned")

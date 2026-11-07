@@ -95,8 +95,19 @@ end
 -- diffs open for review, by tab name
 local diffs = {}
 
+local reviews = 0
+
+-- close_diff takes a review's tab and buffers away, once
 local function close_diff(d)
-  diffs[d.name] = nil
+  if d.closed then
+    return
+  end
+  d.closed = true
+  if diffs[d.name] == d then
+    diffs[d.name] = nil
+  end
+  -- first, so closing its windows here doesn't count as closing it
+  pcall(vim.api.nvim_del_augroup_by_id, d.group)
   if d.proposed and vim.api.nvim_buf_is_valid(d.proposed) then
     vim.bo[d.proposed].modified = false
   end
@@ -111,23 +122,34 @@ local function close_diff(d)
   end
 end
 
--- finish answers a review once, with the proposal as it now stands (you may
--- have edited it)
-local function finish(d, accepted)
+-- respond_review tells the review's caller once: yes, with the proposal as it now
+-- stands (you may have edited it), or no. A yes only ever comes from the
+-- proposal's own keys and :w, so its buffer is there to read
+local function respond_review(d, accepted)
   if d.done then
     return
   end
   d.done = true
-  -- closed some other way (:q in it, :tabclose), the proposal is already
-  -- wiped: that's a no, and there's no text left to send
-  local open = vim.api.nvim_buf_is_valid(d.proposed)
   local proposal = ""
-  if open then
+  if accepted then
     proposal = table.concat(vim.api.nvim_buf_get_lines(d.proposed, 0, -1, false), "\n") .. (d.eol and "\n" or "")
   end
-  -- answered first, so nothing going wrong closing the tab can lose it
-  d.on_done(accepted and open, proposal)
+  d.on_done(accepted, proposal)
+end
+
+-- finish answers a review and closes it
+local function finish(d, accepted)
+  respond_review(d, accepted)
   close_diff(d)
+end
+
+-- close_later closes a review on the next tick, when it was answered inside a
+-- command that's still going: the quit in :wq, a window closing. Closing the
+-- tab under :wq would hand its quit to one of your own windows
+local function close_later(d)
+  vim.schedule(function()
+    close_diff(d)
+  end)
 end
 
 -- review shows a proposed version of a file as a diff in its own tab and
@@ -140,7 +162,9 @@ function M.review(opts, on_done)
     finish(diffs[name], false)
   end
   local contents = opts.contents or ""
+  reviews = reviews + 1
   local d = { name = name, on_done = on_done, eol = contents:sub(-1) == "\n" }
+  d.group = vim.api.nvim_create_augroup("bud.review." .. reviews, {})
 
   vim.cmd.tabnew()
   d.tab = vim.api.nvim_get_current_tabpage()
@@ -180,7 +204,7 @@ function M.review(opts, on_done)
   vim.cmd.diffthis()
   vim.wo.winbar = "%#DiffAdd# "
     .. (opts.title or "Claude's edit")
-    .. " %* :w or ga accept   q reject   (you can edit it first)"
+    .. " %* :w or ga accept   q (or closing it) reject   (you can edit it first)"
 
   local function map(lhs, accepted, desc)
     vim.keymap.set("n", lhs, function()
@@ -190,20 +214,27 @@ function M.review(opts, on_done)
   map("ga", true, "Accept Claude's edit")
   map("q", false, "Reject Claude's edit")
   vim.api.nvim_create_autocmd("BufWriteCmd", {
+    group = d.group,
     buffer = d.proposed,
     callback = function()
-      finish(d, true)
+      respond_review(d, true)
+      -- written, as far as :wq is concerned
+      vim.bo[d.proposed].modified = false
+      close_later(d)
     end,
   })
-  -- closing it any other way is a no
-  vim.api.nvim_create_autocmd("BufWipeout", {
-    buffer = d.proposed,
-    callback = function()
-      vim.schedule(function()
-        finish(d, false)
-      end)
-    end,
+  -- closing it any other way is a no, said at once: either side's window
+  -- (:q, <C-w>o, :tabclose) or the proposal itself going
+  local function closed()
+    respond_review(d, false)
+    close_later(d)
+  end
+  vim.api.nvim_create_autocmd("WinClosed", {
+    group = d.group,
+    pattern = { tostring(old_win), tostring(vim.api.nvim_get_current_win()) },
+    callback = closed,
   })
+  vim.api.nvim_create_autocmd("BufWipeout", { group = d.group, buffer = d.proposed, callback = closed })
   diffs[name] = d
 end
 

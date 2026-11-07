@@ -132,22 +132,7 @@ return {
     -- main is the rewrite for Neovim 0.12; master is frozen
     version = "main",
     config = function()
-      if #filetypes == 0 then
-        return
-      end
-      vim.api.nvim_create_autocmd("FileType", {
-        group = vim.api.nvim_create_augroup("bud.lang.treesitter", {}),
-        pattern = filetypes,
-        desc = "start tree-sitter highlighting",
-        callback = function(ev)
-          vim.schedule(function()
-            if vim.api.nvim_buf_is_valid(ev.buf) then
-              -- fails when the parser isn't built yet, which leaves regex highlighting on
-              pcall(vim.treesitter.start, ev.buf)
-            end
-          end)
-        end,
-      })
+      require("bud.lang.highlight").setup(filetypes)
     end,
     restore = function()
       local ts = require("nvim-treesitter")

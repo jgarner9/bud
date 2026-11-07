@@ -130,6 +130,17 @@ vim.wait(1000, function()
 end)
 eq(vim.bo[buf].syntax, "javascript", "its own syntax")
 
+-- a path through a symlink is the same file, so detection still finds it big
+-- (macOS names buffers in /var/... by /private/var/..., JGA-210)
+local link = vim.fn.tempname()
+assert(vim.uv.fs_symlink(dir, link))
+eq(bigfile.same(link .. "/big.go", dir .. "/big.go"), true, "a path through a symlink is the same file")
+eq(bigfile.same(dir .. "/big.go", dir .. "/deploy"), false, "another file isn't")
+eq(bigfile.same(dir .. "/gone.go", dir .. "/gone.go"), true, "one path is itself, even before it exists")
+eq(bigfile.same(dir .. "/gone.go", link .. "/gone.go"), false, "two paths to a missing file can't be told apart")
+buf = open(link .. "/big.go")
+eq(vim.bo[buf].filetype, "bigfile", "a big file opened through a symlink")
+
 -- a new file has no size yet
 buf = open(dir .. "/new.go")
 eq(vim.bo[buf].filetype, "go", "a new file is itself")

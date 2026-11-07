@@ -50,6 +50,17 @@ function M.big(path, buf)
   return (size - lines) / lines > M.line_length
 end
 
+-- same says whether path and name are one file. Neovim can name a buffer by its
+-- resolved path while detection gets the path as typed (macOS's /var is
+-- /private/var), so a mismatch is checked again with symlinks resolved.
+function M.same(path, name)
+  if path == vim.fs.normalize(name) then
+    return true
+  end
+  local a, b = vim.uv.fs_realpath(path), vim.uv.fs_realpath(name)
+  return a ~= nil and a == b
+end
+
 -- is says whether buf was opened as a big file
 function M.is(buf)
   if buf == 0 then
@@ -74,7 +85,7 @@ local function check(path, buf)
     return nil
   end
   -- only for the file loaded in buf, not a name matched on its own
-  if path ~= vim.fs.normalize(vim.api.nvim_buf_get_name(buf)) then
+  if not M.same(path, vim.api.nvim_buf_get_name(buf)) then
     return nil
   end
   if not M.big(path, buf) then

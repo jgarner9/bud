@@ -157,9 +157,15 @@ function M.review(opts, on_done)
   vim.bo[d.proposed].bufhidden = "wipe"
   -- a big file's proposed side gets its real filetype's syntax and nothing
   -- else, as the file itself does (D94)
+  local bigfile = require("bud.bigfile")
   local orig = vim.api.nvim_win_get_buf(old_win)
-  if vim.bo[orig].filetype == "bigfile" then
-    vim.bo[d.proposed].syntax = require("bud.bigfile").filetype(orig)
+  if bigfile.is(orig) then
+    local proposed, ft = d.proposed, bigfile.filetype(orig)
+    vim.schedule(function()
+      if vim.api.nvim_buf_is_valid(proposed) then
+        vim.bo[proposed].syntax = ft
+      end
+    end)
   else
     vim.bo[d.proposed].filetype = vim.bo[orig].filetype
   end

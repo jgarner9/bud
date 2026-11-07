@@ -12,26 +12,32 @@ local M = {}
 M.size = 1.5 * 1024 * 1024 -- bytes
 M.line_length = 1000 -- average, which catches minified files
 
--- Lockfiles Neovim detects by name, in a table it checks before any pattern,
--- with the filetype it gives each (a test keeps these equal to Neovim's)
+-- Files Neovim detects by name, in a table it checks before any pattern, that
+-- grow big (lockfiles, ctags' tags), with the filetype it gives each (a test
+-- keeps these equal to Neovim's)
 M.named = {
   ["go.sum"] = "gosum",
   ["go.work.sum"] = "gosum",
+  ["Gopkg.lock"] = "toml",
   ["Cargo.lock"] = "toml",
+  ["uv.lock"] = "toml",
   ["yarn.lock"] = "yaml",
+  ["pixi.lock"] = "yaml",
   ["composer.lock"] = "json",
+  ["symfony.lock"] = "json",
   ["flake.lock"] = "json",
   ["Pipfile.lock"] = "json",
-  ["mix.lock"] = "elixir",
-  ["uv.lock"] = "toml",
-  ["bun.lock"] = "jsonc",
   ["deno.lock"] = "json",
+  ["bun.lock"] = "jsonc",
+  ["mix.lock"] = "elixir",
+  ["opam.locked"] = "opam",
+  ["tags"] = "tags",
 }
 
 -- true while finding a big file's real filetype, so detection gives it
 local detecting = false
 
--- big says whether path, loaded in buf, is a big file
+-- big says whether path, loaded in buf (so it has at least one line), is a big file
 function M.big(path, buf)
   local size = vim.fn.getfsize(path)
   if size <= 0 then
@@ -41,10 +47,15 @@ function M.big(path, buf)
     return true
   end
   local lines = vim.api.nvim_buf_line_count(buf)
-  if lines == 0 then
-    return false
-  end
   return (size - lines) / lines > M.line_length
+end
+
+-- is says whether buf was opened as a big file
+function M.is(buf)
+  if buf == 0 then
+    buf = vim.api.nvim_get_current_buf()
+  end
+  return vim.bo[buf].filetype == "bigfile" and vim.b[buf].bud_bigfile ~= nil
 end
 
 -- filetype is buf's real filetype: what a big file would have been, else its own
@@ -52,14 +63,12 @@ function M.filetype(buf)
   if buf == 0 then
     buf = vim.api.nvim_get_current_buf()
   end
-  if vim.bo[buf].filetype == "bigfile" and vim.b[buf].bud_bigfile then
-    return vim.b[buf].bud_bigfile
-  end
-  return vim.bo[buf].filetype
+  return M.is(buf) and vim.b[buf].bud_bigfile or vim.bo[buf].filetype
 end
 
 -- check is the detection rule: "bigfile" for the file loaded in buf when it's
--- big, nil otherwise (and while finding a big file's real filetype)
+-- big, with its real filetype kept in b:bud_bigfile, else nil (and nil while
+-- finding that real filetype)
 local function check(path, buf)
   if detecting or not path or not buf or buf <= 0 or not vim.api.nvim_buf_is_loaded(buf) then
     return nil
@@ -68,30 +77,42 @@ local function check(path, buf)
   if path ~= vim.fs.normalize(vim.api.nvim_buf_get_name(buf)) then
     return nil
   end
-  return M.big(path, buf) and "bigfile" or nil
-end
-
--- real is the filetype buf's file would have without this module
-local function real(buf)
+  if not M.big(path, buf) then
+    -- a file that shrank is itself again, and is announced if it grows back
+    vim.b[buf].bud_bigfile = nil
+    return nil
+  end
+  -- found here, during detection: Neovim's own detectors for shell scripts,
+  -- conf files and the like give nothing once a FileType event has fired
   detecting = true
-  local ok, ft = pcall(vim.filetype.match, { buf = buf })
+  local ok, ft, on_detect = pcall(vim.filetype.match, { buf = buf })
   detecting = false
-  return ok and ft or ""
+  if vim.b[buf].bud_bigfile == nil then
+    vim.b[buf].bud_bigfile_new = true
+  end
+  vim.b[buf].bud_bigfile = ok and ft or ""
+  -- what detection sets up for the real filetype (make's dialect, say), for its syntax
+  if ok and on_detect then
+    pcall(on_detect, buf)
+  end
+  return "bigfile"
 end
 
--- start sets buf up as a big file, saying so the first time
+-- start sets buf up as a big file in the current window, saying so the first time
 local function start(buf)
-  local ft = real(buf)
-  local noted = vim.b[buf].bud_bigfile ~= nil
-  vim.b[buf].bud_bigfile = ft
   vim.b[buf].completion = false
+  -- this window's own values, not its default: one that showed a rendered
+  -- markdown file or tree-sitter folds would otherwise pass them on
+  vim.wo[0][0].foldmethod = "manual"
+  vim.wo[0][0].conceallevel = 0
   -- after the first screen: regex syntax on a big file isn't free either
   vim.schedule(function()
-    if vim.api.nvim_buf_is_valid(buf) then
-      vim.bo[buf].syntax = ft
+    if vim.api.nvim_buf_is_valid(buf) and M.is(buf) then
+      vim.bo[buf].syntax = vim.b[buf].bud_bigfile
     end
   end)
-  if not noted then
+  if vim.b[buf].bud_bigfile_new then
+    vim.b[buf].bud_bigfile_new = nil
     vim.notify(
       ("bud: %s is a big file, so tree-sitter, language servers and completion are off for it"):format(
         vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ":t")
@@ -110,16 +131,18 @@ function M.setup()
   end
   vim.filetype.add({
     filename = filename,
-    -- the default priority runs before extensions, so this sees every other file
-    pattern = { [".*"] = check },
+    -- first of all the patterns, which Neovim checks before extensions
+    pattern = { [".*"] = { check, { priority = math.huge } } },
   })
   vim.api.nvim_create_autocmd("FileType", {
     group = vim.api.nvim_create_augroup("bud.bigfile", { clear = true }),
     pattern = "bigfile",
     desc = "Set a big file up without the per-filetype features",
     callback = function(ev)
-      if vim.api.nvim_buf_get_name(ev.buf) ~= "" then
-        start(ev.buf)
+      if M.is(ev.buf) then
+        vim.api.nvim_buf_call(ev.buf, function()
+          start(ev.buf)
+        end)
       end
     end,
   })

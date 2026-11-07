@@ -104,10 +104,15 @@ func TestKittyFiles(t *testing.T) {
 		Launch:    []string{"/usr/bin/env", "PATH=/bin:/my dir", "/Users/j/.local/bin/bud", "open"},
 		Home:      "/Users/j",
 		KittyConf: "/Users/j/.config/kitty/kitty.conf",
+		KittyHome: "/Users/j/.config/kitty",
 	}
 	files := m.kittyFiles()
 	want := map[string][]string{
-		"kitty.conf": {"include /Users/j/.config/kitty/kitty.conf\n", "macos_quit_when_last_window_closed yes\n"},
+		"kitty.conf": {
+			"include /Users/j/.config/kitty/kitty.conf\n",
+			"macos_quit_when_last_window_closed yes\n",
+			"env KITTY_CONFIG_DIRECTORY=/Users/j/.config/kitty\n",
+		},
 		"macos-launch-services-cmdline": {
 			"--directory=/Users/j --title=bud /usr/bin/env 'PATH=/bin:/my dir' /Users/j/.local/bin/bud open\n",
 		},
@@ -166,6 +171,8 @@ func fakeKitty(t *testing.T, dir, version string) string {
 <key>CFBundleIconFile</key><string>kitty.icns</string>
 <key>CFBundleIconName</key><string>kitty</string>
 <key>LSEnvironment</key><dict><key>KITTY_LAUNCHED_BY_LAUNCH_SERVICES</key><string>1</string></dict>
+<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLSchemes</key><array><string>kitty</string></array></dict></array>
+<key>NSServices</key><array><dict><key>NSMenuItem</key><dict><key>default</key><string>New kitty Window Here</string></dict></dict></array>
 </dict></plist>`
 	os.WriteFile(filepath.Join(app, "Contents", "Info.plist"), []byte(plist), 0o644)
 	return app
@@ -215,8 +222,10 @@ func TestBuildKittyCopy(t *testing.T) {
 			t.Errorf("%s = %q, want %q", key, got, want)
 		}
 	}
-	if _, err := plistString(dest, "CFBundleIconName"); err == nil {
-		t.Error("kitty's asset-catalog icon name kept: it would win over bud.icns")
+	for _, key := range []string{"CFBundleIconName", "CFBundleURLTypes", "NSServices"} {
+		if _, err := plistString(dest, key); err == nil {
+			t.Errorf("kept kitty's %s", key)
+		}
 	}
 	for name, text := range m.kittyFiles() {
 		if got, err := os.ReadFile(filepath.Join(conf, name)); err != nil || string(got) != text {
@@ -229,8 +238,8 @@ func TestBuildKittyCopy(t *testing.T) {
 	if err := exec.Command("codesign", "--verify", "--deep", dest).Run(); err != nil {
 		t.Errorf("signature: %v", err)
 	}
-	if app, version := MacKitty(dest); app != kitty || version != "0.50.0" {
-		t.Errorf("MacKitty = %q, %q", app, version)
+	if info, err := ReadMac(dest); err != nil || info != (MacInfo{Kitty: kitty, KittyVersion: "0.50.0", ConfigDir: ConfigDirFor(dest)}) {
+		t.Errorf("ReadMac = %+v, %v", info, err)
 	}
 	if entries, _ := os.ReadDir(filepath.Dir(dest)); len(entries) != 1 {
 		t.Errorf("left behind %v", entries)
@@ -238,5 +247,40 @@ func TestBuildKittyCopy(t *testing.T) {
 	// kitty itself is untouched
 	if id, _ := MacBundleID(kitty); id != "net.kovidgoyal.kitty" {
 		t.Errorf("kitty.app's bundle id is now %q", id)
+	}
+}
+
+// a linked kitty.app is copied, not linked, and stays as it was
+func TestBuildKittyCopyFromALink(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Bud.app is built on macOS")
+	}
+	dir := t.TempDir()
+	real := fakeKitty(t, filepath.Join(dir, "store"), "0.50.0")
+	if err := exec.Command("codesign", "--force", "--sign", "-", real).Run(); err != nil {
+		t.Skipf("codesign can't run here: %v", err)
+	}
+	link := filepath.Join(dir, "kitty.app")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	// a relative dest still names an absolute config dir
+	t.Chdir(dir)
+	m := Mac{Version: "1.2.3", Kitty: link, Home: "/Users/j", Launch: []string{"/usr/local/bin/bud", "open"}}
+	if err := m.Build(filepath.Join("Apps", "Bud.app")); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(dir, "Apps", "Bud.app")
+	if info, err := os.Lstat(dest); err != nil || !info.IsDir() {
+		t.Fatalf("Bud.app isn't a real app: %v", err)
+	}
+	if id, _ := MacBundleID(real); id != "net.kovidgoyal.kitty" {
+		t.Fatalf("the linked kitty.app was edited: bundle id %q", id)
+	}
+	if _, err := os.Stat(filepath.Join(real, "Contents", "Resources", KittyDir)); err == nil {
+		t.Fatal("Bud's config went into the linked kitty.app")
+	}
+	if info, _ := ReadMac(dest); !filepath.IsAbs(info.ConfigDir) || filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(info.ConfigDir)))) != "Bud.app" {
+		t.Fatalf("config dir %q", info.ConfigDir)
 	}
 }

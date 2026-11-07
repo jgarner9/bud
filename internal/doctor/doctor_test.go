@@ -722,11 +722,14 @@ func TestCheckSyncedPluginsWarnsWhenAnotherCopyLoads(t *testing.T) {
 }
 
 func TestCheckBudAppWarnsWhenKittyMovedOn(t *testing.T) {
-	origFind, origKitty, origVersion := findBundles, macKitty, kittyVersion
-	t.Cleanup(func() { findBundles, macKitty, kittyVersion = origFind, origKitty, origVersion })
+	origFind, origRead, origVersion, origGOOS := findBundles, readMac, kittyVersion, doctorGOOS
+	t.Cleanup(func() { findBundles, readMac, kittyVersion, doctorGOOS = origFind, origRead, origVersion, origGOOS })
+	doctorGOOS = "darwin"
 	p := &paths.Paths{}
-	findBundles = func(*paths.Paths) []bundle.Installed { return []bundle.Installed{{Path: "/Applications/Bud.app"}} }
-	macKitty = func(string) (string, string) { return "/Applications/kitty.app", "0.50.0" }
+	app := "/Applications/Bud.app"
+	findBundles = func(*paths.Paths) []bundle.Installed { return []bundle.Installed{{Path: app}} }
+	info := bundle.MacInfo{Kitty: "/Applications/kitty.app", KittyVersion: "0.50.0", ConfigDir: bundle.ConfigDirFor(app)}
+	readMac = func(string) (bundle.MacInfo, error) { return info, nil }
 
 	kittyVersion = func(string) (string, error) { return "0.50.0", nil }
 	if r, ok := checkBudApp(p); !ok || r.Status != OK || !strings.Contains(r.Detail, "runs kitty 0.50.0") {
@@ -740,14 +743,25 @@ func TestCheckBudAppWarnsWhenKittyMovedOn(t *testing.T) {
 	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "isn't there any more") {
 		t.Fatalf("kitty gone: %+v", r)
 	}
+	// moved: the config dir it names isn't its own
+	kittyVersion = func(string) (string, error) { return "0.50.0", nil }
+	info.ConfigDir = bundle.ConfigDirFor("/Users/j/Applications/Bud.app")
+	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "was moved") || r.Fix != "bud bundle" {
+		t.Fatalf("moved: %+v", r)
+	}
 
-	// the droplet, or no Bud.app: nothing to say
-	macKitty = func(string) (string, string) { return "", "" }
+	// the droplet, no Bud.app, or not macOS: nothing to say
+	readMac = func(string) (bundle.MacInfo, error) { return bundle.MacInfo{}, nil }
 	if _, ok := checkBudApp(p); ok {
 		t.Fatal("reported on the droplet")
 	}
 	findBundles = func(*paths.Paths) []bundle.Installed { return nil }
 	if _, ok := checkBudApp(p); ok {
 		t.Fatal("reported with no Bud.app")
+	}
+	doctorGOOS = "linux"
+	findBundles = func(*paths.Paths) []bundle.Installed { t.Fatal("looked for Bud.app on Linux"); return nil }
+	if _, ok := checkBudApp(p); ok {
+		t.Fatal("reported on Linux")
 	}
 }

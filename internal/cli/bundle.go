@@ -89,7 +89,8 @@ func bundleCmd(g *Globals, args []string, macos, linux bool, dest string) error 
 		if err != nil {
 			return err
 		}
-		m.Home, m.Launch, m.KittyConf = home, launchArgv(self, &Globals{}, "", nil), userKittyConf(home)
+		m.Home, m.Launch = home, launchArgv(self, &Globals{}, "", nil)
+		m.KittyHome, m.KittyConf = userKitty(home)
 		what = "its own copy of " + m.Kitty
 	}
 	g.Logf("building %s, %s, to run %s", dest, what, self)
@@ -101,23 +102,32 @@ func bundleCmd(g *Globals, args []string, macos, linux bool, dest string) error 
 	return nil
 }
 
-// userKittyConf is your kitty.conf, which Bud's own kitty config includes so
-// Bud looks like your kitty: KITTY_CONFIG_DIRECTORY's, else the XDG config
-// dir's; "" when there's none
-func userKittyConf(home string) string {
-	dir := os.Getenv("KITTY_CONFIG_DIRECTORY")
-	// inside a Bud window it's Bud's own, which would include itself
-	if dir == "" || filepath.Base(dir) == bundle.KittyDir {
-		base := os.Getenv("XDG_CONFIG_HOME")
-		if base == "" {
-			base = filepath.Join(home, ".config")
+// userKitty is your kitty config dir and the kitty.conf in it, which Bud's
+// own config includes so Bud looks like your kitty. It looks where kitty
+// does, in its order: KITTY_CONFIG_DIRECTORY (not Bud's own, inside a Bud
+// window), $XDG_CONFIG_HOME/kitty, ~/.config/kitty, each of $XDG_CONFIG_DIRS,
+// then ~/Library/Preferences/kitty; the first with a kitty.conf wins. With
+// none, conf is "" and dir is kitty's default, ~/.config/kitty
+func userKitty(home string) (dir, conf string) {
+	var dirs []string
+	if d := os.Getenv("KITTY_CONFIG_DIRECTORY"); d != "" && filepath.Base(d) != bundle.KittyDir {
+		dirs = append(dirs, d)
+	}
+	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
+		dirs = append(dirs, filepath.Join(x, "kitty"))
+	}
+	fallback := filepath.Join(home, ".config", "kitty")
+	dirs = append(dirs, fallback)
+	for _, x := range filepath.SplitList(os.Getenv("XDG_CONFIG_DIRS")) {
+		dirs = append(dirs, filepath.Join(x, "kitty"))
+	}
+	dirs = append(dirs, filepath.Join(home, "Library", "Preferences", "kitty"))
+	for _, d := range dirs {
+		if c := filepath.Join(d, "kitty.conf"); isFile(c) {
+			return d, c
 		}
-		dir = filepath.Join(base, "kitty")
 	}
-	if conf := filepath.Join(dir, "kitty.conf"); isFile(conf) {
-		return conf
-	}
-	return ""
+	return fallback, ""
 }
 
 // bundleBin is the bud the app runs: the one install.sh put in place, whose

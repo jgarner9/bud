@@ -7,6 +7,7 @@ package bundle
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -39,8 +40,9 @@ type Mac struct {
 	Home string
 	// KittyConf is your own kitty.conf, which Bud's includes; "" when there's none
 	KittyConf string
-	// Dest is where Build installs the app, which the copy's config dir is named for
-	Dest string
+	// KittyHome is your kitty config dir, which programs run inside Bud get
+	// as KITTY_CONFIG_DIRECTORY (kitten themes, kitten ssh), not Bud's own
+	KittyHome string
 }
 
 // Keys bud adds to a kitty copy's Info.plist: the kitty.app it was copied
@@ -74,6 +76,11 @@ func MacDest() (string, error) {
 // droplet. It replaces a Bud.app bud built before, and refuses to touch any
 // other app there
 func (m Mac) Build(dest string) error {
+	// the copy's config dir is named for dest, and Launch Services starts it in /
+	dest, err := filepath.Abs(dest)
+	if err != nil {
+		return err
+	}
 	if err := ownedOrMissing(dest); err != nil {
 		return err
 	}
@@ -88,12 +95,11 @@ func (m Mac) Build(dest string) error {
 	defer os.RemoveAll(tmp)
 
 	app := filepath.Join(tmp, "Bud.app")
-	m.Dest = dest
 	build := m.droplet
 	if m.Kitty != "" {
 		build = m.kitty
 	}
-	if err := build(tmp, app); err != nil {
+	if err := build(tmp, app, dest); err != nil {
 		return err
 	}
 	// editing the bundle broke its signature, and Apple silicon needs an
@@ -118,7 +124,7 @@ func (m Mac) Build(dest string) error {
 }
 
 // droplet compiles the AppleScript droplet that runs bud launch into app
-func (m Mac) droplet(tmp, app string) error {
+func (m Mac) droplet(tmp, app, _ string) error {
 	src, err := m.script()
 	if err != nil {
 		return err
@@ -153,13 +159,23 @@ func (m Mac) droplet(tmp, app string) error {
 // kitty makes app a copy of m.Kitty that is its own app: Bud's name, bundle
 // id and icon, and its own kitty config dir (kittyFiles) that starts bud and
 // opens what's dropped on the icon in it. The copy is an APFS clone where
-// the volume allows, so it takes next to no disk
-func (m Mac) kitty(_, app string) error {
-	if err := run("cp", "-c", "-R", m.Kitty, app); err != nil {
+// the volume allows, so it takes next to no disk. dest is where the app is
+// going, which its config dir is named for
+func (m Mac) kitty(_, app, dest string) error {
+	// a linked kitty.app (nix-darwin's, home-manager's) would be copied as the
+	// link, and every edit below would land in your kitty
+	src, err := filepath.EvalSymlinks(m.Kitty)
+	if err != nil {
+		return err
+	}
+	if err := run("cp", "-c", "-R", src, app); err != nil {
 		os.RemoveAll(app)
-		if err := run("cp", "-R", m.Kitty, app); err != nil {
+		if err := run("cp", "-R", src, app); err != nil {
 			return err
 		}
+	}
+	if info, err := os.Lstat(app); err != nil || !info.IsDir() {
+		return fmt.Errorf("copying %s didn't make an app at %s", m.Kitty, app)
 	}
 	version, err := plistString(m.Kitty, "CFBundleShortVersionString")
 	if err != nil {
@@ -188,7 +204,7 @@ func (m Mac) kitty(_, app string) error {
 		{"-replace", "CFBundleIconFile", "-string", "bud.icns"},
 		{"-replace", "CFBundleDocumentTypes", "-json", documentTypes},
 		// kitty's own LSEnvironment (KITTY_LAUNCHED_BY_LAUNCH_SERVICES) stays
-		{"-replace", "LSEnvironment.KITTY_CONFIG_DIRECTORY", "-string", m.kittyConfigDir()},
+		{"-replace", "LSEnvironment.KITTY_CONFIG_DIRECTORY", "-string", ConfigDirFor(dest)},
 		{"-replace", kittyKey, "-string", m.Kitty},
 		{"-replace", kittyVersionKey, "-string", version},
 	} {
@@ -196,16 +212,18 @@ func (m Mac) kitty(_, app string) error {
 			return err
 		}
 	}
-	// the asset catalog's icon would win over bud.icns
-	_ = run("plutil", "-remove", "CFBundleIconName", plist)
+	// the asset catalog's icon would win over bud.icns, and kitty's URL
+	// schemes and Services would show up twice and could open Bud for kitty
+	for _, key := range []string{"CFBundleIconName", "CFBundleURLTypes", "NSServices", "UTExportedTypeDeclarations", "UTImportedTypeDeclarations"} {
+		_ = run("plutil", "-remove", key, plist)
+	}
 
 	return nil
 }
 
-// kittyConfigDir is where the copy's config dir is once installed: it's
-// built in a temp dir and renamed into place at m.Dest
-func (m Mac) kittyConfigDir() string {
-	return filepath.Join(m.Dest, "Contents", "Resources", KittyDir)
+// ConfigDirFor is the kitty config dir of the Bud.app at app
+func ConfigDirFor(app string) string {
+	return filepath.Join(app, "Contents", "Resources", KittyDir)
 }
 
 // kittyFiles is Bud's kitty config dir: kitty.conf, which includes yours and
@@ -218,6 +236,10 @@ func (m Mac) kittyFiles() map[string]string {
 		conf += "include " + m.KittyConf + "\n"
 	}
 	conf += "# closing Bud's last window quits Bud\nmacos_quit_when_last_window_closed yes\n"
+	if m.KittyHome != "" {
+		conf += "# programs in Bud (kitten themes, kitten ssh) use your kitty config dir, not Bud's\n" +
+			"env KITTY_CONFIG_DIRECTORY=" + m.KittyHome + "\n"
+	}
 
 	run := shellJoin(m.Launch)
 	return map[string]string{
@@ -246,12 +268,28 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// MacKitty is the kitty.app the Bud.app at path is a copy of, and that
-// kitty's version when it was copied; both "" for the droplet
-func MacKitty(path string) (app, version string) {
-	app, _ = plistString(path, kittyKey)
-	version, _ = plistString(path, kittyVersionKey)
-	return app, version
+// MacInfo is what a Bud.app records about the kitty it's a copy of; all ""
+// for the droplet
+type MacInfo struct {
+	Kitty, KittyVersion string // the kitty.app copied, and its version then
+	ConfigDir           string // the kitty config dir its LSEnvironment names
+}
+
+// ReadMac reads the Bud.app at path's Info.plist, in one plutil call
+func ReadMac(path string) (MacInfo, error) {
+	out, err := exec.Command("plutil", "-convert", "json", "-o", "-", filepath.Join(path, "Contents", "Info.plist")).Output()
+	if err != nil {
+		return MacInfo{}, err
+	}
+	var plist struct {
+		Kitty   string            `json:"BudKitty"`
+		Version string            `json:"BudKittyVersion"`
+		Env     map[string]string `json:"LSEnvironment"`
+	}
+	if err := json.Unmarshal(out, &plist); err != nil {
+		return MacInfo{}, err
+	}
+	return MacInfo{Kitty: plist.Kitty, KittyVersion: plist.Version, ConfigDir: plist.Env["KITTY_CONFIG_DIRECTORY"]}, nil
 }
 
 // KittyVersion is the version of the kitty.app at path

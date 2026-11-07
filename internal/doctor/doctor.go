@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -166,28 +167,36 @@ func Run(opts Options) []Result {
 // swappable in tests
 var (
 	findBundles  = bundle.Find
-	macKitty     = bundle.MacKitty
+	readMac      = bundle.ReadMac
 	kittyVersion = bundle.KittyVersion
+	doctorGOOS   = runtime.GOOS
 )
 
-// checkBudApp warns when Bud.app is a copy of an older kitty than the one
-// installed (JGA-185): the copy doesn't follow kitty's updates, so bud bundle
-// copies it again. Nothing to say for the droplet, or with no Bud.app
+// checkBudApp warns when Bud.app, as a copy of kitty (JGA-185), has stopped
+// matching: kitty was updated since (the copy doesn't follow), it's gone, or
+// the app was moved, so the config dir its Info.plist names isn't its own.
+// bud bundle builds it again. Nothing to say for the droplet, with no
+// Bud.app, or off macOS
 func checkBudApp(p *paths.Paths) (Result, bool) {
+	if doctorGOOS != "darwin" {
+		return Result{}, false
+	}
 	for _, b := range findBundles(p) {
-		app, copied := macKitty(b.Path)
-		if app == "" {
+		info, err := readMac(b.Path)
+		if err != nil || info.Kitty == "" {
 			continue
 		}
-		r := Result{Name: "Bud app"}
-		now, err := kittyVersion(app)
+		r := Result{Name: "Bud app", Status: Warn, Fix: "bud bundle"}
+		now, err := kittyVersion(info.Kitty)
 		switch {
+		case info.ConfigDir != bundle.ConfigDirFor(b.Path):
+			r.Detail = b.Path + " was moved, so it opens a plain kitty without bud"
 		case err != nil:
-			r.Status, r.Detail, r.Fix = Warn, b.Path+" is a copy of "+app+", which isn't there any more", "bud bundle"
-		case now != copied:
-			r.Status, r.Detail, r.Fix = Warn, b.Path+" runs kitty "+copied+", and "+app+" is "+now+" now", "bud bundle"
+			r.Detail = b.Path + " is a copy of " + info.Kitty + ", which isn't there any more"
+		case now != info.KittyVersion:
+			r.Detail = b.Path + " runs kitty " + info.KittyVersion + ", and " + info.Kitty + " is " + now + " now"
 		default:
-			r.Detail = b.Path + " runs kitty " + now
+			r.Status, r.Fix, r.Detail = OK, "", b.Path+" runs kitty "+now
 		}
 		return r, true
 	}

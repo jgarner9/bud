@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -61,7 +62,7 @@ func TestBundle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Kitty != "/Applications/kitty.app" || got.Home != home || got.KittyConf != home+"/.config/kitty/kitty.conf" {
+		if got.Kitty != "/Applications/kitty.app" || got.Home != home || got.KittyConf != home+"/.config/kitty/kitty.conf" || got.KittyHome != home+"/.config/kitty" {
 			t.Fatalf("built %+v", *got)
 		}
 		// the same command bud launch runs in a window
@@ -97,19 +98,35 @@ func TestBundle(t *testing.T) {
 	})
 }
 
-func TestUserKittyConfSkipsBudsOwn(t *testing.T) {
+func TestUserKittyLooksWhereKittyDoes(t *testing.T) {
 	home := t.TempDir()
-	os.MkdirAll(home+"/.config/kitty", 0o755)
-	os.WriteFile(home+"/.config/kitty/kitty.conf", nil, 0o644)
+	conf := func(dir string) string {
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(dir, "kitty.conf"), nil, 0o644)
+		return filepath.Join(dir, "kitty.conf")
+	}
 	t.Setenv("XDG_CONFIG_HOME", "")
-	// inside a Bud window, KITTY_CONFIG_DIRECTORY is Bud's own config dir
-	t.Setenv("KITTY_CONFIG_DIRECTORY", "/Applications/Bud.app/Contents/Resources/"+bundle.KittyDir)
-	if got := userKittyConf(home); got != home+"/.config/kitty/kitty.conf" {
-		t.Fatalf("got %q", got)
-	}
+	t.Setenv("XDG_CONFIG_DIRS", "")
 	t.Setenv("KITTY_CONFIG_DIRECTORY", "")
-	os.Remove(home + "/.config/kitty/kitty.conf")
-	if got := userKittyConf(home); got != "" {
-		t.Fatalf("no kitty.conf: got %q", got)
+	check := func(what, wantDir, wantConf string) {
+		t.Helper()
+		if dir, c := userKitty(home); dir != wantDir || c != wantConf {
+			t.Errorf("%s: got %q, %q; want %q, %q", what, dir, c, wantDir, wantConf)
+		}
 	}
+
+	check("none: kitty's default, nothing to include", home+"/.config/kitty", "")
+	prefs := conf(home + "/Library/Preferences/kitty")
+	check("macOS's Preferences dir", home+"/Library/Preferences/kitty", prefs)
+	dot := conf(home + "/.config/kitty")
+	check("~/.config/kitty comes first", home+"/.config/kitty", dot)
+	// inside a Bud window, KITTY_CONFIG_DIRECTORY is Bud's own, which would include itself
+	t.Setenv("KITTY_CONFIG_DIRECTORY", "/Applications/Bud.app/Contents/Resources/"+bundle.KittyDir)
+	check("not Bud's own", home+"/.config/kitty", dot)
+	// a KITTY_CONFIG_DIRECTORY without a kitty.conf is passed over
+	t.Setenv("KITTY_CONFIG_DIRECTORY", home+"/empty")
+	check("one with no kitty.conf", home+"/.config/kitty", dot)
+	set := conf(home + "/set")
+	t.Setenv("KITTY_CONFIG_DIRECTORY", home+"/set")
+	check("yours wins", home+"/set", set)
 }

@@ -32,7 +32,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud update` | Installs a newer release (only for a binary `install.sh` installed), syncs the config, restores plugins, parsers and language tools, syncs the Claude Code kit, then runs the full `bud doctor` and exits 1 on a failure. Rolls back by itself if a check that passed before now fails. |
 | `bud update --check [--channel stable\|nightly]` | Only says whether a newer release is out. |
 | `bud update --no-doctor` | Skips the doctor at the end, for scripts. |
-| `bud doctor [--quick] [--json]` | Health checks with the fix for each problem; exits 1 when something is broken. `--quick` skips the startup timing. |
+| `bud doctor [--quick] [--json]` | Health checks with the fix for each problem; exits 1 when something is broken. `--quick` skips the slow ones: the startup timing, and Claude Code's MCP servers and synced plugins (`claude setup`, `synced plugins`), which the dashboard leaves out. |
 | `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. |
 | `bud bootstrap [--config] user@host` | Installs this version of bud on another machine over SSH, minimal profile by default. `--config` copies your `config.json` across first. |
 | `bud version` | Prints the version. |

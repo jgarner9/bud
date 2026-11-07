@@ -41,7 +41,7 @@ Opening a project (`bud ~/code/thing`) starts its session in the background, car
 
 Claude Code sees your open buffers, the selection and diagnostics through bud's IDE bridge, so "this function" means the one under your cursor. `<leader>as` points it at the selected lines.
 
-When Claude wants to change a file, the change opens as a diff: `ga` or `:w` accepts it, `q` rejects it, and so does closing it any other way (`:q`, `:tabclose`). Anything else it wants to run asks in a small prompt: `y` allow, `a` allow for the rest of the session, `n` deny, `r` deny and say why.
+When Claude wants to change a file, the change opens as a diff: `ga`, `:w`, `:wq`, `:x` or `ZZ` in the proposal accepts it, and `q` rejects it, as does closing either side of the diff any other way (`:q`, `<C-w>o`, `:tabclose`). A `:wa` from another tab leaves an edited proposal unsaved rather than accepting it. Anything else it wants to run asks in a small prompt: `y` allow, `a` allow for the rest of the session, `n` deny, `r` deny and say why.
 
 ## More
 

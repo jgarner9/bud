@@ -95,6 +95,8 @@ end
 -- diffs open for review, by tab name
 local diffs = {}
 
+-- numbers each review's autocmd group: a replacement under the same name
+-- gets its own, so the old one's late close can't delete the new one's
 local reviews = 0
 
 -- close_diff takes a review's tab and buffers away, once
@@ -111,9 +113,19 @@ local function close_diff(d)
   if d.proposed and vim.api.nvim_buf_is_valid(d.proposed) then
     vim.bo[d.proposed].modified = false
   end
-  if vim.api.nvim_tabpage_is_valid(d.tab) and #vim.api.nvim_list_tabpages() > 1 then
-    vim.api.nvim_set_current_tabpage(d.tab)
-    pcall(vim.cmd, "tabclose!")
+  if vim.api.nvim_tabpage_is_valid(d.tab) then
+    if #vim.api.nvim_list_tabpages() > 1 then
+      -- by number, so the tab you're on stays yours (a queued review may
+      -- have opened by now)
+      pcall(vim.cmd, "tabclose! " .. vim.api.nvim_tabpage_get_number(d.tab))
+    else
+      -- the only tab left (:tabonly): the file's window stays, out of diff mode
+      for _, win in ipairs(vim.api.nvim_tabpage_list_wins(d.tab)) do
+        vim.api.nvim_win_call(win, function()
+          vim.cmd("diffoff")
+        end)
+      end
+    end
   end
   for _, buf in ipairs({ d.proposed, d.scratch_old }) do
     if buf and vim.api.nvim_buf_is_valid(buf) then
@@ -204,7 +216,7 @@ function M.review(opts, on_done)
   vim.cmd.diffthis()
   vim.wo.winbar = "%#DiffAdd# "
     .. (opts.title or "Claude's edit")
-    .. " %* :w or ga accept   q (or closing it) reject   (you can edit it first)"
+    .. " %* ga or :w accept   q (or closing it) reject   (you can edit it first)"
 
   local function map(lhs, accepted, desc)
     vim.keymap.set("n", lhs, function()
@@ -212,11 +224,22 @@ function M.review(opts, on_done)
     end, { buffer = d.proposed, nowait = true, desc = desc })
   end
   map("ga", true, "Accept Claude's edit")
+  -- ZZ and :x mean write and close: here, accept, even with nothing edited
+  -- (where they'd otherwise skip the write and just close, a no)
+  map("ZZ", true, "Accept Claude's edit")
+  vim.keymap.set("ca", "x", function()
+    return (vim.fn.getcmdtype() == ":" and vim.fn.getcmdline() == "x") and "wq" or "x"
+  end, { buffer = d.proposed, expr = true })
   map("q", false, "Reject Claude's edit")
   vim.api.nvim_create_autocmd("BufWriteCmd", {
     group = d.group,
     buffer = d.proposed,
     callback = function()
+      -- only a write from the review itself accepts: :wa from your own tab
+      -- leaves the proposal unsaved, so :wqa stops at it instead
+      if vim.api.nvim_get_current_tabpage() ~= d.tab then
+        return
+      end
       respond_review(d, true)
       -- written, as far as :wq is concerned
       vim.bo[d.proposed].modified = false

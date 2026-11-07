@@ -144,44 +144,121 @@ eq(result.behavior, "deny", "write rejected")
 -- closing the diff any other way is a no, said at once: the proposal (:q,
 -- its buffer wiped), the file's side, <C-w>o in the proposal, the whole tab
 local closes = {
-  quit = function()
-    vim.cmd.quit()
-  end,
-  ["the file's side"] = function()
-    vim.cmd.wincmd("h")
-    vim.cmd.quit()
-  end,
-  only = function()
-    vim.cmd.only()
-  end,
-  tabclose = function()
-    vim.cmd.tabclose()
-  end,
-  bwipeout = function()
-    vim.cmd("bwipeout!")
-  end,
+  {
+    "quit",
+    function()
+      vim.cmd.quit()
+    end,
+  },
+  {
+    "the file's side",
+    function()
+      vim.cmd.wincmd("h")
+      vim.cmd.quit()
+    end,
+  },
+  {
+    "only",
+    function()
+      vim.cmd.only()
+    end,
+  },
+  {
+    "tabclose",
+    function()
+      vim.cmd.tabclose()
+    end,
+  },
+  {
+    "bwipeout",
+    function()
+      vim.cmd("bwipeout!")
+    end,
+  },
 }
-for how, close in pairs(closes) do
-  result = nil
+for _, c in ipairs(closes) do
   ask("Write", { file_path = tmp .. "/new.txt", content = "hi\n" })
-  close()
-  eq(result and result.behavior, "deny", "rejected at once by " .. how)
+  c[2]()
+  eq(result and result.behavior, "deny", "rejected at once by " .. c[1])
   wait(function()
     return vim.api.nvim_get_current_tabpage() == tab
-  end, "the diff's tab to go after " .. how)
+  end, "the diff's tab to go after " .. c[1])
 end
 
--- :wq accepts and closes the diff, and only the diff: the quit doesn't land
--- on one of your windows (here the only one, which would quit Neovim)
+-- :wq, :x and ZZ accept and close the diff, and only the diff: the quit doesn't
+-- land on one of your windows (here the only one, which would quit Neovim);
+-- :x and ZZ accept even with nothing edited, where they'd otherwise just close
 local wins = vim.api.nvim_tabpage_list_wins(tab)
-result = nil
+local accepts = {
+  {
+    ":wq",
+    function()
+      vim.cmd.wq()
+    end,
+  },
+  {
+    ":x",
+    function()
+      vim.api.nvim_feedkeys(":x\r", "tx", false)
+    end,
+  },
+  {
+    "ZZ",
+    function()
+      vim.api.nvim_feedkeys("ZZ", "x", false)
+    end,
+  },
+}
+for _, a in ipairs(accepts) do
+  ask("Write", { file_path = tmp .. "/new.txt", content = "hi\n" })
+  a[2]()
+  eq(result and result.behavior, "allow", a[1] .. " accepts")
+  wait(function()
+    return vim.api.nvim_get_current_tabpage() == tab
+  end, "the diff's tab to go after " .. a[1])
+  eq(vim.api.nvim_tabpage_list_wins(tab), wins, "your windows untouched by " .. a[1])
+end
+
+-- :wa from your own tab doesn't accept an edited proposal; it stays open, unsaved
 ask("Write", { file_path = tmp .. "/new.txt", content = "hi\n" })
-vim.cmd.wq()
-eq(result and result.behavior, "allow", ":wq accepts")
+local review_tab = vim.api.nvim_get_current_tabpage()
+vim.api.nvim_buf_set_lines(0, 0, 1, false, { "half done" })
+vim.api.nvim_set_current_tabpage(tab)
+pcall(vim.cmd.wall)
+eq(result, nil, ":wa elsewhere doesn't answer")
+vim.api.nvim_set_current_tabpage(review_tab)
+eq(vim.bo.modified, true, "the proposal still unsaved")
+vim.api.nvim_feedkeys("q", "x", false)
+eq(result.behavior, "deny", "then q rejects it")
+
+-- closing a review while another waits: the next one opens and keeps the
+-- cursor, wherever 'tabclose' would send it
+vim.o.tabclose = "left"
+local first, second
+perms.request({
+  tool = "Write",
+  input = { file_path = tmp .. "/one.txt", content = "1\n" },
+  root = tmp,
+  respond = function(r)
+    first = r
+  end,
+})
+perms.request({
+  tool = "Write",
+  input = { file_path = tmp .. "/two.txt", content = "2\n" },
+  root = tmp,
+  respond = function(r)
+    second = r
+  end,
+})
+vim.cmd.quit()
+eq(first and first.behavior, "deny", "the first rejected")
 wait(function()
-  return vim.api.nvim_get_current_tabpage() == tab
-end, "the diff's tab to go after :wq")
-eq(vim.api.nvim_tabpage_list_wins(tab), wins, "your windows untouched")
+  return vim.api.nvim_buf_get_name(0):find("two.txt", 1, true) ~= nil
+end, "the second review to have the cursor")
+vim.api.nvim_feedkeys("q", "x", false)
+eq(second and second.behavior, "deny", "the second answered too")
+vim.o.tabclose = ""
 
 vim.fn.delete(tmp, "rf")
 print("permissions_test: ok")

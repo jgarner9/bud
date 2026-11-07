@@ -189,7 +189,7 @@ func checkBudApp(p *paths.Paths) (Result, bool) {
 		r := Result{Name: "Bud app", Status: Warn, Fix: "bud bundle"}
 		now, err := kittyVersion(info.Kitty)
 		switch {
-		case info.ConfigDir != bundle.ConfigDirFor(b.Path):
+		case !sameDir(info.ConfigDir, bundle.ConfigDirFor(b.Path)):
 			r.Detail = b.Path + " was moved, so it opens a plain kitty without bud"
 		case err != nil:
 			r.Detail = b.Path + " is a copy of " + info.Kitty + ", which isn't there any more"

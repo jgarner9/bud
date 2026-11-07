@@ -116,6 +116,9 @@ func TestUserKittyLooksWhereKittyDoes(t *testing.T) {
 	}
 
 	check("none: kitty's default, nothing to include", home+"/.config/kitty", "")
+	t.Setenv("XDG_CONFIG_HOME", home+"/xdg")
+	check("none, with XDG_CONFIG_HOME: the dir kitty would use", home+"/xdg/kitty", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
 	prefs := conf(home + "/Library/Preferences/kitty")
 	check("macOS's Preferences dir", home+"/Library/Preferences/kitty", prefs)
 	dot := conf(home + "/.config/kitty")

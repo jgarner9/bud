@@ -107,7 +107,7 @@ func bundleCmd(g *Globals, args []string, macos, linux bool, dest string) error 
 // does, in its order: KITTY_CONFIG_DIRECTORY (not Bud's own, inside a Bud
 // window), $XDG_CONFIG_HOME/kitty, ~/.config/kitty, each of $XDG_CONFIG_DIRS,
 // then ~/Library/Preferences/kitty; the first with a kitty.conf wins. With
-// none, conf is "" and dir is kitty's default, ~/.config/kitty
+// none, conf is "" and dir is the first of them, the one kitty would use
 func userKitty(home string) (dir, conf string) {
 	var dirs []string
 	if d := os.Getenv("KITTY_CONFIG_DIRECTORY"); d != "" && filepath.Base(d) != bundle.KittyDir {
@@ -116,8 +116,7 @@ func userKitty(home string) (dir, conf string) {
 	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
 		dirs = append(dirs, filepath.Join(x, "kitty"))
 	}
-	fallback := filepath.Join(home, ".config", "kitty")
-	dirs = append(dirs, fallback)
+	dirs = append(dirs, filepath.Join(home, ".config", "kitty"))
 	for _, x := range filepath.SplitList(os.Getenv("XDG_CONFIG_DIRS")) {
 		dirs = append(dirs, filepath.Join(x, "kitty"))
 	}
@@ -127,7 +126,7 @@ func userKitty(home string) (dir, conf string) {
 			return d, c
 		}
 	}
-	return fallback, ""
+	return dirs[0], ""
 }
 
 // bundleBin is the bud the app runs: the one install.sh put in place, whose

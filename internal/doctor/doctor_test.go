@@ -743,6 +743,20 @@ func TestCheckBudAppWarnsWhenKittyMovedOn(t *testing.T) {
 	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "isn't there any more") {
 		t.Fatalf("kitty gone: %+v", r)
 	}
+	// the same place spelled through a link isn't a move
+	kittyVersion = func(string) (string, error) { return "0.50.0", nil }
+	linked := t.TempDir()
+	os.MkdirAll(filepath.Join(linked, "real", "Bud.app", "Contents", "Resources", bundle.KittyDir), 0o755)
+	os.Symlink(filepath.Join(linked, "real"), filepath.Join(linked, "via"))
+	findBundles = func(*paths.Paths) []bundle.Installed {
+		return []bundle.Installed{{Path: filepath.Join(linked, "via", "Bud.app")}}
+	}
+	info.ConfigDir = bundle.ConfigDirFor(filepath.Join(linked, "real", "Bud.app"))
+	if r, _ := checkBudApp(p); r.Status != OK {
+		t.Fatalf("linked path: %+v", r)
+	}
+	findBundles = func(*paths.Paths) []bundle.Installed { return []bundle.Installed{{Path: app}} }
+
 	// moved: the config dir it names isn't its own
 	kittyVersion = func(string) (string, error) { return "0.50.0", nil }
 	info.ConfigDir = bundle.ConfigDirFor("/Users/j/Applications/Bud.app")

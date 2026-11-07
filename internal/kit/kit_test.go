@@ -438,3 +438,50 @@ func TestParseMarketplaces(t *testing.T) {
 		t.Fatal("no error for bad output")
 	}
 }
+
+func TestASyncedPluginHiddenByYourOwnCopyNamesTheUninstall(t *testing.T) {
+	dir := t.TempDir()
+	// claude.ai syncs bud, but a copy bud's ledger doesn't hold is installed too
+	f := &fakeMarketplaces{registered: []string{"bud-plugins"}, installed: []string{"bud@synced", "bud@bud-plugins", "bud-ide@synced"}}
+	env := f.env(dir)
+	os.WriteFile(env.Ledger, []byte(`{"marketplaces": {"bud-plugins": "x"}}`), 0o644)
+	k := &Kit{
+		Marketplaces: map[string]string{"bud-plugins": "x"},
+		Plugins:      []string{"bud@bud-plugins", "bud-ide@bud-plugins"},
+	}
+
+	actions, err := Sync(k, env, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Action{"plugin", "bud@bud-plugins", "skip", "claude.ai syncs it, but bud@bud-plugins loads instead: claude plugin uninstall --scope user bud@bud-plugins"}
+	if !slices.Contains(actions, want) {
+		t.Fatalf("actions %v, want %v", actions, want)
+	}
+	if !slices.Contains(actions, Action{"plugin", "bud-ide@bud-plugins", "skip", "claude.ai syncs it"}) {
+		t.Fatalf("bud-ide has no other copy: %v", actions)
+	}
+	// it isn't bud's, so bud doesn't take it out
+	if slices.ContainsFunc(f.ran, func(r string) bool { return strings.Contains(r, "uninstall") }) {
+		t.Fatalf("uninstalled a copy bud didn't install: %q", f.ran)
+	}
+}
+
+func TestShadowed(t *testing.T) {
+	k := &Kit{Plugins: []string{"bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@bud-plugins"}}
+	cases := []struct {
+		installed []string
+		want      []string
+	}{
+		{[]string{"bud@synced", "bud-ide@synced"}, nil},
+		{[]string{"bud@synced", "bud@bud-plugins"}, []string{"bud@bud-plugins"}},
+		{[]string{"superpowers@synced", "superpowers@claude-plugins-official"}, []string{"superpowers@claude-plugins-official"}},
+		// not synced: the installed copy is the only one, nothing hidden
+		{[]string{"bud@bud-plugins"}, nil},
+	}
+	for _, c := range cases {
+		if got := Shadowed(k, c.installed); !slices.Equal(got, c.want) {
+			t.Errorf("Shadowed(%v) = %v, want %v", c.installed, got, c.want)
+		}
+	}
+}

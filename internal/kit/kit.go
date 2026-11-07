@@ -272,7 +272,12 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			}
 			delete(ledger.Plugins, id)
 		case slices.Contains(installed, synced):
-			*actions = append(*actions, Action{"plugin", id, "skip", "claude.ai syncs it"})
+			why := "claude.ai syncs it"
+			// a copy bud didn't install hides the synced one, and is yours to remove
+			if shadows := Shadowed(&Kit{Plugins: []string{id}}, installed); len(shadows) > 0 {
+				why += ", but " + shadows[0] + " loads instead: " + UninstallHint(shadows[0])
+			}
+			*actions = append(*actions, Action{"plugin", id, "skip", why})
 		case slices.Contains(installed, id) && owned:
 			*actions = append(*actions, Action{"plugin", id, "ok", ""})
 			if dryRun {
@@ -536,6 +541,30 @@ func elsewhere(installed []string, id string, ledger *Ledger) string {
 		}
 	}
 	return ""
+}
+
+// Shadowed lists the installed copies that hide a kit plugin claude.ai syncs
+// (JGA-182): Claude Code loads one plugin of a name, and with another copy
+// installed it isn't the synced one, so claude.ai's updates never arrive.
+// Sync only takes out bud's own copy, so the others are yours to uninstall
+func Shadowed(k *Kit, installed []string) []string {
+	var out []string
+	for _, id := range k.Plugins {
+		if !slices.Contains(installed, pluginName(id)+"@synced") {
+			continue
+		}
+		for _, other := range installed {
+			if pluginName(other) == pluginName(id) && !strings.HasSuffix(other, "@synced") && !slices.Contains(out, other) {
+				out = append(out, other)
+			}
+		}
+	}
+	return out
+}
+
+// UninstallHint is the command that takes out a copy Shadowed found
+func UninstallHint(id string) string {
+	return "claude plugin uninstall --scope user " + id
 }
 
 // pluginName is the name in a plugin id, name@marketplace

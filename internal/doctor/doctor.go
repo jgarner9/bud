@@ -4,6 +4,7 @@
 package doctor
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -90,6 +91,30 @@ var (
 	}
 )
 
+// pluginList is the ids claude plugin list --json shows, synced ones as
+// name@synced
+var pluginList = func() ([]string, error) {
+	bin := claude.Find()
+	if bin == "" {
+		return nil, nil
+	}
+	out, err := exec.Command(bin, "plugin", "list", "--json").Output()
+	if err != nil {
+		return nil, err
+	}
+	var list []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(out, &list); err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(list))
+	for i, p := range list {
+		ids[i] = p.ID
+	}
+	return ids, nil
+}
+
 // Options picks which checks Run does
 type Options struct {
 	// Quick skips the slow ones (startup timing runs nvim several times), for
@@ -135,6 +160,9 @@ func Run(opts Options) []Result {
 	if !opts.Quick && status.LoggedIn {
 		// claude.ai's connectors only show up through claude mcp list
 		if r, ok := checkClaudeSetup(claudeDir()); ok {
+			results = append(results, r)
+		}
+		if r, ok := checkSyncedPlugins(); ok {
 			results = append(results, r)
 		}
 	}
@@ -238,6 +266,44 @@ func checkClaudeSetup(dir string) (Result, bool) {
 	r.Detail = strings.Join(details, "; ")
 	r.Fix = strings.Join(fixes, "; ")
 
+	return r, true
+}
+
+// checkSyncedPlugins warns when another copy of a kit plugin claude.ai syncs
+// is installed (JGA-182): Claude Code loads that one instead, so the synced
+// one's updates (new skills) never show up, and kit sync leaves a copy bud
+// didn't install alone. Nothing to say when claude.ai syncs none of them
+func checkSyncedPlugins() (Result, bool) {
+	k, err := kit.Load(kitFS())
+	if err != nil || len(k.Plugins) == 0 {
+		return Result{}, false
+	}
+	r := Result{Name: "synced plugins"}
+	installed, err := pluginList()
+	if err != nil {
+		r.Status, r.Detail = Warn, "couldn't list Claude Code's plugins: "+err.Error()
+		return r, true
+	}
+	synced := false
+	for _, id := range k.Plugins {
+		name, _, _ := strings.Cut(id, "@")
+		synced = synced || slices.Contains(installed, name+"@synced")
+	}
+	if !synced {
+		return Result{}, false
+	}
+	shadows := kit.Shadowed(k, installed)
+	if len(shadows) == 0 {
+		r.Detail = "the plugins claude.ai syncs are the ones that load"
+		return r, true
+	}
+	fixes := make([]string, len(shadows))
+	for i, id := range shadows {
+		fixes[i] = kit.UninstallHint(id)
+	}
+	r.Status = Warn
+	r.Detail = strings.Join(shadows, ", ") + " loads instead of the copy claude.ai syncs, so its updates never reach you"
+	r.Fix = strings.Join(fixes, "; ") + ", then restart Claude Code"
 	return r, true
 }
 

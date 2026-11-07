@@ -651,3 +651,33 @@ func TestParseMCPListSkipsTheDiagnostics(t *testing.T) {
 		t.Errorf("multi = %v, want serena", multi)
 	}
 }
+
+func TestCheckSyncedPluginsWarnsWhenAnotherCopyLoads(t *testing.T) {
+	origFS, origList := kitFS, pluginList
+	kitFS = func() fs.FS {
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["bud@bud-plugins", "bud-ide@bud-plugins"]}`)}}
+	}
+	t.Cleanup(func() { kitFS, pluginList = origFS, origList })
+
+	pluginList = func() ([]string, error) { return []string{"bud@synced", "bud@bud-plugins", "bud-ide@synced"}, nil }
+	r, ok := checkSyncedPlugins()
+	if !ok || r.Status != Warn || !strings.Contains(r.Detail, "bud@bud-plugins loads instead") || !strings.Contains(r.Fix, "claude plugin uninstall --scope user bud@bud-plugins") {
+		t.Fatalf("hidden synced copy: %+v", r)
+	}
+
+	pluginList = func() ([]string, error) { return []string{"bud@synced", "bud-ide@synced"}, nil }
+	if r, ok := checkSyncedPlugins(); !ok || r.Status != OK {
+		t.Fatalf("only synced copies: %+v", r)
+	}
+
+	// nothing synced: nothing to say
+	pluginList = func() ([]string, error) { return []string{"bud@bud-plugins"}, nil }
+	if _, ok := checkSyncedPlugins(); ok {
+		t.Fatal("reported with nothing synced")
+	}
+
+	pluginList = func() ([]string, error) { return nil, errors.New("boom") }
+	if r, _ := checkSyncedPlugins(); r.Status != Warn || !strings.Contains(r.Detail, "boom") {
+		t.Fatalf("list failed: %+v", r)
+	}
+}

@@ -33,3 +33,11 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 ## Starting over
 
 `bud uninstall` lists everything bud put on the machine and removes it after asking (`--keep-config` keeps `config.json` and your tools). With a shared `~/.claude` that includes what the kit added there, the same as `bud kit unsync`; everything of yours stays. Your clod checkout (`~/clod`) stays too; `~/clod/install.sh uninstall` takes its setup out of Claude Code first if you want that gone. Then reinstall with the one-liner from the README.
+
+## A skill from bud-plugins is missing in Claude Code
+
+When claude.ai syncs a bud-plugins plugin (`bud`, `bud-ide`, `superpowers`) and another copy of it is also installed, Claude Code loads that other copy, so skills added since it was installed don't show up. `bud doctor` warns about this under `synced plugins`, and `bud kit sync` names the copy. bud leaves a copy it didn't install alone, so take it out yourself and restart Claude Code:
+
+```sh
+claude plugin uninstall --scope user bud@bud-plugins
+```

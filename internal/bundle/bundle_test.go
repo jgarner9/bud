@@ -3,6 +3,7 @@ package bundle
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"image/png"
 	"os"
 	"os/exec"
@@ -91,10 +92,14 @@ func TestBuild(t *testing.T) {
 	if entries, _ := os.ReadDir(filepath.Dir(dest)); len(entries) != 1 {
 		t.Fatalf("left behind %v", entries)
 	}
-	if got := MacStale(dest, "1.2.3", false); got != "" {
+	info, err := ReadMac(dest)
+	if err != nil || info.Bin != "/usr/local/bin/bud" {
+		t.Fatalf("ReadMac = %+v, %v", info, err)
+	}
+	if got := info.Stale(dest, Want{Version: "1.2.3", Bin: "/usr/local/bin/bud", Kind: true}); got != "" {
 		t.Errorf("an up-to-date droplet is stale: %q", got)
 	}
-	if got := MacStale(dest, "1.2.3", true); got != "kitty is the terminal now" {
+	if got := info.Stale(dest, Want{Version: "1.2.3", Kind: true, Kitty: "/Applications/kitty.app"}); got != "kitty is the terminal now" {
 		t.Errorf("a droplet with kitty the terminal: %q", got)
 	}
 
@@ -244,24 +249,15 @@ func TestBuildKittyCopy(t *testing.T) {
 	if err := exec.Command("codesign", "--verify", "--deep", dest).Run(); err != nil {
 		t.Errorf("signature: %v", err)
 	}
-	if info, err := ReadMac(dest); err != nil || info != (MacInfo{Version: "1.2.3", Kitty: kitty, KittyVersion: "0.50.0", ConfigDir: ConfigDirFor(dest)}) {
+	if info, err := ReadMac(dest); err != nil || info != (MacInfo{Version: "1.2.3", Bin: "", Kitty: kitty, KittyVersion: "0.50.0", ConfigDir: ConfigDirFor(dest)}) {
 		t.Errorf("ReadMac = %+v, %v", info, err)
 	}
 	if entries, _ := os.ReadDir(filepath.Dir(dest)); len(entries) != 1 {
 		t.Errorf("left behind %v", entries)
 	}
-	for _, c := range []struct {
-		version   string
-		wantKitty bool
-		want      string
-	}{
-		{"1.2.3", true, ""},
-		{"1.3.0", true, "bud 1.2.3 built it"},
-		{"1.2.3", false, "kitty isn't the terminal any more"},
-	} {
-		if got := MacStale(dest, c.version, c.wantKitty); got != c.want {
-			t.Errorf("MacStale(%s, %v) = %q, want %q", c.version, c.wantKitty, got, c.want)
-		}
+	info, _ := ReadMac(dest)
+	if got := info.Stale(dest, Want{Version: "1.2.3", Kind: true, Kitty: kitty}); got != "" {
+		t.Errorf("the copy just built is stale: %q", got)
 	}
 	// kitty itself is untouched
 	if id, _ := MacBundleID(kitty); id != "net.kovidgoyal.kitty" {
@@ -302,4 +298,54 @@ func TestBuildKittyCopyFromALink(t *testing.T) {
 	if info, _ := ReadMac(dest); !filepath.IsAbs(info.ConfigDir) || filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(info.ConfigDir)))) != "Bud.app" {
 		t.Fatalf("config dir %q", info.ConfigDir)
 	}
+}
+
+func TestStale(t *testing.T) {
+	orig := KittyVersion
+	t.Cleanup(func() { KittyVersion = orig })
+	KittyVersion = func(string) (string, error) { return "0.50.0", nil }
+	app := "/Applications/Bud.app"
+	kitty := MacInfo{Version: "1.0.0", Bin: "/u/bin/bud", Kitty: "/Applications/kitty.app", KittyVersion: "0.50.0", ConfigDir: ConfigDirFor(app)}
+	droplet := MacInfo{Version: "1.0.0", Bin: "/u/bin/bud"}
+	want := Want{Version: "1.0.0", Bin: "/u/bin/bud", Kind: true, Kitty: "/Applications/kitty.app"}
+	moved := kitty
+	moved.ConfigDir = ConfigDirFor("/Users/j/Applications/Bud.app")
+	old := droplet
+	old.Version, old.Bin = "", ""
+	cases := []struct {
+		what string
+		info MacInfo
+		want Want
+		why  string
+	}{
+		{"up to date", kitty, want, ""},
+		{"another bud", kitty, Want{Version: "1.1.0"}, "bud 1.0.0 built it"},
+		{"no version recorded", old, Want{Version: "1.1.0"}, "an older bud built it"},
+		{"another bud binary", kitty, Want{Version: "1.0.0", Bin: "/other/bud"}, "it runs /u/bin/bud"},
+		{"no binary recorded is no change", with(kitty, func(i *MacInfo) { i.Bin = "" }), want, ""},
+		{"droplet, kitty the terminal", droplet, want, "kitty is the terminal now"},
+		{"copy, kitty not the terminal", kitty, Want{Version: "1.0.0", Kind: true}, "kitty isn't the terminal any more"},
+		{"another kitty.app", kitty, Want{Version: "1.0.0", Kind: true, Kitty: "/Users/j/Applications/kitty.app"}, "it copies /Applications/kitty.app, and kitty is at /Users/j/Applications/kitty.app now"},
+		{"kind unchecked", droplet, Want{Version: "1.0.0", Kitty: "/Applications/kitty.app"}, ""},
+		{"moved", moved, want, "it was moved"},
+	}
+	for _, c := range cases {
+		if got := c.info.Stale(app, c.want); got != c.why {
+			t.Errorf("%s: got %q, want %q", c.what, got, c.why)
+		}
+	}
+	KittyVersion = func(string) (string, error) { return "0.51.0", nil }
+	if got := kitty.Stale(app, want); got != "kitty is 0.51.0 now" {
+		t.Errorf("kitty updated: %q", got)
+	}
+	KittyVersion = func(string) (string, error) { return "", errors.New("gone") }
+	if got := kitty.Stale(app, want); got != "/Applications/kitty.app isn't there any more" {
+		t.Errorf("kitty gone: %q", got)
+	}
+}
+
+// with is i with f applied, for a table row
+func with(i MacInfo, f func(*MacInfo)) MacInfo {
+	f(&i)
+	return i
 }

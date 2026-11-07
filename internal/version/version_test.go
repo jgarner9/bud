@@ -36,3 +36,16 @@ func TestFromBuildInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestReleased(t *testing.T) {
+	orig := Version
+	t.Cleanup(func() { Version = orig })
+	Version = ""
+	if Released() {
+		t.Error("a dev build is no release")
+	}
+	Version = "v0.27.0"
+	if !Released() {
+		t.Error("a release build")
+	}
+}

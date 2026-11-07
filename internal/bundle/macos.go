@@ -19,6 +19,7 @@ import (
 	"text/template"
 
 	"jgarner.dev/bud"
+	"jgarner.dev/bud/internal/paths"
 )
 
 // MacID is Bud.app's bundle identifier, which is also how bud knows a
@@ -48,6 +49,7 @@ type Mac struct {
 // Keys bud adds to a kitty copy's Info.plist: the kitty.app it was copied
 // from and that kitty's version, so a newer kitty shows as a stale copy
 const (
+	binKey          = "BudBin"
 	kittyKey        = "BudKitty"
 	kittyVersionKey = "BudKittyVersion"
 	// KittyDir is the name of Bud's own kitty config dir inside the app
@@ -141,6 +143,7 @@ func (m Mac) droplet(tmp, app, _ string) error {
 	for _, args := range [][]string{
 		{"-replace", "CFBundleIdentifier", "-string", MacID},
 		{"-replace", "CFBundleShortVersionString", "-string", m.Version},
+		{"-replace", binKey, "-string", m.Bin},
 		{"-replace", "CFBundleDocumentTypes", "-json", documentTypes},
 		// the asset catalog's icon would win over droplet.icns
 		{"-remove", "CFBundleIconName"},
@@ -205,6 +208,7 @@ func (m Mac) kitty(_, app, dest string) error {
 		{"-replace", "CFBundleDocumentTypes", "-json", documentTypes},
 		// kitty's own LSEnvironment (KITTY_LAUNCHED_BY_LAUNCH_SERVICES) stays
 		{"-replace", "LSEnvironment.KITTY_CONFIG_DIRECTORY", "-string", ConfigDirFor(dest)},
+		{"-replace", binKey, "-string", m.Bin},
 		{"-replace", kittyKey, "-string", m.Kitty},
 		{"-replace", kittyVersionKey, "-string", version},
 	} {
@@ -272,6 +276,7 @@ func shellQuote(s string) string {
 // for the droplet
 type MacInfo struct {
 	Version             string // the bud that built it
+	Bin                 string // the bud it runs; "" from before it was recorded
 	Kitty, KittyVersion string // the kitty.app copied, and its version then
 	ConfigDir           string // the kitty config dir its LSEnvironment names
 }
@@ -284,6 +289,7 @@ func ReadMac(path string) (MacInfo, error) {
 	}
 	var plist struct {
 		Bud     string            `json:"CFBundleShortVersionString"`
+		Bin     string            `json:"BudBin"`
 		Kitty   string            `json:"BudKitty"`
 		Version string            `json:"BudKittyVersion"`
 		Env     map[string]string `json:"LSEnvironment"`
@@ -291,54 +297,56 @@ func ReadMac(path string) (MacInfo, error) {
 	if err := json.Unmarshal(out, &plist); err != nil {
 		return MacInfo{}, err
 	}
-	return MacInfo{Version: plist.Bud, Kitty: plist.Kitty, KittyVersion: plist.Version, ConfigDir: plist.Env["KITTY_CONFIG_DIRECTORY"]}, nil
+	return MacInfo{Version: plist.Bud, Bin: plist.Bin, Kitty: plist.Kitty, KittyVersion: plist.Version, ConfigDir: plist.Env["KITTY_CONFIG_DIRECTORY"]}, nil
 }
 
-// MacStale says why the Bud.app at path needs building again, "" when it
-// doesn't: another bud built it (its baked-in paths and files may be old),
-// the kitty it's a copy of has been updated or removed, or it was moved, so
-// the kitty config dir it names isn't its own. wantKitty is whether it
-// should be a copy of kitty now, rather than the droplet
-func MacStale(path, version string, wantKitty bool) string {
-	info, err := ReadMac(path)
+// Want is what a Bud.app should be now, for Stale
+type Want struct {
+	Version string // the bud that should have built it
+	Bin     string // the bud it should run; "" doesn't check
+	// Kind checks that it's the right kind: a copy of Kitty, or the droplet
+	// when Kitty is ""
+	Kind  bool
+	Kitty string
+}
+
+// Stale says why the Bud.app at path, as i describes it, needs building
+// again, "" when it doesn't: another bud built it or it runs another bud
+// (its baked-in paths and files may be old), it's the wrong kind or copies
+// another kitty.app than the one there is now, the kitty it copies has been
+// updated or removed, or it was moved, so the config dir it names isn't its own
+func (i MacInfo) Stale(path string, w Want) string {
 	switch {
-	case err != nil:
-		return "can't read its Info.plist: " + err.Error()
-	case info.Version != version:
-		return "bud " + info.Version + " built it"
-	case wantKitty != (info.Kitty != ""):
-		if wantKitty {
-			return "kitty is the terminal now"
+	case i.Version != w.Version:
+		if i.Version == "" {
+			return "an older bud built it"
 		}
+		return "bud " + i.Version + " built it"
+	case w.Bin != "" && i.Bin != "" && !paths.SameDir(i.Bin, w.Bin):
+		return "it runs " + i.Bin
+	case w.Kind && w.Kitty != "" && i.Kitty == "":
+		return "kitty is the terminal now"
+	case w.Kind && w.Kitty == "" && i.Kitty != "":
 		return "kitty isn't the terminal any more"
-	case info.Kitty == "":
+	case w.Kind && i.Kitty != "" && !paths.SameDir(i.Kitty, w.Kitty):
+		return "it copies " + i.Kitty + ", and kitty is at " + w.Kitty + " now"
+	case i.Kitty == "":
 		return ""
 	}
-	now, err := KittyVersion(info.Kitty)
+	now, err := KittyVersion(i.Kitty)
 	switch {
 	case err != nil:
-		return info.Kitty + " isn't there any more"
-	case now != info.KittyVersion:
+		return i.Kitty + " isn't there any more"
+	case now != i.KittyVersion:
 		return "kitty is " + now + " now"
-	case !SameDir(info.ConfigDir, ConfigDirFor(path)):
+	case !paths.SameDir(i.ConfigDir, ConfigDirFor(path)):
 		return "it was moved"
 	}
 	return ""
 }
 
-// SameDir says whether a and b name one dir, links resolved where they can be
-func SameDir(a, b string) bool {
-	resolve := func(d string) string {
-		if r, err := filepath.EvalSymlinks(d); err == nil {
-			return r
-		}
-		return filepath.Clean(d)
-	}
-	return resolve(a) == resolve(b)
-}
-
-// KittyVersion is the version of the kitty.app at path
-func KittyVersion(path string) (string, error) {
+// KittyVersion is the version of the kitty.app at path; swappable in tests
+var KittyVersion = func(path string) (string, error) {
 	return plistString(path, "CFBundleShortVersionString")
 }
 

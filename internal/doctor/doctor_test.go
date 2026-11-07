@@ -20,6 +20,7 @@ import (
 	"jgarner.dev/bud/internal/lang"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/version"
 )
 
 // fakePath puts an executable for each name in a fresh dir and makes it the whole PATH
@@ -721,30 +722,42 @@ func TestCheckSyncedPluginsWarnsWhenAnotherCopyLoads(t *testing.T) {
 	}
 }
 
-func TestCheckBudAppWarnsWhenKittyMovedOn(t *testing.T) {
-	origFind, origRead, origVersion, origGOOS := findBundles, readMac, kittyVersion, doctorGOOS
-	t.Cleanup(func() { findBundles, readMac, kittyVersion, doctorGOOS = origFind, origRead, origVersion, origGOOS })
-	doctorGOOS = "darwin"
+func TestCheckBudAppWarnsWhenItsOutOfDate(t *testing.T) {
+	origFind, origRead, origKitty, origGOOS, origVersion := findBundles, readMac, bundle.KittyVersion, doctorGOOS, version.Version
+	t.Cleanup(func() {
+		findBundles, readMac, bundle.KittyVersion, doctorGOOS, version.Version = origFind, origRead, origKitty, origGOOS, origVersion
+	})
+	doctorGOOS, version.Version = "darwin", "0.27.0"
 	p := &paths.Paths{}
 	app := "/Applications/Bud.app"
 	findBundles = func(*paths.Paths) []bundle.Installed { return []bundle.Installed{{Path: app}} }
-	info := bundle.MacInfo{Kitty: "/Applications/kitty.app", KittyVersion: "0.50.0", ConfigDir: bundle.ConfigDirFor(app)}
+	info := bundle.MacInfo{Version: "0.27.0", Kitty: "/Applications/kitty.app", KittyVersion: "0.50.0", ConfigDir: bundle.ConfigDirFor(app)}
 	readMac = func(string) (bundle.MacInfo, error) { return info, nil }
+	bundle.KittyVersion = func(string) (string, error) { return "0.50.0", nil }
 
-	kittyVersion = func(string) (string, error) { return "0.50.0", nil }
-	if r, ok := checkBudApp(p); !ok || r.Status != OK || !strings.Contains(r.Detail, "runs kitty 0.50.0") {
+	if r, ok := checkBudApp(p); !ok || r.Status != OK || !strings.Contains(r.Detail, "running kitty 0.50.0") {
 		t.Fatalf("current: %+v", r)
 	}
-	kittyVersion = func(string) (string, error) { return "0.51.0", nil }
-	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "is 0.51.0 now") || r.Fix != "bud bundle" {
+	bundle.KittyVersion = func(string) (string, error) { return "0.51.0", nil }
+	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "is out of date: kitty is 0.51.0 now") || r.Fix != "bud bundle" {
 		t.Fatalf("kitty updated: %+v", r)
 	}
-	kittyVersion = func(string) (string, error) { return "", errors.New("no such file") }
-	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "isn't there any more") {
-		t.Fatalf("kitty gone: %+v", r)
+	bundle.KittyVersion = func(string) (string, error) { return "0.50.0", nil }
+
+	// another bud built it: what an update finished at launch leaves behind
+	info.Version = "0.26.0"
+	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "bud 0.26.0 built it") {
+		t.Fatalf("older bud: %+v", r)
 	}
-	// the same place spelled through a link isn't a move
-	kittyVersion = func(string) (string, error) { return "0.50.0", nil }
+	// a dev build is no release, so that doesn't count there
+	version.Version = ""
+	if r, _ := checkBudApp(p); r.Status != OK {
+		t.Fatalf("dev build: %+v", r)
+	}
+	version.Version = "0.27.0"
+	info.Version = "0.27.0"
+
+	// the same place spelled through a link isn't a move; another place is
 	linked := t.TempDir()
 	os.MkdirAll(filepath.Join(linked, "real", "Bud.app", "Contents", "Resources", bundle.KittyDir), 0o755)
 	os.Symlink(filepath.Join(linked, "real"), filepath.Join(linked, "via"))
@@ -756,18 +769,15 @@ func TestCheckBudAppWarnsWhenKittyMovedOn(t *testing.T) {
 		t.Fatalf("linked path: %+v", r)
 	}
 	findBundles = func(*paths.Paths) []bundle.Installed { return []bundle.Installed{{Path: app}} }
-
-	// moved: the config dir it names isn't its own
-	kittyVersion = func(string) (string, error) { return "0.50.0", nil }
 	info.ConfigDir = bundle.ConfigDirFor("/Users/j/Applications/Bud.app")
-	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "was moved") || r.Fix != "bud bundle" {
+	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "it was moved") {
 		t.Fatalf("moved: %+v", r)
 	}
 
-	// the droplet, no Bud.app, or not macOS: nothing to say
-	readMac = func(string) (bundle.MacInfo, error) { return bundle.MacInfo{}, nil }
-	if _, ok := checkBudApp(p); ok {
-		t.Fatal("reported on the droplet")
+	// the droplet up to date, no Bud.app, or not macOS
+	readMac = func(string) (bundle.MacInfo, error) { return bundle.MacInfo{Version: "0.27.0"}, nil }
+	if r, ok := checkBudApp(p); !ok || r.Status != OK || !strings.HasSuffix(r.Detail, "is up to date") {
+		t.Fatalf("droplet: %+v", r)
 	}
 	findBundles = func(*paths.Paths) []bundle.Installed { return nil }
 	if _, ok := checkBudApp(p); ok {

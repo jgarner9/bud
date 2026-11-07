@@ -33,3 +33,9 @@ func fromBuildInfo(info *debug.BuildInfo) string {
 
 	return strings.TrimPrefix(v, "v")
 }
+
+// Released says whether this is a release build, with Version set at link
+// time, rather than a dev build from a checkout (go run, just build)
+func Released() bool {
+	return Version != ""
+}

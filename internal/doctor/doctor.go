@@ -27,6 +27,7 @@ import (
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/projects"
+	"jgarner.dev/bud/internal/version"
 )
 
 type Status int
@@ -166,37 +167,38 @@ func Run(opts Options) []Result {
 
 // swappable in tests
 var (
-	findBundles  = bundle.Find
-	readMac      = bundle.ReadMac
-	kittyVersion = bundle.KittyVersion
-	doctorGOOS   = runtime.GOOS
+	findBundles = bundle.Find
+	readMac     = bundle.ReadMac
+	doctorGOOS  = runtime.GOOS
 )
 
-// checkBudApp warns when Bud.app, as a copy of kitty (JGA-185), has stopped
-// matching: kitty was updated since (the copy doesn't follow), it's gone, or
-// the app was moved, so the config dir its Info.plist names isn't its own.
-// bud bundle builds it again. Nothing to say for the droplet, with no
-// Bud.app, or off macOS
+// checkBudApp warns when the Bud.app bud bundle made is out of date, by the
+// same rules bud update rebuilds it by (bundle.MacInfo.Stale, JGA-185,
+// JGA-187): another bud built it (a dev build doesn't count, being no
+// release), or as a copy of kitty, kitty was updated or removed since, or
+// the app was moved. bud update rebuilds it, but not when a launch finishes
+// an update, which is what this catches; bud bundle does it by hand. Nothing
+// to say with no Bud.app, or off macOS
 func checkBudApp(p *paths.Paths) (Result, bool) {
 	if doctorGOOS != "darwin" {
 		return Result{}, false
 	}
 	for _, b := range findBundles(p) {
 		info, err := readMac(b.Path)
-		if err != nil || info.Kitty == "" {
+		if err != nil {
 			continue
 		}
-		r := Result{Name: "Bud app", Status: Warn, Fix: "bud bundle"}
-		now, err := kittyVersion(info.Kitty)
-		switch {
-		case !bundle.SameDir(info.ConfigDir, bundle.ConfigDirFor(b.Path)):
-			r.Detail = b.Path + " was moved, so it opens a plain kitty without bud"
-		case err != nil:
-			r.Detail = b.Path + " is a copy of " + info.Kitty + ", which isn't there any more"
-		case now != info.KittyVersion:
-			r.Detail = b.Path + " runs kitty " + info.KittyVersion + ", and " + info.Kitty + " is " + now + " now"
-		default:
-			r.Status, r.Fix, r.Detail = OK, "", b.Path+" runs kitty "+now
+		w := bundle.Want{Version: version.String()}
+		if !version.Released() {
+			w.Version = info.Version
+		}
+		r := Result{Name: "Bud app"}
+		if why := info.Stale(b.Path, w); why != "" {
+			r.Status, r.Detail, r.Fix = Warn, b.Path+" is out of date: "+why, "bud bundle"
+		} else if info.Kitty != "" {
+			r.Detail = b.Path + " is up to date, running kitty " + info.KittyVersion
+		} else {
+			r.Detail = b.Path + " is up to date"
 		}
 		return r, true
 	}
@@ -324,7 +326,7 @@ func checkSyncedPlugins(p *paths.Paths, cfg config.Settings, dir string) (Result
 		return Result{}, false
 	}
 	ledger, _, _ := kit.ReadLedger(p.KitLedger())
-	if ledger != nil && !bundle.SameDir(ledgerDir(ledger), dir) {
+	if ledger != nil && !paths.SameDir(ledgerDir(ledger), dir) {
 		// written for another config dir: nothing in this one is bud's
 		ledger = nil
 	}

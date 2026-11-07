@@ -9,6 +9,7 @@ import (
 
 	"jgarner.dev/bud/internal/bundle"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/version"
 )
 
 // fakeBundles records what bundle would build, as if running on goos
@@ -136,53 +137,75 @@ func TestUserKittyLooksWhereKittyDoes(t *testing.T) {
 
 func TestUpdateRebuildsAStaleBundleWhereItIs(t *testing.T) {
 	mac, linux, _ := fakeBundles(t, "darwin")
-	origFind, origStale, origLinux := findBundles, macStale, linuxVersion
-	t.Cleanup(func() { findBundles, macStale, linuxVersion = origFind, origStale, origLinux })
-	findBundles = func(*paths.Paths) []bundle.Installed {
-		return []bundle.Installed{{Path: "/Users/j/Applications/Bud.app"}}
-	}
-	p := &paths.Paths{Data: "/data"}
+	origFind, origRead, origLinux, origRunning, origSelf, origVersion := findBundles, readMac, linuxVersion, appRunning, installedSelf, bundle.KittyVersion
+	t.Cleanup(func() {
+		findBundles, readMac, linuxVersion, appRunning, installedSelf, bundle.KittyVersion = origFind, origRead, origLinux, origRunning, origSelf, origVersion
+	})
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	t.Setenv("XDG_DATA_HOME", "/data")
+	p, _ := paths.Resolve()
+	os.MkdirAll(filepath.Dir(p.MachineConfig()), 0o755)
+	os.WriteFile(p.MachineConfig(), []byte(`{"terminal": "kitty"}`), 0o644)
+	app := "/Users/j/Applications/Bud.app"
+	findBundles = func(*paths.Paths) []bundle.Installed { return []bundle.Installed{{Path: app}} }
+	bundleKitty = func(*paths.Paths) string { return "/Applications/kitty.app" }
+	installedSelf = func(*paths.Paths) (string, bool) { return "/u/bin/bud", true }
+	appRunning = func(string) bool { return false }
+	bundle.KittyVersion = func(string) (string, error) { return "0.50.0", nil }
+	current := bundle.MacInfo{Version: version.String(), Bin: "/u/bin/bud", Kitty: "/Applications/kitty.app", KittyVersion: "0.50.0", ConfigDir: bundle.ConfigDirFor(app)}
+	info := current
+	readMac = func(string) (bundle.MacInfo, error) { return info, nil }
+	refresh := func() string { return captureStdout(t, func() { refreshBundlesFor(&Globals{}, p) }) }
 
 	// up to date: nothing built
-	macStale = func(string, string, bool) string { return "" }
-	out := captureStdout(t, func() { refreshBundlesFor(&Globals{}, p) })
-	if len(*mac) != 0 || out != "" {
+	if out := refresh(); len(*mac) != 0 || out != "" {
 		t.Fatalf("rebuilt an up-to-date app: %v %q", *mac, out)
 	}
 
-	// stale: built again in the same place, saying why
-	var wantKitty bool
+	// another bud built it: built again in the same place, saying why
+	info.Version = "0.25.2"
+	if out := refresh(); len(*mac) != 1 || (*mac)[0] != app || !strings.Contains(out, "Rebuilding "+app+" (bud 0.25.2 built it)") {
+		t.Fatalf("built %v, said %q", *mac, out)
+	}
+
+	// open: left alone, saying what to do
+	appRunning = func(string) bool { return true }
+	if out := refresh(); len(*mac) != 1 || !strings.Contains(out, "but it's open: quit Bud, then run 'bud bundle'") {
+		t.Fatalf("rebuilt an open app: %v %q", *mac, out)
+	}
+	appRunning = func(string) bool { return false }
+
+	// kitty is the terminal but its app can't be found: a kitty copy is kept, not made the droplet
+	bundleKitty = func(*paths.Paths) string { return "" }
+	if out := refresh(); len(*mac) != 1 || !strings.Contains(out, "bud can't find kitty.app now, so it's left as it is") {
+		t.Fatalf("replaced the kitty copy: %v %q", *mac, out)
+	}
 	bundleKitty = func(*paths.Paths) string { return "/Applications/kitty.app" }
-	macStale = func(_, _ string, kitty bool) string { wantKitty = kitty; return "bud 0.25.2 built it" }
-	out = captureStdout(t, func() { refreshBundlesFor(&Globals{}, p) })
-	if len(*mac) != 1 || (*mac)[0] != "/Users/j/Applications/Bud.app" || !wantKitty {
-		t.Fatalf("built %v (want kitty %v)", *mac, wantKitty)
-	}
-	if !strings.Contains(out, "Rebuilding /Users/j/Applications/Bud.app (bud 0.25.2 built it)") {
-		t.Fatalf("output %q", out)
-	}
 
 	// a failed build only says so
 	buildMac = func(bundle.Mac, string) error { return errors.New("codesign failed") }
-	out = captureStdout(t, func() { refreshBundlesFor(&Globals{}, p) })
-	if !strings.Contains(out, "Couldn't rebuild it (codesign failed); 'bud bundle' tries again.") {
+	if out := refresh(); !strings.Contains(out, "Couldn't rebuild it (codesign failed); 'bud bundle' tries again.") {
 		t.Fatalf("output %q", out)
 	}
 
+	// not the bud install.sh installed (a dev build, go run): never rebuilds
+	installedSelf = func(*paths.Paths) (string, bool) { return "", false }
+	readMac = func(string) (bundle.MacInfo, error) { t.Fatal("a dev build looked at the app"); return info, nil }
+	refresh()
+	installedSelf = func(*paths.Paths) (string, bool) { return "/u/bin/bud", true }
+
 	// never run bud bundle: nothing to do
 	findBundles = func(*paths.Paths) []bundle.Installed { return nil }
-	macStale = func(string, string, bool) string { t.Fatal("checked a bundle that isn't there"); return "" }
-	refreshBundlesFor(&Globals{}, p)
+	refresh()
 
-	// Linux: the entry another bud wrote, rewritten with its icons where bud bundle puts them
+	// Linux: the entry another bud wrote, written again in its default place
+	*mac = (*mac)[:0]
 	bundleGOOS = "linux"
-	t.Setenv("XDG_DATA_HOME", "/data")
 	entry := filepath.Join("/data", "applications", "bud.desktop")
 	findBundles = func(*paths.Paths) []bundle.Installed { return []bundle.Installed{{Path: entry}} }
-	linuxVersion = func(string) string { return "0.25.2" }
-	lp, _ := paths.Resolve()
-	captureStdout(t, func() { refreshBundlesFor(&Globals{}, lp) })
-	if len(*linux) != 2 || (*linux)[0] != entry || (*linux)[1] != "/data/icons/hicolor/256x256/apps/bud.png" {
-		t.Fatalf("installed %v", *linux)
+	linuxVersion = func(string) string { return "" }
+	if out := refresh(); len(*linux) != 2 || (*linux)[0] != entry || (*linux)[1] != "/data/icons/hicolor/256x256/apps/bud.png" || !strings.Contains(out, "(an older bud wrote it)") {
+		t.Fatalf("installed %v, said %q", *linux, out)
 	}
 }

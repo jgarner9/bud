@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 
@@ -129,40 +130,100 @@ func userKitty(home string) (dir, conf string) {
 	return dirs[0], ""
 }
 
-// refreshBundles builds the app again where bud bundle put it before, when
-// it's out of date (JGA-187): Bud.app built by another bud, copied from a
-// kitty that has been updated, moved, or the wrong kind for the terminal now
-// (bundle.MacStale), or a bud.desktop another bud wrote. Never run bud bundle,
-// and there's nothing to do. A failure only says so: the app still opens
-// bud, and bud bundle tries again. TestMain turns it off, so no test
-// rebuilds this machine's app
+// refreshBundles builds the app bud bundle made again, in place, when it's
+// out of date (JGA-187): Bud.app (bundle.MacInfo.Stale) or bud.desktop built
+// by another bud, running another bud, the wrong kind for the terminal, or
+// copying a kitty that has moved on. Only the default locations bundle.Find
+// looks in are refreshed, not a --dest elsewhere. Nothing to do when bud
+// bundle never ran, and a failure only says so: the app still opens bud, and
+// bud bundle tries again. TestMain turns it off, so no test rebuilds this
+// machine's app
 var refreshBundles = refreshBundlesFor
 
 // swappable in tests
 var (
-	macStale     = bundle.MacStale
+	readMac      = bundle.ReadMac
 	linuxVersion = bundle.LinuxVersion
+	// appRunning says whether the app at path has a process running from it
+	appRunning = func(path string) bool {
+		return exec.Command("pgrep", "-f", filepath.Join(path, "Contents", "MacOS")+"/").Run() == nil
+	}
+	// installedSelf is this bud's path when it's the one install.sh
+	// installed: a rebuild bakes this bud into the app, so a dev build (a go
+	// run temp binary, say) must never do one
+	installedSelf = func(p *paths.Paths) (string, bool) {
+		r, err := installer.ReadReceipt(p.InstallReceipt())
+		self, serr := os.Executable()
+		if err != nil || r == nil || serr != nil || !version.Released() || !paths.SameDir(r.Path, self) {
+			return "", false
+		}
+		return r.Path, true
+	}
 )
 
 func refreshBundlesFor(g *Globals, p *paths.Paths) {
-	for _, b := range findBundles(p) {
-		why, dest := "", b.Path
+	found := findBundles(p)
+	if len(found) == 0 {
+		return
+	}
+	self, ok := installedSelf(p)
+	if !ok {
+		g.Logf("not rebuilding the app: this bud isn't the release install.sh installed")
+		return
+	}
+	want := bundle.Want{Version: version.String(), Bin: self}
+	// kitty is the terminal, but its app isn't where bud looks: a kitty copy
+	// is left as it is rather than rebuilt as the droplet
+	lostKitty := false
+	if bundleGOOS == "darwin" {
+		name, err := pickTerminal(p, "")
+		if err != nil {
+			g.Logf("not rebuilding the app: %v", err)
+			return
+		}
+		want.Kind = true
+		if name == "kitty" {
+			want.Kitty = bundleKitty(p)
+			lostKitty = want.Kitty == ""
+		}
+	}
+	for _, b := range found {
+		why := ""
 		switch bundleGOOS {
 		case "darwin":
-			why = macStale(b.Path, version.String(), bundleKitty(p) != "")
-		case "linux":
-			if v := linuxVersion(b.Path); v != version.String() {
-				why = "bud " + v + " wrote it"
+			info, err := readMac(b.Path)
+			if err != nil {
+				g.Logf("can't read %s: %v", b.Path, err)
+				continue
 			}
-			// bud bundle with no --dest writes the icons into the icon theme
-			if b.Path == p.DesktopEntry() {
-				dest = ""
+			w := want
+			if lostKitty {
+				if info.Kitty != "" {
+					fmt.Printf("%s is a copy of kitty, and bud can't find kitty.app now, so it's left as it is.\n", b.Path)
+					continue
+				}
+				w.Kind = false
+			}
+			if why = info.Stale(b.Path, w); why != "" && appRunning(b.Path) {
+				fmt.Printf("%s is out of date (%s), but it's open: quit Bud, then run 'bud bundle'.\n", b.Path, why)
+				continue
+			}
+		case "linux":
+			if v := linuxVersion(b.Path); v == "" {
+				why = "an older bud wrote it"
+			} else if v != want.Version {
+				why = "bud " + v + " wrote it"
 			}
 		}
 		if why == "" {
 			continue
 		}
 		fmt.Printf("Rebuilding %s (%s)...\n", b.Path, why)
+		dest := b.Path
+		if bundleGOOS == "linux" {
+			// bud.desktop in its default place, with the icons in the icon theme
+			dest = ""
+		}
 		if err := bundleCmd(g, nil, false, false, dest); err != nil {
 			fmt.Printf("Couldn't rebuild it (%v); 'bud bundle' tries again.\n", err)
 		}

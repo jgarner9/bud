@@ -131,3 +131,14 @@ func (p *Paths) DesktopIcon(size int) string {
 	px := strconv.Itoa(size)
 	return filepath.Join(filepath.Dir(p.Data), "icons", "hicolor", px+"x"+px, "apps", AppName+".png")
 }
+
+// SameDir says whether a and b name one dir, links resolved where they can be
+func SameDir(a, b string) bool {
+	resolve := func(d string) string {
+		if r, err := filepath.EvalSymlinks(d); err == nil {
+			return r
+		}
+		return filepath.Clean(d)
+	}
+	return resolve(a) == resolve(b)
+}

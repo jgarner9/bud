@@ -514,11 +514,38 @@ func TestUninstallHintUsesThePluginsScope(t *testing.T) {
 		{ID: "bud@clod", Scope: "user"}:                          "claude plugin uninstall --scope user bud@clod",
 		{ID: "bud@clod", Scope: "local", Project: "/home/j/app"}: "cd /home/j/app && claude plugin uninstall --scope local bud@clod",
 		{ID: "bud@clod", Scope: "project", Project: "/x/my app"}: "cd '/x/my app' && claude plugin uninstall --scope project bud@clod",
+		{ID: "bud@corp", Scope: "managed"}:                       "bud@corp is installed by your organisation's policy, so an administrator has to remove it",
 	}
 	for p, want := range cases {
 		if got := UninstallHint(p); got != want {
 			t.Errorf("UninstallHint(%+v) = %q, want %q", p, got, want)
 		}
+	}
+}
+
+func TestOwnedIsTheLedgersCopyAtUserScope(t *testing.T) {
+	ledger := &Ledger{Plugins: map[string]string{"bud@bud-plugins": "installed"}}
+	cases := map[Plugin]bool{
+		{ID: "bud@bud-plugins", Scope: "user"}:                 true,
+		{ID: "bud@bud-plugins"}:                                true,
+		{ID: "bud@bud-plugins", Scope: "local", Project: "/w"}: false,
+		{ID: "bud@clod", Scope: "user"}:                        false,
+	}
+	for p, want := range cases {
+		if got := Owned(p, ledger); got != want {
+			t.Errorf("Owned(%+v) = %v, want %v", p, got, want)
+		}
+	}
+	if Owned(Plugin{ID: "bud@bud-plugins"}, nil) {
+		t.Error("a nil ledger owns nothing")
+	}
+}
+
+func TestShadowNoteTellsCopiesOfOneIDApart(t *testing.T) {
+	got := shadowNote([]Plugin{{ID: "bud@clod", Scope: "user"}, {ID: "bud@clod", Scope: "local", Project: "/w"}})
+	want := ", but bud@clod, bud@clod (local, /w) load instead: claude plugin uninstall --scope user bud@clod; cd /w && claude plugin uninstall --scope local bud@clod"
+	if got != want {
+		t.Fatalf("got %q\nwant %q", got, want)
 	}
 }
 

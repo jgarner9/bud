@@ -658,41 +658,64 @@ func TestCheckSyncedPluginsWarnsWhenAnotherCopyLoads(t *testing.T) {
 		return fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@bud-plugins"]}`)}}
 	}
 	t.Cleanup(func() { kitFS, pluginList = origFS, origList })
-	p := &paths.Paths{State: t.TempDir()}
+	p, dir := &paths.Paths{State: t.TempDir()}, t.TempDir()
 	cfg := config.Defaults()
 	list := func(ps ...kit.Plugin) func() ([]kit.Plugin, error) {
 		return func() ([]kit.Plugin, error) { return ps, nil }
 	}
 	synced := func(name string) kit.Plugin { return kit.Plugin{ID: name + "@synced", Scope: "synced"} }
+	ledger := func(d string) {
+		os.WriteFile(p.KitLedger(), []byte(`{"plugins": {"bud@bud-plugins": "installed"}, "dir": "`+d+`"}`), 0o644)
+	}
 
+	// yours, in its own scope
 	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@clod", Scope: "local", Project: "/w"}, synced("bud-ide"))
-	r, ok := checkSyncedPlugins(p, cfg)
-	if !ok || r.Status != Warn || !strings.Contains(r.Detail, "bud@clod loads instead") || !strings.Contains(r.Fix, "cd /w && claude plugin uninstall --scope local bud@clod") {
+	r, ok := checkSyncedPlugins(p, cfg, dir)
+	if !ok || r.Status != Warn || !strings.Contains(r.Detail, "bud@clod (local, /w) loads instead") || !strings.Contains(r.Fix, "cd /w && claude plugin uninstall --scope local bud@clod") {
 		t.Fatalf("hidden synced copy: %+v", r)
 	}
 
-	// bud's own copy is sync's to take out, not yours
-	os.WriteFile(p.KitLedger(), []byte(`{"plugins": {"bud@bud-plugins": "installed"}}`), 0o644)
+	// bud's own copy, still there: bud kit sync takes it out
+	ledger(dir)
 	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@bud-plugins", Scope: "user"})
-	if r, ok := checkSyncedPlugins(p, cfg); !ok || r.Status != OK {
+	if r, _ := checkSyncedPlugins(p, cfg, dir); r.Status != Warn || !strings.Contains(r.Detail, "bud's own bud@bud-plugins is still installed") || !strings.HasPrefix(r.Fix, "bud kit sync") {
 		t.Fatalf("bud's own copy: %+v", r)
+	}
+
+	// the same id at another scope isn't bud's: bud installs at user scope only
+	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@bud-plugins", Scope: "local", Project: "/w"})
+	if r, _ := checkSyncedPlugins(p, cfg, dir); !strings.Contains(r.Fix, "cd /w && claude plugin uninstall --scope local bud@bud-plugins") {
+		t.Fatalf("local copy of bud's id: %+v", r)
+	}
+
+	// a ledger for another config dir owns nothing here
+	ledger(t.TempDir())
+	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@bud-plugins", Scope: "user"})
+	if r, _ := checkSyncedPlugins(p, cfg, dir); !strings.Contains(r.Fix, "claude plugin uninstall --scope user bud@bud-plugins") {
+		t.Fatalf("ledger for another dir: %+v", r)
+	}
+
+	// only synced copies: all good
+	pluginList = list(synced("bud"), synced("bud-ide"))
+	if r, ok := checkSyncedPlugins(p, cfg, dir); !ok || r.Status != OK {
+		t.Fatalf("only synced copies: %+v", r)
 	}
 
 	// one you turned off in bud and installed yourself is your choice
 	off := cfg
 	off.Kit.Disabled = []string{"superpowers@bud-plugins"}
 	pluginList = list(synced("superpowers"), kit.Plugin{ID: "superpowers@claude-plugins-official", Scope: "user"})
-	if _, ok := checkSyncedPlugins(p, off); ok {
+	if _, ok := checkSyncedPlugins(p, off, dir); ok {
 		t.Fatal("warned about a plugin turned off with kit.disabled")
 	}
 
 	// nothing synced, or no list: nothing to say
 	pluginList = list(kit.Plugin{ID: "bud@bud-plugins", Scope: "user"})
-	if _, ok := checkSyncedPlugins(p, cfg); ok {
+	if _, ok := checkSyncedPlugins(p, cfg, dir); ok {
 		t.Fatal("reported with nothing synced")
 	}
 	pluginList = func() ([]kit.Plugin, error) { return nil, errors.New("boom") }
-	if _, ok := checkSyncedPlugins(p, cfg); ok {
+	if _, ok := checkSyncedPlugins(p, cfg, dir); ok {
 		t.Fatal("reported a failed list")
 	}
 }

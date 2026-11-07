@@ -129,7 +129,6 @@ type Env struct {
 	Disabled     []string // entries turned off on this machine (bud kit disable)
 }
 
-// without is k minus the named entries
 // Without is k with the plugins and marketplaces names turns off (kit.disabled) left out
 func (k *Kit) Without(names []string) *Kit {
 	if len(names) == 0 {
@@ -577,12 +576,37 @@ func SyncsAny(k *Kit, installed []Plugin) bool {
 	return slices.ContainsFunc(k.Plugins, func(id string) bool { return slices.Contains(ids, pluginName(id)+"@synced") })
 }
 
-// Shadowed lists the installed copies that hide a kit plugin claude.ai syncs
-// (JGA-182): Claude Code loads one plugin of a name, and with another copy
-// installed it isn't the synced one, so claude.ai's updates never arrive.
-// Copies in ledger are bud's, which sync takes out itself, so they're left
-// out; the rest are yours to uninstall. A nil ledger leaves none out
-func Shadowed(k *Kit, installed []Plugin, ledger *Ledger) []Plugin {
+// synced says whether p is a copy claude.ai syncs
+func (p Plugin) synced() bool {
+	return p.Scope == "synced" || strings.HasSuffix(p.ID, "@synced")
+}
+
+// Label is p's id, with its scope (and project) when that isn't user, so two
+// copies of one id read apart
+func (p Plugin) Label() string {
+	switch {
+	case p.Scope == "" || p.Scope == "user":
+		return p.ID
+	case p.Project != "":
+		return p.ID + " (" + p.Scope + ", " + p.Project + ")"
+	}
+	return p.ID + " (" + p.Scope + ")"
+}
+
+// Owned says whether p is bud's own copy: in the ledger, and at user scope,
+// the only scope bud installs at. A nil ledger owns nothing
+func Owned(p Plugin, ledger *Ledger) bool {
+	if ledger == nil || (p.Scope != "" && p.Scope != "user") {
+		return false
+	}
+	_, ok := ledger.Plugins[p.ID]
+	return ok
+}
+
+// Shadowing lists every installed copy that hides a kit plugin claude.ai
+// syncs (JGA-182): Claude Code loads one plugin of a name, and with another
+// copy installed it isn't the synced one, so claude.ai's updates never arrive
+func Shadowing(k *Kit, installed []Plugin) []Plugin {
 	ids := IDs(installed)
 	var out []Plugin
 	for _, id := range k.Plugins {
@@ -590,11 +614,7 @@ func Shadowed(k *Kit, installed []Plugin, ledger *Ledger) []Plugin {
 			continue
 		}
 		for _, p := range installed {
-			owned := false
-			if ledger != nil {
-				_, owned = ledger.Plugins[p.ID]
-			}
-			if pluginName(p.ID) == pluginName(id) && p.Scope != "synced" && !strings.HasSuffix(p.ID, "@synced") && !owned && !slices.Contains(out, p) {
+			if pluginName(p.ID) == pluginName(id) && !p.synced() && !slices.Contains(out, p) {
 				out = append(out, p)
 			}
 		}
@@ -602,12 +622,22 @@ func Shadowed(k *Kit, installed []Plugin, ledger *Ledger) []Plugin {
 	return out
 }
 
-// UninstallHint is the command that takes out a copy Shadowed found, in its
-// own scope; a project or local one is uninstalled from its project's dir
+// Shadowed is the copies Shadowing finds that aren't bud's: sync takes bud's
+// own out itself, so these are the ones that are yours to uninstall
+func Shadowed(k *Kit, installed []Plugin, ledger *Ledger) []Plugin {
+	return slices.DeleteFunc(Shadowing(k, installed), func(p Plugin) bool { return Owned(p, ledger) })
+}
+
+// UninstallHint is how to take out a copy Shadowed found: the command in its
+// own scope, from its project's dir for a project or local one. One installed
+// by policy (managed) is for an administrator to remove
 func UninstallHint(p Plugin) string {
 	scope := p.Scope
 	if scope == "" {
 		scope = "user"
+	}
+	if scope == "managed" {
+		return p.ID + " is installed by your organisation's policy, so an administrator has to remove it"
 	}
 	cmd := "claude plugin uninstall --scope " + scope + " " + p.ID
 	if (scope == "project" || scope == "local") && p.Project != "" {
@@ -616,12 +646,21 @@ func UninstallHint(p Plugin) string {
 	return cmd
 }
 
+// Labels is the copies' labels, joined for a message
+func Labels(plugins []Plugin) string {
+	labels := make([]string, len(plugins))
+	for i, p := range plugins {
+		labels[i] = p.Label()
+	}
+	return strings.Join(labels, ", ")
+}
+
 // shadowNote is what sync adds to a plugin's reason when copies hide the synced one
 func shadowNote(shadows []Plugin) string {
 	if len(shadows) == 0 {
 		return ""
 	}
-	ids, hints := IDs(shadows), make([]string, len(shadows))
+	hints := make([]string, len(shadows))
 	for i, p := range shadows {
 		hints[i] = UninstallHint(p)
 	}
@@ -629,7 +668,7 @@ func shadowNote(shadows []Plugin) string {
 	if len(shadows) > 1 {
 		verb = " load"
 	}
-	return ", but " + strings.Join(ids, ", ") + verb + " instead: " + strings.Join(hints, "; ")
+	return ", but " + Labels(shadows) + verb + " instead: " + strings.Join(hints, "; ")
 }
 
 // shellWord quotes s for a shell when it needs it, so a pasted command works

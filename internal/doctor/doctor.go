@@ -150,7 +150,7 @@ func Run(opts Options) []Result {
 		if r, ok := checkClaudeSetup(claudeDir()); ok {
 			results = append(results, r)
 		}
-		if r, ok := checkSyncedPlugins(p, cfg); ok {
+		if r, ok := checkSyncedPlugins(p, cfg, claudeDir()); ok {
 			results = append(results, r)
 		}
 	}
@@ -258,13 +258,14 @@ func checkClaudeSetup(dir string) (Result, bool) {
 }
 
 // checkSyncedPlugins warns when another copy of a kit plugin claude.ai syncs
-// is installed (JGA-182): Claude Code loads that one instead, so the synced
-// one's updates (new skills) never show up, and kit sync leaves a copy bud
-// didn't install alone. Plugins turned off with kit.disabled, bud's own
-// copies (sync takes those out) and a list claude can't give (the claude
-// code check covers a broken claude) leave nothing to say, as does claude.ai
-// syncing none of them
-func checkSyncedPlugins(p *paths.Paths, cfg config.Settings) (Result, bool) {
+// is installed in dir's Claude Code (JGA-182): Claude Code loads that one
+// instead, so the synced one's updates (new skills) never show up. A copy of
+// yours is yours to uninstall, since kit sync leaves it alone; bud's own (its
+// ledger's, when the ledger is for dir) goes at the next bud kit sync.
+// Plugins turned off with kit.disabled and a list claude can't give (the
+// claude code check covers a broken claude) leave nothing to say, as does
+// claude.ai syncing none of them
+func checkSyncedPlugins(p *paths.Paths, cfg config.Settings, dir string) (Result, bool) {
 	k, err := kit.Load(kitFS())
 	if err != nil {
 		return Result{}, false
@@ -278,20 +279,59 @@ func checkSyncedPlugins(p *paths.Paths, cfg config.Settings) (Result, bool) {
 		return Result{}, false
 	}
 	ledger, _, _ := kit.ReadLedger(p.KitLedger())
+	if ledger != nil && !sameDir(ledgerDir(ledger), dir) {
+		// written for another config dir: nothing in this one is bud's
+		ledger = nil
+	}
 	r := Result{Name: "synced plugins"}
-	shadows := kit.Shadowed(k, installed, ledger)
-	if len(shadows) == 0 {
+	var yours, buds []kit.Plugin
+	for _, c := range kit.Shadowing(k, installed) {
+		if kit.Owned(c, ledger) {
+			buds = append(buds, c)
+		} else {
+			yours = append(yours, c)
+		}
+	}
+	if len(yours)+len(buds) == 0 {
 		r.Detail = "the plugins claude.ai syncs are the ones that load"
 		return r, true
 	}
-	fixes := make([]string, len(shadows))
-	for i, s := range shadows {
-		fixes[i] = kit.UninstallHint(s)
+	var details, fixes []string
+	if len(yours) > 0 {
+		details = append(details, kit.Labels(yours)+" loads instead of the copy claude.ai syncs, so its updates never reach you")
+		for _, c := range yours {
+			fixes = append(fixes, kit.UninstallHint(c))
+		}
+	}
+	if len(buds) > 0 {
+		details = append(details, "bud's own "+kit.Labels(buds)+" is still installed and loads instead of the copy claude.ai syncs")
+		fixes = append(fixes, "bud kit sync")
 	}
 	r.Status = Warn
-	r.Detail = strings.Join(kit.IDs(shadows), ", ") + " loads instead of the copy claude.ai syncs, so its updates never reach you"
+	r.Detail = strings.Join(details, "; ")
 	r.Fix = strings.Join(fixes, "; ") + ", then restart Claude Code"
 	return r, true
+}
+
+// ledgerDir is the Claude Code config dir a ledger is for: "" is from before
+// bud kept its own (JGA-135), which means ~/.claude
+func ledgerDir(l *kit.Ledger) string {
+	if l.Dir != "" {
+		return l.Dir
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".claude")
+}
+
+// sameDir says whether a and b name one dir, links resolved where they can be
+func sameDir(a, b string) bool {
+	resolve := func(d string) string {
+		if r, err := filepath.EvalSymlinks(d); err == nil {
+			return r
+		}
+		return filepath.Clean(d)
+	}
+	return resolve(a) == resolve(b)
 }
 
 // parseMCPList reads claude mcp list's output: each server's statuses by

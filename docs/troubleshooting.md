@@ -30,6 +30,8 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 **The app doesn't open.** `bud bundle` builds it again with your current `PATH` and bud; `bud launch` from a shell shows any error.
 
+**Bud.app is out of date with kitty.** On macOS with Kitty, Bud.app is a copy of kitty.app, so it doesn't follow kitty's updates. `bud doctor` warns (`Bud app`) when kitty has moved on; `bud bundle` copies it again.
+
 ## Starting over
 
 `bud uninstall` lists everything bud put on the machine and removes it after asking (`--keep-config` keeps `config.json` and your tools). With a shared `~/.claude` that includes what the kit added there, the same as `bud kit unsync`; everything of yours stays. Your clod checkout (`~/clod`) stays too; `~/clod/install.sh uninstall` takes its setup out of Claude Code first if you want that gone. Then reinstall with the one-liner from the README.

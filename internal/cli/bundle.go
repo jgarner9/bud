@@ -40,6 +40,17 @@ var (
 	buildMac     = func(m bundle.Mac, dest string) error { return m.Build(dest) }
 	bundleGOOS   = runtime.GOOS
 	installLinux = func(l bundle.Linux, entry string, icon func(int) string) error { return l.Install(entry, icon) }
+	// the kitty.app Bud.app copies: kitty's app when it's the terminal bud
+	// launches, else "" for the droplet
+	bundleKitty = func(p *paths.Paths) string {
+		name, err := pickTerminal(p, "")
+		if err != nil || name != "kitty" {
+			return ""
+		}
+		t, _ := installer.Lookup("kitty")
+		_, app := t.Locate()
+		return app
+	}
 )
 
 func bundleCmd(g *Globals, args []string, macos, linux bool, dest string) error {
@@ -68,14 +79,45 @@ func bundleCmd(g *Globals, args []string, macos, linux bool, dest string) error 
 			return err
 		}
 	}
-	g.Logf("building %s to run %s", dest, self)
 	m := bundle.Mac{Bin: self, Path: os.Getenv("PATH"), Version: version.String()}
+	if p, err := paths.Resolve(); err == nil {
+		m.Kitty = bundleKitty(p)
+	}
+	what := "a droplet that runs bud launch"
+	if m.Kitty != "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		m.Home, m.Launch, m.KittyConf = home, launchArgv(self, &Globals{}, "", nil), userKittyConf(home)
+		what = "its own copy of " + m.Kitty
+	}
+	g.Logf("building %s, %s, to run %s", dest, what, self)
 	if err := buildMac(m, dest); err != nil {
 		return err
 	}
-	fmt.Printf("Installed %s: it opens bud with %s\n", dest, self)
+	fmt.Printf("Installed %s (%s): it opens bud with %s\n", dest, what, self)
 
 	return nil
+}
+
+// userKittyConf is your kitty.conf, which Bud's own kitty config includes so
+// Bud looks like your kitty: KITTY_CONFIG_DIRECTORY's, else the XDG config
+// dir's; "" when there's none
+func userKittyConf(home string) string {
+	dir := os.Getenv("KITTY_CONFIG_DIRECTORY")
+	// inside a Bud window it's Bud's own, which would include itself
+	if dir == "" || filepath.Base(dir) == bundle.KittyDir {
+		base := os.Getenv("XDG_CONFIG_HOME")
+		if base == "" {
+			base = filepath.Join(home, ".config")
+		}
+		dir = filepath.Join(base, "kitty")
+	}
+	if conf := filepath.Join(dir, "kitty.conf"); isFile(conf) {
+		return conf
+	}
+	return ""
 }
 
 // bundleBin is the bud the app runs: the one install.sh put in place, whose

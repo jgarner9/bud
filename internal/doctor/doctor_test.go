@@ -12,6 +12,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"jgarner.dev/bud/internal/bundle"
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
@@ -717,5 +718,36 @@ func TestCheckSyncedPluginsWarnsWhenAnotherCopyLoads(t *testing.T) {
 	pluginList = func() ([]kit.Plugin, error) { return nil, errors.New("boom") }
 	if _, ok := checkSyncedPlugins(p, cfg, dir); ok {
 		t.Fatal("reported a failed list")
+	}
+}
+
+func TestCheckBudAppWarnsWhenKittyMovedOn(t *testing.T) {
+	origFind, origKitty, origVersion := findBundles, macKitty, kittyVersion
+	t.Cleanup(func() { findBundles, macKitty, kittyVersion = origFind, origKitty, origVersion })
+	p := &paths.Paths{}
+	findBundles = func(*paths.Paths) []bundle.Installed { return []bundle.Installed{{Path: "/Applications/Bud.app"}} }
+	macKitty = func(string) (string, string) { return "/Applications/kitty.app", "0.50.0" }
+
+	kittyVersion = func(string) (string, error) { return "0.50.0", nil }
+	if r, ok := checkBudApp(p); !ok || r.Status != OK || !strings.Contains(r.Detail, "runs kitty 0.50.0") {
+		t.Fatalf("current: %+v", r)
+	}
+	kittyVersion = func(string) (string, error) { return "0.51.0", nil }
+	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "is 0.51.0 now") || r.Fix != "bud bundle" {
+		t.Fatalf("kitty updated: %+v", r)
+	}
+	kittyVersion = func(string) (string, error) { return "", errors.New("no such file") }
+	if r, _ := checkBudApp(p); r.Status != Warn || !strings.Contains(r.Detail, "isn't there any more") {
+		t.Fatalf("kitty gone: %+v", r)
+	}
+
+	// the droplet, or no Bud.app: nothing to say
+	macKitty = func(string) (string, string) { return "", "" }
+	if _, ok := checkBudApp(p); ok {
+		t.Fatal("reported on the droplet")
+	}
+	findBundles = func(*paths.Paths) []bundle.Installed { return nil }
+	if _, ok := checkBudApp(p); ok {
+		t.Fatal("reported with no Bud.app")
 	}
 }

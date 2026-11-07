@@ -1,5 +1,8 @@
 // Package bundle builds the app bundles that open bud from the desktop
-// (BASE.md 5.6): Bud.app on macOS, a droplet that runs bud launch
+// (BASE.md 5.6). On macOS Bud.app is its own copy of kitty when kitty is the
+// terminal (JGA-185, D97), so macOS, the Dock and window managers see an app
+// called Bud, and Cmd+Q quits only it; with another terminal it's a droplet
+// that runs bud launch
 package bundle
 
 import (
@@ -26,7 +29,28 @@ type Mac struct {
 	Bin     string // the bud it runs
 	Path    string // the PATH it runs bud with
 	Version string
+
+	// Kitty is the kitty.app Bud.app is a copy of; "" builds the droplet
+	Kitty string
+	// Launch is the command a Bud window runs, bud open; a dropped file or
+	// folder goes after it
+	Launch []string
+	// Home is where a Bud window starts
+	Home string
+	// KittyConf is your own kitty.conf, which Bud's includes; "" when there's none
+	KittyConf string
+	// Dest is where Build installs the app, which the copy's config dir is named for
+	Dest string
 }
+
+// Keys bud adds to a kitty copy's Info.plist: the kitty.app it was copied
+// from and that kitty's version, so a newer kitty shows as a stale copy
+const (
+	kittyKey        = "BudKitty"
+	kittyVersionKey = "BudKittyVersion"
+	// KittyDir is the name of Bud's own kitty config dir inside the app
+	KittyDir = "bud-kitty"
+)
 
 // documentTypes lets Finder and the Dock drop any file or folder on the icon;
 // osacompile's own default only takes files
@@ -46,8 +70,9 @@ func MacDest() (string, error) {
 	return filepath.Join(home, "Applications", "Bud.app"), nil
 }
 
-// Build writes Bud.app at dest. It replaces a Bud.app bud built before, and
-// refuses to touch any other app there
+// Build writes Bud.app at dest: a copy of m.Kitty when that's set, else the
+// droplet. It replaces a Bud.app bud built before, and refuses to touch any
+// other app there
 func (m Mac) Build(dest string) error {
 	if err := ownedOrMissing(dest); err != nil {
 		return err
@@ -62,6 +87,38 @@ func (m Mac) Build(dest string) error {
 	}
 	defer os.RemoveAll(tmp)
 
+	app := filepath.Join(tmp, "Bud.app")
+	m.Dest = dest
+	build := m.droplet
+	if m.Kitty != "" {
+		build = m.kitty
+	}
+	if err := build(tmp, app); err != nil {
+		return err
+	}
+	// editing the bundle broke its signature, and Apple silicon needs an
+	// ad-hoc one to run it at all
+	if err := run("codesign", "--force", "--deep", "--sign", "-", app); err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(dest); err == nil {
+		if err := os.Rename(dest, filepath.Join(tmp, "old.app")); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(app, dest); err != nil {
+		return err
+	}
+	// so Finder and the Dock pick up the new icon and Launch Services the new
+	// Info.plist; it's only cosmetic
+	_ = exec.Command(lsregister, "-f", dest).Run()
+
+	return nil
+}
+
+// droplet compiles the AppleScript droplet that runs bud launch into app
+func (m Mac) droplet(tmp, app string) error {
 	src, err := m.script()
 	if err != nil {
 		return err
@@ -70,7 +127,6 @@ func (m Mac) Build(dest string) error {
 	if err := os.WriteFile(scriptPath, src, 0o644); err != nil {
 		return err
 	}
-	app := filepath.Join(tmp, "Bud.app")
 	if err := run("osacompile", "-o", app, scriptPath); err != nil {
 		return err
 	}
@@ -91,27 +147,125 @@ func (m Mac) Build(dest string) error {
 	if err := os.Remove(filepath.Join(resources, "Assets.car")); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(resources, "droplet.icns"), Icon(), 0o644); err != nil {
-		return err
-	}
-	// editing the bundle broke osacompile's ad-hoc signature, which Apple
-	// silicon needs to run it at all
-	if err := run("codesign", "--force", "--sign", "-", app); err != nil {
-		return err
-	}
+	return os.WriteFile(filepath.Join(resources, "droplet.icns"), Icon(), 0o644)
+}
 
-	if _, err := os.Stat(dest); err == nil {
-		if err := os.Rename(dest, filepath.Join(tmp, "old.app")); err != nil {
+// kitty makes app a copy of m.Kitty that is its own app: Bud's name, bundle
+// id and icon, and its own kitty config dir (kittyFiles) that starts bud and
+// opens what's dropped on the icon in it. The copy is an APFS clone where
+// the volume allows, so it takes next to no disk
+func (m Mac) kitty(_, app string) error {
+	if err := run("cp", "-c", "-R", m.Kitty, app); err != nil {
+		os.RemoveAll(app)
+		if err := run("cp", "-R", m.Kitty, app); err != nil {
 			return err
 		}
 	}
-	if err := os.Rename(app, dest); err != nil {
+	version, err := plistString(m.Kitty, "CFBundleShortVersionString")
+	if err != nil {
+		return fmt.Errorf("reading %s's version: %w", m.Kitty, err)
+	}
+	resources := filepath.Join(app, "Contents", "Resources")
+	conf := filepath.Join(resources, KittyDir)
+	if err := os.MkdirAll(conf, 0o755); err != nil {
 		return err
 	}
-	// so Finder and the Dock pick up the new icon; it's only cosmetic
-	_ = exec.Command(lsregister, "-f", dest).Run()
+	for name, text := range m.kittyFiles() {
+		if err := os.WriteFile(filepath.Join(conf, name), []byte(text), 0o644); err != nil {
+			return err
+		}
+	}
+	if err := os.WriteFile(filepath.Join(resources, "bud.icns"), Icon(), 0o644); err != nil {
+		return err
+	}
+
+	plist := filepath.Join(app, "Contents", "Info.plist")
+	for _, args := range [][]string{
+		{"-replace", "CFBundleName", "-string", "Bud"},
+		{"-replace", "CFBundleDisplayName", "-string", "Bud"},
+		{"-replace", "CFBundleIdentifier", "-string", MacID},
+		{"-replace", "CFBundleShortVersionString", "-string", m.Version},
+		{"-replace", "CFBundleIconFile", "-string", "bud.icns"},
+		{"-replace", "CFBundleDocumentTypes", "-json", documentTypes},
+		// kitty's own LSEnvironment (KITTY_LAUNCHED_BY_LAUNCH_SERVICES) stays
+		{"-replace", "LSEnvironment.KITTY_CONFIG_DIRECTORY", "-string", m.kittyConfigDir()},
+		{"-replace", kittyKey, "-string", m.Kitty},
+		{"-replace", kittyVersionKey, "-string", version},
+	} {
+		if err := run("plutil", append(args, plist)...); err != nil {
+			return err
+		}
+	}
+	// the asset catalog's icon would win over bud.icns
+	_ = run("plutil", "-remove", "CFBundleIconName", plist)
 
 	return nil
+}
+
+// kittyConfigDir is where the copy's config dir is once installed: it's
+// built in a temp dir and renamed into place at m.Dest
+func (m Mac) kittyConfigDir() string {
+	return filepath.Join(m.Dest, "Contents", "Resources", KittyDir)
+}
+
+// kittyFiles is Bud's kitty config dir: kitty.conf, which includes yours and
+// quits Bud with its last window; macos-launch-services-cmdline, what kitty
+// runs when the app is opened from the Dock or Finder; and launch-actions.conf,
+// which opens a file or folder dropped on the icon in a new Bud window
+func (m Mac) kittyFiles() map[string]string {
+	conf := "# Bud's kitty settings, written by bud bundle: yours first, then Bud's\n"
+	if m.KittyConf != "" {
+		conf += "include " + m.KittyConf + "\n"
+	}
+	conf += "# closing Bud's last window quits Bud\nmacos_quit_when_last_window_closed yes\n"
+
+	run := shellJoin(m.Launch)
+	return map[string]string{
+		"kitty.conf":                    conf,
+		"macos-launch-services-cmdline": "--directory=" + shellQuote(m.Home) + " --title=bud " + run + "\n",
+		"launch-actions.conf": "# a file or folder dropped on Bud's icon opens in bud (written by bud bundle)\n" +
+			"protocol file\n" +
+			"action launch --type=os-window --cwd=" + shellQuote(m.Home) + " " + run + " ${FILE_PATH}\n",
+	}
+}
+
+// shellJoin quotes each word for a shell and joins them
+func shellJoin(words []string) string {
+	quoted := make([]string, len(words))
+	for i, w := range words {
+		quoted[i] = shellQuote(w)
+	}
+	return strings.Join(quoted, " ")
+}
+
+// shellQuote quotes s as one shell word when it needs it
+func shellQuote(s string) string {
+	if s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-~+=:,@%") == "" {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// MacKitty is the kitty.app the Bud.app at path is a copy of, and that
+// kitty's version when it was copied; both "" for the droplet
+func MacKitty(path string) (app, version string) {
+	app, _ = plistString(path, kittyKey)
+	version, _ = plistString(path, kittyVersionKey)
+	return app, version
+}
+
+// KittyVersion is the version of the kitty.app at path
+func KittyVersion(path string) (string, error) {
+	return plistString(path, "CFBundleShortVersionString")
+}
+
+// plistString reads one string key from the Info.plist of the app at path
+func plistString(path, key string) (string, error) {
+	out, err := exec.Command("plutil", "-extract", key, "raw", "-o", "-", filepath.Join(path, "Contents", "Info.plist")).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 const lsregister = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
@@ -130,12 +284,7 @@ func ownedOrMissing(dest string) error {
 
 // MacBundleID reads the bundle identifier of the app at path
 func MacBundleID(path string) (string, error) {
-	out, err := exec.Command("plutil", "-extract", "CFBundleIdentifier", "raw", "-o", "-", filepath.Join(path, "Contents", "Info.plist")).Output()
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(string(out)), nil
+	return plistString(path, "CFBundleIdentifier")
 }
 
 // script is the droplet's AppleScript with this bud and PATH filled in

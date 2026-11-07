@@ -22,7 +22,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud [path ...]` | Same as `bud open`. No path opens the dashboard. |
 | `bud open [path ...]` | One directory opens as a project (and registers it). Files open from the root of the git repo they're in, else from the first file's directory. |
 | `bud launch [--terminal kitty\|ghostty] [--layout name] [path ...]` | Opens bud in a new terminal window. `terminal` in `config.json` picks the default, else the first one installed. |
-| `bud bundle [--macos\|--linux] [--dest dir]` | Builds the desktop app: `Bud.app` on macOS, `bud.desktop` on Linux. `bud install` does this on the full profile. |
+| `bud bundle [--macos\|--linux] [--dest dir]` | Builds the desktop app: `Bud.app` on macOS, `bud.desktop` on Linux. With Kitty as the terminal, `Bud.app` is its own copy of kitty, an app called Bud that Cmd+Q and window managers treat apart from kitty (match it in AeroSpace with `if.app-id = 'dev.jgarner.bud'`); run it again after kitty updates, which `bud doctor` points out. `bud install` does this on the full profile. |
 
 ## Setting up and staying healthy
 

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"jgarner.dev/bud"
+	"jgarner.dev/bud/internal/bundle"
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
@@ -155,7 +156,42 @@ func Run(opts Options) []Result {
 		}
 	}
 
+	if r, ok := checkBudApp(p); ok {
+		results = append(results, r)
+	}
+
 	return append(results, cfgResult, checkProjects(p))
+}
+
+// swappable in tests
+var (
+	findBundles  = bundle.Find
+	macKitty     = bundle.MacKitty
+	kittyVersion = bundle.KittyVersion
+)
+
+// checkBudApp warns when Bud.app is a copy of an older kitty than the one
+// installed (JGA-185): the copy doesn't follow kitty's updates, so bud bundle
+// copies it again. Nothing to say for the droplet, or with no Bud.app
+func checkBudApp(p *paths.Paths) (Result, bool) {
+	for _, b := range findBundles(p) {
+		app, copied := macKitty(b.Path)
+		if app == "" {
+			continue
+		}
+		r := Result{Name: "Bud app"}
+		now, err := kittyVersion(app)
+		switch {
+		case err != nil:
+			r.Status, r.Detail, r.Fix = Warn, b.Path+" is a copy of "+app+", which isn't there any more", "bud bundle"
+		case now != copied:
+			r.Status, r.Detail, r.Fix = Warn, b.Path+" runs kitty "+copied+", and "+app+" is "+now+" now", "bud bundle"
+		default:
+			r.Detail = b.Path + " runs kitty " + now
+		}
+		return r, true
+	}
+	return Result{}, false
 }
 
 // claudeDir is the Claude Code config dir in use: CLAUDE_CONFIG_DIR, which

@@ -11,7 +11,10 @@ opt.relativenumber = true
 opt.signcolumn = "yes"
 opt.termguicolors = true
 opt.mouse = "a"
-opt.clipboard = "unnamedplus"
+-- the system clipboard, but not over SSH (D95): there it falls back to OSC 52,
+-- and many terminals refuse to answer its paste request, so every p waits for
+-- a timeout. "+y and "+p still use it there when you ask
+opt.clipboard = vim.env.SSH_CONNECTION and "" or "unnamedplus"
 
 opt.expandtab = true
 opt.shiftwidth = 2

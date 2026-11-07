@@ -54,8 +54,14 @@ end
 -- resolved path while detection gets the path as typed (macOS's /var is
 -- /private/var), so a mismatch is checked again with symlinks resolved.
 function M.same(path, name)
-  if path == vim.fs.normalize(name) then
+  name = vim.fs.normalize(name)
+  if path == name then
     return true
+  end
+  -- a symlinked dir keeps the file's own name, so two names can't be one file
+  -- (and resolving both costs two syscalls on every preview's detection)
+  if vim.fs.basename(path) ~= vim.fs.basename(name) then
+    return false
   end
   local a, b = vim.uv.fs_realpath(path), vim.uv.fs_realpath(name)
   return a ~= nil and a == b

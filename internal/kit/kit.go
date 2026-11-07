@@ -246,9 +246,13 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 	var plugins []Plugin
 	var err error
 	var errs []error
+	// without the list, a copy that isn't in it may still be there: the
+	// ledger keeps what it has rather than forget one of bud's own
+	listed := true
 	if env.InstalledPlugins != nil {
 		if plugins, err = env.InstalledPlugins(); err != nil {
 			errs = append(errs, fmt.Errorf("listing plugins: %w", err))
+			listed = false
 		}
 	}
 	// only a copy that loads in every project counts as installed (JGA-183): a
@@ -292,7 +296,7 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 		case slices.Contains(installed, id):
 			why := "you installed it yourself"
 			if !slices.Contains(atUser, id) {
-				why = "your organisation's policy installs it"
+				why = machineWhy(plugins, id)
 			}
 			*actions = append(*actions, Action{"plugin", id, "skip", why})
 			// bud's own copy is gone, so the ledger lets go of it
@@ -323,11 +327,23 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			*actions = append(*actions, Action{"plugin", id, "skip", "kept until " + next + " installs"})
 			continue
 		}
+		if !listed {
+			*actions = append(*actions, Action{"plugin", id, "skip", "no longer in the kit, kept until claude plugin list works"})
+			continue
+		}
+		// only bud's user-scope copy is bud's to uninstall: with none left, the
+		// ledger lets go, and a copy at another scope stays, as yours
+		if left := others(plugins, id); !slices.Contains(atUser, id) && len(left) > 0 {
+			*actions = append(*actions, Action{"plugin", id, "skip", "no longer in the kit, and the copy left is yours: " + Labels(left)})
+			if !dryRun {
+				delete(ledger.Plugins, id)
+			}
+			continue
+		}
 		*actions = append(*actions, Action{"plugin", id, "remove", "no longer in the kit"})
 		if dryRun {
 			continue
 		}
-		// only bud's user-scope copy: one at project or local scope isn't bud's
 		if slices.Contains(atUser, id) {
 			if err := env.Claude("plugin", "uninstall", "--scope", "user", id); err != nil {
 				errs = append(errs, fmt.Errorf("uninstalling %s: %w", id, err))
@@ -597,6 +613,28 @@ func (p Plugin) atUser() bool {
 // claude.ai, or installed by an organisation's policy (managed)
 func (p Plugin) machineWide() bool {
 	return p.atUser() || p.synced() || p.Scope == "managed"
+}
+
+// machineWide copies of id that aren't at user scope are claude.ai's, under
+// id (scope synced), or a policy's; machineWhy says which
+func machineWhy(plugins []Plugin, id string) string {
+	for _, p := range plugins {
+		if p.ID == id && p.synced() {
+			return "claude.ai syncs it"
+		}
+	}
+	return "your organisation's policy installs it"
+}
+
+// others is the copies of id that aren't at user scope
+func others(plugins []Plugin, id string) []Plugin {
+	var out []Plugin
+	for _, p := range plugins {
+		if p.ID == id && !p.atUser() {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // localNote names the project and local copies of id's name, which don't count

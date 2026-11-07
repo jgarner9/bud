@@ -462,7 +462,7 @@ func TestSyncCountsOnlyCopiesThatLoadInEveryProject(t *testing.T) {
 		{"plugin", "bud@bud-plugins", "add", "only in some projects so far: bud@bud-plugins (local, /w)"},
 		{"plugin", "corp@x", "skip", "your organisation's policy installs it"},
 		{"plugin", "gone@bud-plugins", "skip", "your organisation's policy installs it"},
-		{"plugin", "old@bud-plugins", "remove", "no longer in the kit"},
+		{"plugin", "old@bud-plugins", "skip", "no longer in the kit, and the copy left is yours: old@bud-plugins (project, /p)"},
 	} {
 		if !slices.Contains(actions, want) {
 			t.Errorf("no %v in %v", want, actions)
@@ -477,6 +477,40 @@ func TestSyncCountsOnlyCopiesThatLoadInEveryProject(t *testing.T) {
 	}
 	if l.Plugins["bud@bud-plugins"] != "installed" {
 		t.Errorf("ledger lacks bud: %v", l.Plugins)
+	}
+}
+
+func TestSyncKeepsTheLedgerWhenPluginsCantBeListed(t *testing.T) {
+	dir := t.TempDir()
+	var ran []string
+	env := Env{
+		ClaudeDir: filepath.Join(dir, ".claude"), ClaudeJSON: filepath.Join(dir, ".claude.json"), Ledger: filepath.Join(dir, "l.json"),
+		Claude: func(a ...string) error {
+			ran = append(ran, strings.Join(a, " "))
+			return nil
+		},
+		InstalledPlugins: func() ([]Plugin, error) { return nil, errors.New("claude timed out") },
+	}
+	os.WriteFile(env.Ledger, []byte(`{"plugins": {"old@bud-plugins": "installed"}}`), 0o644)
+	actions, err := Sync(&Kit{}, env, false)
+	if err == nil || !strings.Contains(err.Error(), "claude timed out") {
+		t.Fatalf("err %v", err)
+	}
+	if !slices.Contains(actions, Action{"plugin", "old@bud-plugins", "skip", "no longer in the kit, kept until claude plugin list works"}) || len(ran) > 0 {
+		t.Fatalf("actions %v, ran %q", actions, ran)
+	}
+	if l, _, _ := ReadLedger(env.Ledger); l.Plugins["old@bud-plugins"] != "installed" {
+		t.Fatalf("ledger forgot bud's copy: %v", l.Plugins)
+	}
+}
+
+func TestSyncSaysWhyAMachineWideCopyIsntBuds(t *testing.T) {
+	plugins := []Plugin{{ID: "a@m", Scope: "synced"}, {ID: "b@m", Scope: "managed"}}
+	if got := machineWhy(plugins, "a@m"); got != "claude.ai syncs it" {
+		t.Errorf("synced: %q", got)
+	}
+	if got := machineWhy(plugins, "b@m"); got != "your organisation's policy installs it" {
+		t.Errorf("managed: %q", got)
 	}
 }
 

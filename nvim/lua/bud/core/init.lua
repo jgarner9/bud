@@ -1,4 +1,5 @@
 require("bud.core.options")
+require("bud.bigfile").setup()
 require("bud.core.keymaps")
 require("bud.core.autocmds")
 require("bud.messages").setup()

@@ -149,4 +149,7 @@ local want = { buf, off }
 table.sort(want)
 eq(handed, want, "open hands over the markdown files, not scratch buffers")
 
+-- a markdown file past 250 KB stays text: rendering it stalls the editor (D94)
+eq(md.config().max_file_size, 0.25, "render-markdown's size limit")
+
 print("markdown_test: ok")

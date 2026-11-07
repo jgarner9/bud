@@ -94,6 +94,10 @@ function M.config()
     -- the plugin's defaults too, kept here so a change to them can't slip by
     file_types = { "markdown" },
     render = { diff = false },
+    -- in MB: rendering stalls the editor once, about 100 ms at 250 KB and 190
+    -- at 500 KB (D94), so a file past this stays text; bud.bigfile takes
+    -- anything past 1.5 MB away from the plugin altogether
+    max_file_size = 0.25,
     ignore = function(buf)
       return not M.file(buf)
     end,

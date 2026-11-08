@@ -21,7 +21,7 @@ just test            # go test ./...
 just test -run TestOpen ./internal/cli   # single test (args pass through to go test)
 just run <args>      # go run ./cmd/bud <args>, e.g. just run update
 just build           # ./bud (gitignored)
-just fmt             # gofmt -w .
+just fmt             # gofmt -w ., with the gofmt of the Go toolchain go.mod selects (what CI runs)
 just lua-fmt         # stylua over every Lua dir
 just lua-test        # headless Lua tests in tests/lua (plain asserts, no framework), 60 s limit each
 just install-test    # install.sh's checks against fake releases signed with a throwaway key

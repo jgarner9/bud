@@ -21,13 +21,13 @@ install:
 test *args:
   if [ $# -eq 0 ]; then set -- ./...; fi; go test "$@"
 
-# format Go code in place
+# format Go code in place, with the gofmt of the Go toolchain go.mod selects (what CI runs), not the one on PATH
 fmt:
-  gofmt -w .
+  "$(go env GOROOT)/bin/gofmt" -w .
 
-# fail if any Go file needs formatting
+# fail if any Go file needs formatting, by that same gofmt
 fmt-check:
-  @test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+  @gofmt="$(go env GOROOT)/bin/gofmt"; test -z "$("$gofmt" -l .)" || { "$gofmt" -l .; exit 1; }
 
 # format Lua in place
 lua-fmt: (_need "stylua")

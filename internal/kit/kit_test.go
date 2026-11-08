@@ -21,10 +21,13 @@ func TestShippedKit(t *testing.T) {
 	if k.Marketplaces["bud-plugins"] != "https://github.com/jgarner9/bud-plugins.git" {
 		t.Errorf("marketplaces %v", k.Marketplaces)
 	}
-	for _, id := range []string{"bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@bud-plugins"} {
+	for _, id := range []string{"bud@bud-plugins", "bud-ide@bud-plugins"} {
 		if !slices.Contains(k.Plugins, id) {
 			t.Errorf("no %s in %v", id, k.Plugins)
 		}
+	}
+	if slices.Contains(k.Plugins, "superpowers@bud-plugins") {
+		t.Errorf("superpowers is back in %v (dropped, D100)", k.Plugins)
 	}
 
 }
@@ -635,8 +638,8 @@ func TestShadowed(t *testing.T) {
 
 func TestUninstallHintUsesThePluginsScope(t *testing.T) {
 	cases := map[Plugin]string{
-		{ID: "bud@clod"}:                                         "claude plugin uninstall --scope user bud@clod",
-		{ID: "bud@clod", Scope: "user"}:                          "claude plugin uninstall --scope user bud@clod",
+		{ID: "bud@clod"}:                "claude plugin uninstall --scope user bud@clod",
+		{ID: "bud@clod", Scope: "user"}: "claude plugin uninstall --scope user bud@clod",
 		{ID: "bud@clod", Scope: "local", Project: "/home/j/app"}: "cd /home/j/app && claude plugin uninstall --scope local bud@clod",
 		{ID: "bud@clod", Scope: "project", Project: "/x/my app"}: "cd '/x/my app' && claude plugin uninstall --scope project bud@clod",
 		{ID: "bud@corp", Scope: "managed"}:                       "bud@corp is installed by your organisation's policy, so an administrator has to remove it",

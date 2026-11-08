@@ -4,8 +4,7 @@
   },
   "plugins": [
     "bud@bud-plugins",
-    "bud-ide@bud-plugins",
-    "superpowers@bud-plugins"
+    "bud-ide@bud-plugins"
   ],
   "core": "bud-plugins/core.md",
   "expected_mcp": [

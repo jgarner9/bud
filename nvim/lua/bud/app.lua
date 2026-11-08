@@ -58,25 +58,22 @@ local function record(role)
   return addr
 end
 
--- tell runs lua with args in the nvim at addr, as a notification, so neither
--- nvim ever waits on the other. One that's gone just can't be connected to
-local function tell(addr, lua, args)
+-- tell connects to the nvim at addr, which says it's still running (one
+-- that's gone can't be connected to), sends it lua as a notification when
+-- given, so neither nvim ever waits on the other, and says whether it connected
+local function tell(addr, lua)
   local ok, ch = pcall(vim.fn.sockconnect, "pipe", addr, { rpc = true })
   if not ok or ch == 0 then
-    return
+    return false
   end
-  pcall(vim.rpcnotify, ch, "nvim_exec_lua", lua, args)
+  if lua then
+    pcall(vim.rpcnotify, ch, "nvim_exec_lua", lua, {})
+  end
   -- closed later, so the notification is written first
   vim.defer_fn(function()
     pcall(vim.fn.chanclose, ch)
   end, 1000)
-end
-
--- answer is the drop's reply to a dashboard that came second
-function M.answer(addr)
-  if M.role == "drop" then
-    tell(addr, "require('bud.app').yield()", {})
-  end
+  return true
 end
 
 -- untouched says whether this nvim still shows only the dashboard. Floating
@@ -98,7 +95,7 @@ function M.yield()
   if M.role ~= "start" then
     return
   end
-  -- after the dashboard has drawn, and after the RPC call has returned
+  -- after the dashboard has drawn
   vim.schedule(function()
     if untouched() then
       M.quit()
@@ -126,10 +123,10 @@ function M.setup(opts)
     if not other then
       return
     elseif kind == "drop" then
-      tell(other, "require('bud.app').yield()", {})
-    elseif addr then
-      -- the drop came first: it answers only while its window is open
-      tell(other, "require('bud.app').answer(...)", { addr })
+      tell(other, "require('bud.app').yield()")
+    elseif tell(other) then
+      -- the drop came first, and its window is still open
+      M.yield()
     end
   end)
 end

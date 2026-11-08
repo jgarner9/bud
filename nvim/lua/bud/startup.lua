@@ -14,9 +14,10 @@ M.now = function()
   return s * 1e6 + us
 end
 
--- start records when startup began: launched (microseconds since the epoch)
--- when it's from the last 10 seconds, else now. Anything older was inherited
--- from somewhere else, not set for this Neovim
+-- start records when startup began, for the timing: launched (microseconds
+-- since the epoch) when it's from the last 10 seconds, else now, since an
+-- older one is usually inherited. M.launched keeps launched as given, for
+-- what needs bud's own start however long it took (bud.app)
 function M.start(launched)
   local now = M.now()
   launched = tonumber(launched)

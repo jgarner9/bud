@@ -100,14 +100,15 @@ drop(5000)
 eq(quit(), false, "a dashboard you've split is kept")
 vim.fn.jobstop(job)
 
--- nothing at all without a BUD_APP bud.app knows
+-- nothing at all without a BUD_APP bud.app knows: no role, no record
 vim.fn.delete(app.file("drop"))
+vim.fn.delete(app.file("start"))
+app.role = nil
 vim.env.BUD_APP = "other"
 app.setup()
-vim.wait(50)
 eq(
-  { vim.fn.filereadable(app.file("drop")), vim.fn.filereadable(app.file("other")), vim.env.BUD_APP },
-  { 0, 0, nil },
+  { app.role, vim.fn.glob(dir .. "/app-*", false, true), vim.env.BUD_APP },
+  { nil, {}, nil },
   "an unknown BUD_APP is ignored"
 )
 

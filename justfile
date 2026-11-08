@@ -27,7 +27,7 @@ fmt:
 
 # fail if any Go file needs formatting, by that same gofmt
 fmt-check:
-  @gofmt="$(go env GOROOT)/bin/gofmt"; test -z "$("$gofmt" -l .)" || { "$gofmt" -l .; exit 1; }
+  @gofmt="$(go env GOROOT)/bin/gofmt"; [ -x "$gofmt" ] || { echo "no gofmt at $gofmt: is go installed?" >&2; exit 1; }; test -z "$("$gofmt" -l .)" || { "$gofmt" -l .; exit 1; }
 
 # format Lua in place
 lua-fmt: (_need "stylua")

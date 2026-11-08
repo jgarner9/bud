@@ -151,7 +151,8 @@ function M.on(event, fn)
 end
 
 -- argv is the command line a session runs: resuming its own conversation
--- once it has one, else the most recent unless resume is "new"
+-- once it has one, else with resume "continue" the project's saved one or the
+-- most recent, else a new one
 function M.argv(bin, s, cfg)
   local argv = vim.list_extend(
     M.prefix(bin, cfg),

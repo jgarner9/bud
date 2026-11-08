@@ -12,9 +12,11 @@ set -u
 limit=60
 
 # limited runs "$@" for at most $1 seconds, exiting 142 (SIGALRM's status) when
-# it overran and with the command's own status otherwise
+# it overran, 254 when interrupted (Ctrl-C), and with the command's own status
+# otherwise
 limited() {
 	perl -e '
+		use POSIX ":sys_wait_h";
 		my $limit = shift;
 		my $pid = fork() // die "fork: $!\n";
 		if ($pid == 0) {
@@ -27,6 +29,8 @@ limited() {
 		sub stop {
 			kill("TERM", -$pid) or return;
 			for (1 .. 10) {
+				# reap the test itself, or as a zombie it stays in the group
+				waitpid($pid, WNOHANG);
 				kill(0, -$pid) or return;
 				select(undef, undef, undef, 0.1);
 			}
@@ -34,7 +38,7 @@ limited() {
 		}
 		my $done = 0;
 		$SIG{ALRM} = sub { return if $done; stop(); exit(142) };
-		$SIG{INT} = $SIG{TERM} = sub { stop(); exit(130) };
+		$SIG{INT} = $SIG{TERM} = sub { stop(); exit(254) };
 		alarm($limit);
 		waitpid($pid, 0);
 		$done = 1;
@@ -51,7 +55,7 @@ for t in "$@"; do
 	limited "$limit" nvim --clean --headless -l "$t"
 	status=$?
 	# Ctrl-C: the test's group is gone already, so just stop
-	if [ "$status" -eq 130 ]; then exit 130; fi
+	if [ "$status" -eq 254 ]; then exit 130; fi
 	if [ "$status" -eq 142 ]; then
 		echo "lua-test: $t: still running after ${limit}s, stopped it" >&2
 		exit 1

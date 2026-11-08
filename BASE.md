@@ -1,7 +1,7 @@
 # Bud IDE: BASE plan
 
-> Status: built and released (v0.20.0). Everything in sections 1–5 exists unless it's marked as later; the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
-> Date: 2026-10-24, updated 2026-11-06
+> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later; the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
+> Date: 2026-10-24, updated 2026-11-08
 
 ## 0. The one-paragraph version
 
@@ -196,6 +196,8 @@ bud/
 │       │   # dialogs, menus, inputs and panels on nui.nvim (D74)
 │       ├── lang/
 │       │   # the language engine: reads the synced languages/*, says what plugins/lang.lua wires up (D30)
+│       ├── dap/
+│       │   # the debug adapters nvim-dap can run (adapters.lua, D66)
 │       ├── ai/
 │       │   # claude.lua: the per-project Claude Code session + the API every AI UI uses (4.2);
 │       │   # inline actions, chat mode (Claude Code's TUI, D81), the project's TUI pane, tool generator UI (:BudGen)
@@ -228,7 +230,7 @@ bud/
 │   # curated AI-generated or hand-written tools that were "promoted"
 │   └── <tool-name>/
 │       ├── manifest.json
-│       │   # name, description, keymaps/commands it adds, deps
+│       │   # description, and the commands and keymaps it adds
 │       └── init.lua
 │
 ├── bundles/
@@ -248,7 +250,7 @@ bud/
 │   # smoke and language checks, release planning and signing, headless Lua tests, the recipes
 │
 └── docs/
-    # the user docs: config, commands, keys, Claude Code, languages, tools, layouts, issues, troubleshooting
+    # the user docs: config, commands, keys, Claude Code, languages, tools, layouts, issues, building a Claude TUI, troubleshooting; internals/ is how the code works
 ```
 
 ### Where things live on a machine (outside the repo)
@@ -352,7 +354,7 @@ How Claude works (the Bud persona, code style, planning, which tool to use when,
 
 | Plugin | What it brings |
 | ------ | -------------- |
-| `bud@bud-plugins` | `bud:code-style`, `bud:planning`, `bud:debugging`, `bud:verify`, `bud:tools` (the lookup ladder and Basic Memory cache), `bud:bootstrap-project`, `bud:release`, `/bud:plan-to-linear`, the `code-reviewer` agent |
+| `bud@bud-plugins` | `bud:code-style`, `bud:planning`, `bud:debugging`, `bud:verify`, `bud:tools` (the lookup ladder and Basic Memory cache), `bud:bootstrap-project`, `bud:release`, `bud:learn` (explanations first, saved to Basic Memory), `/bud:plan-to-linear`, the `code-reviewer` agent |
 | `bud-ide@bud-plugins` | `bud-ide:bud-dev`, `bud-ide:file-issue` (what `:BudIssue` runs), the `chat` agent chat mode runs as (5.5), and a SessionStart hook with the notes on working inside bud, only when `BUD_BIN` is set |
 
 **Sync rules:**

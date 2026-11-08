@@ -4,7 +4,7 @@ A tool is a small Neovim extension in a directory:
 
 ```text
 my-tool/
-├── manifest.json   # name, description, the commands and keymaps it adds
+├── manifest.json   # description, and the commands and keymaps it adds
 └── init.lua        # returns { setup = function(manifest) ... end }
 ```
 
@@ -30,7 +30,7 @@ end
 return M
 ```
 
-Yours go in `~/.local/share/bud/user-tools/<name>/` and load the next time bud starts, after the first screen, so they never slow startup. One of yours with the same name as one of bud's wins. bud ships one, `tools/test-file/` (`:BudTestFile`), which is a good one to copy.
+Yours go in `~/.local/share/bud/user-tools/<name>/` and load the next time bud starts, after the first screen, so they never slow startup. One of yours with the same name as one of bud's wins. bud ships one, `tools/test-file/` (`:BudTestFile`), which is a good one to copy. The folder name is the tool's name, and bud reads only `description` from the manifest; `commands` and `keymaps` are for people. `:BudTools` lists them in the editor.
 
 ## Letting Claude write it
 

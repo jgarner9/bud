@@ -16,15 +16,16 @@ AI scope is **Claude Code only** (D26): one Claude Code session per project, sta
 
 ```sh
 just                 # list recipes
-just check           # what CI runs: gofmt check, Lua lint, go vet, shellcheck, go test ./..., smoke test
+just check           # everything CI checks: lint, go test ./..., the Lua and script tests, smoke test
 just test            # go test ./...
 just test -run TestOpen ./internal/cli   # single test (args pass through to go test)
 just run <args>      # go run ./cmd/bud <args>, e.g. just run update
 just build           # ./bud (gitignored)
 just fmt             # gofmt -w .
-just lua-fmt         # stylua over nvim/ and scripts/
+just lua-fmt         # stylua over every Lua dir
 just lua-test        # headless Lua tests in tests/lua (plain asserts, no framework), 60 s limit each
 just install-test    # install.sh's checks against fake releases signed with a throwaway key
+just rotate-test     # rotate-release-key.sh against a throwaway repo, with fake op and gh
 just release-plan-test # release-plan.sh's decisions against throwaway repos with a fake gh
 just smoke           # sync the config into temp XDG dirs, restore plugins, start nvim headless (needs network)
 just lang-check [go] # install every language's tooling in temp XDG dirs, check each on a sample project (slow, needs network)
@@ -48,7 +49,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **Errors and output.** Commands return errors and never print errors or call `os.Exit`. `cli.ExitCode` (`internal/cli/errors.go`) is the only place that prints errors (one `bud: ...` line on stderr) and picks the exit code: 0 for success or `-h`, 2 for a `*UsageError` (build one with `usageErrorf`), 1 for anything else. `App.parse` silences the flag package and prints requested help to stdout, and the error plus usage to stderr. `App.Stdout`/`App.Stderr` let tests capture that output.
 
-**Embedded config (D5).** The root package `bud` (`embed.go`) embeds `nvim/` and `languages/*.lua` with `//go:embed` (a file glob, so `_template.lua` isn't dropped), and `bud.Config()` serves them as one tree: `nvim/` at the root with `languages/` mounted inside. It must stay at the repo root, because embed can't reach parent directories. Later top-level dirs (`layouts/`, `tools/`) get mounted the same way; `bundles/` is embedded but not synced (`bud.Bundles()`). The binary is the release: `internal/nvim.SyncConfig` copies `bud.Config()` into `~/.config/bud` and records them in `.bud-manifest.json`. It overwrites managed files, deletes ones a release dropped, and never touches anything else. After a change it runs `bud.pack.restore()` in headless nvim, so plugins match the committed `nvim/nvim-pack-lock.json`. The target dir comes from `paths.Resolve().Config`, which is `~/.config/bud` on macOS too, because that's where Neovim looks.
+**Embedded config (D5).** The root package `bud` (`embed.go`) embeds `nvim/`, `languages/*.lua` (a file glob, so `_template.lua` isn't dropped), `layouts/*.lua`, `tools/`, `migrations/*.lua`, `kit/` and `bundles/` with `//go:embed`, and `bud.Config()` serves the first four as one tree: `nvim/` at the root with `languages/`, `layouts/` and `tools/` mounted inside. It must stay at the repo root, because embed can't reach parent directories. `migrations/`, `kit/` and `bundles/` are embedded but not synced into the config dir (`bud.Migrations()`, `bud.Kit()`, `bud.Bundles()`). The binary is the release: `internal/nvim.SyncConfig` copies `bud.Config()` into `~/.config/bud` and records them in `.bud-manifest.json`. It overwrites managed files, deletes ones a release dropped, and never touches anything else. After a change it runs `bud.pack.restore()` in headless nvim, so plugins match the committed `nvim/nvim-pack-lock.json`. The target dir comes from `paths.Resolve().Config`, which is `~/.config/bud` on macOS too, because that's where Neovim looks.
 
 **Paths and machine config.** `internal/paths.Resolve` is the only place that builds a bud path (XDG on macOS too, D13); don't hardcode one elsewhere. That includes the language spec dirs (`LanguageSpecs`, `UserLanguageSpecs`). Files bud rewrites (`config.json`, `projects.json`, the sync manifest) go through `internal/atomicfile.WriteFile`. `internal/config` keeps `config.json` as a raw JSON tree so unknown keys survive `Save`, and `File.Settings()` decodes it over `Defaults()`.
 

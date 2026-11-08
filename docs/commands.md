@@ -15,6 +15,8 @@ bud [global flags] <command> [command flags] [args]
 | `--layout <name>` | The pane layout to open the editor with, just this once. |
 | `--no-update` | Skip the background update check at launch. |
 
+`-y` is short for `--yes` on `install`, `uninstall`, `claude setup`, `lang enable`, `lang rm` and `kit unsync`.
+
 ## Opening things
 
 | Command | What it does |
@@ -32,6 +34,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud update` | Installs a newer release (only for a binary `install.sh` installed), syncs the config, restores plugins, parsers and language tools, syncs the Claude Code kit, rebuilds the desktop app if you've run `bud bundle` and it's out of date (another bud built it, kitty updated, or it moved; not while it's open), then runs the full `bud doctor` and exits 1 on a failure. Rolls back by itself if a check that passed before now fails. |
 | `bud update --check [--channel stable\|nightly]` | Only says whether a newer release is out. |
 | `bud update --no-doctor` | Skips the app rebuild and the doctor at the end, for scripts. |
+| `bud update --background` | What bud starts by itself at launch, detached and at most once a day, so launching never waits on the network. It installs a newer stable release when `update.auto` is on, else only notes it for the dashboard. `--no-update` skips it. You don't normally run it. |
 | `bud doctor [--quick] [--json]` | Health checks with the fix for each problem; exits 1 when something is broken. `--quick` skips the slow ones: the startup timing, and Claude Code's MCP servers and synced plugins (`claude setup`, `synced plugins`), which the dashboard leaves out. |
 | `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. |
 | `bud bootstrap [--config] user@host` | Installs this version of bud on another machine over SSH, minimal profile by default. `--config` copies your `config.json` across first. |

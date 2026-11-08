@@ -462,7 +462,7 @@ func TestSyncCountsOnlyCopiesThatLoadInEveryProject(t *testing.T) {
 		{"plugin", "bud@bud-plugins", "add", "only in some projects so far: bud@bud-plugins (local, /w)"},
 		{"plugin", "corp@x", "skip", "your organisation's policy installs it"},
 		{"plugin", "gone@bud-plugins", "skip", "your organisation's policy installs it"},
-		{"plugin", "old@bud-plugins", "skip", "no longer in the kit, and the copy left is yours: old@bud-plugins (project, /p)"},
+		{"plugin", "old@bud-plugins", "skip", "no longer in the kit, and the copy left isn't bud's: old@bud-plugins (project, /p) (yours)"},
 	} {
 		if !slices.Contains(actions, want) {
 			t.Errorf("no %v in %v", want, actions)
@@ -492,15 +492,47 @@ func TestSyncKeepsTheLedgerWhenPluginsCantBeListed(t *testing.T) {
 		InstalledPlugins: func() ([]Plugin, error) { return nil, errors.New("claude timed out") },
 	}
 	os.WriteFile(env.Ledger, []byte(`{"plugins": {"old@bud-plugins": "installed"}}`), 0o644)
-	actions, err := Sync(&Kit{}, env, false)
+	// nothing installed either: an install could put a second copy beside one it can't see
+	actions, err := Sync(&Kit{Plugins: []string{"bud@bud-plugins"}}, env, false)
 	if err == nil || !strings.Contains(err.Error(), "claude timed out") {
 		t.Fatalf("err %v", err)
 	}
-	if !slices.Contains(actions, Action{"plugin", "old@bud-plugins", "skip", "no longer in the kit, kept until claude plugin list works"}) || len(ran) > 0 {
-		t.Fatalf("actions %v, ran %q", actions, ran)
+	for _, id := range []string{"bud@bud-plugins", "old@bud-plugins"} {
+		if !slices.Contains(actions, Action{"plugin", id, "skip", "couldn't list the installed plugins"}) {
+			t.Errorf("no skip for %s in %v", id, actions)
+		}
+	}
+	if len(ran) > 0 {
+		t.Fatalf("ran %q", ran)
 	}
 	if l, _, _ := ReadLedger(env.Ledger); l.Plugins["old@bud-plugins"] != "installed" {
 		t.Fatalf("ledger forgot bud's copy: %v", l.Plugins)
+	}
+}
+
+func TestADroppedPluginAlreadyGoneIsLetGoQuietly(t *testing.T) {
+	dir := t.TempDir()
+	var ran []string
+	env := Env{
+		ClaudeDir: filepath.Join(dir, ".claude"), ClaudeJSON: filepath.Join(dir, ".claude.json"), Ledger: filepath.Join(dir, "l.json"),
+		Claude: func(a ...string) error {
+			ran = append(ran, strings.Join(a, " "))
+			return nil
+		},
+		InstalledPlugins: func() ([]Plugin, error) { return []Plugin{{ID: "pol@m", Scope: "managed"}}, nil },
+	}
+	os.WriteFile(env.Ledger, []byte(`{"plugins": {"gone@m": "installed", "pol@m": "installed"}}`), 0o644)
+	actions, _ := Sync(&Kit{}, env, true)
+	for _, want := range []Action{
+		{"plugin", "gone@m", "skip", "no longer in the kit, and already uninstalled"},
+		{"plugin", "pol@m", "skip", "no longer in the kit, and the copy left isn't bud's: pol@m (managed) (your organisation's policy installs it)"},
+	} {
+		if !slices.Contains(actions, want) {
+			t.Errorf("no %v in %v", want, actions)
+		}
+	}
+	if len(ran) > 0 {
+		t.Fatalf("a dry run ran %q", ran)
 	}
 }
 

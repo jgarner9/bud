@@ -248,11 +248,20 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 	var errs []error
 	// without the list, a copy that isn't in it may still be there: the
 	// ledger keeps what it has rather than forget one of bud's own
-	listed := true
 	if env.InstalledPlugins != nil {
 		if plugins, err = env.InstalledPlugins(); err != nil {
-			errs = append(errs, fmt.Errorf("listing plugins: %w", err))
-			listed = false
+			// without the list nothing can be told apart: an install could put
+			// a second copy beside yours or the synced one, and the ledger
+			// could forget one of bud's own, so the plugins wait for next time
+			for _, id := range k.Plugins {
+				*actions = append(*actions, Action{"plugin", id, "skip", "couldn't list the installed plugins"})
+			}
+			for _, id := range sortedKeys(ledger.Plugins) {
+				if !slices.Contains(k.Plugins, id) {
+					*actions = append(*actions, Action{"plugin", id, "skip", "couldn't list the installed plugins"})
+				}
+			}
+			return fmt.Errorf("listing plugins: %w", err)
 		}
 	}
 	// only a copy that loads in every project counts as installed (JGA-183): a
@@ -327,14 +336,14 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 			*actions = append(*actions, Action{"plugin", id, "skip", "kept until " + next + " installs"})
 			continue
 		}
-		if !listed {
-			*actions = append(*actions, Action{"plugin", id, "skip", "no longer in the kit, kept until claude plugin list works"})
-			continue
-		}
 		// only bud's user-scope copy is bud's to uninstall: with none left, the
-		// ledger lets go, and a copy at another scope stays, as yours
-		if left := others(plugins, id); !slices.Contains(atUser, id) && len(left) > 0 {
-			*actions = append(*actions, Action{"plugin", id, "skip", "no longer in the kit, and the copy left is yours: " + Labels(left)})
+		// ledger just lets go, and a copy at another scope stays
+		if !slices.Contains(atUser, id) {
+			why := "no longer in the kit, and already uninstalled"
+			if left := others(plugins, id); len(left) > 0 {
+				why = "no longer in the kit, and the copy left isn't bud's: " + Labels(left) + " (" + leftWhy(left) + ")"
+			}
+			*actions = append(*actions, Action{"plugin", id, "skip", why})
 			if !dryRun {
 				delete(ledger.Plugins, id)
 			}
@@ -344,11 +353,9 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 		if dryRun {
 			continue
 		}
-		if slices.Contains(atUser, id) {
-			if err := env.Claude("plugin", "uninstall", "--scope", "user", id); err != nil {
-				errs = append(errs, fmt.Errorf("uninstalling %s: %w", id, err))
-				continue
-			}
+		if err := env.Claude("plugin", "uninstall", "--scope", "user", id); err != nil {
+			errs = append(errs, fmt.Errorf("uninstalling %s: %w", id, err))
+			continue
 		}
 		delete(ledger.Plugins, id)
 	}
@@ -635,6 +642,17 @@ func others(plugins []Plugin, id string) []Plugin {
 		}
 	}
 	return out
+}
+
+// leftWhy says whose the copies left of a plugin are: claude.ai's, a policy's,
+// or yours (project or local)
+func leftWhy(left []Plugin) string {
+	for _, p := range left {
+		if p.synced() || p.Scope == "managed" {
+			return machineWhy(left, p.ID)
+		}
+	}
+	return "yours"
 }
 
 // localNote names the project and local copies of id's name, which don't count

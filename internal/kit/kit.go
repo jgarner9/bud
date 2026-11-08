@@ -246,8 +246,6 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 	var plugins []Plugin
 	var err error
 	var errs []error
-	// without the list, a copy that isn't in it may still be there: the
-	// ledger keeps what it has rather than forget one of bud's own
 	if env.InstalledPlugins != nil {
 		if plugins, err = env.InstalledPlugins(); err != nil {
 			// without the list nothing can be told apart: an install could put
@@ -341,7 +339,7 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 		if !slices.Contains(atUser, id) {
 			why := "no longer in the kit, and already uninstalled"
 			if left := others(plugins, id); len(left) > 0 {
-				why = "no longer in the kit, and the copy left isn't bud's: " + Labels(left) + " (" + leftWhy(left) + ")"
+				why = "no longer in the kit, and the copies left aren't bud's: " + Labels(left)
 			}
 			*actions = append(*actions, Action{"plugin", id, "skip", why})
 			if !dryRun {
@@ -642,17 +640,6 @@ func others(plugins []Plugin, id string) []Plugin {
 		}
 	}
 	return out
-}
-
-// leftWhy says whose the copies left of a plugin are: claude.ai's, a policy's,
-// or yours (project or local)
-func leftWhy(left []Plugin) string {
-	for _, p := range left {
-		if p.synced() || p.Scope == "managed" {
-			return machineWhy(left, p.ID)
-		}
-	}
-	return "yours"
 }
 
 // localNote names the project and local copies of id's name, which don't count

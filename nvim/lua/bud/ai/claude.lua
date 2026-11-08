@@ -105,7 +105,7 @@ local function settings()
   local cfg = require("bud.config")
   return {
     autostart = cfg.get("ai.claude.autostart", true),
-    resume = cfg.get("ai.claude.resume", "continue"),
+    resume = cfg.get("ai.claude.resume", "new"), -- the Go default, D106
     idle_minutes = cfg.get("ai.claude.idle_minutes", 30),
     args = cfg.get("ai.claude.args", {}),
     command = cfg.get("ai.claude.command", {}),

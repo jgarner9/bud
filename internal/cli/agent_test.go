@@ -29,7 +29,8 @@ func TestAgent(t *testing.T) {
 	if err := agent(&Globals{}, []string{file}); err != nil {
 		t.Fatal(err)
 	}
-	if dir != project || !slices.Equal(argv, []string{bin, "--continue"}) {
+	// a fresh conversation unless ai.claude.resume says continue (D106)
+	if dir != project || !slices.Equal(argv, []string{bin}) {
 		t.Fatalf("ran %q in %s", argv, dir)
 	}
 	// bud-ide's hook knows it's bud's session by BUD_BIN, which is this bud
@@ -38,19 +39,29 @@ func TestAgent(t *testing.T) {
 		t.Fatalf("BUD_BIN in the env: %q", got)
 	}
 
+	// resume = "continue" carries on the newest conversation in the directory
+	state := os.Getenv("XDG_STATE_HOME")
+	os.MkdirAll(filepath.Join(state, "bud"), 0o755)
+	cfgFile := filepath.Join(state, "bud", "config.json")
+	os.WriteFile(cfgFile, []byte(`{"ai": {"claude": {"resume": "continue"}}}`), 0o644)
+	if err := agent(&Globals{}, []string{project}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(argv, []string{bin, "--continue"}) {
+		t.Fatalf("resume continue: argv %q", argv)
+	}
+
 	// ai.claude.command wraps it
 	wrapper := filepath.Join(filepath.Dir(bin), "headroom")
 	os.WriteFile(wrapper, []byte("#!/bin/sh\n"), 0o755)
-	state := os.Getenv("XDG_STATE_HOME")
-	os.MkdirAll(filepath.Join(state, "bud"), 0o755)
-	os.WriteFile(filepath.Join(state, "bud", "config.json"), []byte(`{"ai": {"claude": {"command": ["headroom", "wrap", "claude", "--"]}}}`), 0o644)
+	os.WriteFile(cfgFile, []byte(`{"ai": {"claude": {"resume": "continue", "command": ["headroom", "wrap", "claude", "--"]}}}`), 0o644)
 	if err := agent(&Globals{}, []string{project}); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(argv, []string{wrapper, "wrap", "claude", "--", "--continue"}) {
 		t.Fatalf("wrapped argv %q", argv)
 	}
-	os.Remove(filepath.Join(state, "bud", "config.json"))
+	os.Remove(cfgFile)
 
 	if err := agent(&Globals{}, []string{project, file}); err == nil {
 		t.Fatal("two paths accepted")

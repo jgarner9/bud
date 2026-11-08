@@ -22,14 +22,14 @@ bud kit sync         # bud's Claude Code plugins (bud, bud-ide)
 
 ## The project session
 
-Opening a project (`bud ~/code/thing`) starts its session in the background, carrying on bud's last conversation there. The statusline shows its state. Sessions nothing has used for 30 minutes stop, and the next message starts them again on the same conversation. At most three run at once.
+Opening a project (`bud ~/code/thing`) starts its session in the background on a fresh conversation (`ai.claude.resume = "continue"` carries on bud's last one there instead). The statusline shows its state. Sessions nothing has used for 30 minutes stop, and the next message starts them again on the same conversation. At most three run at once.
 
 - `:BudClaude status` shows the session and the IDE bridge; `:BudClaude restart` (`<leader>ar`) and `:BudClaude stop` do what they say.
-- `ai.claude.autostart = false` starts one only when you use an AI feature; `ai.claude.resume = "new"` starts fresh each time.
+- `ai.claude.autostart = false` starts one only when you use an AI feature; `ai.claude.resume = "continue"` carries on bud's last conversation in a project instead of starting fresh.
 
 ## Which model it runs
 
-Opus sessions cost the most, and changing model or effort partway through a conversation makes Claude Code process all of it again at full price (the prompt cache is keyed on both), which `opusplan` does every time you enter or leave plan mode. So clod's settings default to Sonnet at medium effort, bud's sessions follow them (they share `~/.claude`), and bud's agents (`code-reviewer`, `chat`) name Sonnet themselves. A resumed conversation keeps the model it was last on, and that outranks these settings, so with `ai.claude.resume = "continue"` (the default) reopening a project lands on Opus if its last conversation ran there; set it to `"new"` to start every open on the default. Use Opus in a separate planning session you start on purpose (`bud agent`, then `/model opus`), not by switching in a long one. To change what bud's own sessions use without touching `~/.claude`, put flags in `ai.claude.args`, e.g. `["--model", "sonnet", "--effort", "medium"]`. On a provider such as Bedrock, clod leaves your model alone.
+Opus sessions cost the most, and changing model or effort partway through a conversation makes Claude Code process all of it again at full price (the prompt cache is keyed on both), which `opusplan` does every time you enter or leave plan mode. So clod's settings default to Sonnet at medium effort, bud's sessions follow them (they share `~/.claude`), and bud's agents (`code-reviewer`, `chat`) name Sonnet themselves. A resumed conversation keeps the model it was last on, and that outranks these settings, so with `ai.claude.resume = "continue"` reopening a project lands on Opus if its last conversation ran there; the default, `"new"`, starts every open on the model your settings choose. Use Opus in a separate planning session you start on purpose (`bud agent`, then `/model opus`), not by switching in a long one. To change what bud's own sessions use without touching `~/.claude`, put flags in `ai.claude.args`, e.g. `["--model", "sonnet", "--effort", "medium"]`. On a provider such as Bedrock, clod leaves your model alone.
 
 ## Ways to talk to it
 

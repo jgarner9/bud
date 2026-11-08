@@ -111,7 +111,7 @@ type IssueTarget struct {
 
 type Claude struct {
 	Autostart bool   `json:"autostart"`
-	Resume    string `json:"resume"` // "continue" or "new"
+	Resume    string `json:"resume"` // "new" (the default, D106) or "continue"
 	// a session nothing has used for this long is stopped (D49); 0 never
 	IdleMinutes int      `json:"idle_minutes"`
 	Args        []string `json:"args"`
@@ -143,7 +143,7 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
-		AI: AI{Claude: Claude{Autostart: true, Resume: "continue", IdleMinutes: 30, Args: []string{}, Config: "home"},
+		AI: AI{Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
 	}
 }

@@ -66,11 +66,28 @@ func TestSettingsMergeOverDefaults(t *testing.T) {
 	if s.FormatOnSave {
 		t.Error("format_on_save = true, want the file's false")
 	}
-	if c := s.AI.Claude; !c.Autostart || c.Resume != "continue" || !slices.Equal(c.Args, []string{"--model", "opus"}) {
+	if c := s.AI.Claude; !c.Autostart || c.Resume != "new" || !slices.Equal(c.Args, []string{"--model", "opus"}) {
 		t.Errorf("ai.claude = %+v", c)
 	}
 	if s.Dashboard.Style != "silly" || s.Terminal != "kitty" {
 		t.Errorf("untouched keys lost their defaults: %+v", s)
+	}
+}
+
+func TestAReopenedProjectStartsFreshUnlessTheConfigSaysContinue(t *testing.T) {
+	if got := Defaults().AI.Claude.Resume; got != "new" {
+		t.Errorf("default ai.claude.resume = %q, want %q (D106)", got, "new")
+	}
+	f, err := Load(writeFile(t, `{"ai": {"claude": {"resume": "continue"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := f.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.AI.Claude.Resume; got != "continue" {
+		t.Errorf("ai.claude.resume = %q, want the file's %q", got, "continue")
 	}
 }
 

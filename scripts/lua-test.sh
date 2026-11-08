@@ -22,15 +22,25 @@ limited() {
 			exec(@ARGV) or die "exec $ARGV[0]: $!\n";
 		}
 		# the group goes with the test: on overrun, on Ctrl-C, and whatever
-		# it left running when it finished
-		sub stop { kill("TERM", -$pid); sleep(1); kill("KILL", -$pid) }
-		$SIG{ALRM} = sub { stop(); exit(142) };
+		# it left running when it finished. TERM first, KILL only for what
+		# is still there a second later
+		sub stop {
+			kill("TERM", -$pid) or return;
+			for (1 .. 10) {
+				kill(0, -$pid) or return;
+				select(undef, undef, undef, 0.1);
+			}
+			kill("KILL", -$pid);
+		}
+		my $done = 0;
+		$SIG{ALRM} = sub { return if $done; stop(); exit(142) };
 		$SIG{INT} = $SIG{TERM} = sub { stop(); exit(130) };
 		alarm($limit);
 		waitpid($pid, 0);
-		my $status = $? & 127 ? 128 + ($? & 127) : $? >> 8;
+		$done = 1;
 		alarm(0);
-		kill("TERM", -$pid);
+		my $status = $? & 127 ? 128 + ($? & 127) : $? >> 8;
+		stop();
 		exit($status);
 	' "$@"
 }
@@ -40,6 +50,8 @@ if [ $# -eq 0 ]; then set -- tests/lua/*_test.lua; fi
 for t in "$@"; do
 	limited "$limit" nvim --clean --headless -l "$t"
 	status=$?
+	# Ctrl-C: the test's group is gone already, so just stop
+	if [ "$status" -eq 130 ]; then exit 130; fi
 	if [ "$status" -eq 142 ]; then
 		echo "lua-test: $t: still running after ${limit}s, stopped it" >&2
 		exit 1

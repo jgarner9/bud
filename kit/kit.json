@@ -10,8 +10,6 @@
   "expected_mcp": [
     "basic-memory",
     "context7",
-    "exa",
-    "linear",
-    "serena"
+    "exa"
   ]
 }

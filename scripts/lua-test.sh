@@ -21,10 +21,17 @@ limited() {
 			setpgrp(0, 0);
 			exec(@ARGV) or die "exec $ARGV[0]: $!\n";
 		}
-		$SIG{ALRM} = sub { kill("TERM", -$pid); sleep(1); kill("KILL", -$pid); exit(142) };
+		# the group goes with the test: on overrun, on Ctrl-C, and whatever
+		# it left running when it finished
+		sub stop { kill("TERM", -$pid); sleep(1); kill("KILL", -$pid) }
+		$SIG{ALRM} = sub { stop(); exit(142) };
+		$SIG{INT} = $SIG{TERM} = sub { stop(); exit(130) };
 		alarm($limit);
 		waitpid($pid, 0);
-		exit($? & 127 ? 128 + ($? & 127) : $? >> 8);
+		my $status = $? & 127 ? 128 + ($? & 127) : $? >> 8;
+		alarm(0);
+		kill("TERM", -$pid);
+		exit($status);
 	' "$@"
 }
 

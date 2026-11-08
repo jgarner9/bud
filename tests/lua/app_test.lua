@@ -100,6 +100,17 @@ drop(5000)
 eq(quit(), false, "a dashboard you've split is kept")
 vim.fn.jobstop(job)
 
+-- nothing at all without a BUD_APP bud.app knows
+vim.fn.delete(app.file("drop"))
+vim.env.BUD_APP = "other"
+app.setup()
+vim.wait(50)
+eq(
+  { vim.fn.filereadable(app.file("drop")), vim.fn.filereadable(app.file("other")), vim.env.BUD_APP },
+  { 0, 0, nil },
+  "an unknown BUD_APP is ignored"
+)
+
 -- yield does nothing in an nvim that isn't a cold start's dashboard
 app.role = "drop"
 local quits = 0

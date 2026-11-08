@@ -20,6 +20,8 @@ end
 function M.start(launched)
   local now = M.now()
   launched = tonumber(launched)
+  -- as given, however old: bud.app pairs Bud.app's two launches on it
+  M.launched = launched
   if launched and launched <= now and now - launched < 10e6 then
     M.began = launched
   else

@@ -27,7 +27,8 @@ end
 -- began is when this nvim's bud started, in seconds (bud.startup reads
 -- BUD_LAUNCHED before init.lua clears it)
 function M.began()
-  return require("bud.startup").began / 1e6
+  local startup = require("bud.startup")
+  return (startup.launched or startup.began) / 1e6
 end
 
 -- quit ends this nvim, which closes its Bud window (swappable in tests)
@@ -57,15 +58,25 @@ local function record(role)
   return addr
 end
 
--- call runs lua in the nvim at addr, and says whether it answered
-local function call(addr, lua)
+-- tell runs lua with args in the nvim at addr, as a notification, so neither
+-- nvim ever waits on the other. One that's gone just can't be connected to
+local function tell(addr, lua, args)
   local ok, ch = pcall(vim.fn.sockconnect, "pipe", addr, { rpc = true })
   if not ok or ch == 0 then
-    return false
+    return
   end
-  local done = pcall(vim.rpcrequest, ch, "nvim_exec_lua", lua, {})
-  pcall(vim.fn.chanclose, ch)
-  return done
+  pcall(vim.rpcnotify, ch, "nvim_exec_lua", lua, args)
+  -- closed later, so the notification is written first
+  vim.defer_fn(function()
+    pcall(vim.fn.chanclose, ch)
+  end, 1000)
+end
+
+-- answer is the drop's reply to a dashboard that came second
+function M.answer(addr)
+  if M.role == "drop" then
+    tell(addr, "require('bud.app').yield()", {})
+  end
 end
 
 -- untouched says whether this nvim still shows only the dashboard. Floating
@@ -109,16 +120,18 @@ function M.setup(opts)
     vim.fn.mkdir(vim.fn.fnamemodify(M.file(kind), ":h"), "p")
     vim.fn.writefile({ ("%.6f"):format(M.began()), addr }, M.file(kind))
   end
-  local other = record(kind == "start" and "drop" or "start")
-  if not other then
-    return
-  end
-  if kind == "drop" then
-    call(other, "require('bud.app').yield()")
-  elseif call(other, "return true") then
-    -- the drop came first and its window is still open
-    M.yield()
-  end
+  -- after the first screen
+  vim.schedule(function()
+    local other = record(kind == "start" and "drop" or "start")
+    if not other then
+      return
+    elseif kind == "drop" then
+      tell(other, "require('bud.app').yield()", {})
+    elseif addr then
+      -- the drop came first: it answers only while its window is open
+      tell(other, "require('bud.app').answer(...)", { addr })
+    end
+  end)
 end
 
 return M

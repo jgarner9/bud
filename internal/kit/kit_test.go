@@ -638,8 +638,8 @@ func TestShadowed(t *testing.T) {
 
 func TestUninstallHintUsesThePluginsScope(t *testing.T) {
 	cases := map[Plugin]string{
-		{ID: "bud@clod"}:                "claude plugin uninstall --scope user bud@clod",
-		{ID: "bud@clod", Scope: "user"}: "claude plugin uninstall --scope user bud@clod",
+		{ID: "bud@clod"}:                                         "claude plugin uninstall --scope user bud@clod",
+		{ID: "bud@clod", Scope: "user"}:                          "claude plugin uninstall --scope user bud@clod",
 		{ID: "bud@clod", Scope: "local", Project: "/home/j/app"}: "cd /home/j/app && claude plugin uninstall --scope local bud@clod",
 		{ID: "bud@clod", Scope: "project", Project: "/x/my app"}: "cd '/x/my app' && claude plugin uninstall --scope project bud@clod",
 		{ID: "bud@corp", Scope: "managed"}:                       "bud@corp is installed by your organisation's policy, so an administrator has to remove it",

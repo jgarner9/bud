@@ -462,7 +462,7 @@ func TestSyncCountsOnlyCopiesThatLoadInEveryProject(t *testing.T) {
 		{"plugin", "bud@bud-plugins", "add", "only in some projects so far: bud@bud-plugins (local, /w)"},
 		{"plugin", "corp@x", "skip", "your organisation's policy installs it"},
 		{"plugin", "gone@bud-plugins", "skip", "your organisation's policy installs it"},
-		{"plugin", "old@bud-plugins", "skip", "no longer in the kit, and the copies left aren't bud's: old@bud-plugins (project, /p)"},
+		{"plugin", "old@bud-plugins", "skip", "no longer in the kit, and the copy left isn't bud's: old@bud-plugins (project, /p), yours"},
 	} {
 		if !slices.Contains(actions, want) {
 			t.Errorf("no %v in %v", want, actions)
@@ -525,7 +525,7 @@ func TestADroppedPluginAlreadyGoneIsLetGoQuietly(t *testing.T) {
 	actions, _ := Sync(&Kit{}, env, true)
 	for _, want := range []Action{
 		{"plugin", "gone@m", "skip", "no longer in the kit, and already uninstalled"},
-		{"plugin", "pol@m", "skip", "no longer in the kit, and the copies left aren't bud's: pol@m (managed)"},
+		{"plugin", "pol@m", "skip", "no longer in the kit, and the copy left isn't bud's: pol@m (managed), your organisation's policy's"},
 	} {
 		if !slices.Contains(actions, want) {
 			t.Errorf("no %v in %v", want, actions)
@@ -533,6 +533,13 @@ func TestADroppedPluginAlreadyGoneIsLetGoQuietly(t *testing.T) {
 	}
 	if len(ran) > 0 {
 		t.Fatalf("a dry run ran %q", ran)
+	}
+}
+
+func TestLeftNoteNamesEachCopysOwner(t *testing.T) {
+	got := leftNote([]Plugin{{ID: "x@m", Scope: "local", Project: "/w"}, {ID: "x@m", Scope: "managed"}})
+	if want := "the copies left aren't bud's: x@m (local, /w), yours; x@m (managed), your organisation's policy's"; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 

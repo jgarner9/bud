@@ -339,7 +339,7 @@ func syncPlugins(k *Kit, env Env, ledger *Ledger, dryRun bool, actions *[]Action
 		if !slices.Contains(atUser, id) {
 			why := "no longer in the kit, and already uninstalled"
 			if left := others(plugins, id); len(left) > 0 {
-				why = "no longer in the kit, and the copies left aren't bud's: " + Labels(left)
+				why = "no longer in the kit, and " + leftNote(left)
 			}
 			*actions = append(*actions, Action{"plugin", id, "skip", why})
 			if !dryRun {
@@ -640,6 +640,25 @@ func others(plugins []Plugin, id string) []Plugin {
 		}
 	}
 	return out
+}
+
+// leftNote says whose the copies left of a plugin bud let go of are
+func leftNote(left []Plugin) string {
+	parts := make([]string, len(left))
+	for i, p := range left {
+		owner := "yours"
+		switch {
+		case p.synced():
+			owner = "claude.ai's"
+		case p.Scope == "managed":
+			owner = "your organisation's policy's"
+		}
+		parts[i] = p.Label() + ", " + owner
+	}
+	if len(left) == 1 {
+		return "the copy left isn't bud's: " + parts[0]
+	}
+	return "the copies left aren't bud's: " + strings.Join(parts, "; ")
 }
 
 // localNote names the project and local copies of id's name, which don't count

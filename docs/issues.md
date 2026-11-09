@@ -39,13 +39,13 @@ Something wrong with bud itself while you do this: `<leader>aB` files it in bud'
 
 By default `<leader>aw` works in a local worktree. Set `ai.work.where` to `cloud` (`bud config set ai.work.where cloud`), or add `cloud` or `local` to one command (`:BudIssue work JGA-12 cloud`), and the work goes to a Claude Code cloud session instead. Your laptop stays free, and several issues can run at once.
 
-What happens: bud runs `claude --cloud` in the repo with the same task. The cloud session clones the repo from GitHub, works the issue on a branch named after it (`jga-12-dashboard-drops-a-row`, or `claude/jga-12-...` where the environment only allows that prefix), runs the checks, pushes the branch and moves the issue to In Review. bud shows the session's link in `:BudIssues`, and when a branch with the issue id in its name appears on `origin` it marks the issue ready. `d` then fetches the branch and shows the diff in diffview. Merging stays yours.
+What happens: bud runs `claude --cloud` in the repo with the same task. The cloud session clones the repo from GitHub, works the issue on a branch named after it (`jga-12-dashboard-drops-a-row`, or `claude/jga-12-...` where the environment only allows that prefix), runs the checks and pushes the branch. bud shows the session's link in `:BudIssues`, and when a branch with the issue id in its name appears on `origin` it marks the issue ready. `d` then fetches the branch and shows the diff in diffview. Merging stays yours.
 
 What it needs:
 
 - The repo's `origin` is on GitHub, and the base branch (usually `main`) is pushed. Anything else is refused with a message, and `local` still works.
 - Claude Code trusts the repo's folder: run `claude` in it once and accept the prompt. bud says so if it hasn't.
-- The Linear connector is enabled for cloud sessions in your claude.ai settings. Without it the session stops and says so, because it can't read the issue.
+- Your local Claude Code can reach Linear (the claude.ai connector). Sessions started by `claude --cloud` have no Linear of their own, so bud reads the issue (title, description, comments) with your local Claude first and puts it in the task, then moves the issue to In Progress when the session starts and to In Review when its branch appears. If it can't read the issue, nothing is started.
 
 What differs from local: a cloud session doesn't use bud's permission float, so it runs in its own sandboxed environment (`bud-dev` for bud's own work, whichever your account uses elsewhere). A question from it isn't answered with `a`; open the link in `:BudIssues` and answer there.
 

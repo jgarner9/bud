@@ -203,6 +203,18 @@ local function fake_launch(printed, code)
   end
 end
 
+-- Linear is read and written through the local claude, stubbed here
+local asked_linear = {}
+work.linear = function(prompt, tools, cb)
+  table.insert(asked_linear, { prompt = prompt, tools = tools })
+  vim.schedule(function()
+    if prompt:find("Move the Linear issue", 1, true) then
+      return cb("done")
+    end
+    cb("# JGA-20 Cloud one\n\nStatus: Backlog\n\nMake the thing do the other thing.\n\nComment (Jason): use a table.")
+  end)
+end
+
 -- base branch not on origin yet: refused, nothing launched
 fake_launch({}, 0)
 launched = nil
@@ -231,6 +243,9 @@ eq(launched.argv[2], "--cloud", "as a cloud session")
 eq(launched.cwd, vim.uv.fs_realpath(crepo), "from the repo")
 for _, want in ipairs({
   "Linear issue JGA-20",
+  "Make the thing do the other thing.",
+  "use a table.",
+  "Linear isn't available in this session",
   "branch `jga-20-cloud-one` from `main`",
   "git push -u origin jga-20-cloud-one",
   "Don't open a pull request",
@@ -239,6 +254,13 @@ for _, want in ipairs({
   assert(launched.argv[3]:find(want, 1, true), "cloud prompt lacks: " .. want)
 end
 eq(crun.state, "working", "working until the branch is pushed")
+wait(function()
+  return #asked_linear >= 2
+end, "the status move")
+assert(asked_linear[1].prompt:find("Print the Linear issue JGA-20", 1, true), "reads the issue first")
+assert(vim.tbl_contains(asked_linear[1].tools, "mcp__claude_ai_Linear__get_issue"), "read tools only")
+assert(not vim.tbl_contains(asked_linear[1].tools, "mcp__claude_ai_Linear__save_issue"), "no writes while reading")
+assert(asked_linear[2].prompt:find('"In Progress"', 1, true), asked_linear[2].prompt)
 eq(work.statusline() ~= "", true, "counted as in progress")
 
 -- the branch appears on origin: done
@@ -247,6 +269,10 @@ wait(function()
   return crun.state == "done"
 end, "the pushed branch")
 eq(crun.branch, "claude/jga-20-cloud-one-x1y2", "the branch the session really pushed")
+wait(function()
+  return #asked_linear >= 3
+end, "the In Review move")
+assert(asked_linear[3].prompt:find('"In Review"', 1, true), asked_linear[3].prompt)
 local clines = issue.list_lines({}, { ["JGA-20"] = crun })
 assert(clines[3]:find("cloud  https://claude.ai/code/session_01Abc", 1, true), clines[3])
 
@@ -259,6 +285,25 @@ wait(function()
   return trun.state == "failed"
 end, "the trust failure")
 assert(trun.summary:find("run claude there once", 1, true), trun.summary)
+-- Linear unreadable: nothing is launched blind
+launched = nil
+local real_linear = work.linear
+work.linear = function(_, _, cb)
+  vim.schedule(function()
+    cb(nil, "not logged in")
+  end)
+end
+work.runs["JGA-21"] = nil
+trun = work.start("JGA-21", "Blind", crepo, "cloud")
+wait(function()
+  return trun.state == "failed"
+end, "the unreadable issue")
+assert(
+  trun.summary:find("couldn't read the issue", 1, true) and trun.summary:find("not logged in", 1, true),
+  trun.summary
+)
+eq(launched, nil, "no cloud session without the issue")
+work.linear = real_linear
 -- no session and no trust prompt: the output is shown
 fake_launch({ "boom" }, 2)
 work.runs["JGA-21"] = nil

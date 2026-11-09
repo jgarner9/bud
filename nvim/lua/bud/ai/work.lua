@@ -58,6 +58,47 @@ function M.on_origin(repo, id, cb)
   )
 end
 
+-- linear asks the claude on this machine, which has Linear, to do one thing
+-- there, with only the tools given allowed, and calls cb(text) or cb(nil, why).
+-- Sessions started by `claude --cloud` have no Linear connector of their own
+-- (JGA-237), so bud reads the issue and moves its status for them
+local linear_tools = {
+  read = {
+    "mcp__claude_ai_Linear__get_issue",
+    "mcp__claude_ai_Linear__list_comments",
+    "mcp__linear__get_issue",
+    "mcp__linear__list_comments",
+  },
+  write = { "mcp__claude_ai_Linear__save_issue", "mcp__linear__save_issue" },
+}
+function M.linear(prompt, tools, cb)
+  vim.system(
+    { "claude", "-p", prompt, "--allowedTools", table.concat(tools, ",") },
+    { text = true, timeout = 180000 },
+    function(r)
+      vim.schedule(function()
+        if r.code ~= 0 then
+          return cb(nil, vim.trim((r.stderr or "") .. (r.stdout or "")):sub(-300))
+        end
+        cb(vim.trim(r.stdout or ""))
+      end)
+    end
+  )
+end
+
+-- set_status moves a Linear issue, and says if it couldn't
+function M.set_status(id, status)
+  M.linear(
+    ("Move the Linear issue %s to the status %q. Change nothing else. Reply with one word: done."):format(id, status),
+    linear_tools.write,
+    function(_, why)
+      if why then
+        notify(("couldn't move %s to %s: %s"):format(id, status, why), vim.log.levels.WARN)
+      end
+    end
+  )
+end
+
 -- how often a cloud run checks for its branch, and how long it waits
 M.poll_ms = 30000
 M.give_up_ms = 6 * 60 * 60 * 1000
@@ -231,22 +272,24 @@ function M.cloud_prompt(run)
   return table.concat({
     ("Work on the Linear issue %s%s."):format(run.id, run.title and (' ("' .. run.title .. '")') or ""),
     "",
+    "The issue, as it is in Linear (Linear isn't available in this session; bud moves its status, so don't try):",
+    "",
+    run.issue or "(bud couldn't read it; ask what it says before you change anything)",
+    "",
     ("You're in a fresh cloud checkout of the repo. Make the branch `%s` from `%s` and work only on it."):format(
       run.branch,
       run.base
     ),
     "",
-    "1. Read the issue in Linear (description and comments) and move it to In Progress."
-      .. " If Linear isn't available to you, stop and say so: the user has to enable the Linear connector for cloud sessions.",
-    "2. Fix it the way the repo's CLAUDE.md, README and existing code say things are done here.",
-    "3. Run the project's own checks (its CLAUDE.md, justfile, Makefile or package scripts say which).",
-    "4. When they pass, commit in the repo's commit style with the issue id in the subject,"
-      .. (" push the branch (`git push -u origin %s`)"):format(run.branch)
-      .. " and move the issue to In Review. Don't open a pull request, merge, or touch other branches."
+    "1. Fix it the way the repo's CLAUDE.md, README and existing code say things are done here.",
+    "2. Run the project's own checks (its CLAUDE.md, justfile, Makefile or package scripts say which).",
+    "3. When they pass, commit in the repo's commit style with the issue id in the subject and push the branch"
+      .. (" (`git push -u origin %s`). "):format(run.branch)
+      .. "Don't open a pull request, merge, or touch other branches."
       .. (" If your environment only lets you push a `claude/` branch, use `claude/%s` and keep the issue id in the name."):format(
         run.branch
       ),
-    "5. If you're stuck, or the checks fail and you can't fix them, push nothing broken and say what's left.",
+    "4. If you're stuck, or the checks fail and you can't fix them, push nothing broken and say what's left.",
   }, "\n")
 end
 
@@ -321,28 +364,44 @@ function M.start_cloud(id, title, repo)
     run.state, run.summary = "failed", why
     notify(id .. " failed: " .. why, vim.log.levels.WARN)
   end
-  local job, why = M.launch({ "claude", "--cloud", M.cloud_prompt(run) }, repo, function(line)
-    table.insert(out, line)
-    run.session = run.session or line:match("(session_%w+)")
-    run.url = run.url or line:match("(https://claude%.ai/code/session_%w+[^%s]*)")
-  end, function(code)
-    if run.session then
-      run.url = run.url or ("https://claude.ai/code/" .. run.session)
-      notify(("%s went to a cloud session: %s"):format(id, run.url))
-      M.watch(run)
-      return
+  local function launch()
+    local job, why = M.launch({ "claude", "--cloud", M.cloud_prompt(run) }, repo, function(line)
+      table.insert(out, line)
+      run.session = run.session or line:match("(session_%w+)")
+      run.url = run.url or line:match("(https://claude%.ai/code/session_%w+[^%s]*)")
+    end, function(code)
+      if run.session then
+        run.url = run.url or ("https://claude.ai/code/" .. run.session)
+        notify(("%s went to a cloud session: %s"):format(id, run.url))
+        M.set_status(id, "In Progress")
+        M.watch(run)
+        return
+      end
+      local text = table.concat(out, "\n")
+      if text:find("Quick safety check", 1, true) then
+        return fail("Claude Code doesn't trust " .. repo .. " yet: run claude there once and accept it, then try again")
+      end
+      fail(("claude --cloud exited %d without making a session: %s"):format(code, vim.trim(text):sub(-300)))
+    end)
+    if not job then
+      fail(why)
     end
-    local text = table.concat(out, "\n")
-    if text:find("Quick safety check", 1, true) then
-      return fail("Claude Code doesn't trust " .. repo .. " yet: run claude there once and accept it, then try again")
-    end
-    fail(("claude --cloud exited %d without making a session: %s"):format(code, vim.trim(text):sub(-300)))
-  end)
-  if not job then
-    fail(why)
-    return run
   end
-  notify(("starting a cloud session for %s…"):format(id))
+  notify(("reading %s from Linear, then starting a cloud session…"):format(id))
+  M.linear(
+    (
+      "Print the Linear issue %s for a developer who can't open Linear: its title, status, description, and every comment"
+      .. " (author and text), as plain markdown. Print nothing else."
+    ):format(id),
+    linear_tools.read,
+    function(text, why)
+      if not text or text == "" then
+        return fail("couldn't read the issue from Linear: " .. (why or "empty answer"))
+      end
+      run.issue = text
+      launch()
+    end
+  )
   return run
 end
 
@@ -373,6 +432,7 @@ function M.watch(run)
         if found then
           run.branch = found
           run.state, run.summary = "done", "branch pushed to origin; d fetches and shows it"
+          M.set_status(run.id, "In Review")
           notify(("%s is ready to review on %s (d in :BudIssues)"):format(run.id, run.branch))
           stop()
         elseif waited >= M.give_up_ms then

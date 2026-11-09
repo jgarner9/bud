@@ -50,7 +50,7 @@ func TestIssueTarget(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if got := targetJSON(t, []string{dir}, false); got != (target{"ENG", "Web", "config", dir}) {
+	if got := targetJSON(t, []string{dir}, false); got != (target{Team: "ENG", Project: "Web", Source: "config", Root: dir}) {
 		t.Fatalf("config: %+v", got)
 	}
 
@@ -64,7 +64,7 @@ func TestIssueTarget(t *testing.T) {
 	if proj, ok := r.Get(dir); !ok || proj.Issues == nil || proj.Issues.Team != "APP" {
 		t.Fatalf("projects.json: %+v", r.Projects)
 	}
-	if got := targetJSON(t, []string{dir}, false); got != (target{"APP", "", "project", dir}) {
+	if got := targetJSON(t, []string{dir}, false); got != (target{Team: "APP", Source: "project", Root: dir}) {
 		t.Fatalf("project: %+v", got)
 	}
 
@@ -88,7 +88,7 @@ func TestIssueTargetBud(t *testing.T) {
 	os.MkdirAll(filepath.Join(checkout, "languages"), 0o755)
 
 	// bud's own tracker by default, with no checkout until one is dev-linked
-	if got := targetJSON(t, nil, true); got != (target{"JGA", "Bud IDE", "bud", ""}) {
+	if got := targetJSON(t, nil, true); got != (target{Team: "JGA", Project: "Bud IDE", Source: "bud"}) {
 		t.Fatalf("default: %+v", got)
 	}
 	if err := nvim.Link(checkout, p.Config); err != nil {
@@ -118,5 +118,75 @@ func TestIssueSetUsage(t *testing.T) {
 	}
 	if err := issueSet([]string{"/no/such/dir"}, "T", "", false); err == nil {
 		t.Fatal("a missing dir was registered")
+	}
+}
+
+// budRepo makes a dir that looks like a bud git checkout
+func budRepo(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(filepath.Join(dir, "nvim"), 0o755)
+	os.WriteFile(filepath.Join(dir, "nvim", "init.lua"), nil, 0o644)
+	os.MkdirAll(filepath.Join(dir, "languages"), 0o755)
+	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
+
+	return dir
+}
+
+// <leader>aB remembers the bud checkout, and checks it each time (JGA-226)
+func TestIssueCheckoutIsRememberedAndChecked(t *testing.T) {
+	layoutHome(t)
+	checkout := budRepo(t)
+
+	if err := issueCheckout([]string{filepath.Join(t.TempDir(), "nope")}, false); err == nil || !strings.Contains(err.Error(), "no longer exists") {
+		t.Fatalf("a missing dir should be refused: %v", err)
+	}
+	notBud := t.TempDir()
+	if err := issueCheckout([]string{notBud}, false); err == nil || !strings.Contains(err.Error(), "isn't a bud checkout") {
+		t.Fatalf("a dir that isn't bud should be refused: %v", err)
+	}
+	if got := targetJSON(t, nil, true); got.Root != "" || got.Stale != "" {
+		t.Fatalf("nothing saved yet: %+v", got)
+	}
+
+	captureStdout(t, func() {
+		if err := issueCheckout([]string{checkout}, false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if got := targetJSON(t, nil, true); got.Root != checkout || got.Stale != "" {
+		t.Fatalf("saved: %+v", got)
+	}
+
+	// moved: not used, and reported with why
+	moved := checkout + "-moved"
+	if err := os.Rename(checkout, moved); err != nil {
+		t.Fatal(err)
+	}
+	got := targetJSON(t, nil, true)
+	if got.Root != "" || got.Stale != checkout || !strings.Contains(got.StaleWhy, "moved or removed") {
+		t.Fatalf("moved: %+v", got)
+	}
+	if err := issueCheckout(nil, false); err == nil || !strings.Contains(err.Error(), "unusable") {
+		t.Fatalf("status of a gone checkout: %v", err)
+	}
+
+	// back in place: used again
+	os.Rename(moved, checkout)
+	if got := targetJSON(t, nil, true); got.Root != checkout {
+		t.Fatalf("restored: %+v", got)
+	}
+
+	// forgotten
+	captureStdout(t, func() {
+		if err := issueCheckout(nil, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if got := targetJSON(t, nil, true); got.Root != "" || got.Stale != "" {
+		t.Fatalf("forgotten: %+v", got)
 	}
 }

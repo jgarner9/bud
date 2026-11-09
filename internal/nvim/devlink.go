@@ -35,6 +35,41 @@ func DevLink(dir string) (string, bool) {
 	return l.Checkout, true
 }
 
+// checkCheckout says whether dir has bud's source in it
+func checkCheckout(dir string) error {
+	for _, need := range []string{"nvim/init.lua", "languages"} {
+		if _, err := os.Stat(filepath.Join(dir, need)); err != nil {
+			return fmt.Errorf("%s isn't a bud checkout (no %s)", dir, need)
+		}
+	}
+
+	return nil
+}
+
+// CheckBudRepo says whether dir is still a bud git checkout Claude can work in:
+// it exists, has bud's source and is a git repo. A remembered path (JGA-226)
+// goes through this each time it's used, since the dir may have been moved or
+// removed since
+func CheckBudRepo(dir string) error {
+	info, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return fmt.Errorf("%s no longer exists (moved or removed)", dir)
+	case err != nil:
+		return err
+	case !info.IsDir():
+		return fmt.Errorf("%s isn't a directory", dir)
+	}
+	if err := checkCheckout(dir); err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		return fmt.Errorf("%s isn't a git checkout (no .git)", dir)
+	}
+
+	return nil
+}
+
 // Link points dir at checkout. A synced copy in dir is removed first
 // (RemoveConfig, so the user's own files stay); a previous link is replaced
 func Link(checkout, dir string) error {
@@ -42,10 +77,8 @@ func Link(checkout, dir string) error {
 	if err != nil {
 		return err
 	}
-	for _, need := range []string{"nvim/init.lua", "languages"} {
-		if _, err := os.Stat(filepath.Join(checkout, need)); err != nil {
-			return fmt.Errorf("%s isn't a bud checkout (no %s)", checkout, need)
-		}
+	if err := checkCheckout(checkout); err != nil {
+		return err
 	}
 
 	if _, linked := DevLink(dir); linked {

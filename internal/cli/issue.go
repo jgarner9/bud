@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"jgarner.dev/bud/internal/config"
@@ -22,7 +23,7 @@ func init() {
 // Linear team and project in projects.json, else config.json's ai.issues, and
 // bud's own tracker for issues about bud itself
 func Issue() *Command {
-	var bud, asJSON, global bool
+	var bud, asJSON, global, unsetCheckout bool
 	var team, project string
 	return &Command{
 		Name:  "issue",
@@ -47,6 +48,14 @@ func Issue() *Command {
 				},
 				Run: func(_ *Globals, args []string) error { return issueSet(args, team, project, global) },
 			},
+			{
+				Name:  "checkout",
+				Usage: "the bud checkout <leader>aB works in: checkout [path] saves it, checkout --unset forgets it, with neither it says what's saved",
+				Flags: func(fs *flag.FlagSet) {
+					fs.BoolVar(&unsetCheckout, "unset", false, "forget the saved checkout")
+				},
+				Run: func(_ *Globals, args []string) error { return issueCheckout(args, unsetCheckout) },
+			},
 			{Name: "unset", Usage: "send a project's issues back to the default target: unset [project]", Run: func(_ *Globals, args []string) error { return issueUnset(args) }},
 		},
 	}
@@ -58,8 +67,13 @@ type target struct {
 	Project string `json:"project"`
 	// "project" (projects.json), "config" (ai.issues), "bud" (ai.issues.bud), or "" for none
 	Source string `json:"source"`
-	// the project's dir, or bud's dev-linked checkout; "" when bud isn't linked to one
+	// the project's dir, or for bud its dev-linked or remembered checkout; ""
+	// when there is none (or the remembered one is gone, see Stale)
 	Root string `json:"root"`
+	// the remembered bud checkout that no longer works, and why, so the editor
+	// can say so and ask again
+	Stale    string `json:"stale,omitempty"`
+	StaleWhy string `json:"stale_why,omitempty"`
 }
 
 // resolveTarget works out where an issue filed from dir goes
@@ -69,7 +83,16 @@ func resolveTarget(p *paths.Paths, s config.Settings, dir string, bud bool) (tar
 		if t.Team == "" {
 			t.Source = ""
 		}
-		t.Root, _ = nvim.DevLink(p.Config)
+		if root, ok := nvim.DevLink(p.Config); ok {
+			t.Root = root
+		} else if c := s.AI.Issues.Bud.Checkout; c != "" {
+			// remembered, but checked every time: it may have moved since
+			if err := nvim.CheckBudRepo(c); err != nil {
+				t.Stale, t.StaleWhy = c, err.Error()
+			} else {
+				t.Root = c
+			}
+		}
 		return t, nil
 	}
 
@@ -232,4 +255,70 @@ func setProjectIssues(p *paths.Paths, nameOrPath string, t *projects.IssueTarget
 	}
 
 	return proj, r.Save()
+}
+
+// issueCheckout saves, forgets or reports the bud checkout issues about bud are
+// worked on in
+func issueCheckout(args []string, unset bool) error {
+	if len(args) > 1 || (unset && len(args) > 0) {
+		return usageErrorf("issue checkout takes one path, or --unset")
+	}
+	_, f, s, err := loadSettings()
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case unset:
+		if err := f.Set("ai.issues.bud.checkout", ""); err != nil {
+			return err
+		}
+		if err := f.Save(); err != nil {
+			return err
+		}
+		fmt.Println("Forgot the bud checkout.")
+		return nil
+	case len(args) == 1:
+		dir, err := filepath.Abs(expandHome(args[0]))
+		if err != nil {
+			return err
+		}
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			dir = real
+		}
+		if err := nvim.CheckBudRepo(dir); err != nil {
+			return err
+		}
+		if err := f.Set("ai.issues.bud.checkout", dir); err != nil {
+			return err
+		}
+		if err := f.Save(); err != nil {
+			return err
+		}
+		fmt.Printf("Issues about bud are worked on in %s.\n", dir)
+		return nil
+	}
+
+	c := s.AI.Issues.Bud.Checkout
+	if c == "" {
+		fmt.Println("No bud checkout saved: bud issue checkout <path> saves one.")
+		return nil
+	}
+	if err := nvim.CheckBudRepo(c); err != nil {
+		return fmt.Errorf("saved checkout is unusable: %w\nsave another with bud issue checkout <path>, or forget it with --unset", err)
+	}
+	fmt.Println(c)
+
+	return nil
+}
+
+// expandHome turns a leading ~ into the home dir; the editor passes what was typed
+func expandHome(path string) string {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(path, "~"))
+		}
+	}
+
+	return path
 }

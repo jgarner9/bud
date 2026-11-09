@@ -41,7 +41,7 @@ Something wrong with bud itself while you do this: `<leader>aB` files it in bud'
 
 Claude reads the issue, moves it to In Progress, makes the fix, runs the project's checks, commits on that branch with the issue id and moves the issue to In Review. Its edits inside the worktree go through without asking; shell commands (the checks, git) still ask you, and so would an edit anywhere else. The statusline shows how many are in progress, and a question from Claude shows up as a notification: answer it with `a` in `:BudIssues`.
 
-When it's done, `d` opens the diff against the base in diffview. Merging, pushing and removing the worktree (`git worktree remove <path>`) are yours. For bud's own issues, Claude needs a checkout: `bud dev link ~/dev/bud`.
+When it's done, `d` opens the diff against the base in diffview. Merging, pushing and removing the worktree (`git worktree remove <path>`) are yours. For bud's own issues, Claude needs a bud checkout: the one `<leader>aB` remembered, or `bud dev link ~/dev/bud`.
 
 ## Where issues go
 
@@ -52,6 +52,6 @@ bud issue set --global --team ENG       # every project without its own
 bud issue unset                         # back to the global one
 ```
 
-The first `<leader>ai` in a project with no target asks for one and offers to save it. Issues about bud go to `ai.issues.bud` (bud's own tracker), and Claude reads bud's code in your `bud dev link` checkout, or the synced config without one.
+The first `<leader>ai` in a project with no target asks for one and offers to save it. Issues about bud go to `ai.issues.bud` (bud's own tracker), and Claude reads bud's code in your `bud dev link` checkout. Without one, the first `<leader>aB` asks for the path to a bud checkout and remembers it (`bud issue checkout <path>`; `bud issue checkout` shows it, `--unset` forgets it). It is checked every time: if the dir has been moved or removed, bud says so and asks again, and an empty answer falls back to the synced config, which has no Go code to read.
 
 Needs the `bud-ide` plugin (`bud kit sync`) and Linear in Claude Code: the claude.ai Linear connector, or a `linear` MCP server in Claude Code's config where there's no claude.ai (Bedrock).

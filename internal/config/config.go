@@ -107,6 +107,9 @@ type Issues struct {
 type IssueTarget struct {
 	Team    string `json:"team"`
 	Project string `json:"project"`
+	// the bud checkout Claude works in for issues about bud, remembered by
+	// 'bud issue checkout'; only read for ai.issues.bud
+	Checkout string `json:"checkout"`
 }
 
 type Claude struct {

@@ -88,6 +88,7 @@ Every key and its default is in the [config reference](config.md).
 | `bud tools promote [--repo dir] [--yes] <name>` | Moves one of yours into a bud checkout's `tools/`, commits and pushes it, after asking. `--repo` defaults to the `bud dev link` checkout. |
 | `bud issue target [--bud] [--json] [dir]` | Where an issue filed from the editor goes in Linear. `--json` prints it for the editor. |
 | `bud issue set --team T [--project P] [--global] [project]` / `unset [project]` | Sets or clears it. See [filing issues](issues.md). |
+| `bud issue checkout [path]` / `--unset` | Saves the bud checkout `<leader>aB` works in (checked to still be a bud git checkout), forgets it, or with neither says what is saved. See [filing issues](issues.md). |
 
 How the pieces fit together is in [Claude Code in bud](claude-code.md).
 

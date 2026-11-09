@@ -481,12 +481,17 @@ function M.target(kind, cb)
     vim.notify("bud: " .. (why or "bud issue target answered oddly"), vim.log.levels.ERROR)
     return
   end
+  if kind == "bud" then
+    if target.source == "" then
+      vim.notify("bud: no tracker for bud itself; set ai.issues.bud.team with bud config set", vim.log.levels.WARN)
+      return
+    end
+    if target.root == "" then
+      return M.checkout(target, cb)
+    end
+  end
   if target.source ~= "" then
     return cb(target)
-  end
-  if kind == "bud" then
-    vim.notify("bud: no tracker for bud itself; set ai.issues.bud.team with bud config set", vim.log.levels.WARN)
-    return
   end
   vim.ui.input({ prompt = "Linear team for this project's issues: " }, function(team)
     if not team or team == "" then
@@ -509,6 +514,38 @@ function M.target(kind, cb)
         cb(target)
       end)
     end)
+  end)
+end
+
+-- checkout finds the bud checkout Claude works in for an issue about bud, when
+-- none is linked or remembered, or the remembered one has moved or gone: it
+-- says so, asks for a path, and saves it for next time. An empty answer files
+-- against the synced config instead, as before
+function M.checkout(target, cb)
+  if target.stale then
+    vim.notify(
+      ("bud: the saved bud checkout is unusable: %s"):format(target.stale_why or target.stale),
+      vim.log.levels.WARN
+    )
+  end
+  local default = target.stale or "~/dev/bud"
+  vim.ui.input({
+    prompt = "Path to your bud checkout (empty: use the synced config, no code to read): ",
+    default = default,
+    completion = "dir",
+  }, function(path)
+    if not path or vim.trim(path) == "" then
+      return cb(target)
+    end
+    local _, err = M.bud({ "issue", "checkout", vim.trim(path) })
+    if err then
+      vim.notify("bud: " .. err, vim.log.levels.WARN)
+      return cb(target)
+    end
+    local out = M.bud({ "issue", "checkout" })
+    target.root = vim.trim(out or "")
+    target.stale, target.stale_why = nil, nil
+    cb(target)
   end)
 end
 

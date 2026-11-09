@@ -172,6 +172,46 @@ end)
 eq(got, nil, "no bud target")
 assert(notified[#notified]:find("ai.issues.bud.team", 1, true), notified[#notified])
 
+-- bud issues remember the checkout: asked for when none is saved or the saved one
+-- is gone, saved with bud issue checkout, then used without asking
+local saved
+issue.bud = function(args)
+  if args[1] == "issue" and args[2] == "target" then
+    if saved then
+      return '{"team":"JGA","project":"Bud IDE","source":"bud","root":"' .. saved .. '"}'
+    end
+    return '{"team":"JGA","project":"Bud IDE","source":"bud","root":"","stale":"/gone/bud","stale_why":"/gone/bud no longer exists (moved or removed)"}'
+  end
+  if args[1] == "issue" and args[2] == "checkout" and args[3] then
+    saved = args[3]
+    return ""
+  end
+  if args[1] == "issue" and args[2] == "checkout" then
+    return saved .. "\n"
+  end
+  return ""
+end
+local asked
+vim.ui.input = function(opts, on)
+  asked = opts
+  on("/home/me/bud")
+end
+got = nil
+issue.target("bud", function(t)
+  got = t
+end)
+eq(asked.default, "/gone/bud", "offers the old path as the default")
+eq(got.root, "/home/me/bud", "uses the path it was given")
+assert(notified[#notified]:find("no longer exists", 1, true), notified[#notified])
+asked = nil
+got = nil
+issue.target("bud", function(t)
+  got = t
+end)
+eq(asked, nil, "does not ask again once saved")
+eq(got.root, "/home/me/bud", "remembered")
+saved = nil
+
 -- the whole flow: propose, review, y, filed
 run = issue.start("Dashboard drops a row", { team = "JGA", project = "Bud IDE", root = repo }, repo, ctx)
 wait(function()

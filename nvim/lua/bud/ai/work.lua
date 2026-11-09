@@ -24,6 +24,67 @@ end
 -- state: "working", "waiting" (Claude asked something), "done", "failed"
 M.runs = {}
 
+-- Cloud runs outlive the editor (JGA-239): they are saved as they change and
+-- picked up again by setup, which resumes watching the ones still working
+function M.runs_file()
+  return vim.fn.stdpath("state") .. "/cloud-runs.json"
+end
+
+local keep =
+  { "id", "title", "repo", "branch", "base", "cloud", "state", "summary", "session", "url", "before", "started" }
+local week = 7 * 24 * 60 * 60
+
+function M.save()
+  local out = {}
+  for id, run in pairs(M.runs) do
+    if run.cloud then
+      local r = {}
+      for _, k in ipairs(keep) do
+        r[k] = run[k]
+      end
+      out[id] = r
+    end
+  end
+  local file = M.runs_file()
+  vim.fn.mkdir(vim.fs.dirname(file), "p")
+  -- a temp file renamed over it, so a crash never leaves half a file
+  local tmp = file .. ".tmp"
+  local f = io.open(tmp, "w")
+  if f then
+    f:write(vim.json.encode(out))
+    f:close()
+    vim.uv.fs_rename(tmp, file)
+  end
+end
+
+-- load brings back the saved cloud runs from the last week, and watches the
+-- ones still working. One that never got a session (bud closed while it was
+-- starting) can't be followed, so it is marked failed
+function M.load()
+  local f = io.open(M.runs_file())
+  if not f then
+    return
+  end
+  local ok, saved = pcall(vim.json.decode, f:read("*a"))
+  f:close()
+  if not ok or type(saved) ~= "table" then
+    return
+  end
+  for id, run in pairs(saved) do
+    if type(run) == "table" and run.cloud and not M.runs[id] and os.time() - (run.started or 0) < week then
+      M.runs[id] = run
+      if run.state == "working" then
+        if run.session then
+          M.watch(run)
+        else
+          run.state, run.summary = "failed", "bud closed before the cloud session started"
+        end
+      end
+    end
+  end
+  M.save()
+end
+
 -- the swappable edges of the cloud path (tests replace them)
 -- launch runs argv in cwd on a pty, calling on_line for each line it prints and
 -- on_exit(code) at the end; returns a job id, or nil and why
@@ -377,11 +438,14 @@ function M.start_cloud(id, title, repo)
     base = base,
     cloud = true,
     state = "working",
+    started = os.time(),
   }
   M.runs[id] = run
+  M.save()
   local out = {}
   local function fail(why)
     run.state, run.summary = "failed", why
+    M.save()
     notify(id .. " failed: " .. why, vim.log.levels.WARN)
   end
   local function launch()
@@ -406,6 +470,7 @@ function M.start_cloud(id, title, repo)
       end
       if run.session then
         run.url = run.url or ("https://claude.ai/code/" .. run.session)
+        M.save()
         notify(("%s went to a cloud session: %s"):format(id, run.url))
         M.set_status(id, "In Progress")
         M.watch(run)
@@ -490,10 +555,12 @@ function M.watch(run)
           run.branch = found
           run.state, run.summary = "done", "branch pushed to origin; d fetches and shows it"
           M.set_status(run.id, "In Review")
+          M.save()
           notify(("%s is ready to review on %s (d in :BudIssues)"):format(run.id, run.branch))
           stop()
         elseif waited >= M.give_up_ms then
           run.state, run.summary = "failed", "no branch after a long wait; check " .. (run.url or "the cloud session")
+          M.save()
           notify(run.id .. ": " .. run.summary, vim.log.levels.WARN)
           stop()
         end
@@ -611,6 +678,7 @@ function M.statusline()
 end
 
 function M.setup()
+  M.load()
   table.insert(require("bud.ai.permissions").policies, M.policy)
   require("bud.statusline").add(M.statusline)
 end

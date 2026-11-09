@@ -73,6 +73,10 @@ vim.notify = function(msg)
   table.insert(notified, msg)
 end
 local work = require("bud.ai.work")
+-- cloud runs are saved here, not in the real state dir
+work.runs_file = function()
+  return tmp .. "/cloud-runs.json"
+end
 local issue = require("bud.ai.issue")
 local permissions = require("bud.ai.permissions")
 table.insert(permissions.policies, work.policy)
@@ -355,6 +359,45 @@ wait(function()
 end, "a failed launch")
 assert(trun.summary:find("exited 2", 1, true) and trun.summary:find("boom", 1, true), trun.summary)
 vim.fn.delete(tmp .. "/config.json")
+
+-- cloud runs survive a restart (JGA-239): saved as they change, picked up by
+-- load, and the ones still working are watched again
+local saved_run = vim.json.decode(table.concat(vim.fn.readfile(tmp .. "/cloud-runs.json"), "\n"))
+eq(saved_run["JGA-20"].state, "done", "a finished run was saved")
+eq(saved_run["JGA-20"].url, "https://claude.ai/code/session_01Abc?from=cli&m=0", "with its link")
+work.runs["JGA-30"] = {
+  id = "JGA-30",
+  cloud = true,
+  state = "working",
+  session = "session_x",
+  repo = crepo,
+  branch = "jga-30-x",
+  base = "main",
+  started = os.time(),
+  before = {},
+}
+work.runs["JGA-31"] =
+  { id = "JGA-31", cloud = true, state = "working", repo = crepo, branch = "jga-31-x", started = os.time() }
+work.runs["JGA-32"] =
+  { id = "JGA-32", cloud = true, state = "done", repo = crepo, branch = "jga-32-x", started = os.time() - 8 * 86400 }
+work.save()
+work.runs = {} -- bud restarts
+local real_on_origin = work.on_origin
+work.on_origin = function(_, _, cb)
+  cb({ "claude/jga-30-x-ab12" })
+end
+work.load()
+eq(work.runs["JGA-20"].state, "done", "a finished run is listed again")
+eq(work.runs["JGA-32"], nil, "runs older than a week are dropped")
+eq(work.runs["JGA-31"].state, "failed", "a run with no session can't be followed")
+assert(work.runs["JGA-31"].summary:find("closed before", 1, true), work.runs["JGA-31"].summary)
+wait(function()
+  return work.runs["JGA-30"].state == "done"
+end, "the resumed watch")
+eq(work.runs["JGA-30"].branch, "claude/jga-30-x-ab12", "its branch")
+work.on_origin = real_on_origin
+local again = vim.json.decode(table.concat(vim.fn.readfile(tmp .. "/cloud-runs.json"), "\n"))
+eq(again["JGA-30"].state, "done", "and saved again")
 
 -- a filed issue is worked in the repo it was filed for
 issue.filed = { { id = "JGA-9", title = "Other", repo = repo } }

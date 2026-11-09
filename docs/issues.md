@@ -39,7 +39,7 @@ Something wrong with bud itself while you do this: `<leader>aB` files it in bud'
 
 By default `<leader>aw` works in a local worktree. Set `ai.work.where` to `cloud` (`bud config set ai.work.where cloud`), or add `cloud` or `local` to one command (`:BudIssue work JGA-12 cloud`), and the work goes to a Claude Code cloud session instead. Your laptop stays free, and several issues can run at once.
 
-What happens: bud runs `claude --cloud` in the repo with the same task. The cloud session clones the repo from GitHub, works the issue on a branch named after it (`jga-12-dashboard-drops-a-row`, or `claude/jga-12-...` where the environment only allows that prefix), runs the checks and pushes the branch. bud shows the session's link in `:BudIssues`, and when a branch with the issue id in its name appears on `origin` it marks the issue ready. `d` then fetches the branch and shows the diff in diffview. Merging stays yours.
+What happens: bud runs `claude --cloud` in the repo with the same task. The cloud session clones the repo from GitHub, works the issue on a branch named after it (`jga-12-dashboard-drops-a-row`, or `claude/jga-12-...` where the environment only allows that prefix), runs the checks and pushes the branch. bud shows the session's link in `:BudIssues`, and when a branch with the issue id in its name appears on `origin` it marks the issue ready. `d` then fetches the branch and shows the diff in diffview. Merging stays yours. Cloud runs are saved (`cloud-runs.json` in bud's state dir), so closing bud doesn't lose them: the next start lists them again with their links and keeps watching the ones still working, and drops those older than a week.
 
 What it needs:
 

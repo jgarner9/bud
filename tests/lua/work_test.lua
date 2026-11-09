@@ -218,12 +218,30 @@ end
 -- base branch not on origin yet: refused, nothing launched
 fake_launch({}, 0)
 launched = nil
-eq(work.start("JGA-20", "Cloud one", crepo), nil, "base must be on origin")
+local brun = work.start("JGA-20", "Cloud one", crepo)
+wait(function()
+  return brun.state == "failed"
+end, "the base check")
+assert(brun.summary:find("isn't on origin yet", 1, true), brun.summary)
 eq(launched, nil, "nothing launched without the base on origin")
+work.runs["JGA-20"] = nil
 cgit({ "push", "-q", "origin", "main" })
 
 -- not a GitHub origin: refused
 eq(work.start("JGA-20", "Cloud one", repo, "cloud"), nil, "no GitHub origin")
+
+-- branches already on origin for the id (an earlier attempt), and ones whose
+-- name only starts with the same digits, are not this run's
+cgit({ "push", "-q", "origin", "main:refs/heads/jga-20-earlier-attempt" })
+cgit({ "push", "-q", "origin", "main:refs/heads/jga-200-other-issue" })
+local seen
+work.on_origin("" .. crepo, "JGA-20", function(b)
+  seen = b
+end)
+wait(function()
+  return seen
+end, "origin listing")
+eq(seen, { "jga-20-earlier-attempt" }, "whole-word match only")
 
 -- launched; the session link is read from what claude prints
 fake_launch({
@@ -254,6 +272,8 @@ for _, want in ipairs({
   assert(launched.argv[3]:find(want, 1, true), "cloud prompt lacks: " .. want)
 end
 eq(crun.state, "working", "working until the branch is pushed")
+vim.wait(150) -- a few polls: the earlier attempt's branch must not finish it
+eq(crun.state, "working", "an earlier branch for the id doesn't count")
 wait(function()
   return #asked_linear >= 2
 end, "the status move")
@@ -285,6 +305,28 @@ wait(function()
   return trun.state == "failed"
 end, "the trust failure")
 assert(trun.summary:find("run claude there once", 1, true), trun.summary)
+-- a trust prompt that waits for a key never exits: it is stopped when seen
+local stopped
+local real_jobstop = vim.fn.jobstop
+vim.fn.jobstop = function(job)
+  stopped = job
+  return 1
+end
+work.launch = function(_, _, on_line)
+  vim.schedule(function()
+    on_line("Quick safety check: Is this a project you trust?")
+  end)
+  return 7 -- and on_exit is never called
+end
+work.runs["JGA-22"] = nil
+local hrun = work.start("JGA-22", "Hangs", crepo, "cloud")
+wait(function()
+  return hrun.state == "failed"
+end, "the hanging trust prompt")
+assert(hrun.summary:find("run claude there once", 1, true), hrun.summary)
+eq(stopped, 7, "the waiting job is stopped")
+vim.fn.jobstop = real_jobstop
+
 -- Linear unreadable: nothing is launched blind
 launched = nil
 local real_linear = work.linear

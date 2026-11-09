@@ -46,17 +46,41 @@ function M.launch(argv, cwd, on_line, on_exit)
   return id
 end
 
--- on_origin calls cb(branch) with a branch on repo's origin whose name has the
--- issue id in it, or nil. Cloud sessions can be limited to a claude/ prefix,
--- so the run's own branch name is only a guess (JGA-237)
+-- on_origin calls cb(branches): the branches on repo's origin whose name has the
+-- issue id as a whole word (jga-2-x, claude/jga-2-x, jga-2; not jga-20-x).
+-- Cloud sessions can be limited to a claude/ prefix, so a run's own branch name
+-- is only a guess (JGA-237)
 function M.on_origin(repo, id, cb)
+  local want = id:lower()
+  vim.system({ "git", "-C", repo, "ls-remote", "--heads", "origin", "*" .. want .. "*" }, { text = true }, function(r)
+    vim.schedule(function()
+      local found = {}
+      if r.code == 0 then
+        for name in (r.stdout or ""):gmatch("%x+%s+refs/heads/(%S+)") do
+          local lower = name:lower()
+          if
+            lower:match("^" .. vim.pesc(want) .. "$")
+            or lower:match("^" .. vim.pesc(want) .. "%-")
+            or lower:match("/" .. vim.pesc(want) .. "$")
+            or lower:match("/" .. vim.pesc(want) .. "%-")
+          then
+            table.insert(found, name)
+          end
+        end
+      end
+      cb(found)
+    end)
+  end)
+end
+
+-- has_branch calls cb(true/false) for whether branch is on repo's origin
+function M.has_branch(repo, branch, cb)
   vim.system(
-    { "git", "-C", repo, "ls-remote", "--heads", "origin", "*" .. id:lower() .. "*" },
+    { "git", "-C", repo, "ls-remote", "--exit-code", "--heads", "origin", branch },
     { text = true },
     function(r)
       vim.schedule(function()
-        local sha, name = (r.stdout or ""):match("(%x+)%s+refs/heads/(%S+)")
-        cb(r.code == 0 and sha and name or nil)
+        cb(r.code == 0)
       end)
     end
   )
@@ -345,10 +369,6 @@ function M.start_cloud(id, title, repo)
     return nil
   end
   local base = M.base(repo)
-  if not M.git(repo, { "ls-remote", "--exit-code", "--heads", "origin", base }) then
-    notify(("can't work %s in the cloud: %s isn't on origin yet; push it first"):format(id, base), vim.log.levels.ERROR)
-    return nil
-  end
   local run = {
     id = id,
     title = title,
@@ -365,11 +385,25 @@ function M.start_cloud(id, title, repo)
     notify(id .. " failed: " .. why, vim.log.levels.WARN)
   end
   local function launch()
-    local job, why = M.launch({ "claude", "--cloud", M.cloud_prompt(run) }, repo, function(line)
+    local job, why
+    local function untrusted()
+      return fail("Claude Code doesn't trust " .. repo .. " yet: run claude there once and accept it, then try again")
+    end
+    job, why = M.launch({ "claude", "--cloud", M.cloud_prompt(run) }, repo, function(line)
       table.insert(out, line)
       run.session = run.session or line:match("(session_%w+)")
       run.url = run.url or line:match("(https://claude%.ai/code/session_%w+[^%s]*)")
+      -- it waits at this prompt for a key and never exits, so stop it here
+      if run.state == "working" and line:find("Quick safety check", 1, true) then
+        if job then
+          vim.fn.jobstop(job)
+        end
+        untrusted()
+      end
     end, function(code)
+      if run.state ~= "working" then
+        return
+      end
       if run.session then
         run.url = run.url or ("https://claude.ai/code/" .. run.session)
         notify(("%s went to a cloud session: %s"):format(id, run.url))
@@ -378,9 +412,6 @@ function M.start_cloud(id, title, repo)
         return
       end
       local text = table.concat(out, "\n")
-      if text:find("Quick safety check", 1, true) then
-        return fail("Claude Code doesn't trust " .. repo .. " yet: run claude there once and accept it, then try again")
-      end
       fail(("claude --cloud exited %d without making a session: %s"):format(code, vim.trim(text):sub(-300)))
     end)
     if not job then
@@ -388,20 +419,36 @@ function M.start_cloud(id, title, repo)
     end
   end
   notify(("reading %s from Linear, then starting a cloud session…"):format(id))
-  M.linear(
-    (
-      "Print the Linear issue %s for a developer who can't open Linear: its title, status, description, and every comment"
-      .. " (author and text), as plain markdown. Print nothing else."
-    ):format(id),
-    linear_tools.read,
-    function(text, why)
-      if not text or text == "" then
-        return fail("couldn't read the issue from Linear: " .. (why or "empty answer"))
+  local function read_issue()
+    M.linear(
+      (
+        "Print the Linear issue %s for a developer who can't open Linear: its title, status, description, and every comment"
+        .. " (author and text), as plain markdown. Print nothing else."
+      ):format(id),
+      linear_tools.read,
+      function(text, why)
+        if not text or text == "" then
+          return fail("couldn't read the issue from Linear: " .. (why or "empty answer"))
+        end
+        run.issue = text
+        launch()
       end
-      run.issue = text
-      launch()
+    )
+  end
+  -- the base must be on origin, which is where the cloud session clones from;
+  -- remember what branches already carry this id so they aren't taken for its
+  M.has_branch(repo, base, function(ok)
+    if not ok then
+      return fail(("%s isn't on origin yet; push it first"):format(base))
     end
-  )
+    M.on_origin(repo, id, function(existing)
+      run.before = {}
+      for _, name in ipairs(existing) do
+        run.before[name] = true
+      end
+      read_issue()
+    end)
+  end)
   return run
 end
 
@@ -419,15 +466,25 @@ function M.watch(run)
     M.poll_ms,
     M.poll_ms,
     vim.schedule_wrap(function()
-      if run.state ~= "working" or checking then
+      if run.state ~= "working" then
+        return stop()
+      end
+      if checking then
         return
       end
       waited = waited + M.poll_ms
       checking = true
-      M.on_origin(run.repo, run.id, function(found)
+      M.on_origin(run.repo, run.id, function(branches)
         checking = false
         if run.state ~= "working" then
           return stop()
+        end
+        local found
+        for _, name in ipairs(branches) do
+          if not (run.before or {})[name] then
+            found = name
+            break
+          end
         end
         if found then
           run.branch = found
@@ -511,13 +568,21 @@ function M.diff(id)
   end
   if run.cloud then
     local base = run.base
-    local out = vim.fn.system({ "git", "-C", run.repo, "fetch", "origin", base, run.branch })
-    if vim.v.shell_error ~= 0 then
-      return notify(("can't fetch %s: %s"):format(run.branch, vim.trim(out)), vim.log.levels.WARN)
-    end
-    vim.cmd("tabnew")
-    vim.cmd.tcd(run.repo)
-    return vim.cmd(("DiffviewOpen origin/%s...origin/%s"):format(base, run.branch))
+    notify("fetching " .. run.branch .. "…")
+    vim.system({ "git", "-C", run.repo, "fetch", "origin", base, run.branch }, { text = true }, function(r)
+      vim.schedule(function()
+        if r.code ~= 0 then
+          return notify(
+            ("can't fetch %s: %s"):format(run.branch, vim.trim((r.stderr or "") .. (r.stdout or ""))),
+            vim.log.levels.WARN
+          )
+        end
+        vim.cmd("tabnew")
+        vim.cmd.tcd(run.repo)
+        vim.cmd(("DiffviewOpen origin/%s...origin/%s"):format(base, run.branch))
+      end)
+    end)
+    return
   end
   vim.cmd("tabnew")
   vim.cmd.tcd(run.worktree)

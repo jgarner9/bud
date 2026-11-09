@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"jgarner.dev/bud/internal/config"
+	"jgarner.dev/bud/internal/paths"
 )
 
 func TestAgent(t *testing.T) {
@@ -39,7 +43,8 @@ func TestAgent(t *testing.T) {
 		t.Fatalf("BUD_BIN in the env: %q", got)
 	}
 
-	// resume = "continue" carries on the newest conversation in the directory
+	// resume = "continue" in a shared ~/.claude passes no --continue (JGA-231):
+	// the newest conversation there may be one you started by hand
 	state := os.Getenv("XDG_STATE_HOME")
 	os.MkdirAll(filepath.Join(state, "bud"), 0o755)
 	cfgFile := filepath.Join(state, "bud", "config.json")
@@ -47,8 +52,8 @@ func TestAgent(t *testing.T) {
 	if err := agent(&Globals{}, []string{project}); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(argv, []string{bin, "--continue"}) {
-		t.Fatalf("resume continue: argv %q", argv)
+	if !slices.Equal(argv, []string{bin}) {
+		t.Fatalf("resume continue in a shared dir: argv %q", argv)
 	}
 
 	// ai.claude.command wraps it
@@ -58,7 +63,7 @@ func TestAgent(t *testing.T) {
 	if err := agent(&Globals{}, []string{project}); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(argv, []string{wrapper, "wrap", "claude", "--", "--continue"}) {
+	if !slices.Equal(argv, []string{wrapper, "wrap", "claude", "--"}) {
 		t.Fatalf("wrapped argv %q", argv)
 	}
 	os.Remove(cfgFile)
@@ -71,5 +76,57 @@ func TestAgent(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	if err := agent(&Globals{}, nil); err == nil || !strings.Contains(err.Error(), "bud claude setup") {
 		t.Fatalf("no claude: %v", err)
+	}
+}
+
+// resume "continue" resumes the editor's saved conversation, and --continue
+// only happens in bud's own Claude Code config dir (JGA-231)
+func TestResumeFlags(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	t.Setenv("HOME", t.TempDir())
+	root, _ := filepath.EvalSymlinks(t.TempDir())
+	cont := config.Defaults()
+	cont.AI.Claude.Resume = "continue"
+
+	write := func(dir, name string) {
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(dir, name), nil, 0o644)
+	}
+
+	// the default starts fresh
+	if got := resumeFlags(config.Defaults(), root); got != nil {
+		t.Fatalf("new: %q", got)
+	}
+
+	// shared ~/.claude with a hand-started conversation: nothing to continue
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	write(claudeProjectDir(root), "by-hand.jsonl")
+	if got := resumeFlags(cont, root); got != nil {
+		t.Fatalf("shared dir passed %q", got)
+	}
+
+	// the editor's saved conversation is resumed by id, shared or not
+	ids, _ := json.Marshal(map[string]string{root: "saved-id"})
+	os.MkdirAll(filepath.Join(state, "bud"), 0o755)
+	os.WriteFile(filepath.Join(state, "bud", "claude-sessions.json"), ids, 0o644)
+	if got := resumeFlags(cont, root); got != nil {
+		t.Fatalf("a saved id whose conversation is gone: %q", got)
+	}
+	write(claudeProjectDir(root), "saved-id.jsonl")
+	if got := resumeFlags(cont, root); !slices.Equal(got, []string{"--resume", "saved-id"}) {
+		t.Fatalf("saved: %q", got)
+	}
+	os.Remove(filepath.Join(state, "bud", "claude-sessions.json"))
+
+	// bud's own config dir: --continue, when there is a conversation
+	p, _ := paths.Resolve()
+	t.Setenv("CLAUDE_CONFIG_DIR", p.ClaudeConfig())
+	if got := resumeFlags(cont, root); got != nil {
+		t.Fatalf("own dir with no conversation: %q", got)
+	}
+	write(claudeProjectDir(root), "any.jsonl")
+	if got := resumeFlags(cont, root); !slices.Equal(got, []string{"--continue"}) {
+		t.Fatalf("own dir: %q", got)
 	}
 }

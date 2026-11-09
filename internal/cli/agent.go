@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"syscall"
@@ -65,17 +68,81 @@ func agent(g *Globals, args []string) error {
 	}
 
 	s := machineSettings()
-	var flags []string
-	if s.AI.Claude.Resume == "continue" {
-		flags = append(flags, "--continue")
-	}
-	argv, err := tuiArgv(s, bin, flags)
+	argv, err := tuiArgv(s, bin, resumeFlags(s, ws.Root))
 	if err != nil {
 		return err
 	}
 	g.Logf("running %q in %s", argv, ws.Root)
 
 	return execClaude(ws.Root, argv, agentEnv())
+}
+
+// resumeFlags picks the conversation the way the editor does (resume_args in
+// bud.ai.claude): with resume "continue", the project's saved one, else the
+// newest in the dir, but only in bud's own Claude Code config dir. In a shared
+// ~/.claude the newest may be one you started by hand, an issue, gen or chat
+// conversation, so it starts a new one instead (JGA-231)
+func resumeFlags(s config.Settings, root string) []string {
+	if s.AI.Claude.Resume != "continue" {
+		return nil
+	}
+	if id := savedConversation(root); id != "" {
+		return []string{"--resume", id}
+	}
+	if budClaudeDir() && anyConversation(root) {
+		return []string{"--continue"}
+	}
+
+	return nil
+}
+
+// claudeProjectDir is where Claude Code keeps the conversations run in root:
+// the real path with everything but letters and digits turned into -
+func claudeProjectDir(root string) string {
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		home, _ := os.UserHomeDir()
+		dir = filepath.Join(home, ".claude")
+	}
+	if real, err := filepath.EvalSymlinks(root); err == nil {
+		root = real
+	}
+
+	return filepath.Join(dir, "projects", nonAlnum.ReplaceAllString(root, "-"))
+}
+
+var nonAlnum = regexp.MustCompile(`[^A-Za-z0-9]`)
+
+// anyConversation says whether Claude Code has a conversation to continue in root
+func anyConversation(root string) bool {
+	files, _ := filepath.Glob(filepath.Join(claudeProjectDir(root), "*.jsonl"))
+	return len(files) > 0
+}
+
+// savedConversation is the conversation the editor saved for root in
+// claude-sessions.json, when Claude Code still has it, else ""
+func savedConversation(root string) string {
+	p, err := paths.Resolve()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(p.State, "claude-sessions.json"))
+	if err != nil {
+		return ""
+	}
+	var ids map[string]string
+	if json.Unmarshal(data, &ids) != nil {
+		return ""
+	}
+	id := ids[root]
+	if id == "" {
+		return ""
+	}
+	if _, err := os.Stat(filepath.Join(claudeProjectDir(root), id+".jsonl")); err != nil {
+		return ""
+	}
+
+	return id
 }
 
 // machineSettings is config.json's settings, the defaults when it's missing

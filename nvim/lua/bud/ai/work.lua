@@ -16,6 +16,10 @@ local claude = require("bud.ai.claude")
 
 local M = {}
 
+local function notify(msg, level)
+  vim.notify("bud: " .. msg, level or vim.log.levels.INFO)
+end
+
 -- runs by issue id: { id, title, repo, worktree, branch, base, key, state, summary, commit }
 -- state: "working", "waiting" (Claude asked something), "done", "failed"
 M.runs = {}
@@ -291,10 +295,6 @@ function M.cloud_prompt(run)
       ),
     "4. If you're stuck, or the checks fail and you can't fix them, push nothing broken and say what's left.",
   }, "\n")
-end
-
-local function notify(msg, level)
-  vim.notify("bud: " .. msg, level or vim.log.levels.INFO)
 end
 
 -- on_done reads a reply: finished (a bud-work block) or a question

@@ -34,7 +34,7 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 ## Starting over
 
-`bud uninstall` lists everything bud put on the machine and removes it after asking (`--keep-config` keeps `config.json` and your tools). With a shared `~/.claude` that includes what the kit added there, the same as `bud kit unsync`; everything of yours stays. Your clod checkout (`~/clod`) stays too; `~/clod/install.sh uninstall` takes its setup out of Claude Code first if you want that gone. Then reinstall with the one-liner from the README.
+`bud uninstall` lists everything bud put on the machine and removes it after asking (`--keep-config` keeps `config.json` and your tools). With a shared `~/.claude` that includes what the kit added there, the same as `bud kit unsync`; everything of yours stays. Claude Code itself stays installed (`~/.local/bin/claude`, `~/.local/share/claude`, `~/.claude`, `~/.claude.json`): `bud install` set it up through Anthropic's installer, but it's a separate product, and `~/.claude` may hold your own sessions, so remove it with Anthropic's instructions if you want it gone. Your clod checkout (`~/clod`) stays too; `~/clod/install.sh uninstall` takes its setup out of Claude Code first if you want that gone. Then reinstall with the one-liner from the README.
 
 ## A skill from bud-plugins is missing in Claude Code
 

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"jgarner.dev/bud"
+	"jgarner.dev/bud/internal/paths"
 )
 
 // Spec is the part of a language spec the CLI uses
@@ -77,6 +78,10 @@ func Load(shipped bool, dirs ...string) (*Set, error) {
 	out := filepath.Join(tmp, "specs.json")
 	args := []string{"--clean", "--headless", "-l", filepath.Join(tmp, "lua/bud/lang/dump.lua"), tmp, out}
 	cmd := exec.Command(bin, append(args, dirs...)...)
+	// --clean doesn't change where Neovim keeps its log and state, so under
+	// bud's name they land in bud's dirs, which uninstall removes, and not in
+	// the ~/.local/state/nvim of a Neovim that isn't bud's
+	cmd.Env = append(os.Environ(), "NVIM_APPNAME="+paths.AppName)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("reading language specs: %w: %s", err, strings.TrimSpace(string(output)))
 	}

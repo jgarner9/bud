@@ -69,7 +69,11 @@ var MinTreeSitter = installer.MinTreeSitter
 // swappable in tests
 var (
 	nvimVersion = func() (string, error) {
-		out, err := exec.Command("nvim", "--version").Output()
+		cmd := exec.Command("nvim", "--version")
+		// as bud: Neovim writes its log even for --version, into the state
+		// dir its name picks, and uninstall removes bud's
+		cmd.Env = append(os.Environ(), "NVIM_APPNAME="+paths.AppName)
+		out, err := cmd.Output()
 		return string(out), err
 	}
 	treeSitterVersion = func() (string, error) {

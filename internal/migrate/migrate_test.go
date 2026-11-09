@@ -107,3 +107,28 @@ func TestShipped(t *testing.T) {
 		t.Fatal("want an error from a failing script")
 	}
 }
+
+// Neovim's log and state follow NVIM_APPNAME even under --clean, so a migration
+// has to run as bud, or Neovim writes ~/.local/state/nvim/nvim.log (JGA-224)
+func TestNvimRunsAsBud(t *testing.T) {
+	real, err := exec.LookPath("nvim")
+	if err != nil {
+		t.Skip("no nvim")
+	}
+	dir := t.TempDir()
+	record := filepath.Join(dir, "appname")
+	script := "#!/bin/sh\nprintf '%s' \"$NVIM_APPNAME\" > " + record + "\nexec " + real + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "nvim"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("NVIM_APPNAME", "someone-elses")
+
+	p := &paths.Paths{Config: dir, Data: dir, State: dir, Cache: dir}
+	if err := Nvim(p)("0001_noop", []byte("-- nothing\n")); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(record); string(got) != "bud" {
+		t.Fatalf("nvim ran with NVIM_APPNAME=%q, want bud", got)
+	}
+}

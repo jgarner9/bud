@@ -458,3 +458,24 @@ func TestUseManagedBin(t *testing.T) {
 		t.Fatalf("PATH = %q, want %q (once, first)", os.Getenv("PATH"), want)
 	}
 }
+
+// Neovim writes nvim.log even for --version, into the state dir NVIM_APPNAME
+// picks, so the probe has to run as bud or it litters ~/.local/state/nvim (JGA-224)
+func TestVersionOutputRunsAsBud(t *testing.T) {
+	dir := t.TempDir()
+	record := filepath.Join(dir, "appname")
+	script := "#!/bin/sh\nprintf '%s' \"$NVIM_APPNAME\" > " + record + "\necho NVIM v0.12.6\n"
+	bin := filepath.Join(dir, "nvim")
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NVIM_APPNAME", "someone-elses")
+
+	out, err := versionOutput(bin)
+	if err != nil || !strings.Contains(out, "v0.12.6") {
+		t.Fatalf("out = %q, err = %v", out, err)
+	}
+	if got, _ := os.ReadFile(record); string(got) != "bud" {
+		t.Fatalf("ran with NVIM_APPNAME=%q, want bud", got)
+	}
+}

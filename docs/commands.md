@@ -36,7 +36,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud update --no-doctor` | Skips the app rebuild and the doctor at the end, for scripts. |
 | `bud update --background` | What bud starts by itself at launch, detached and at most once a day, so launching never waits on the network. It installs a newer stable release when `update.auto` is on, else only notes it for the dashboard. `--no-update` skips it. You don't normally run it. |
 | `bud doctor [--quick] [--json]` | Health checks with the fix for each problem; exits 1 when something is broken. `--quick` skips the slow ones: the startup timing, and Claude Code's MCP servers and synced plugins (`claude setup`, `synced plugins`), which the dashboard leaves out. |
-| `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. |
+| `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. Claude Code and your clod checkout stay (see Troubleshooting). |
 | `bud bootstrap [--config] user@host` | Installs this version of bud on another machine over SSH, minimal profile by default. `--config` copies your `config.json` across first. |
 | `bud version` | Prints the version. |
 | `bud completion bash\|zsh\|fish` | Prints shell completion. Add `eval "$(bud completion zsh)"` to your shell rc. |

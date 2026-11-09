@@ -153,7 +153,10 @@ func Nvim(p *paths.Paths) Runner {
 		}
 
 		cmd := exec.Command(bin, "--clean", "--headless", "-l", file)
+		// under bud's name, so Neovim's own log and state land in bud's dirs
+		// (which uninstall removes), not in a Neovim that isn't bud's
 		cmd.Env = append(os.Environ(),
+			"NVIM_APPNAME="+paths.AppName,
 			"BUD_CONFIG_DIR="+p.Config,
 			"BUD_DATA_DIR="+p.Data,
 			"BUD_STATE_DIR="+p.State,

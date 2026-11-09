@@ -169,3 +169,28 @@ func TestFile(t *testing.T) {
 		t.Fatalf("File = %q", got)
 	}
 }
+
+// Neovim's log and state follow NVIM_APPNAME even under --clean, so reading the
+// specs has to run as bud, or it writes ~/.local/state/nvim/nvim.log (JGA-224)
+func TestLoadRunsNvimAsBud(t *testing.T) {
+	needNvim(t)
+	real, _ := exec.LookPath("nvim")
+	dir := t.TempDir()
+	record := filepath.Join(dir, "appname")
+	wrapper := filepath.Join(dir, "nvim")
+	script := "#!/bin/sh\nprintf '%s' \"$NVIM_APPNAME\" > " + record + "\nexec " + real + " \"$@\"\n"
+	if err := os.WriteFile(wrapper, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NVIM_APPNAME", "someone-elses")
+	orig := nvimBin
+	nvimBin = wrapper
+	t.Cleanup(func() { nvimBin = orig })
+
+	if _, err := Load(true); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(record); string(got) != "bud" {
+		t.Fatalf("nvim ran with NVIM_APPNAME=%q, want bud", got)
+	}
+}

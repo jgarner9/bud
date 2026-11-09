@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"jgarner.dev/bud/internal/paths"
 )
 
 // MinNeovim is the oldest Neovim bud supports (D19)
@@ -102,9 +104,12 @@ var (
 
 		return io.ReadAll(io.LimitReader(resp.Body, maxDownload))
 	}
-	// versionOutput runs bin --version
+	// versionOutput runs bin --version. As bud, since Neovim writes its log
+	// even for --version, into the state dir its name picks
 	versionOutput = func(bin string) (string, error) {
-		out, err := exec.Command(bin, "--version").Output()
+		cmd := exec.Command(bin, "--version")
+		cmd.Env = append(os.Environ(), "NVIM_APPNAME="+paths.AppName)
+		out, err := cmd.Output()
 		return string(out), err
 	}
 )

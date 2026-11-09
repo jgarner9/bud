@@ -93,6 +93,15 @@ type UI struct {
 type AI struct {
 	Claude Claude `json:"claude"`
 	Issues Issues `json:"issues"`
+	Work   Work   `json:"work"`
+}
+
+// Work is where <leader>aw has Claude fix an issue (JGA-237)
+type Work struct {
+	// "local": a git worktree next to the repo, in a Claude Code session of
+	// bud's own (the default); "cloud": a Claude Code cloud session that clones
+	// the repo from GitHub and pushes a branch
+	Where string `json:"where"`
 }
 
 // Issues is where issues filed from the editor go (JGA-123): Linear's team and
@@ -147,7 +156,7 @@ func Defaults() Settings {
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
 		AI: AI{Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
-			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}},
+			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"}},
 	}
 }
 
@@ -163,6 +172,7 @@ func (s Settings) Validate() error {
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
 		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},
 		{"ai.claude.config", s.AI.Claude.Config, []string{"home", "bud"}},
+		{"ai.work.where", s.AI.Work.Where, []string{"local", "cloud"}},
 	}
 	for _, c := range checks {
 		if !slices.Contains(c.allowed, c.value) {

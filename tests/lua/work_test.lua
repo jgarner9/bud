@@ -164,6 +164,109 @@ assert(lines[3]:find("jga-7-esc-drops-the-proposal", 1, true), lines[3])
 eq(rows[3], "JGA-7", "detail rows point at the issue")
 assert(lines[5]:find("JGA-9      filed", 1, true), lines[5])
 
+-- cloud (JGA-237): ai.work.where = "cloud" sends the issue to `claude --cloud`
+-- from a repo whose origin is on GitHub, and watches origin for the branch
+local origin = tmp .. "/origin.git"
+vim.fn.system({ "git", "init", "-q", "--bare", origin })
+local crepo = tmp .. "/cloudrepo"
+vim.fn.mkdir(crepo, "p")
+local function cgit(args)
+  local out = vim.fn.system(vim.list_extend({ "git", "-C", crepo, "-c", "commit.gpgsign=false" }, args))
+  assert(vim.v.shell_error == 0, out)
+  return vim.trim(out)
+end
+cgit({ "init", "-q", "-b", "main" })
+vim.fn.writefile({ "hi" }, crepo .. "/README")
+cgit({ "add", "README" })
+cgit({ "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "chore: start" })
+-- a GitHub-looking origin that really is the local bare repo
+cgit({ "remote", "add", "origin", "https://github.com/me/proj.git" })
+cgit({ "config", "url." .. origin .. ".insteadOf", "https://github.com/me/proj.git" })
+
+eq(work.where(nil), "local", "local by default")
+eq(work.where("cloud"), "cloud", "the call picks")
+vim.fn.writefile({ '{"ai": {"work": {"where": "cloud"}}}' }, tmp .. "/config.json")
+eq(work.where(nil), "cloud", "the setting picks")
+eq(work.where("local"), "local", "the call beats the setting")
+
+local launched
+local function fake_launch(printed, code)
+  work.launch = function(argv, cwd, on_line, on_exit)
+    launched = { argv = argv, cwd = cwd }
+    vim.schedule(function()
+      for _, l in ipairs(printed) do
+        on_line(l)
+      end
+      on_exit(code)
+    end)
+    return 1
+  end
+end
+
+-- base branch not on origin yet: refused, nothing launched
+fake_launch({}, 0)
+launched = nil
+eq(work.start("JGA-20", "Cloud one", crepo), nil, "base must be on origin")
+eq(launched, nil, "nothing launched without the base on origin")
+cgit({ "push", "-q", "origin", "main" })
+
+-- not a GitHub origin: refused
+eq(work.start("JGA-20", "Cloud one", repo, "cloud"), nil, "no GitHub origin")
+
+-- launched; the session link is read from what claude prints
+fake_launch({
+  "Created cloud session: Cloud one",
+  "View: https://claude.ai/code/session_01Abc?from=cli&m=0",
+  "Resume with: claude --teleport session_01Abc",
+}, 0)
+work.poll_ms = 30
+local crun = work.start("JGA-20", "Cloud one", crepo)
+wait(function()
+  return crun.session
+end, "the session link")
+eq(crun.session, "session_01Abc", "session id")
+eq(crun.url, "https://claude.ai/code/session_01Abc?from=cli&m=0", "url")
+eq(launched.argv[1], "claude", "runs claude")
+eq(launched.argv[2], "--cloud", "as a cloud session")
+eq(launched.cwd, vim.uv.fs_realpath(crepo), "from the repo")
+for _, want in ipairs({
+  "Linear issue JGA-20",
+  "branch `jga-20-cloud-one` from `main`",
+  "git push -u origin jga-20-cloud-one",
+  "Don't open a pull request",
+}) do
+  assert(launched.argv[3]:find(want, 1, true), "cloud prompt lacks: " .. want)
+end
+eq(crun.state, "working", "working until the branch is pushed")
+eq(work.statusline() ~= "", true, "counted as in progress")
+
+-- the branch appears on origin: done
+cgit({ "push", "-q", "origin", "main:refs/heads/jga-20-cloud-one" })
+wait(function()
+  return crun.state == "done"
+end, "the pushed branch")
+local clines = issue.list_lines({}, { ["JGA-20"] = crun })
+assert(clines[3]:find("cloud  https://claude.ai/code/session_01Abc", 1, true), clines[3])
+
+-- answering is for the web session, not bud
+work.runs["JGA-21"] = nil
+-- a folder Claude Code doesn't trust yet: says what to do
+fake_launch({ "Quick safety check: Is this a project you trust?" }, 1)
+local trun = work.start("JGA-21", "Untrusted", crepo, "cloud")
+wait(function()
+  return trun.state == "failed"
+end, "the trust failure")
+assert(trun.summary:find("run claude there once", 1, true), trun.summary)
+-- no session and no trust prompt: the output is shown
+fake_launch({ "boom" }, 2)
+work.runs["JGA-21"] = nil
+trun = work.start("JGA-21", "Broken", crepo, "cloud")
+wait(function()
+  return trun.state == "failed"
+end, "a failed launch")
+assert(trun.summary:find("exited 2", 1, true) and trun.summary:find("boom", 1, true), trun.summary)
+vim.fn.delete(tmp .. "/config.json")
+
 -- a filed issue is worked in the repo it was filed for
 issue.filed = { { id = "JGA-9", title = "Other", repo = repo } }
 local started

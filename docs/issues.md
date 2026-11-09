@@ -6,7 +6,7 @@ Spot a problem or think of a feature while you work, press a key, say what's wro
 | --- | --- |
 | `<leader>ai` | An issue about this project (`:BudIssue`) |
 | `<leader>aB` | An issue about bud itself (`:BudIssue bud`) |
-| `<leader>aw` | Have Claude fix an issue (`:BudIssue work JGA-12`); the last one filed by default |
+| `<leader>aw` | Have Claude fix an issue (`:BudIssue work JGA-12 [local\|cloud]`); the last one filed by default; [in the cloud](#in-the-cloud) with `ai.work.where` |
 | `:BudIssues` | What you filed and what Claude is fixing; `<CR>` opens one, `w` fixes it, `d` shows the fix, `a` answers Claude |
 
 ## How it goes
@@ -31,9 +31,23 @@ The same steps work for a bug and for a new feature; a feature just comes back l
 7. **Hand it to Claude.** Press `<leader>aw` and press `<CR>` to accept the last issue filed, or type another id. Claude gets a git worktree next to your repo (`<repo>.worktrees/jga-12`) on a branch named after the issue, moves the issue to In Progress, makes the change, runs your checks, commits with the issue id and moves it to In Review. Your own checkout is never touched.
 8. **Answer its prompts.** Claude asks before running shell commands (the checks, git): `y` allows once, `a` allows for the session, `n` denies, `r` denies and lets you say why. If it has a question, the notification says so; answer with `a` in `:BudIssues`.
 9. **Review the work.** Open `:BudIssues`, put the cursor on the issue and press `d` for the diff in diffview.
-10. **Land it yourself.** From the worktree (or the branch in your checkout): push, open the pull request, merge, then `git worktree remove <repo>.worktrees/jga-12`. Move the issue to Done in Linear. bud never pushes or merges for you.
+10. **Land it yourself.** (Cloud mode: the branch is already pushed to `origin`; open the pull request from it.) From the worktree (or the branch in your checkout): push, open the pull request, merge, then `git worktree remove <repo>.worktrees/jga-12`. Move the issue to Done in Linear. bud never pushes or merges for you.
 
 Something wrong with bud itself while you do this: `<leader>aB` files it in bud's own tracker. Use `<leader>ai` for the project you are in.
+
+## In the cloud
+
+By default `<leader>aw` works in a local worktree. Set `ai.work.where` to `cloud` (`bud config set ai.work.where cloud`), or add `cloud` or `local` to one command (`:BudIssue work JGA-12 cloud`), and the work goes to a Claude Code cloud session instead. Your laptop stays free, and several issues can run at once.
+
+What happens: bud runs `claude --cloud` in the repo with the same task. The cloud session clones the repo from GitHub, works the issue on a branch named after it (`jga-12-dashboard-drops-a-row`), runs the checks, pushes the branch and moves the issue to In Review. bud shows the session's link in `:BudIssues`, and when the branch appears on `origin` it marks the issue ready. `d` then fetches the branch and shows the diff in diffview. Merging stays yours.
+
+What it needs:
+
+- The repo's `origin` is on GitHub, and the base branch (usually `main`) is pushed. Anything else is refused with a message, and `local` still works.
+- Claude Code trusts the repo's folder: run `claude` in it once and accept the prompt. bud says so if it hasn't.
+- Linear is available to cloud sessions (the claude.ai connector). Without it the session still pushes the branch and says it couldn't move the issue.
+
+What differs from local: a cloud session doesn't use bud's permission float, so it runs in its own sandboxed environment (`bud-dev` for bud's own work, whichever your account uses elsewhere). A question from it isn't answered with `a`; open the link in `:BudIssues` and answer there.
 
 ## Having Claude fix one
 

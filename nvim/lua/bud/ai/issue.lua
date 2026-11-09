@@ -633,7 +633,8 @@ function M.list_lines(filed, runs)
     table.insert(lines, ("  %-10s %-9s %s"):format(id, state, title or ""))
     rows[#lines] = id
     if run then
-      table.insert(lines, ("  %-10s %s"):format("", run.branch .. "  " .. vim.fn.fnamemodify(run.worktree, ":~")))
+      local where = run.cloud and ("cloud  " .. (run.url or "")) or vim.fn.fnamemodify(run.worktree, ":~")
+      table.insert(lines, ("  %-10s %s"):format("", run.branch .. "  " .. where))
       rows[#lines] = id
       if run.summary then
         table.insert(lines, ("  %-10s %s"):format("", run.summary))
@@ -660,14 +661,14 @@ end
 
 -- work hands id to Claude to fix (bud.ai.work), in the repo it was filed
 -- for, else the current one
-function M.work(id, title)
+function M.work(id, title, where)
   local repo
   for _, f in ipairs(M.filed) do
     if f.id == id then
       repo, title = f.repo, title or f.title
     end
   end
-  return require("bud.ai.work").start(id, title, repo or vim.fn.getcwd())
+  return require("bud.ai.work").start(id, title, repo or vim.fn.getcwd(), where)
 end
 
 -- list shows :BudIssues: <CR> opens an issue, w has Claude fix it, d shows
@@ -712,6 +713,9 @@ function M.list()
   end)
   map("a", function(id)
     local run = work.runs[id]
+    if run and run.cloud then
+      return vim.notify("bud: " .. id .. " runs in the cloud; talk to it at " .. (run.url or "claude.ai/code"))
+    end
     if not run or run.state ~= "waiting" then
       return vim.notify("bud: Claude isn't waiting on an answer for " .. id)
     end
@@ -730,9 +734,9 @@ function M.list()
 end
 
 -- work_prompt asks which issue to work, the last filed by default
-local function work_prompt(id)
+local function work_prompt(id, where)
   if id and id ~= "" then
-    return M.work(id:upper())
+    return M.work(id:upper(), nil, where)
   end
   local last = M.filed[#M.filed]
   vim.ui.input({ prompt = "Issue for Claude to fix: ", default = last and last.id or "" }, function(text)
@@ -755,13 +759,16 @@ function M.setup()
   end, { desc = "Have Claude fix an issue" })
   vim.api.nvim_create_user_command("BudIssue", function(o)
     if o.fargs[1] == "work" then
-      return work_prompt(o.fargs[2])
+      return work_prompt(o.fargs[2], o.fargs[3])
     end
     M.open(o.fargs[1] == "bud" and "bud" or "project")
   end, {
     nargs = "*",
-    desc = "File an issue with Claude (about this project, or bud), or have Claude fix one (work ID)",
-    complete = function()
+    desc = "File an issue with Claude (about this project, or bud), or have Claude fix one (work ID [local|cloud])",
+    complete = function(_, line)
+      if line:match("^%s*%S+%s+work%s+%S+%s+") then
+        return { "local", "cloud" }
+      end
       return { "bud", "work" }
     end,
   })

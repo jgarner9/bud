@@ -72,6 +72,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `ai.issues.bud.team` | `"JGA"` | Where issues about bud itself (`<leader>aB`) go: bud's own tracker. |
 | `ai.issues.bud.project` | `"Bud IDE"` | The Linear project in that team. |
 | `ai.issues.bud.checkout` | unset | The bud checkout Claude reads and works in for issues about bud. `<leader>aB` asks for it once and saves it with `bud issue checkout <path>`; it is checked each time, and asked for again if the dir was moved or removed. A `bud dev link` checkout takes precedence. |
+| `ai.work.where` | `"local"` | Where `<leader>aw` has Claude fix an issue: `local` is a git worktree beside the repo; `cloud` starts a Claude Code cloud session that clones the repo from GitHub, works the issue and pushes a branch (the repo needs a GitHub `origin` with the base branch pushed). `:BudIssue work ID cloud` or `local` picks per issue. See [filing issues](issues.md#in-the-cloud). |
 | `clod.repo` | unset | Your clod, the private repo with your Claude Code setup, as `owner/name`. Unset, it's `<your gh login>/clod`. Set it when gh is logged in to another account (a work one) or your repo has another name; `bud bootstrap --config` copies it across. |
 
 ## Tools and the kit

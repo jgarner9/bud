@@ -110,7 +110,7 @@ Each project gets one Claude Code session, shared by everything that uses it:
 - **Chat** (`<leader>ch`, `bud chat`): chat mode, outside any project.
 - **Issues:** turn a note into Linear issues, and have Claude fix one in a worktree.
 
-[docs/claude-code.md](docs/claude-code.md) explains how it fits together; [docs/issues.md](docs/issues.md), [docs/tools.md](docs/tools.md) and [docs/claude-tui.md](docs/claude-tui.md) go further.
+[docs/claude-code.md](docs/claude-code.md) explains how it fits together; [docs/issues.md](docs/issues.md) (the whole file-an-issue, have-Claude-fix-it, merge-it flow, step by step), [docs/tools.md](docs/tools.md) and [docs/claude-tui.md](docs/claude-tui.md) go further.
 
 ### Dashboard and projects
 

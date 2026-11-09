@@ -18,6 +18,23 @@ Spot a problem or think of a feature while you work, press a key, say what's wro
 
 Until you press `y`, Claude can read Linear but not write to it: bud refuses its writes, so nothing is filed by accident.
 
+## From idea to merged: the whole flow
+
+The same steps work for a bug and for a new feature; a feature just comes back labelled as one. Do it once to see it.
+
+1. **Once per machine:** `bud install`, then `bud claude setup` so Claude Code is logged in, and `bud kit sync` so the `bud-ide` plugin is there. Linear needs to be connected in Claude Code (the claude.ai Linear connector).
+2. **Once per project:** in the project's folder, run `bud issue set --team ENG --project Web` to say where its issues go (or press `<leader>ai` and let bud ask). `bud issue target` shows the answer.
+3. **Open the project** with `bud` (press its number on the dashboard, or `bud launch <path>`).
+4. **Say what you want.** Press `<leader>ai`, press `i`, and write the summary on the first line and the detail below. For a feature, say what you want to be able to do. Press `<Esc>`, then `<CR>` to send.
+5. **Review the proposal.** After a short wait a float lists the issues Claude would file, with their type, priority and any open question. `<CR>` opens one, `e` edits the JSON, `n` drops everything. Nothing is in Linear yet.
+6. **Press `y`** to file. bud tells you the ids (say JGA-12).
+7. **Hand it to Claude.** Press `<leader>aw` and press `<CR>` to accept the last issue filed, or type another id. Claude gets a git worktree next to your repo (`<repo>.worktrees/jga-12`) on a branch named after the issue, moves the issue to In Progress, makes the change, runs your checks, commits with the issue id and moves it to In Review. Your own checkout is never touched.
+8. **Answer its prompts.** Claude asks before running shell commands (the checks, git): `y` allows once, `a` allows for the session, `n` denies, `r` denies and lets you say why. If it has a question, the notification says so; answer with `a` in `:BudIssues`.
+9. **Review the work.** Open `:BudIssues`, put the cursor on the issue and press `d` for the diff in diffview.
+10. **Land it yourself.** From the worktree (or the branch in your checkout): push, open the pull request, merge, then `git worktree remove <repo>.worktrees/jga-12`. Move the issue to Done in Linear. bud never pushes or merges for you.
+
+Something wrong with bud itself while you do this: `<leader>aB` files it in bud's own tracker. Use `<leader>ai` for the project you are in.
+
 ## Having Claude fix one
 
 `w` on an issue in `:BudIssues` (or `<leader>aw`) hands it to Claude in a git worktree of its own, next to your repo: `<repo>.worktrees/<id>`, on a branch named after the issue (`jga-12-dashboard-drops-a-row`) from your default branch. Your checkout and open buffers never change.

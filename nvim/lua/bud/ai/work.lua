@@ -42,14 +42,17 @@ function M.launch(argv, cwd, on_line, on_exit)
   return id
 end
 
--- on_origin calls cb(true/false) for whether branch is on repo's origin
-function M.on_origin(repo, branch, cb)
+-- on_origin calls cb(branch) with a branch on repo's origin whose name has the
+-- issue id in it, or nil. Cloud sessions can be limited to a claude/ prefix,
+-- so the run's own branch name is only a guess (JGA-237)
+function M.on_origin(repo, id, cb)
   vim.system(
-    { "git", "-C", repo, "ls-remote", "--exit-code", "--heads", "origin", branch },
+    { "git", "-C", repo, "ls-remote", "--heads", "origin", "*" .. id:lower() .. "*" },
     { text = true },
     function(r)
       vim.schedule(function()
-        cb(r.code == 0)
+        local sha, name = (r.stdout or ""):match("(%x+)%s+refs/heads/(%S+)")
+        cb(r.code == 0 and sha and name or nil)
       end)
     end
   )
@@ -234,12 +237,15 @@ function M.cloud_prompt(run)
     ),
     "",
     "1. Read the issue in Linear (description and comments) and move it to In Progress."
-      .. " If Linear isn't available to you, carry on and say so at the end.",
+      .. " If Linear isn't available to you, stop and say so: the user has to enable the Linear connector for cloud sessions.",
     "2. Fix it the way the repo's CLAUDE.md, README and existing code say things are done here.",
     "3. Run the project's own checks (its CLAUDE.md, justfile, Makefile or package scripts say which).",
     "4. When they pass, commit in the repo's commit style with the issue id in the subject,"
       .. (" push the branch (`git push -u origin %s`)"):format(run.branch)
-      .. " and move the issue to In Review. Don't open a pull request, merge, or touch other branches.",
+      .. " and move the issue to In Review. Don't open a pull request, merge, or touch other branches."
+      .. (" If your environment only lets you push a `claude/` branch, use `claude/%s` and keep the issue id in the name."):format(
+        run.branch
+      ),
     "5. If you're stuck, or the checks fail and you can't fix them, push nothing broken and say what's left.",
   }, "\n")
 end
@@ -359,12 +365,13 @@ function M.watch(run)
       end
       waited = waited + M.poll_ms
       checking = true
-      M.on_origin(run.repo, run.branch, function(found)
+      M.on_origin(run.repo, run.id, function(found)
         checking = false
         if run.state ~= "working" then
           return stop()
         end
         if found then
+          run.branch = found
           run.state, run.summary = "done", "branch pushed to origin; d fetches and shows it"
           notify(("%s is ready to review on %s (d in :BudIssues)"):format(run.id, run.branch))
           stop()

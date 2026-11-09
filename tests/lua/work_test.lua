@@ -234,6 +234,7 @@ for _, want in ipairs({
   "branch `jga-20-cloud-one` from `main`",
   "git push -u origin jga-20-cloud-one",
   "Don't open a pull request",
+  "`claude/jga-20-cloud-one`",
 }) do
   assert(launched.argv[3]:find(want, 1, true), "cloud prompt lacks: " .. want)
 end
@@ -241,10 +242,11 @@ eq(crun.state, "working", "working until the branch is pushed")
 eq(work.statusline() ~= "", true, "counted as in progress")
 
 -- the branch appears on origin: done
-cgit({ "push", "-q", "origin", "main:refs/heads/jga-20-cloud-one" })
+cgit({ "push", "-q", "origin", "main:refs/heads/claude/jga-20-cloud-one-x1y2" })
 wait(function()
   return crun.state == "done"
 end, "the pushed branch")
+eq(crun.branch, "claude/jga-20-cloud-one-x1y2", "the branch the session really pushed")
 local clines = issue.list_lines({}, { ["JGA-20"] = crun })
 assert(clines[3]:find("cloud  https://claude.ai/code/session_01Abc", 1, true), clines[3])
 

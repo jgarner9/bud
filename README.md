@@ -27,7 +27,7 @@ Linux or macOS, amd64 or arm64:
 curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh
 ```
 
-The script downloads the release for your platform, checks its signature and checksum, puts `bud` in `~/.local/bin`, and offers to run `bud install`. That asks for a profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree, then sets up the config, plugins and language tools, Claude Code and clod.
+The script downloads the release for your platform, checks its signature and checksum, puts `bud` in `~/.local/bin`, and offers to run `bud install`. That asks for a profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree (on Linux, a Neovim or tree-sitter-cli that is missing or too old is downloaded and checksum-verified instead), then sets up the config, plugins and language tools, Claude Code and clod.
 
 <details>
 <summary><b>Read the script first, pass options, or build from source</b></summary>
@@ -124,7 +124,7 @@ Small Neovim extensions in a directory of their own, loaded after the first scre
 
 - **`bud doctor`** checks dependencies, languages, config sync, startup time and Claude Code, with the fix for each problem.
 - **`bud update`** installs signed releases (stable or nightly), checks itself afterwards and rolls back if a check breaks. Stable updates install in the background.
-- **Honest installs:** bud shows the package manager command and asks first, and never upgrades anything behind your back.
+- **Honest installs:** bud shows the package manager command (or the download, for the Neovim and tree-sitter-cli that Linux distros often ship too old) and asks first, and never upgrades anything behind your back.
 
 ## Usage
 

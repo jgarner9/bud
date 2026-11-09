@@ -57,14 +57,14 @@ type Result struct {
 }
 
 // MinNeovim is the oldest Neovim bud supports (D19)
-var MinNeovim = [2]int{0, 12}
+var MinNeovim = installer.MinNeovim
 
 // StartupBudget is how long bud may take to show its first screen, empty or on
 // a file of any enabled language (principle 1, D35)
 var StartupBudget = 50 * time.Millisecond
 
 // MinTreeSitter is the oldest tree-sitter CLI nvim-treesitter's main branch builds parsers with
-var MinTreeSitter = [3]int{0, 26, 1}
+var MinTreeSitter = installer.MinTreeSitter
 
 // swappable in tests
 var (
@@ -733,7 +733,7 @@ func checkNeovim() (Result, bool) {
 	if major < MinNeovim[0] || (major == MinNeovim[0] && minor < MinNeovim[1]) {
 		r.Status = Fail
 		r.Detail += fmt.Sprintf(", bud needs %d.%d or newer", MinNeovim[0], MinNeovim[1])
-		r.Fix = "upgrade Neovim with your package manager"
+		r.Fix = upgradeFix("nvim", "upgrade Neovim with your package manager")
 	}
 
 	return r, true
@@ -783,10 +783,22 @@ func checkTreeSitter() (Result, bool) {
 	if slices.Compare(have[:], MinTreeSitter[:]) < 0 {
 		r.Status = Warn
 		r.Detail += fmt.Sprintf(", parsers need %d.%d.%d or newer", MinTreeSitter[0], MinTreeSitter[1], MinTreeSitter[2])
-		r.Fix = "upgrade tree-sitter-cli with your package manager, or install a newer release from GitHub"
+		r.Fix = upgradeFix("tree-sitter", "upgrade tree-sitter-cli with your package manager, or install a newer release from GitHub")
 	}
 
 	return r, true
+}
+
+// upgradeFix says how to get a newer bin: on Linux 'bud install' downloads one
+// when the one on PATH is too old (D107); elsewhere it's the package manager's
+func upgradeFix(bin, other string) string {
+	for _, dep := range installer.Deps {
+		if dep.Managed() && dep.Tool.Bin == bin {
+			return "run 'bud install': it downloads a current " + dep.Name
+		}
+	}
+
+	return other
 }
 
 func firstLine(s string) string {

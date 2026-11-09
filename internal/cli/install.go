@@ -254,6 +254,9 @@ func installDepsShown(deps []installer.Dep, pr *prompter, yes bool) error {
 		status, style := "missing", ansiRed
 		if dep.Installed() {
 			status, style = "ok", ansiGreen
+		} else if dep.OnPath() {
+			// there, but older than bud needs (a Linux package manager's Neovim)
+			status = "too old"
 		}
 		fmt.Printf("%-15s %s\n", dep.Name, paint(os.Stdout, style, status))
 	}
@@ -265,12 +268,18 @@ func installDepsShown(deps []installer.Dep, pr *prompter, yes bool) error {
 // pr is nil when nobody can be asked, so without --yes nothing runs
 func installDeps(plan *installer.Plan, pr *prompter, yes bool) error {
 	argv := plan.Command()
-	if argv == nil {
+	downloads := plan.Downloads()
+	if argv == nil && len(downloads) == 0 {
 		// nothing missing, or no package manager to install with
 		return plan.Err()
 	}
 
-	fmt.Printf("\nbud will run:\n  %s\n", paint(os.Stdout, ansiBold, strings.Join(argv, " ")))
+	for _, t := range downloads {
+		fmt.Printf("\nbud will download %s %s from GitHub and check it against the checksum built into bud\n", t.Name, t.Version)
+	}
+	if argv != nil {
+		fmt.Printf("\nbud will run:\n  %s\n", paint(os.Stdout, ansiBold, strings.Join(argv, " ")))
+	}
 	if !yes {
 		if pr == nil {
 			return plan.Err()

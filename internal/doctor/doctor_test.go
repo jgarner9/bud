@@ -172,6 +172,27 @@ func TestCheckNeovim(t *testing.T) {
 	})
 }
 
+// a Neovim that's too old points at 'bud install' where bud downloads one
+// (Linux, D107) and at the package manager everywhere else
+func TestCheckNeovimFixMatchesWhereBudDownloads(t *testing.T) {
+	fakePath(t, "nvim")
+	withNvimVersion(t, "NVIM v0.10.4\n", nil)
+
+	managed := false
+	for _, dep := range installer.Deps {
+		if dep.Tool != nil && dep.Tool.Bin == "nvim" {
+			managed = dep.Managed()
+		}
+	}
+	r, _ := checkNeovim()
+	if managed && !strings.Contains(r.Fix, "bud install") {
+		t.Errorf("fix = %q, want it to say to run bud install", r.Fix)
+	}
+	if !managed && !strings.Contains(r.Fix, "package manager") {
+		t.Errorf("fix = %q, want it to say to use the package manager", r.Fix)
+	}
+}
+
 func TestCheckDeps(t *testing.T) {
 	fakePath(t, "here", "brew")
 	withDeps(t, []installer.Dep{

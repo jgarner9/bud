@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"jgarner.dev/bud/internal/config"
+	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -44,6 +45,14 @@ func UseClaudeConfig() {
 		return
 	}
 	os.Setenv("CLAUDE_CONFIG_DIR", dir)
+}
+
+// UseManagedBin puts the tools bud downloaded (D107) ahead of the system's on
+// PATH, for bud and what it starts. main calls it, so tests never do
+func UseManagedBin() {
+	if p, err := paths.Resolve(); err == nil {
+		installer.UseManagedBin(p.Data)
+	}
 }
 
 // budClaudeDir says whether CLAUDE_CONFIG_DIR is bud's own dir, which

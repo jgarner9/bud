@@ -1,7 +1,8 @@
 // Package installer makes sure the system tooling bud depends on is present.
 // Mason handles language tooling inside Neovim; this covers everything else,
 // through the system package manager (D16). It installs what's missing but never
-// upgrades what's there, Neovim included (D19)
+// upgrades what's there. The exception is Linux, where a Neovim or tree-sitter
+// the package manager has too old (or none) is downloaded instead (D107)
 package installer
 
 import (
@@ -11,6 +12,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+
+	"jgarner.dev/bud/internal/paths"
 )
 
 type Dep struct {
@@ -21,12 +24,15 @@ type Dep struct {
 	Pkgs map[string][]string
 	// FullOnly deps are left out of the minimal profile
 	FullOnly bool
+	// Tool, when set, is what bud downloads on Linux in place of the package
+	// manager's, which may be too old (D107)
+	Tool *Tool
 }
 
 // Deps lists every system dependency in the order it should be installed.
 // nvim and git come first since the config sync and plugin restore need them
 var Deps = []Dep{
-	{Name: "neovim", Bins: []string{"nvim"}},
+	{Name: "neovim", Bins: []string{"nvim"}, Tool: &neovimTool},
 	{Name: "git", Bins: []string{"git"}},
 	{Name: "ripgrep", Bins: []string{"rg"}},
 	{Name: "fd", Bins: []string{"fd", "fdfind"}, Pkgs: map[string][]string{
@@ -37,7 +43,7 @@ var Deps = []Dep{
 	{Name: "fzf", Bins: []string{"fzf"}},
 	// nvim-treesitter builds parsers with these two (D29); doctor checks the
 	// CLI's version, since some distros ship one too old for it
-	{Name: "tree-sitter-cli", Bins: []string{"tree-sitter"}},
+	{Name: "tree-sitter-cli", Bins: []string{"tree-sitter"}, Tool: &treeSitterTool},
 	// macOS always has /usr/bin/cc (it offers to install the command line tools
 	// on first use, and Homebrew needs them anyway), so only Linux installs this
 	{Name: "gcc", Bins: []string{"cc", "gcc", "clang"}},
@@ -112,7 +118,18 @@ func (d Dep) Packages(m Manager) []string {
 	return []string{d.Name}
 }
 
+// Installed says whether the dep is on PATH. A downloaded one (Managed) also
+// has to be new enough, since a package manager's can be a release behind
 func (d Dep) Installed() bool {
+	if t, ok := d.managed(); ok {
+		return t.newEnough()
+	}
+
+	return d.OnPath()
+}
+
+// OnPath says whether any of the dep's binaries is on PATH, of whatever version
+func (d Dep) OnPath() bool {
 	for _, bin := range d.Bins {
 		if _, err := exec.LookPath(bin); err == nil {
 			return true
@@ -239,10 +256,29 @@ func (p *Plan) Command() []string {
 
 	var pkgs []string
 	for _, dep := range p.Missing {
+		if dep.Managed() {
+			continue
+		}
 		pkgs = append(pkgs, dep.Packages(p.Manager)...)
+	}
+	if len(pkgs) == 0 {
+		return nil
 	}
 
 	return p.Manager.Command(pkgs)
+}
+
+// Downloads are the missing deps bud fetches itself instead of installing
+// with the package manager (D107)
+func (p *Plan) Downloads() []Tool {
+	var tools []Tool
+	for _, dep := range p.Missing {
+		if t, ok := dep.managed(); ok {
+			tools = append(tools, t)
+		}
+	}
+
+	return tools
 }
 
 // Err is a *MissingError naming what's missing, or nil when nothing is
@@ -254,12 +290,25 @@ func (p *Plan) Err() error {
 	return &MissingError{Deps: p.Missing, Manager: p.Manager, Found: p.Found}
 }
 
-// Run installs the missing deps, then checks again, since a package can
-// install without putting the binary bud looks for on PATH
+// Run downloads what bud fetches itself, installs the rest of the missing deps
+// with the package manager, then checks again, since a package can install
+// without putting the binary bud looks for on PATH
 func (p *Plan) Run() error {
+	if tools := p.Downloads(); len(tools) > 0 {
+		pp, err := paths.Resolve()
+		if err != nil {
+			return err
+		}
+		for _, t := range tools {
+			if err := t.Download(pp.Data); err != nil {
+				return err
+			}
+		}
+		UseManagedBin(pp.Data)
+	}
 	argv := p.Command()
 	if argv == nil {
-		return p.Err()
+		return NewPlan(p.Missing).Err()
 	}
 	if err := run(argv); err != nil {
 		return fmt.Errorf("%s: %w", strings.Join(argv, " "), err)

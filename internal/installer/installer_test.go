@@ -344,3 +344,74 @@ func TestReadReceipt(t *testing.T) {
 		}
 	}
 }
+
+func withVenv(t *testing.T, ok bool) {
+	t.Helper()
+	orig := pythonCanVenv
+	pythonCanVenv = func() bool { return ok }
+	t.Cleanup(func() { pythonCanVenv = orig })
+}
+
+// Debian ships node without npm and python3 without venv, and Mason needs both
+// (JGA-233): a dep isn't installed until its whole package is
+func TestLanguageDepsNeedTheirWholePackage(t *testing.T) {
+	deps := ForBins([]string{"node", "python3"})
+	node, python := deps[0], deps[1]
+
+	fakePath(t, "node", "python3")
+	withVenv(t, false)
+	if node.Installed() {
+		t.Error("node without npm should not count as installed")
+	}
+	if python.Installed() {
+		t.Error("python3 that can't make a venv should not count as installed")
+	}
+	if got := Missing(deps); len(got) != 2 {
+		t.Errorf("missing = %v, want both", got)
+	}
+
+	fakePath(t, "node", "npm", "python3")
+	withVenv(t, true)
+	if !node.Installed() || !python.Installed() {
+		t.Error("with npm and venv both should count as installed")
+	}
+	if got := Missing(deps); len(got) != 0 {
+		t.Errorf("missing = %v, want none", got)
+	}
+
+	// no node at all is still missing, npm or not
+	fakePath(t, "npm")
+	if node.Installed() {
+		t.Error("npm alone isn't node")
+	}
+}
+
+func TestPlanInstallsTheMissingHalfOfAPackage(t *testing.T) {
+	withRoot(t, false)
+	withGOOS(t, "linux")
+	fakePath(t, "node", "python3", "apt-get")
+	withVenv(t, false)
+	deps := ForBins([]string{"node", "python3"})
+
+	plan := NewPlan(deps)
+	want := []string{"sudo", "apt-get", "install", "-y", "nodejs", "npm", "python3", "python3-venv"}
+	if got := plan.Command(); !slices.Equal(got, want) {
+		t.Fatalf("command = %q, want %q", got, want)
+	}
+
+	// after the package manager runs, the plan checks again
+	withRun(t, func([]string) error {
+		withVenv(t, true)
+		return os.WriteFile(filepath.Join(os.Getenv("PATH"), "npm"), []byte("#!/bin/sh\n"), 0o755)
+	})
+	if err := plan.Run(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPythonCanVenvRunsPython(t *testing.T) {
+	fakePath(t) // no python3 on PATH
+	if pythonCanVenv() {
+		t.Fatal("no python3 can't make a venv")
+	}
+}

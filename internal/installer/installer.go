@@ -24,6 +24,13 @@ type Dep struct {
 	Pkgs map[string][]string
 	// FullOnly deps are left out of the minimal profile
 	FullOnly bool
+	// Also lists binaries that must all be on PATH too, for a dep whose
+	// package is split in two: node without npm can't install Mason's npm
+	// packages (JGA-233)
+	Also []string
+	// Probe, when set, must pass for the dep to count as installed, for what
+	// a binary on PATH doesn't show (python3 without venv support)
+	Probe func() bool
 	// Tool, when set, is what bud downloads on Linux in place of the package
 	// manager's, which may be too old (D107)
 	Tool *Tool
@@ -58,13 +65,13 @@ var LanguageDeps = []Dep{
 		"dnf": {"golang"},
 	}},
 	// venv too, which Mason installs PyPI packages (ty, ruff) into; apt splits it out
-	{Name: "python3", Bins: []string{"python3"}, Pkgs: map[string][]string{
+	{Name: "python3", Bins: []string{"python3"}, Probe: func() bool { return pythonCanVenv() }, Pkgs: map[string][]string{
 		"brew":   {"python"},
 		"pacman": {"python"},
 		"apt":    {"python3", "python3-venv"},
 	}},
 	// npm too, which Mason installs npm packages (tsc, prettier) with
-	{Name: "node", Bins: []string{"node"}, Pkgs: map[string][]string{
+	{Name: "node", Bins: []string{"node"}, Also: []string{"npm"}, Pkgs: map[string][]string{
 		"pacman": {"nodejs", "npm"},
 		"apt":    {"nodejs", "npm"},
 		"dnf":    {"nodejs", "npm"},
@@ -125,7 +132,23 @@ func (d Dep) Installed() bool {
 		return t.newEnough()
 	}
 
-	return d.OnPath()
+	if !d.OnPath() {
+		return false
+	}
+	for _, bin := range d.Also {
+		if _, err := exec.LookPath(bin); err != nil {
+			return false
+		}
+	}
+
+	return d.Probe == nil || d.Probe()
+}
+
+// pythonCanVenv says whether python3 can make a virtual environment, which
+// Mason installs its PyPI packages into. Debian splits that out as python3-venv
+// and ships python3 without it. It's swappable in tests
+var pythonCanVenv = func() bool {
+	return exec.Command("python3", "-c", "import ensurepip, venv").Run() == nil
 }
 
 // OnPath says whether any of the dep's binaries is on PATH, of whatever version

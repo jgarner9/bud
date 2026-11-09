@@ -255,8 +255,12 @@ func installDepsShown(deps []installer.Dep, pr *prompter, yes bool) error {
 		if dep.Installed() {
 			status, style = "ok", ansiGreen
 		} else if dep.OnPath() {
-			// there, but older than bud needs (a Linux package manager's Neovim)
-			status = "too old"
+			// there, but older than bud needs (a Linux package manager's Neovim),
+			// or without the part of its package bud uses (node without npm)
+			status = "incomplete"
+			if dep.Managed() {
+				status = "too old"
+			}
 		}
 		fmt.Printf("%-15s %s\n", dep.Name, paint(os.Stdout, style, status))
 	}

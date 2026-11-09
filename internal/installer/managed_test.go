@@ -479,3 +479,64 @@ func TestVersionOutputRunsAsBud(t *testing.T) {
 		t.Fatalf("ran with NVIM_APPNAME=%q, want bud", got)
 	}
 }
+
+// A second copy of the same version replaces the first without a gap where the
+// link points at nothing, and a failed swap keeps the first (JGA-232 review)
+func TestDownloadKeepsTheOldCopyUntilTheNewOneIsIn(t *testing.T) {
+	archive := nvimTarGz(t)
+	withFetch(t, archive)
+	data := t.TempDir()
+	tool := neovimTool
+	tool.Assets = map[string]Asset{"amd64": {URL: "u", SHA256: digest(archive), Member: "nvim-linux-x86_64/bin/nvim"}}
+	if err := tool.Download(data); err != nil {
+		t.Fatal(err)
+	}
+	if err := tool.Download(data); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(ManagedBin(data), "nvim")); err != nil {
+		t.Fatalf("link broken after a second download: %v", err)
+	}
+	entries, _ := os.ReadDir(managedDir(data))
+	if len(entries) != 1 {
+		t.Errorf("want just the one version dir, got %v", entries)
+	}
+
+	// a bad archive stops before anything is moved
+	bad := makeGz(t, "not a tar")
+	withFetch(t, bad)
+	tool.Assets["amd64"] = Asset{URL: "u", SHA256: digest(bad), Member: "nvim-linux-x86_64/bin/nvim"}
+	if err := tool.Download(data); err == nil {
+		t.Fatal("want an error")
+	}
+	if _, err := os.Stat(filepath.Join(ManagedBin(data), "nvim")); err != nil {
+		t.Fatalf("a failed download broke the working copy: %v", err)
+	}
+}
+
+// A downloaded Neovim must not shadow one the user installed since
+func TestPruneManagedDropsALinkTheSystemHasCaughtUpWith(t *testing.T) {
+	withGOOS(t, "linux")
+	origArch := goarch
+	goarch = "amd64"
+	t.Cleanup(func() { goarch = origArch })
+	data := t.TempDir()
+	managed := ManagedBin(data)
+	os.MkdirAll(managed, 0o755)
+	os.WriteFile(filepath.Join(managed, "nvim"), []byte("#!/bin/sh\n"), 0o755)
+	sys := t.TempDir()
+	os.WriteFile(filepath.Join(sys, "nvim"), []byte("#!/bin/sh\n"), 0o755)
+	t.Setenv("PATH", managed+":"+sys)
+
+	withVersion(t, "NVIM v0.11.0\n", nil)
+	PruneManaged(data)
+	if _, err := os.Lstat(filepath.Join(managed, "nvim")); err != nil {
+		t.Fatal("an old system nvim must not remove the download")
+	}
+
+	withVersion(t, "NVIM v0.13.0\n", nil)
+	PruneManaged(data)
+	if _, err := os.Lstat(filepath.Join(managed, "nvim")); err == nil {
+		t.Fatal("a new enough system nvim should have replaced the download")
+	}
+}

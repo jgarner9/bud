@@ -142,6 +142,12 @@ func (t Tool) newEnough() bool {
 	if err != nil {
 		return false
 	}
+
+	return t.enough(bin)
+}
+
+// enough says whether the binary at bin is at least t.Min
+func (t Tool) enough(bin string) bool {
 	out, err := versionOutput(bin)
 	if err != nil {
 		return false
@@ -193,6 +199,42 @@ func UseManagedBin(data string) {
 	os.Setenv("PATH", dir+string(os.PathListSeparator)+path)
 }
 
+// PruneManaged unlinks a downloaded tool once the system has one new enough
+// (the user installed Neovim 0.13 since), so it stops shadowing the system's.
+// The unpacked copy stays. It runs from 'bud install', not at startup, because
+// it starts the tools to read their versions
+func PruneManaged(data string) {
+	dir := ManagedBin(data)
+	for _, d := range Deps {
+		t, ok := d.managed()
+		if !ok {
+			continue
+		}
+		name := filepath.Join(dir, t.Bin)
+		if _, err := os.Lstat(name); err != nil {
+			continue
+		}
+		if sys := lookPathOutside(t.Bin, dir); sys != "" && t.enough(sys) {
+			os.Remove(name)
+		}
+	}
+}
+
+// lookPathOutside finds bin on PATH, skipping the directory skip
+func lookPathOutside(bin, skip string) string {
+	for _, d := range filepath.SplitList(os.Getenv("PATH")) {
+		if d == "" || d == skip {
+			continue
+		}
+		p := filepath.Join(d, bin)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode().Perm()&0o111 != 0 {
+			return p
+		}
+	}
+
+	return ""
+}
+
 // Download installs t for this machine under data and links its binary into
 // ManagedBin. It checks the archive against the pinned digest before reading
 // anything from it
@@ -231,12 +273,26 @@ func (t Tool) Download(data string) error {
 	}
 
 	final := filepath.Join(managedDir(data), t.Name+"-"+t.Version)
-	if err := os.RemoveAll(final); err != nil {
+	// move an earlier copy aside rather than deleting it first, so a failure
+	// leaves the link pointing at something that works
+	aside := final + ".old"
+	if err := os.RemoveAll(aside); err != nil {
 		return err
+	}
+	replaced := true
+	if err := os.Rename(final, aside); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		replaced = false
 	}
 	if err := os.Rename(tmp, final); err != nil {
+		if replaced {
+			os.Rename(aside, final)
+		}
 		return err
 	}
+	defer os.RemoveAll(aside)
 
 	return link(filepath.Join(final, member), filepath.Join(ManagedBin(data), t.Bin))
 }

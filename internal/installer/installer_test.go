@@ -358,7 +358,8 @@ func TestLanguageDepsNeedTheirWholePackage(t *testing.T) {
 	deps := ForBins([]string{"node", "python3"})
 	node, python := deps[0], deps[1]
 
-	fakePath(t, "node", "python3")
+	withGOOS(t, "linux")
+	fakePath(t, "node", "python3", "apt-get")
 	withVenv(t, false)
 	if node.Installed() {
 		t.Error("node without npm should not count as installed")
@@ -370,7 +371,7 @@ func TestLanguageDepsNeedTheirWholePackage(t *testing.T) {
 		t.Errorf("missing = %v, want both", got)
 	}
 
-	fakePath(t, "node", "npm", "python3")
+	fakePath(t, "node", "npm", "python3", "apt-get")
 	withVenv(t, true)
 	if !node.Installed() || !python.Installed() {
 		t.Error("with npm and venv both should count as installed")
@@ -383,6 +384,23 @@ func TestLanguageDepsNeedTheirWholePackage(t *testing.T) {
 	fakePath(t, "npm")
 	if node.Installed() {
 		t.Error("npm alone isn't node")
+	}
+}
+
+// Only apt has a package that adds venv; on a distro without one, holding python3
+// to it would make 'bud install' fail on every run
+func TestPythonVenvOnlyMattersWhereAptCanFixIt(t *testing.T) {
+	python := ForBins([]string{"python3"})[0]
+	withGOOS(t, "linux")
+	withVenv(t, false)
+
+	fakePath(t, "python3", "pacman")
+	if !python.Installed() {
+		t.Error("python3 under pacman can't be completed, so it counts as installed")
+	}
+	fakePath(t, "python3", "apt-get")
+	if python.Installed() {
+		t.Error("python3 under apt without venv is incomplete")
 	}
 }
 

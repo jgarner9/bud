@@ -58,6 +58,9 @@ func install(g *Globals, args []string, yes bool) error {
 		return fmt.Errorf("%w\nfix or remove %s, then run 'bud install' again", err, p.MachineConfig())
 	}
 
+	// a downloaded tool the system has since caught up with stops shadowing it
+	installer.PruneManaged(p.Data)
+
 	// questions need someone to answer them: --yes or no terminal takes the defaults
 	pr := terminalPrompter(yes)
 	if s, err = askSetup(pr, f, s, g.Profile); err != nil {

@@ -65,7 +65,7 @@ var LanguageDeps = []Dep{
 		"dnf": {"golang"},
 	}},
 	// venv too, which Mason installs PyPI packages (ty, ruff) into; apt splits it out
-	{Name: "python3", Bins: []string{"python3"}, Probe: func() bool { return pythonCanVenv() }, Pkgs: map[string][]string{
+	{Name: "python3", Bins: []string{"python3"}, Probe: pythonProbe, Pkgs: map[string][]string{
 		"brew":   {"python"},
 		"pacman": {"python"},
 		"apt":    {"python3", "python3-venv"},
@@ -149,6 +149,18 @@ func (d Dep) Installed() bool {
 // and ships python3 without it. It's swappable in tests
 var pythonCanVenv = func() bool {
 	return exec.Command("python3", "-c", "import ensurepip, venv").Run() == nil
+}
+
+// pythonProbe holds python3 to venv support only where the package manager has
+// a package to add it: apt's python3-venv. Elsewhere "incomplete" could never
+// be fixed and 'bud install' would fail on every run
+func pythonProbe() bool {
+	m, found := DetectManager()
+	if !found || m.Name != "apt" {
+		return true
+	}
+
+	return pythonCanVenv()
 }
 
 // OnPath says whether any of the dep's binaries is on PATH, of whatever version

@@ -561,7 +561,7 @@ function M.open(kind)
   end
   -- read before the float takes the cursor
   local ctx = M.context()
-  vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
+  vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
   M.target(kind, function(target)
     ctx.bud = vim.trim(M.bud({ "version" }) or ""):gsub("^bud ", "")
     -- bud's own issues are looked into in its checkout, else the synced config

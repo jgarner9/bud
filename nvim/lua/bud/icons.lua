@@ -49,31 +49,31 @@ local icons = {
 -- the strings above skips it (the dashboard test checks these separately). Font
 -- Awesome only, and the ones that already have a name above reuse it
 icons.kinds = {
-  Text = "\u{f031}", -- nf-fa
-  Method = "\u{f1b2}", -- nf-fa
-  Function = "\u{f121}", -- nf-fa
-  Constructor = "\u{f0ad}", -- nf-fa
-  Field = "\u{f02b}", -- nf-fa
-  Variable = "\u{f069}", -- nf-fa
-  Property = "\u{f013}", -- nf-fa
-  Class = "\u{f1b3}", -- nf-fa
-  Interface = "\u{f0e8}", -- nf-fa
-  Struct = "\u{f0db}", -- nf-fa
-  Module = "\u{f187}", -- nf-fa
-  Unit = "\u{f080}", -- nf-fa
-  Value = "\u{f292}", -- nf-fa
-  Enum = "\u{f0ca}", -- nf-fa
-  EnumMember = "\u{f0c9}", -- nf-fa
-  Keyword = "\u{f084}", -- nf-fa
+  Text = "", -- nf-fa
+  Method = "", -- nf-fa
+  Function = "", -- nf-fa
+  Constructor = "", -- nf-fa
+  Field = "", -- nf-fa
+  Variable = "", -- nf-fa
+  Property = "", -- nf-fa
+  Class = "", -- nf-fa
+  Interface = "", -- nf-fa
+  Struct = "", -- nf-fa
+  Module = "", -- nf-fa
+  Unit = "", -- nf-fa
+  Value = "", -- nf-fa
+  Enum = "", -- nf-fa
+  EnumMember = "", -- nf-fa
+  Keyword = "", -- nf-fa
   Constant = icons.locked,
-  Snippet = "\u{f0c4}", -- nf-fa
-  Color = "\u{f1fc}", -- nf-fa
+  Snippet = "", -- nf-fa
+  Color = "", -- nf-fa
   File = icons.file,
-  Reference = "\u{f0c1}", -- nf-fa
+  Reference = "", -- nf-fa
   Folder = icons.projects,
   Event = icons.startup,
-  Operator = "\u{f1ec}", -- nf-fa
-  TypeParameter = "\u{f12e}", -- nf-fa
+  Operator = "", -- nf-fa
+  TypeParameter = "", -- nf-fa
 }
 
 return icons

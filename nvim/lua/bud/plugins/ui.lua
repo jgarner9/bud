@@ -24,7 +24,7 @@ return {
       end
       -- the same glyphs as the completion menu; dropbar wants a space after each
       local symbols = {}
-      for kind, glyph in pairs(require("bud.kinds")) do
+      for kind, glyph in pairs(require("bud.icons").kinds) do
         symbols[kind] = glyph .. " "
       end
       require("dropbar").setup({

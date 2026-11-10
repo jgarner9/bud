@@ -2,7 +2,7 @@
 -- Only long-standing ones (Font Awesome, Octicons, Devicons), which every Nerd
 -- Font has, all one cell wide. Add here rather than inventing symbols elsewhere,
 -- and never use emoji.
-return {
+local icons = {
   project = "", -- nf-fa-folder_open
   file = "", -- nf-fa-file_o
   recent = "", -- nf-fa-history
@@ -43,3 +43,37 @@ return {
   lsp = "", -- nf-fa-cogs
   command = "", -- nf-fa-terminal
 }
+
+-- kinds: the glyph for each LSP completion / symbol kind, for the completion
+-- menu and the breadcrumbs. A table of its own, so the one-cell-wide check over
+-- the strings above skips it (the dashboard test checks these separately). Font
+-- Awesome only, and the ones that already have a name above reuse it
+icons.kinds = {
+  Text = "\u{f031}", -- nf-fa
+  Method = "\u{f1b2}", -- nf-fa
+  Function = "\u{f121}", -- nf-fa
+  Constructor = "\u{f0ad}", -- nf-fa
+  Field = "\u{f02b}", -- nf-fa
+  Variable = "\u{f069}", -- nf-fa
+  Property = "\u{f013}", -- nf-fa
+  Class = "\u{f1b3}", -- nf-fa
+  Interface = "\u{f0e8}", -- nf-fa
+  Struct = "\u{f0db}", -- nf-fa
+  Module = "\u{f187}", -- nf-fa
+  Unit = "\u{f080}", -- nf-fa
+  Value = "\u{f292}", -- nf-fa
+  Enum = "\u{f0ca}", -- nf-fa
+  EnumMember = "\u{f0c9}", -- nf-fa
+  Keyword = "\u{f084}", -- nf-fa
+  Constant = icons.locked,
+  Snippet = "\u{f0c4}", -- nf-fa
+  Color = "\u{f1fc}", -- nf-fa
+  File = icons.file,
+  Reference = "\u{f0c1}", -- nf-fa
+  Folder = icons.projects,
+  Event = icons.startup,
+  Operator = "\u{f1ec}", -- nf-fa
+  TypeParameter = "\u{f12e}", -- nf-fa
+}
+
+return icons

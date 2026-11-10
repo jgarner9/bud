@@ -94,9 +94,11 @@ local data = {
 local icons = require("bud.icons")
 -- every icon is one cell wide, or the centering is off
 for name, glyph in pairs(icons) do
-  eq(vim.fn.strdisplaywidth(glyph), 1, "width of icon " .. name)
+  if name ~= "kinds" then
+    eq(vim.fn.strdisplaywidth(glyph), 1, "width of icon " .. name)
+  end
 end
-for name, glyph in pairs(require("bud.kinds")) do
+for name, glyph in pairs(icons.kinds) do
   eq(vim.fn.strdisplaywidth(glyph), 1, "width of kind icon " .. name)
 end
 local lines, hls = view.build(data, 100, 40)

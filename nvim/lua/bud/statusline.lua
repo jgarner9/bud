@@ -56,20 +56,32 @@ end
 -- file_icon is the icon for the current buffer's file type: the language's own
 -- when nvim-web-devicons has already loaded (the tree and pickers load it; the
 -- first screen must not, D35), else the plain file glyph. Special buffers get
--- none, since file() already says what they are
+-- none, since file() already says what they are. The answer is kept on the
+-- buffer until its name or file type changes or devicons loads, since this runs
+-- on every redraw
 function M.file_icon()
-  local icons = require("bud.icons")
   if vim.bo.buftype ~= "" then
     return ""
   end
   local devicons = package.loaded["nvim-web-devicons"]
-  if devicons then
-    local icon = devicons.get_icon(vim.fn.expand("%:t"), vim.fn.expand("%:e"), { default = false })
-    if icon then
-      return icon
-    end
+  local name = vim.api.nvim_buf_get_name(0)
+  local cached = vim.b.bud_file_icon
+  if cached and cached.name == name and cached.ft == vim.bo.filetype and cached.devicons == (devicons ~= nil) then
+    return cached.icon
   end
-  return icons.file
+  local icon
+  if devicons then
+    icon = devicons.get_icon(vim.fs.basename(name), name:match("%.([^./]+)$"), { default = false })
+  end
+  icon = icon or require("bud.icons").file
+  vim.b.bud_file_icon = { name = name, ft = vim.bo.filetype, devicons = devicons ~= nil, icon = icon }
+  return icon
+end
+
+-- file_section is the file part of the line: its icon, then file()
+function M.file_section(short)
+  local icon = M.file_icon()
+  return (icon ~= "" and icon .. " " or "") .. M.file(short)
 end
 
 -- lsp names the language servers attached to the current buffer. Until
@@ -144,7 +156,7 @@ function M.active()
     { hl = mode_hl, strings = { mode } },
     { hl = "MiniStatuslineDevinfo", strings = { git, diff } },
     "%<",
-    { hl = "MiniStatuslineFilename", strings = { M.file_icon() .. " " .. M.file(sl.is_truncated(140)) } },
+    { hl = "MiniStatuslineFilename", strings = { M.file_section(sl.is_truncated(140)) } },
     "%=",
     { hl = "MiniStatuslineFilename", strings = { diagnostics } },
     { hl = "MiniStatuslineFileinfo", strings = { lsp } },

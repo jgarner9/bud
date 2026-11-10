@@ -72,7 +72,25 @@ package.loaded["nvim-web-devicons"] = {
 }
 eq(sl.file_icon(), "L", "devicons icon once loaded")
 package.loaded["nvim-web-devicons"] = nil
+-- it is kept on the buffer, and follows a rename
+local calls = 0
+vim.b.bud_file_icon = nil
+package.loaded["nvim-web-devicons"] = {
+  get_icon = function(name)
+    calls = calls + 1
+    return name == "b.lua" and "L" or "R"
+  end,
+}
+eq(sl.file_icon(), "L", "devicons again")
+eq(sl.file_icon(), "L", "from the cache")
+eq(calls, 1, "looked up once")
+vim.cmd.file(vim.fn.fnameescape("lua/c.lua"))
+eq(sl.file_icon(), "R", "a new name looks it up again")
+package.loaded["nvim-web-devicons"] = nil
+eq(sl.file_section(true), icons.file .. " c.lua", "icon, then the name")
 vim.bo.buftype = "nofile"
 eq(sl.file_icon(), "", "no icon on a special buffer")
+vim.bo.filetype = "neo-tree"
+eq(sl.file_section(), "neo-tree", "and no leading space")
 
 print("statusline_test: ok")

@@ -11,6 +11,7 @@ return {
       -- loading fzf-lua starts a server socket, ~10 ms, so it waits for the first picker key
       local fzf = pack.on_first_use("fzf-lua", function(m)
         local icons = require("bud.icons")
+        local symbols_prompt = icons.kinds.Function .. "  "
         -- a glyph in each picker's prompt says what it is; the file lists show
         -- the git status of each file too (file icons are on by default)
         m.setup({
@@ -19,7 +20,13 @@ return {
           oldfiles = { prompt = icons.recent .. "  " },
           grep = { prompt = icons.command .. "  " },
           diagnostics = { prompt = icons.warn .. "  " },
-          lsp = { symbols = { prompt = require("bud.kinds").Function .. "  " } },
+          -- workspace and document symbols are copies of symbols made when
+          -- fzf-lua loads, so each needs its own
+          lsp = {
+            symbols = { prompt = symbols_prompt },
+            document_symbols = { prompt = symbols_prompt },
+            workspace_symbols = { prompt = symbols_prompt },
+          },
         })
       end)
       local function picker(name)

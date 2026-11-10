@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 {% include head.html %}
+<noscript><style>.side .toggle { display: none; } .side nav { display: block !important; }</style></noscript>
 </head>
 <body class="doc">
 <header class="bar">
@@ -13,8 +14,8 @@
 </header>
 <div class="shell">
   <aside class="side">
-    <details class="menu" id="menu" open>
-    <summary>Docs menu</summary>
+    <button class="toggle" id="toggle" type="button" aria-expanded="false" aria-controls="nav">Docs menu</button>
+    <nav id="nav" aria-label="Docs">
     {% for group in site.data.nav %}
     <p class="group">{{ group.title }}</p>
     <ul>
@@ -24,7 +25,7 @@
       {% endfor %}
     </ul>
     {% endfor %}
-    </details>
+    </nav>
   </aside>
   <main class="prose">
     <h1>{{ page.title }}</h1>
@@ -33,13 +34,13 @@
   </main>
 </div>
 <script>
-// the menu is always open beside the page; on a phone it starts closed
+// on a phone the sidebar is a menu, closed until its button is pressed
 (function () {
-  var menu = document.getElementById("menu");
-  var wide = window.matchMedia("(min-width: 48.01rem)");
-  function sync() { menu.open = wide.matches; }
-  sync();
-  if (wide.addEventListener) wide.addEventListener("change", sync);
+  var toggle = document.getElementById("toggle");
+  toggle.addEventListener("click", function () {
+    var open = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", open);
+  });
 })();
 </script>
 </body>

@@ -4,5 +4,5 @@
 .serena/
 dist/
 nvim.log
-_site_src/
-_site/
+/_site_src/
+/_site/

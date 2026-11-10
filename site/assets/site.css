@@ -57,7 +57,7 @@ footer p { margin: 0.2rem 0; }
 /* the docs */
 .shell { display: flex; max-width: 76rem; margin: 0 auto; }
 .side { width: 15rem; flex: none; padding: 1.5rem; position: sticky; top: 0; align-self: flex-start; max-height: 100vh; overflow-y: auto; }
-.side summary { display: none; }
+.side .toggle { display: none; }
 .side .group { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin: 1.2rem 0 0.3rem; }
 .side ul { list-style: none; margin: 0; padding: 0; }
 .side a { display: block; padding: 0.2rem 0.6rem; border-radius: 6px; color: var(--text); }
@@ -70,7 +70,7 @@ footer p { margin: 0.2rem 0; }
 .prose th { background: var(--mantle); }
 .prose .edit { margin-top: 3rem; font-size: 0.9rem; }
 
-img, svg, video { max-width: 100%; height: auto; }
+.prose img { max-width: 100%; height: auto; }
 .prose { overflow-wrap: break-word; }
 
 @media (max-width: 48rem) {
@@ -86,14 +86,15 @@ img, svg, video { max-width: 100%; height: auto; }
   .start li { gap: 0.2rem; }
   .start li a { min-width: 100%; }
   .shell { flex-direction: column; }
-  .side { position: static; width: auto; max-height: none; border-bottom: 1px solid var(--surface); padding: 0.5rem 1rem; }
-  .side summary { display: block; cursor: pointer; padding: 0.5rem 0.6rem; font-weight: 600; border-radius: 6px; list-style: none; }
-  .side summary::-webkit-details-marker { display: none; }
-  .side summary::after { content: "\25be"; float: right; color: var(--dim); }
-  .side details[open] summary::after { content: "\25b4"; }
-  .side details[open] summary { margin-bottom: 0.3rem; }
+  .side { position: static; align-self: stretch; width: auto; max-height: none; border-bottom: 1px solid var(--surface); padding: 0; }
+  .side .toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; color: var(--text); font: 600 1rem var(--sans); padding: 0.8rem 1rem; cursor: pointer; }
+  .side .toggle::after { content: "\25be"; color: var(--dim); }
+  .side .toggle[aria-expanded="true"]::after { content: "\25b4"; }
+  .side nav { display: none; padding: 0 0.4rem 0.8rem; }
+  .side .toggle[aria-expanded="true"] + nav { display: block; }
+  .side .group { margin-top: 0.6rem; padding: 0 0.6rem; }
   .side a { padding: 0.45rem 0.6rem; }
   .prose { padding: 1rem 1rem 3rem; }
   .prose h1 { font-size: 1.6rem; }
-  .prose pre { margin-left: -1rem; margin-right: -1rem; border-radius: 0; padding: 0.9rem 1rem; }
+  .prose > .highlighter-rouge pre, .prose > pre { margin-left: -1rem; margin-right: -1rem; border-radius: 0; padding: 0.9rem 1rem; }
 }

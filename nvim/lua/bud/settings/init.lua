@@ -28,6 +28,7 @@ M.sections = {
       { key = "ui.cmdline_float", label = "Command line in a float (restart)", kind = "bool" },
       { key = "ui.breadcrumbs", label = "Breadcrumbs", kind = "bool" },
       { key = "ui.markdown", label = "Render markdown", kind = "bool" },
+      { key = "ui.buddy", label = "Buddy in the corner (restart)", kind = "bool" },
     },
   },
   {

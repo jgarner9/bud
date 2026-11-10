@@ -1,10 +1,11 @@
 -- The dashboard buddy's moves (JGA-155, JGA-181): each is a list of frames drawn on a
 -- fixed canvas, so a move never changes the size of the art or moves the text
 -- beside it. Pure data plus the drawing: it touches no buffer or timer;
--- bud.dashboard plays the moves and bud.dashboard.view lays out the canvas.
+-- bud.dashboard.player plays the moves, and bud.dashboard.view (the dashboard)
+-- and bud.buddy (the corner of the editor) lay out the canvas.
 --
 -- A sprite is a list of rows, spaces see-through. A frame places sprites on the
--- canvas and holds for some ticks (bud.dashboard's tick_ms each). The buddy
+-- canvas and holds for some ticks (the player's tick_ms each). The buddy
 -- stands on the bottom row with headroom above for jumps and flips.
 
 local M = {}
@@ -391,6 +392,111 @@ move("kickball", {
   frame(4, { bot("@.@"), X, Y }, fx("o", X + 6, Y + 3)),
   stand(5, "^_^"),
 })
+
+do -- party: confetti rains past a "1.0!" banner while he cheers (the 1.0 release)
+  local bits = {
+    { 0, 0, "*" },
+    { 2, 4, "·" },
+    { 4, 2, "✦" },
+    { 12, 5, "*" },
+    { 14, 1, "·" },
+    { 16, 3, "✦" },
+    { 17, 6, "'" },
+  }
+  local frames = { stand(4, N), stand(3, "O.O") }
+  for i = 1, 14 do
+    local parts = {}
+    for _, b in ipairs(bits) do
+      table.insert(parts, fx(b[3], b[1], (b[2] + i) % M.height))
+    end
+    local up = i % 2 == 1
+    table.insert(parts, { bot("^o^", { l = up and "\\" or "/", r = up and "/" or "\\" }), X, Y })
+    table.insert(parts, fx("1.0!", X, 1))
+    table.insert(frames, frame(2, unpack(parts)))
+  end
+  table.insert(frames, frame(8, { S.tada, X - 1, Y }, fx("1.0!", X, 1), fx("✦", X - 3, Y), fx("✦", X + 7, Y)))
+  table.insert(frames, stand(5, "^.^"))
+  move("party", frames)
+end
+
+do -- rocket: a countdown, up and off the top on a flame, then back down
+  local opts = { top = "_^_" }
+  -- his bottom n rows, for when the rest of him is above the canvas
+  local function tail(face, n)
+    local me = bot(face, opts)
+    return { unpack(me, #me - n + 1) }
+  end
+  local function flame(i, y)
+    return fx(i % 2 == 1 and " * * " or " ' ' ", X, y)
+  end
+  local frames = { stand(4, N), stand(3, "O.O", opts) }
+  for i, n in ipairs({ "3", "2", "1" }) do
+    local spark = i % 2 == 1 and "*" or "'"
+    table.insert(
+      frames,
+      frame(4, { bot(">.<", opts), X, Y }, fx(n, X + 7, Y + 1), fx(spark, X - 1, Y + 3), fx(spark, X + 5, Y + 3))
+    )
+  end
+  for i, y in ipairs({ Y - 1, Y - 2, Y - 3 }) do
+    table.insert(frames, frame(2, { bot("^.^", opts), X, y }, flame(i, y + 4)))
+  end
+  for n = 3, 1, -1 do
+    table.insert(frames, frame(1, { tail("^.^", n), X, 0 }, flame(n, n)))
+  end
+  table.insert(frames, frame(1, flame(1, 0)))
+  table.insert(frames, frame(3, fx("✦", X + 2, 0)))
+  table.insert(frames, frame(4))
+  for n = 1, 3 do
+    table.insert(frames, frame(1, { tail("O.O", n), X, 0 }))
+  end
+  for _, y in ipairs({ Y - 3, Y - 2, Y - 1 }) do
+    table.insert(frames, frame(1, { bot("O.O", opts), X, y }))
+  end
+  table.insert(frames, frame(3, { S.crouch, X, Y + 1 }, fx("*", X - 1, Y + 3), fx("*", X + 5, Y + 3)))
+  table.insert(frames, stand(5, "^.^"))
+  move("rocket", frames)
+end
+
+do -- moonwalk: he glides one way while looking the other, to each edge and back
+  local frames = { stand(4, N), stand(3, "-.-") }
+  local function glide(face, from, to)
+    local step = from < to and 1 or -1
+    for x = from, to, step do
+      local legs = x % 2 == 0 and " ] [ " or (step == 1 and " ]/  " or "  \\[ ")
+      table.insert(
+        frames,
+        frame(2, { bot(face, { legs = legs }), x, Y }, fx("♪", x + (step == 1 and -1 or 5), Y - 1))
+      )
+    end
+  end
+  glide(".o ", X, W - 6)
+  table.insert(frames, stand(3, "-.-", nil, W - 6))
+  glide(" o.", W - 6, 1)
+  table.insert(frames, stand(3, "-.-", nil, 1))
+  glide(".o ", 1, X)
+  table.insert(frames, stand(6, "^.^", { r = "/" }))
+  move("moonwalk", frames)
+end
+
+do -- cake: a deep breath, and the candle is out
+  local cake = { "  i  ", "[===]" }
+  local function scene(hold, sprite, x, y, ...)
+    return frame(hold, { sprite, x, y }, burst(cake, X + 7, Y + 2), ...)
+  end
+  local lit, flicker = fx("'", X + 9, Y + 1), fx("*", X + 9, Y + 1)
+  move("cake", {
+    scene(4, bot(N), X, Y, lit),
+    scene(3, bot(" o."), X, Y, flicker),
+    scene(3, bot("^.^"), X, Y, lit),
+    scene(4, bot("O o", { l = "\\", r = "/" }), X, Y - 1, flicker),
+    scene(3, bot(">o<"), X, Y, fx("~", X + 6, Y + 1), fx("-", X + 9, Y + 1)),
+    scene(3, bot(">o<"), X, Y, fx("~ ~", X + 6, Y + 1)),
+    scene(3, bot("o.o"), X, Y, fx(".", X + 9, Y)),
+    scene(3, bot("o.o"), X, Y, fx("°", X + 9, Y - 1)),
+    scene(8, S.tada, X - 1, Y, fx("✦", X - 3, Y), fx("yay!", X + 7, Y - 1)),
+    scene(5, bot("^.^"), X, Y),
+  })
+end
 
 --- draw lays a frame (nil: standing still) out on the canvas, the neutral
 --- face swapped for face. It returns M.height rows, each a list of

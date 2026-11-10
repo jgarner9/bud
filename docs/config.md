@@ -34,6 +34,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `ui.cmdline_float` | `true` | While you type a command (`;`), a search or an input, the command line is a centered float titled with what it is, and completion opens under it; it goes back to the bottom line when you're done, where the command and its messages show as before. Needs `ui.messages`. Turn it off to keep the command line at the bottom; takes effect on the next start. |
 | `ui.breadcrumbs` | `true` | Path and symbol breadcrumbs at the top of file windows (dropbar.nvim); `<leader>;` picks one and opens its menu. |
 | `ui.markdown` | `true` | Markdown files open rendered: headings, lists, code blocks, tables and checkboxes drawn in place, the cursor line shown as written. `false` opens them as text. Either way `<leader>um` switches one file, a file open in a diff shows its text everywhere until the diff closes, and one over 250 KB always opens as text. Applies to files opened after the change. |
+| `ui.buddy` | `false` | The robot stands in the bottom right corner of the editor and plays the dashboard's moves while you work. He takes no focus or keys, steps aside while the dashboard is on screen and in an editor too small to spare the corner, and after midnight he only snores. `<leader>ub` turns him on or off for the session either way; the setting takes effect on the next start. |
 
 ## Updates
 
@@ -54,7 +55,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `dashboard.prs` | `false` | Open PRs per project, and how many ask you for a review, through `gh`. |
 | `dashboard.todos` | `false` | How many TODO and FIXME comments each project has, through `rg`. |
 | `dashboard.clock` | `false` | The date and time under the robot. |
-| `dashboard.animate` | `true` | The robot plays his moves one after another (wave, backflip, juggling, fireworks and more), in a random order that then repeats; after midnight he only snores. |
+| `dashboard.animate` | `true` | The robot plays his moves one after another (wave, backflip, juggling, fireworks, a moonwalk and more; 22 in all), in a random order that then repeats; after midnight he only snores. |
 | `dashboard.sessions` | `false` | Save a project's open files on exit and restore them when you open it from the dashboard. |
 
 ## Claude Code

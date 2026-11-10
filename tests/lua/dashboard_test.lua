@@ -145,6 +145,7 @@ eq(#box_widths(joined), 1, "joined boxes the same width")
 
 -- the robot's moves only change the robot, and never its size
 local moves = require("bud.dashboard.moves")
+local player = require("bud.dashboard.player")
 local base = view.build(vim.tbl_extend("force", data, { mood = "normal" }), 100, 40)
 local first_box
 for row, line in ipairs(base) do
@@ -152,7 +153,7 @@ for row, line in ipairs(base) do
     first_box = first_box or row
   end
 end
-eq(#moves.names, 18, "every move listed")
+eq(#moves.names, 22, "every move listed")
 for _, name in ipairs(moves.names) do
   for i, frame in ipairs(moves.moves[name]) do
     local what = name .. " frame " .. i
@@ -189,10 +190,10 @@ has(
 )
 
 -- the cycle starts anywhere, plays each move once, then repeats that order
-dashboard.order = nil
+player.order = nil
 local cycle = {}
 for i = 1, #moves.names do
-  cycle[i] = dashboard.next_move()
+  cycle[i] = player.next_move()
 end
 local sorted = vim.deepcopy(cycle)
 table.sort(sorted)
@@ -200,7 +201,7 @@ local names = vim.deepcopy(moves.names)
 table.sort(names)
 eq(sorted, names, "one cycle plays every move once")
 for i = 1, #moves.names * 2 do
-  eq(dashboard.next_move(), cycle[(i - 1) % #cycle + 1], "the order repeats, move " .. i)
+  eq(player.next_move(), cycle[(i - 1) % #cycle + 1], "the order repeats, move " .. i)
 end
 
 -- optional extras (JGA-97)
@@ -334,8 +335,8 @@ f = assert(io.open(tmp .. "/config.json", "w"))
 f:write('{"dashboard": {"scratchpad": true}}')
 f:close()
 -- the buddy moves now and then, and settles back between moves (JGA-155)
-dashboard.pause_ms = 20
-dashboard.tick_ms = 2
+player.pause_ms = 20
+player.tick_ms = 2
 buf = dashboard.open({ offline = true })
 local still = dashboard.lines()
 if not vim.wait(2000, function()

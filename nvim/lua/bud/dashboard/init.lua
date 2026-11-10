@@ -4,7 +4,7 @@
 -- in the background and redraws when it's back, so opening it costs a few ms.
 
 local view = require("bud.dashboard.view")
-local moves = require("bud.dashboard.moves")
+local player = require("bud.dashboard.player")
 local projects = require("bud.projects")
 local config = require("bud.config")
 
@@ -203,76 +203,25 @@ local function draw()
   render(win)
 end
 
--- animate plays the buddy's moves one after another while the dashboard is on
--- screen (JGA-155, JGA-181): each frame redraws from the data already
--- gathered, so nothing runs again; asleep, it only snores
--- one tick is how long a frame's hold counts in, pause is the breath between
--- moves; swapped in tests
-M.tick_ms = 80
-M.pause_ms = 640
-
--- order is every move shuffled on first use, then repeated as is, so the
--- first move is a random one and each comes round once per cycle; at is the
--- one last played. Kept for the whole nvim, so reopening the dashboard
--- carries on the cycle
-M.order, M.at = nil, 0
-
---- next_move returns the name of the next move in the cycle.
-function M.next_move()
-  if not M.order then
-    M.order = vim.deepcopy(moves.names)
-    for i = #M.order, 2, -1 do
-      local j = math.random(i)
-      M.order[i], M.order[j] = M.order[j], M.order[i]
-    end
-    M.at = 0
-  end
-  M.at = M.at % #M.order + 1
-  return M.order[M.at]
-end
-
+-- animate plays the buddy's moves while the dashboard is on screen (JGA-155,
+-- JGA-181; bud.dashboard.player): each frame redraws from the data already
+-- gathered, so nothing runs again; asleep, he only snores
 local function animate()
-  local timer = vim.uv.new_timer()
-  current.anim = timer
-  local function alive()
-    return current ~= nil and current.anim == timer
-  end
-  local function after(ms, fn)
-    timer:start(
-      ms,
-      0,
-      vim.schedule_wrap(function()
-        if alive() then
-          fn()
-        end
-      end)
-    )
-  end
-  local idle
-  local function play(frames, i)
-    current.frame = frames[i]
-    render()
-    after(frames[i].hold * M.tick_ms, function()
-      if i < #frames then
-        return play(frames, i + 1)
+  local state = current
+  state.stop_anim = player.start({
+    show = function(frame)
+      state.frame = frame
+      if current == state then
+        render()
       end
-      current.frame = nil
-      render()
-      idle()
-    end)
-  end
-  idle = function()
-    after(M.pause_ms, function()
-      if current.style == "minimal" or vim.fn.bufwinid(current.buf) == -1 then
-        return idle()
-      end
-      if current.data and current.data.mood == "sleepy" then
-        return play(moves.moves.sleep, 1)
-      end
-      play(moves.moves[M.next_move()], 1)
-    end)
-  end
-  idle()
+    end,
+    ready = function()
+      return state.style ~= "minimal" and vim.fn.bufwinid(state.buf) ~= -1
+    end,
+    sleepy = function()
+      return state.data ~= nil and state.data.mood == "sleepy"
+    end,
+  })
 end
 
 -- leader replays a global leader mapping, so the dashboard follows whatever it does
@@ -581,9 +530,8 @@ function M.open(opts)
     buffer = buf,
     callback = function()
       show_cursor()
-      if current and current.anim then
-        current.anim:stop()
-        current.anim:close()
+      if current and current.stop_anim then
+        current.stop_anim()
       end
       current = nil
     end,

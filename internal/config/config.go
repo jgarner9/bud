@@ -88,6 +88,9 @@ type UI struct {
 	// markdown files open rendered (render-markdown, D88); off, they open as
 	// text and <leader>um still renders one
 	Markdown bool `json:"markdown"`
+	// the robot in the bottom right corner of the editor, playing the
+	// dashboard's moves (D108); off, <leader>ub still turns him on
+	Buddy bool `json:"buddy"`
 }
 
 type AI struct {

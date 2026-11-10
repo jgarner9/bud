@@ -13,7 +13,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that f
 | `<leader>,` | Settings. |
 | `<leader>P` · `<leader>M` | The plugin list · Mason. |
 | `<leader>un` | Notification history. |
-| `<leader>ub` | The buddy in the bottom right corner, on or off (`ui.buddy` starts him with the editor). |
+| `<leader>ub` | The buddy in the file window's bottom right corner, on or off (`ui.buddy` starts him with the editor). |
 | `<leader>qq` · `<leader>qw` · `<leader>qQ` | Quit (asks about unsaved files) · save all and quit · quit without saving. |
 
 ## Finding things

@@ -1,5 +1,5 @@
 -- The corner buddy (D108): the dashboard's robot in a small float at the
--- bottom right of the editor, playing the same moves (bud.dashboard.moves,
+-- bottom right of the file window, playing the same moves (bud.dashboard.moves,
 -- bud.dashboard.player) while you work. <leader>ub turns him on and off for
 -- this nvim; ui.buddy = true starts him with the editor. He takes no focus and
 -- no keys, steps aside while the dashboard (which has its own) is on screen,
@@ -14,7 +14,7 @@ local groups = { bot = "BudBuddy", fx = "BudBuddySpark" }
 -- the moves and their player, loaded by open
 local moves, player
 
--- state while he's on: { buf, win, frame, stop, resize }; nil when he's off
+-- state while he's on: { buf, win, spot, frame, stop, resize }; nil when he's off
 local current
 
 local function sleepy()
@@ -30,14 +30,39 @@ local function dashboard_showing()
   return false
 end
 
--- place is the float's spot: the bottom right corner, above the statusline
--- and the command line
-local function place()
+-- host is the file window he stands in: the one furthest to the bottom right
+-- of the tab page, big enough to spare a corner. Panes (the explorer, the
+-- terminal, Claude Code's pane) are never it, so he's never over a prompt
+local function host()
+  local best, best_at
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local file = vim.bo[vim.api.nvim_win_get_buf(win)].buftype == ""
+    local w, h = vim.api.nvim_win_get_width(win), vim.api.nvim_win_get_height(win)
+    if
+      file
+      and vim.api.nvim_win_get_config(win).relative == ""
+      and not vim.w[win].bud_side
+      and w >= moves.width * 3
+      and h >= moves.height * 2
+    then
+      local pos = vim.api.nvim_win_get_position(win)
+      local at = (pos[1] + h) * 10000 + pos[2] + w
+      if not best or at > best_at then
+        best, best_at = win, at
+      end
+    end
+  end
+  return best
+end
+
+-- place is the float's spot: the bottom right corner of win
+local function place(win)
   return {
-    relative = "editor",
+    relative = "win",
+    win = win,
     anchor = "SE",
-    row = vim.o.lines - vim.o.cmdheight - 1,
-    col = vim.o.columns,
+    row = vim.api.nvim_win_get_height(win),
+    col = vim.api.nvim_win_get_width(win),
     width = moves.width,
     height = moves.height,
   }
@@ -47,12 +72,7 @@ local function hide()
   if current.win and vim.api.nvim_win_is_valid(current.win) then
     vim.api.nvim_win_close(current.win, true)
   end
-  current.win = nil
-end
-
--- room is whether the editor is big enough to give him a corner
-local function room()
-  return vim.o.columns >= moves.width * 3 and vim.o.lines >= moves.height * 3
+  current.win, current.spot = nil, nil
 end
 
 local function buffer()
@@ -62,11 +82,13 @@ local function buffer()
   return buf
 end
 
--- window makes sure the float is up in the current tab page, opening it again
--- after something closed it (:only) or wiped its buffer; moved puts it back
--- in its corner after a resize. False when he's stepping aside
-local function window(moved)
-  if dashboard_showing() or not room() then
+-- window makes sure the float is up in its host's corner, opening it again
+-- after something closed it (:only) or wiped its buffer, and moving it when
+-- the host or its size changed. False when he's stepping aside: the dashboard
+-- is on screen, or no file window has the room
+local function window()
+  local win = not dashboard_showing() and host()
+  if not win then
     hide()
     return false
   end
@@ -74,28 +96,29 @@ local function window(moved)
     hide()
     current.buf = buffer()
   end
+  local to = place(win)
+  local spot = table.concat({ win, to.row, to.col }, ":")
   if current.win and vim.api.nvim_win_is_valid(current.win) then
-    if vim.api.nvim_win_get_tabpage(current.win) == vim.api.nvim_get_current_tabpage() then
-      if moved then
-        vim.api.nvim_win_set_config(current.win, place())
-      end
-      return true
+    if spot ~= current.spot then
+      vim.api.nvim_win_set_config(current.win, to)
+      current.spot = spot
     end
-    hide()
+    return true
   end
   current.win = vim.api.nvim_open_win(
     current.buf,
     false,
-    vim.tbl_extend("force", place(), { style = "minimal", focusable = false, noautocmd = true, zindex = 20 })
+    vim.tbl_extend("force", to, { style = "minimal", focusable = false, noautocmd = true, zindex = 20 })
   )
+  current.spot = spot
   vim.wo[current.win].winhighlight = "NormalFloat:Normal"
   return true
 end
 
 -- show draws a frame (nil: standing still) into his buffer
-local function show(frame, moved)
+local function show(frame)
   current.frame = frame
-  if not window(moved) then
+  if not window() then
     return
   end
   local asleep = sleepy()
@@ -151,9 +174,9 @@ function M.open()
     sleepy = sleepy,
   })
   -- the frame he's on, in the corner's new place or the tab just entered
-  current.resize = vim.api.nvim_create_autocmd({ "VimResized", "TabEnter" }, {
+  current.resize = vim.api.nvim_create_autocmd({ "VimResized", "WinResized", "TabEnter" }, {
     callback = function()
-      show(current.frame, true)
+      show(current.frame)
     end,
   })
 end

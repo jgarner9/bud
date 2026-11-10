@@ -1,7 +1,6 @@
 -- Run with: nvim --clean --headless -l tests/lua/buddy_test.lua (just lua-test)
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
-vim.o.columns, vim.o.lines = 120, 40
 
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp, "p")
@@ -49,7 +48,11 @@ local wins = floats()
 eq(#wins, 1, "one float")
 local cfg = vim.api.nvim_win_get_config(wins[1])
 eq({ cfg.width, cfg.height, cfg.focusable }, { moves.width, moves.height, false }, "the canvas, unfocusable")
-eq({ cfg.anchor, cfg.col }, { "SE", vim.o.columns }, "in the bottom right corner")
+eq(
+  { cfg.relative, cfg.win, cfg.anchor, cfg.col, cfg.row },
+  { "win", editor, "SE", vim.api.nvim_win_get_width(editor), vim.api.nvim_win_get_height(editor) },
+  "in the file window's bottom right corner"
+)
 eq(vim.api.nvim_get_current_win(), editor, "the editor keeps the focus")
 local still = buddy.lines()
 eq(#still, moves.height, "the canvas height")
@@ -71,19 +74,24 @@ end, 5) then
   error("the buddy never settled")
 end
 
--- he follows the editor's size
-vim.o.columns = 100
-vim.api.nvim_exec_autocmds("VimResized", {})
-eq(vim.api.nvim_win_get_config(floats()[1]).col, 100, "back in the corner after a resize")
-
--- too small an editor has no corner to spare; he comes back when it grows
-vim.o.columns = 30
-vim.api.nvim_exec_autocmds("VimResized", {})
-eq(#floats(), 0, "steps aside in a small editor")
+-- a pane on the right (Claude Code's, a terminal) is never his corner: he
+-- stays in the file window, clear of its prompt
+vim.cmd("botright vsplit")
+local pane = vim.api.nvim_get_current_win()
+vim.api.nvim_win_set_buf(pane, vim.api.nvim_create_buf(false, true))
+vim.api.nvim_win_set_width(pane, 20)
+vim.api.nvim_set_current_win(editor)
+vim.api.nvim_exec_autocmds("WinResized", {})
+cfg = vim.api.nvim_win_get_config(floats()[1])
+eq({ cfg.win, cfg.col }, { editor, vim.api.nvim_win_get_width(editor) }, "in the file window beside a pane")
+-- with only the pane left there's no corner for him
+vim.api.nvim_win_set_width(pane, 60)
+vim.api.nvim_exec_autocmds("WinResized", {})
+eq(#floats(), 0, "steps aside when the file window is too narrow")
 eq(buddy.on(), true, "still on")
-vim.o.columns = 120
-vim.api.nvim_exec_autocmds("VimResized", {})
-eq(#floats(), 1, "back when there's room")
+vim.api.nvim_win_close(pane, true)
+vim.api.nvim_exec_autocmds("WinResized", {})
+eq(#floats(), 1, "back when the pane closes")
 
 -- the dashboard has its own buddy, so the corner one steps aside
 local dash = vim.api.nvim_create_buf(false, true)

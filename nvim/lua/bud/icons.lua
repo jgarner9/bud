@@ -38,6 +38,8 @@ return {
   stopped = "", -- nf-fa-arrow_right
   modified = "", -- nf-fa-circle
   locked = "", -- nf-fa-lock
+  info = "", -- nf-fa-info_circle
+  cursor = "", -- nf-fa-map_marker
   lsp = "", -- nf-fa-cogs
   command = "", -- nf-fa-terminal
 }

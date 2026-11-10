@@ -38,7 +38,7 @@ eq(package.loaded["vim.lsp"], nil, "vim.lsp left unloaded")
 local _ = vim.lsp.get_clients
 eq(sl.lsp(), "", "no lsp once it's loaded")
 
--- diagnostics name their numbers; narrow windows shorten them
+-- diagnostics name their numbers; narrow windows keep just icon and number
 vim.cmd.enew()
 eq(sl.diagnostics(), "", "no diagnostics")
 local ns = vim.api.nvim_create_namespace("statusline_test")
@@ -50,12 +50,29 @@ vim.diagnostic.set(ns, 0, {
   { lnum = 2, col = 0, message = "x", severity = sev.WARN },
   { lnum = 2, col = 0, message = "x", severity = sev.INFO },
 })
-eq(sl.diagnostics(), "2 errors 1 warning 1 info", "named counts")
-eq(sl.diagnostics(true), "E2 W1 I1", "short counts")
+eq(
+  sl.diagnostics(),
+  icons.error .. " 2 errors " .. icons.warn .. " 1 warning " .. icons.info .. " 1 info",
+  "named counts"
+)
+eq(sl.diagnostics(true), icons.error .. " 2 " .. icons.warn .. " 1 " .. icons.info .. " 1", "short counts")
 
 -- the position is a statusline format string; evaluated it reads in words
 vim.api.nvim_win_set_cursor(0, { 2, 0 })
-eq(vim.api.nvim_eval_statusline(sl.position(), { winid = 0 }).str, "Ln 2, Col 1  66% of 3", "position")
-eq(vim.api.nvim_eval_statusline(sl.position(true), { winid = 0 }).str, "2:1", "short position")
+eq(vim.api.nvim_eval_statusline(sl.position(), { winid = 0 }).str, icons.cursor .. " Ln 2, Col 1  66% of 3", "position")
+eq(vim.api.nvim_eval_statusline(sl.position(true), { winid = 0 }).str, icons.cursor .. " 2:1", "short position")
+
+-- the file icon: the plain glyph until devicons has loaded, none for special buffers
+vim.cmd.edit(vim.fn.fnameescape("lua/b.lua"))
+eq(sl.file_icon(), icons.file, "plain file icon")
+package.loaded["nvim-web-devicons"] = {
+  get_icon = function(name)
+    return name == "b.lua" and "L" or nil
+  end,
+}
+eq(sl.file_icon(), "L", "devicons icon once loaded")
+package.loaded["nvim-web-devicons"] = nil
+vim.bo.buftype = "nofile"
+eq(sl.file_icon(), "", "no icon on a special buffer")
 
 print("statusline_test: ok")

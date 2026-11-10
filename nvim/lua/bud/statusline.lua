@@ -53,6 +53,25 @@ function M.file(short)
   return name
 end
 
+-- file_icon is the icon for the current buffer's file type: the language's own
+-- when nvim-web-devicons has already loaded (the tree and pickers load it; the
+-- first screen must not, D35), else the plain file glyph. Special buffers get
+-- none, since file() already says what they are
+function M.file_icon()
+  local icons = require("bud.icons")
+  if vim.bo.buftype ~= "" then
+    return ""
+  end
+  local devicons = package.loaded["nvim-web-devicons"]
+  if devicons then
+    local icon = devicons.get_icon(vim.fn.expand("%:t"), vim.fn.expand("%:e"), { default = false })
+    if icon then
+      return icon
+    end
+  end
+  return icons.file
+end
+
 -- lsp names the language servers attached to the current buffer. Until
 -- something has loaded vim.lsp no server can be attached, and touching it here
 -- would load it (~4 ms) on the first screen
@@ -70,27 +89,29 @@ function M.lsp()
   return require("bud.icons").lsp .. " LSP: " .. table.concat(names, " ")
 end
 
--- diagnostics counts the current buffer's problems with a name on each number:
--- "2 errors 1 warning" when there's room, "E2 W1" when narrow. Hints and infos
--- only show when there are some, and a clean buffer shows nothing
+-- diagnostics counts the current buffer's problems, an icon and a name on
+-- each number: "<icon> 2 errors <icon> 1 warning" when there's room, the icon
+-- and number alone when narrow. Hints and infos only show when there are some,
+-- and a clean buffer shows nothing
 function M.diagnostics(short)
+  local icons = require("bud.icons")
   local counts = vim.diagnostic.count(0)
   local kinds = {
-    { vim.diagnostic.severity.ERROR, "E", "error" },
-    { vim.diagnostic.severity.WARN, "W", "warning" },
-    { vim.diagnostic.severity.INFO, "I", "info" },
-    { vim.diagnostic.severity.HINT, "H", "hint" },
+    { vim.diagnostic.severity.ERROR, icons.error, "error" },
+    { vim.diagnostic.severity.WARN, icons.warn, "warning" },
+    { vim.diagnostic.severity.INFO, icons.info, "info" },
+    { vim.diagnostic.severity.HINT, icons.tip, "hint" },
   }
   local parts = {}
   for _, kind in ipairs(kinds) do
     local n = counts[kind[1]] or 0
     if n > 0 then
       if short then
-        table.insert(parts, kind[2] .. n)
+        table.insert(parts, ("%s %d"):format(kind[2], n))
       else
         -- "info" is its own plural
         local plural = (n == 1 or kind[3] == "info") and "" or "s"
-        table.insert(parts, ("%d %s%s"):format(n, kind[3], plural))
+        table.insert(parts, ("%s %d %s%s"):format(kind[2], n, kind[3], plural))
       end
     end
   end
@@ -98,14 +119,16 @@ function M.diagnostics(short)
 end
 
 -- position says where the cursor is in words, not bare numbers: "Ln 42, Col 7"
--- and "37% of 580" (lines in the file), or just "42:7" when narrow. It returns
+-- and "37% of 580" (lines in the file), or just "42:7" when narrow, after a
+-- map-marker icon. It returns
 -- a statusline format string: %l, %v, %p and %L are items the statusline fills
 -- in, and %% is a literal percent sign
 function M.position(short)
+  local icon = require("bud.icons").cursor
   if short then
-    return "%l:%v"
+    return icon .. " %l:%v"
   end
-  return "Ln %l, Col %v  %p%% of %L"
+  return icon .. " Ln %l, Col %v  %p%% of %L"
 end
 
 function M.active()
@@ -121,7 +144,7 @@ function M.active()
     { hl = mode_hl, strings = { mode } },
     { hl = "MiniStatuslineDevinfo", strings = { git, diff } },
     "%<",
-    { hl = "MiniStatuslineFilename", strings = { M.file(sl.is_truncated(140)) } },
+    { hl = "MiniStatuslineFilename", strings = { M.file_icon() .. " " .. M.file(sl.is_truncated(140)) } },
     "%=",
     { hl = "MiniStatuslineFilename", strings = { diagnostics } },
     { hl = "MiniStatuslineFileinfo", strings = { lsp } },

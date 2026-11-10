@@ -34,55 +34,96 @@ local keep =
   { "id", "title", "repo", "branch", "base", "cloud", "state", "summary", "session", "url", "before", "started" }
 local week = 7 * 24 * 60 * 60
 
+-- recent says whether a saved run is young enough to keep
+local function recent(run)
+  return type(run) == "table" and run.cloud and os.time() - (run.started or 0) < week
+end
+
+-- saved reads the runs on disk; nothing if the file is missing or broken
+local function saved()
+  local f = io.open(M.runs_file())
+  if not f then
+    return {}
+  end
+  local ok, runs = pcall(vim.json.decode, f:read("*a"))
+  f:close()
+  return ok and type(runs) == "table" and runs or {}
+end
+
+local warned_save = false
+
+-- save writes the cloud runs. It starts from what's on disk, so a run another
+-- bud window saved isn't lost; this window's own runs win over the file's
 function M.save()
   local out = {}
+  for id, run in pairs(saved()) do
+    if recent(run) then
+      out[id] = run
+    end
+  end
   for id, run in pairs(M.runs) do
-    if run.cloud then
+    if run.cloud and recent(run) then
       local r = {}
       for _, k in ipairs(keep) do
         r[k] = run[k]
       end
       out[id] = r
+    else
+      out[id] = nil
+    end
+  end
+  local function fail(why)
+    -- once per session: the editor keeps working, but runs won't survive a restart
+    if not warned_save then
+      warned_save = true
+      notify("couldn't save cloud runs: " .. tostring(why), vim.log.levels.WARN)
     end
   end
   local file = M.runs_file()
   vim.fn.mkdir(vim.fs.dirname(file), "p")
   -- a temp file renamed over it, so a crash never leaves half a file
   local tmp = file .. ".tmp"
-  local f = io.open(tmp, "w")
-  if f then
-    f:write(vim.json.encode(out))
-    f:close()
-    vim.uv.fs_rename(tmp, file)
+  local f, err = io.open(tmp, "w")
+  if not f then
+    return fail(err)
+  end
+  local wrote, werr = f:write(vim.json.encode(out))
+  f:close()
+  if not wrote then
+    vim.uv.fs_unlink(tmp)
+    return fail(werr)
+  end
+  local renamed, rerr = vim.uv.fs_rename(tmp, file)
+  if not renamed then
+    vim.uv.fs_unlink(tmp)
+    return fail(rerr)
   end
 end
 
 -- load brings back the saved cloud runs from the last week, and watches the
 -- ones still working. One that never got a session (bud closed while it was
--- starting) can't be followed, so it is marked failed
+-- starting) can't be followed, so it is marked failed. The file is only
+-- rewritten when load changed something
 function M.load()
-  local f = io.open(M.runs_file())
-  if not f then
-    return
-  end
-  local ok, saved = pcall(vim.json.decode, f:read("*a"))
-  f:close()
-  if not ok or type(saved) ~= "table" then
-    return
-  end
-  for id, run in pairs(saved) do
-    if type(run) == "table" and run.cloud and not M.runs[id] and os.time() - (run.started or 0) < week then
+  local changed = false
+  for id, run in pairs(saved()) do
+    if not recent(run) then
+      changed = true
+    elseif not M.runs[id] then
       M.runs[id] = run
       if run.state == "working" then
         if run.session then
           M.watch(run)
         else
           run.state, run.summary = "failed", "bud closed before the cloud session started"
+          changed = true
         end
       end
     end
   end
-  M.save()
+  if changed then
+    M.save()
+  end
 end
 
 -- the swappable edges of the cloud path (tests replace them)
@@ -521,7 +562,8 @@ end
 -- its checks pass; that is when it's ready to review
 function M.watch(run)
   local timer = vim.uv.new_timer()
-  local waited = 0
+  -- a run restored after a restart has already waited since it started
+  local waited = math.max(0, (os.time() - (run.started or os.time())) * 1000)
   local checking = false
   local function stop()
     timer:stop()

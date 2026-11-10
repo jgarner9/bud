@@ -399,6 +399,39 @@ work.on_origin = real_on_origin
 local again = vim.json.decode(table.concat(vim.fn.readfile(tmp .. "/cloud-runs.json"), "\n"))
 eq(again["JGA-30"].state, "done", "and saved again")
 
+-- saving keeps a run another bud window saved, and this window's own win
+local function disk()
+  return vim.json.decode(table.concat(vim.fn.readfile(tmp .. "/cloud-runs.json"), "\n"))
+end
+local theirs = disk()
+theirs["JGA-40"] = { id = "JGA-40", cloud = true, state = "done", started = os.time() }
+vim.fn.writefile({ vim.json.encode(theirs) }, tmp .. "/cloud-runs.json")
+work.save()
+eq(disk()["JGA-40"].state, "done", "another window's run survives a save")
+eq(disk()["JGA-30"].state, "done", "and this window's runs are still there")
+
+-- a run restored after a restart counts the time it already waited, so it
+-- gives up on schedule instead of starting over
+work.runs["JGA-50"] = {
+  id = "JGA-50",
+  cloud = true,
+  state = "working",
+  session = "session_y",
+  repo = crepo,
+  branch = "jga-50-x",
+  base = "main",
+  started = os.time() - 7 * 3600,
+  before = {},
+}
+work.on_origin = function(_, _, cb)
+  cb({})
+end
+work.watch(work.runs["JGA-50"])
+wait(function()
+  return work.runs["JGA-50"].state == "failed"
+end, "a restored run gives up")
+work.on_origin = real_on_origin
+
 -- a filed issue is worked in the repo it was filed for
 issue.filed = { { id = "JGA-9", title = "Other", repo = repo } }
 local started

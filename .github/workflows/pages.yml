@@ -27,11 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: sh scripts/site.sh "$RUNNER_TEMP/site"
+      - run: sh scripts/site.sh _site_src
       - uses: actions/configure-pages@v5
+      # the action runs in a container that sees only the workspace and reads
+      # source relative to it, so the assembled site can't live in the temp dir
+      # and the path can't be absolute
       - uses: actions/jekyll-build-pages@v1
         with:
-          source: ${{ runner.temp }}/site
+          source: ./_site_src
           destination: ./_site
       - uses: actions/upload-pages-artifact@v3
   deploy:

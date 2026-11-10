@@ -63,13 +63,18 @@ smoke:
 install-test:
   sh scripts/install-test.sh </dev/null
 
+# assemble the docs site's Jekyll source (site/ plus docs/*.md) into a temp dir,
+# failing when a docs page is missing from the sidebar
+site-test:
+  sh scripts/site.sh "${TMPDIR:-/tmp}/bud-site"
+
 # install every language's tooling into a throwaway dir and check it on sample
 # projects, e.g. just lang-check go (needs network, tree-sitter, node, python3)
 lang-check *langs:
   sh scripts/lang-check.sh "$@"
 
 # everything CI checks (lint + tests + smoke)
-check: lint test lua-test install-test rotate-test release-plan-test smoke
+check: lint test lua-test install-test rotate-test release-plan-test site-test smoke
 
 # fail with an install hint when a tool isn't on PATH
 [private]

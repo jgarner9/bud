@@ -1,0 +1,45 @@
+name: Pages
+
+# Builds the docs site (bud.jgarner.dev) from site/ and docs/*.md and deploys
+# it to GitHub Pages. The repo's Pages source must be "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - site/**
+      - scripts/site.sh
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: sh scripts/site.sh "$RUNNER_TEMP/site"
+      - uses: actions/configure-pages@v5
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ${{ runner.temp }}/site
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v3
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

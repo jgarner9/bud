@@ -1,0 +1,78 @@
+/* bud.jgarner.dev: Catppuccin Macchiato, as in the editor; Latte in a light browser */
+:root {
+  --base: #24273a; --mantle: #1e2030; --crust: #181926;
+  --surface: #363a4f; --line: #494d64;
+  --text: #cad3f5; --dim: #a5adcb;
+  --green: #a6da95; --mauve: #c6a0f6; --blue: #8aadf4; --yellow: #eed49f;
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --base: #eff1f5; --mantle: #e6e9ef; --crust: #dce0e8;
+    --surface: #ccd0da; --line: #bcc0cc;
+    --text: #4c4f69; --dim: #6c6f85;
+    --green: #40a02b; --mauve: #8839ef; --blue: #1e66f5; --yellow: #df8e1d;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--base); color: var(--text); font: 16px/1.65 var(--sans); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, kbd { font-family: var(--mono); font-size: 0.9em; }
+code { background: var(--mantle); padding: 0.1em 0.35em; border-radius: 4px; }
+pre { background: var(--mantle); padding: 1em; border-radius: 8px; overflow-x: auto; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+kbd { background: var(--surface); border-bottom: 2px solid var(--line); padding: 0.05em 0.4em; border-radius: 4px; }
+.face { font-family: var(--mono); color: var(--green); }
+
+.bar { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem 1.5rem; border-bottom: 1px solid var(--surface); }
+.bar .brand { font: 600 1.1rem var(--mono); color: var(--text); }
+.bar nav a { margin-left: 1.25rem; color: var(--dim); }
+
+/* the landing page */
+.home main { max-width: 62rem; margin: 0 auto; padding: 0 1.5rem; }
+.hero { display: flex; gap: 3rem; align-items: center; padding: 4.5rem 0 3.5rem; }
+.buddy { background: none; color: var(--green); font-size: 1.9rem; line-height: 1.15; padding: 0; margin: 0; min-width: 9ch; overflow: visible; }
+.hero h1 { font: 700 3rem var(--mono); margin: 0 0 0.5rem; color: var(--mauve); }
+.lede { font-size: 1.2rem; margin: 0 0 1.5rem; max-width: 36rem; }
+.install { display: flex; align-items: stretch; background: var(--crust); border: 1px solid var(--surface); border-radius: 8px; overflow: hidden; max-width: 100%; }
+.install code { background: none; padding: 0.8rem 1rem; overflow-x: auto; white-space: nowrap; flex: 1; }
+.install button { background: var(--surface); color: var(--text); border: 0; padding: 0 1rem; font: inherit; cursor: pointer; }
+.install button:hover { background: var(--line); }
+.fine { color: var(--dim); font-size: 0.9rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; padding-bottom: 3rem; }
+.grid article { background: var(--mantle); border: 1px solid var(--surface); border-radius: 10px; padding: 1.1rem 1.25rem; }
+.grid h2 { font-size: 1.05rem; margin: 0 0 0.4rem; color: var(--yellow); }
+.grid p { margin: 0; color: var(--dim); }
+.start h2 { font-size: 1.3rem; }
+.start ul { list-style: none; padding: 0; margin: 0 0 4rem; }
+.start li { padding: 0.6rem 0; border-top: 1px solid var(--surface); display: flex; gap: 1rem; flex-wrap: wrap; }
+.start li a { min-width: 10rem; font-weight: 600; }
+.start li span { color: var(--dim); }
+footer { border-top: 1px solid var(--surface); text-align: center; padding: 1.5rem; color: var(--dim); }
+footer p { margin: 0.2rem 0; }
+
+/* the docs */
+.shell { display: flex; max-width: 76rem; margin: 0 auto; }
+.side { width: 15rem; flex: none; padding: 1.5rem; position: sticky; top: 0; align-self: flex-start; max-height: 100vh; overflow-y: auto; }
+.side .group { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin: 1.2rem 0 0.3rem; }
+.side ul { list-style: none; margin: 0; padding: 0; }
+.side a { display: block; padding: 0.2rem 0.6rem; border-radius: 6px; color: var(--text); }
+.side a[aria-current] { background: var(--surface); color: var(--green); }
+.prose { flex: 1; min-width: 0; padding: 1.5rem 2rem 4rem; max-width: 54rem; }
+.prose h1 { font-size: 2rem; margin-top: 0.5rem; }
+.prose h2 { margin-top: 2.2rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--surface); }
+.prose table { border-collapse: collapse; display: block; overflow-x: auto; margin: 1rem 0; }
+.prose th, .prose td { border: 1px solid var(--surface); padding: 0.45rem 0.7rem; text-align: left; vertical-align: top; }
+.prose th { background: var(--mantle); }
+.prose .edit { margin-top: 3rem; font-size: 0.9rem; }
+
+@media (max-width: 48rem) {
+  .hero { flex-direction: column; align-items: flex-start; gap: 1.5rem; padding-top: 2.5rem; }
+  .hero h1 { font-size: 2.2rem; }
+  .shell { flex-direction: column; }
+  .side { position: static; width: auto; max-height: none; border-bottom: 1px solid var(--surface); padding: 0.5rem 1.5rem 1rem; }
+  .prose { padding: 1rem 1.25rem 3rem; }
+}

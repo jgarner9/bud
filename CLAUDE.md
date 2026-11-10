@@ -10,7 +10,7 @@ AI scope is **Claude Code only** (D26): one Claude Code session per project, sta
 
 ## Docs
 
-`docs/` holds the user docs: `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), references for every command (`commands.md`) and key (`keys.md`), an overview of Claude Code in bud (`claude-code.md`), and how-tos for languages, tools, layouts, filing issues, building a Claude TUI and troubleshooting. The README keeps short descriptions and links to these. Keep them in step when behaviour changes. `docs/internals/` is the other kind: how each part of the code works, for working on bud (see "Where the detail is"). Move detail there when a paragraph here grows, and keep this file short, since it loads in every session.
+`docs/` holds the user docs: `setup.md` (the whole setup in order, including Claude Code, clod and the plugins), `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), references for every command (`commands.md`) and key (`keys.md`), an overview of Claude Code in bud (`claude-code.md`), and how-tos for languages, tools, layouts, filing issues, building a Claude TUI and troubleshooting. The README keeps short descriptions and links to these. Keep them in step when behaviour changes. The same files are the docs site, https://bud.jgarner.dev (D110): `site/` holds only the landing page, layout and styles, `scripts/site.sh` copies `docs/*.md` in beside them, and `.github/workflows/pages.yml` builds it with GitHub Pages' Jekyll on a push to main. A new page in `docs/` needs a line in `site/_data/nav.yml`, and a link out of `docs/` (to the README, say) has to be a full URL, since only `docs/*.md` is on the site. `docs/internals/` is the other kind: how each part of the code works, for working on bud (see "Where the detail is"). Move detail there when a paragraph here grows, and keep this file short, since it loads in every session.
 
 ## Commands
 
@@ -27,6 +27,7 @@ just lua-test        # headless Lua tests in tests/lua (plain asserts, no framew
 just install-test    # install.sh's checks against fake releases signed with a throwaway key
 just rotate-test     # rotate-release-key.sh against a throwaway repo, with fake op and gh
 just release-plan-test # release-plan.sh's decisions against throwaway repos with a fake gh
+just site-test       # assemble the docs site from site/ and docs/*.md; fails when a page isn't in the sidebar
 just smoke           # sync the config into temp XDG dirs, restore plugins, start nvim headless (needs network)
 just lang-check [go] # install every language's tooling in temp XDG dirs, check each on a sample project (slow, needs network)
 just snapshot        # local GoReleaser build into dist/, needs goreleaser installed

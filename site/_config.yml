@@ -1,0 +1,21 @@
+# The docs site (bud.jgarner.dev). scripts/site.sh copies this directory and
+# the repo's docs/*.md into one tree, and GitHub Pages' Jekyll builds it: the
+# pages are the same Markdown files GitHub shows, never a second copy.
+title: bud
+description: One small Go binary. One isolated Neovim. Eight languages ready to go.
+url: https://bud.jgarner.dev
+repo: https://github.com/jgarner9/bud
+markdown: kramdown
+kramdown:
+  input: GFM
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-titles-from-headings
+titles_from_headings:
+  strip_title: true
+defaults:
+  - scope:
+      path: docs
+    values:
+      layout: doc

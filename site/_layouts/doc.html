@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+{% include head.html %}
+</head>
+<body class="doc">
+<header class="bar">
+  <a class="brand" href="{{ '/' | relative_url }}"><span class="face">[o.o]</span> bud</a>
+  <nav>
+    <a href="{{ '/docs/setup.html' | relative_url }}">Docs</a>
+    <a href="{{ site.repo }}">GitHub</a>
+  </nav>
+</header>
+<div class="shell">
+  <aside class="side">
+    {% for group in site.data.nav %}
+    <p class="group">{{ group.title }}</p>
+    <ul>
+      {% for p in group.pages %}
+      {% capture href %}/docs/{{ p.file }}.html{% endcapture %}
+      <li><a href="{{ href | relative_url }}"{% if page.url == href %} aria-current="page"{% endif %}>{{ p.title }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endfor %}
+  </aside>
+  <main class="prose">
+    <h1>{{ page.title }}</h1>
+    {{ content }}
+    <p class="edit"><a href="{{ site.repo }}/blob/main/{{ page.path }}">This page on GitHub</a></p>
+  </main>
+</div>
+</body>
+</html>

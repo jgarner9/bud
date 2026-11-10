@@ -1,0 +1,19 @@
+# The docs sidebar, in reading order. scripts/site.sh fails when a page in
+# docs/ is missing from here, so a new page can't be left off the site.
+- title: Start
+  pages:
+    - { file: setup, title: Setting up }
+    - { file: claude-code, title: Claude Code in bud }
+    - { file: troubleshooting, title: Troubleshooting }
+- title: Reference
+  pages:
+    - { file: commands, title: Commands }
+    - { file: keys, title: Keys }
+    - { file: config, title: Config }
+- title: How-to
+  pages:
+    - { file: languages, title: Adding a language }
+    - { file: layouts, title: Layouts }
+    - { file: tools, title: Writing a tool }
+    - { file: issues, title: Filing issues }
+    - { file: claude-tui, title: Building a Claude TUI }

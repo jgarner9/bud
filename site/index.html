@@ -1,0 +1,115 @@
+---
+---
+<!doctype html>
+<html lang="en">
+<head>
+{% include head.html %}
+</head>
+<body class="home">
+<header class="bar">
+  <a class="brand" href="{{ '/' | relative_url }}"><span class="face">[o.o]</span> bud</a>
+  <nav>
+    <a href="{{ '/docs/setup.html' | relative_url }}">Docs</a>
+    <a href="{{ site.repo }}">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <pre class="buddy" id="buddy" aria-hidden="true">
+  ___
+ [o.o]
+ /[_]\
+  ] [  </pre>
+    <div>
+      <h1>hey bud.</h1>
+      <p class="lede">A fast, reproducible IDE: Neovim plus one small Go binary that installs, launches, updates and syncs it. Claude Code is built in.</p>
+      <div class="install" id="install">
+        <code id="cmd">curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh</code>
+        <button type="button" id="copy">copy</button>
+      </div>
+      <p class="fine">macOS and Linux, amd64 and arm64. The script checks the release's signature and checksum, then offers to run <code>bud install</code>. <a href="{{ '/docs/setup.html' | relative_url }}">Every step, explained</a>.</p>
+    </div>
+  </section>
+
+  <section class="grid">
+    <article>
+      <h2>The whole config ships in the binary</h2>
+      <p>Every machine gets exactly the same editor: plugins pinned in a committed lockfile, synced from the binary, offline. It runs as its own Neovim and never touches <code>~/.config/nvim</code>. <code>bud uninstall</code> removes it without a trace.</p>
+    </article>
+    <article>
+      <h2>50 ms to the first screen</h2>
+      <p>Neovim 0.12, lazy-loaded, with fzf-lua, blink.cmp, gitsigns, diffview, nvim-dap and rendered markdown. <code>bud doctor</code> times every start and warns past the budget.</p>
+    </article>
+    <article>
+      <h2>Eight languages, one file each</h2>
+      <p>Go, Python, TypeScript, C, Bash, HTML, CSS and Lua come with parsers, a language server, a linter and format on save. <a href="{{ '/docs/languages.html' | relative_url }}">Add your own</a> with one Lua file.</p>
+    </article>
+    <article>
+      <h2>Claude Code, built in</h2>
+      <p>One session per project, shared by its pane, inline actions and commit messages. Every edit Claude proposes opens as a diff to accept or reject. <a href="{{ '/docs/claude-code.html' | relative_url }}">How it fits together</a>.</p>
+    </article>
+    <article>
+      <h2>From a note to a fix</h2>
+      <p>Press a key, say what's wrong, and Claude drafts Linear issues you approve before anything is filed. Then hand one back and get a branch to review. <a href="{{ '/docs/issues.html' | relative_url }}">The whole flow</a>.</p>
+    </article>
+    <article>
+      <h2>Updates that check themselves</h2>
+      <p>Signed releases install in the background. After each one bud runs its own health checks and rolls back if something that worked now doesn't.</p>
+    </article>
+  </section>
+
+  <section class="start">
+    <h2>Start here</h2>
+    <ul>
+      <li><a href="{{ '/docs/setup.html' | relative_url }}">Setting up</a><span>From nothing to a working bud, with Claude Code, clod and the plugins.</span></li>
+      <li><a href="{{ '/docs/keys.html' | relative_url }}">Keys</a><span>Leader is Space. Everything else is here.</span></li>
+      <li><a href="{{ '/docs/commands.html' | relative_url }}">Commands</a><span>Every <code>bud</code> command and flag.</span></li>
+      <li><a href="{{ '/docs/config.html' | relative_url }}">Config</a><span>Every setting and its default.</span></li>
+      <li><a href="{{ '/docs/troubleshooting.html' | relative_url }}">Troubleshooting</a><span>Start with <code>bud doctor</code>.</span></li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <p><span class="face">[o.o]</span> beep boop, built one commit at a time · <a href="{{ site.repo }}">source</a> · <a href="{{ site.repo }}/releases">releases</a> · MIT</p>
+  <p class="fine">A personal tool that happens to be public. <a href="{{ '/docs/setup.html#making-it-yours' | relative_url }}">Making it yours</a>.</p>
+</footer>
+
+<script>
+// the buddy waves, blinks and hops; still when motion is unwelcome
+(function () {
+  var el = document.getElementById("buddy");
+  var bot = function (top, face, mid, legs) { return [top, face, mid, legs].join("\n"); };
+  var stand = bot("  ___   ", " [o.o]  ", " /[_]\\  ", "  ] [   ");
+  var happy = bot("  ___   ", " [^.^]  ", " /[_]\\  ", "  ] [   ");
+  var blink = bot("  ___   ", " [-.-]  ", " /[_]\\  ", "  ] [   ");
+  var waveA = bot("  ___  o", " [^.^]/ ", " /[_]   ", "  ] [   ");
+  var waveB = bot("  ___ o ", " [^.^]| ", " /[_]   ", "  ] [   ");
+  var up = bot(" \\___/  ", " [^o^]  ", "  [_]   ", "  ] [   ");
+  var moves = [
+    [[stand, 12], [blink, 2], [stand, 10]],
+    [[happy, 4], [waveA, 3], [waveB, 3], [waveA, 3], [waveB, 3], [waveA, 3], [happy, 6]],
+    [[stand, 8], [blink, 2], [stand, 2], [blink, 2], [stand, 8]],
+    [[stand, 4], [up, 3], [happy, 3], [up, 3], [happy, 8]]
+  ];
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { return; }
+  var m = 0, f = 0;
+  (function tick() {
+    var frame = moves[m][f];
+    el.textContent = frame[0];
+    f += 1;
+    if (f === moves[m].length) { f = 0; m = (m + 1) % moves.length; }
+    setTimeout(tick, frame[1] * 80);
+  })();
+})();
+document.getElementById("copy").addEventListener("click", function () {
+  var btn = this;
+  navigator.clipboard.writeText(document.getElementById("cmd").textContent).then(function () {
+    btn.textContent = "copied";
+    setTimeout(function () { btn.textContent = "copy"; }, 1500);
+  });
+});
+</script>
+</body>
+</html>

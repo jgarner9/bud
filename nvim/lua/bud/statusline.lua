@@ -2,6 +2,7 @@
 -- core/options.lua), built from mini.statusline's sections plus bud's own.
 -- Left: mode, git and diff, the file relative to the project. Right:
 -- diagnostics, the buffer's language servers, bud's sections, the location.
+-- Every number carries its name ("2 errors", "Ln 42, Col 7", "37% of 580").
 -- Other modules add a section with add(); it shows up in its own block just
 -- before the location.
 
@@ -66,7 +67,45 @@ function M.lsp()
   if #names == 0 then
     return ""
   end
-  return require("bud.icons").lsp .. " " .. table.concat(names, " ")
+  return require("bud.icons").lsp .. " LSP: " .. table.concat(names, " ")
+end
+
+-- diagnostics counts the current buffer's problems with a name on each number:
+-- "2 errors 1 warning" when there's room, "E2 W1" when narrow. Hints and infos
+-- only show when there are some, and a clean buffer shows nothing
+function M.diagnostics(short)
+  local counts = vim.diagnostic.count(0)
+  local kinds = {
+    { vim.diagnostic.severity.ERROR, "E", "error" },
+    { vim.diagnostic.severity.WARN, "W", "warning" },
+    { vim.diagnostic.severity.INFO, "I", "info" },
+    { vim.diagnostic.severity.HINT, "H", "hint" },
+  }
+  local parts = {}
+  for _, kind in ipairs(kinds) do
+    local n = counts[kind[1]] or 0
+    if n > 0 then
+      if short then
+        table.insert(parts, kind[2] .. n)
+      else
+        -- "info" is its own plural
+        local plural = (n == 1 or kind[3] == "info") and "" or "s"
+        table.insert(parts, ("%d %s%s"):format(n, kind[3], plural))
+      end
+    end
+  end
+  return table.concat(parts, " ")
+end
+
+-- position says where the cursor is in words, not bare numbers: "Ln 42, Col 7"
+-- and "37% of 580" (lines in the file), or just "42:7" when narrow. It returns
+-- a statusline format string: %l, %v, %p and %L are items the statusline fills
+-- in, and %% is a literal percent sign
+function M.position(short)
+  if short then
+    return "%l:%v"
+  end
+  return "Ln %l, Col %v  %p%% of %L"
 end
 
 function M.active()
@@ -74,9 +113,9 @@ function M.active()
   local mode, mode_hl = sl.section_mode({ trunc_width = 120 })
   local git = sl.section_git({ trunc_width = 40 })
   local diff = sl.section_diff({ trunc_width = 75 })
-  local diagnostics = sl.section_diagnostics({ trunc_width = 75 })
+  local diagnostics = sl.is_truncated(75) and "" or M.diagnostics(sl.is_truncated(110))
   local lsp = sl.is_truncated(100) and "" or M.lsp()
-  local location = sl.section_location({ trunc_width = 75 })
+  local location = M.position(sl.is_truncated(75))
 
   return sl.combine_groups({
     { hl = mode_hl, strings = { mode } },

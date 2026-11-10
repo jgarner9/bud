@@ -15,6 +15,9 @@ return {
         keymap = { preset = "default" },
         sources = { default = { "lsp", "path", "snippets", "buffer" } },
         fuzzy = { implementation = "prefer_rust_with_warning" },
+        -- bud's own glyphs for the kinds (Font Awesome only, D37): blink's
+        -- defaults are Material Design ones that older Nerd Fonts don't have
+        appearance = { kind_icons = require("bud.kinds") },
       })
     end,
     -- fetch the prebuilt matcher for the locked release tag while bud install or

@@ -22,7 +22,13 @@ return {
         vim.g.loaded_dropbar = true -- keeps its own FileType setup from running
         return
       end
+      -- the same glyphs as the completion menu; dropbar wants a space after each
+      local symbols = {}
+      for kind, glyph in pairs(require("bud.kinds")) do
+        symbols[kind] = glyph .. " "
+      end
       require("dropbar").setup({
+        icons = { kinds = { symbols = symbols } },
         bar = {
           -- files only: not the tree, terminals, help, the dashboard or chat
           enable = function(buf, win)

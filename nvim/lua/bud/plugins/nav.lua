@@ -10,7 +10,17 @@ return {
     config = function()
       -- loading fzf-lua starts a server socket, ~10 ms, so it waits for the first picker key
       local fzf = pack.on_first_use("fzf-lua", function(m)
-        m.setup({})
+        local icons = require("bud.icons")
+        -- a glyph in each picker's prompt says what it is; the file lists show
+        -- the git status of each file too (file icons are on by default)
+        m.setup({
+          files = { prompt = icons.file .. "  ", git_icons = true },
+          buffers = { prompt = icons.chat .. "  " },
+          oldfiles = { prompt = icons.recent .. "  " },
+          grep = { prompt = icons.command .. "  " },
+          diagnostics = { prompt = icons.warn .. "  " },
+          lsp = { symbols = { prompt = require("bud.kinds").Function .. "  " } },
+        })
       end)
       local function picker(name)
         return function()

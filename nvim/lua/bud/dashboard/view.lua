@@ -168,7 +168,7 @@ local function silly(data, roomy)
   end
 
   local sections = {
-    { title = { text = "Menu" }, lines = menu(data.menu, roomy) },
+    { title = { icon = icons.command, text = "Menu" }, lines = menu(data.menu, roomy) },
     { title = { icon = icons.projects, text = "Projects" }, lines = projects(data.projects) },
   }
   local status = {}
@@ -179,7 +179,7 @@ local function silly(data, roomy)
     table.insert(status, { seg("  " .. data.health, "BudDashboardDim") })
   end
   if #status > 0 then
-    table.insert(sections, { title = { text = "Status" }, lines = status })
+    table.insert(sections, { title = { icon = icons.doctor, text = "Status" }, lines = status })
   end
 
   -- every box as wide as the widest section, with two cells to spare

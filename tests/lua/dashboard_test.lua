@@ -96,6 +96,9 @@ local icons = require("bud.icons")
 for name, glyph in pairs(icons) do
   eq(vim.fn.strdisplaywidth(glyph), 1, "width of icon " .. name)
 end
+for name, glyph in pairs(require("bud.kinds")) do
+  eq(vim.fn.strdisplaywidth(glyph), 1, "width of kind icon " .. name)
+end
 local lines, hls = view.build(data, 100, 40)
 has(lines, "[-.-]  z", "sleepy face")
 has(lines, '"hjkl and chill"', "tagline")
@@ -120,9 +123,9 @@ for _, h in ipairs(hls) do
 end
 -- each section in its own box, titled in the top border, all one width
 -- (JGA-155); a short window joins them with titled dividers
-has(lines, "╭─ Menu ", "menu box")
+has(lines, "╭─ " .. icons.command .. " Menu ", "menu box")
 has(lines, "╭─ " .. icons.projects .. " Projects ", "projects box")
-has(lines, "╭─ Status ", "status box")
+has(lines, "╭─ " .. icons.doctor .. " Status ", "status box")
 local function box_widths(ls)
   local widths = {}
   for _, l in ipairs(ls) do
@@ -135,7 +138,7 @@ local function box_widths(ls)
 end
 eq(#box_widths(lines), 1, "every box line the same width")
 local joined = view.build(data, 100, 18)
-has(joined, "├─ Status ", "tight boxes share a divider")
+has(joined, "├─ " .. icons.doctor .. " Status ", "tight boxes share a divider")
 eq(#box_widths(joined), 1, "joined boxes the same width")
 
 -- the robot's moves only change the robot, and never its size

@@ -13,6 +13,8 @@
 </header>
 <div class="shell">
   <aside class="side">
+    <details class="menu" id="menu" open>
+    <summary>Docs menu</summary>
     {% for group in site.data.nav %}
     <p class="group">{{ group.title }}</p>
     <ul>
@@ -22,6 +24,7 @@
       {% endfor %}
     </ul>
     {% endfor %}
+    </details>
   </aside>
   <main class="prose">
     <h1>{{ page.title }}</h1>
@@ -29,5 +32,15 @@
     <p class="edit"><a href="{{ site.repo }}/blob/main/{{ page.path }}">This page on GitHub</a></p>
   </main>
 </div>
+<script>
+// the menu is always open beside the page; on a phone it starts closed
+(function () {
+  var menu = document.getElementById("menu");
+  var wide = window.matchMedia("(min-width: 48.01rem)");
+  function sync() { menu.open = wide.matches; }
+  sync();
+  if (wide.addEventListener) wide.addEventListener("change", sync);
+})();
+</script>
 </body>
 </html>

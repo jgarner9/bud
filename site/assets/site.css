@@ -57,6 +57,7 @@ footer p { margin: 0.2rem 0; }
 /* the docs */
 .shell { display: flex; max-width: 76rem; margin: 0 auto; }
 .side { width: 15rem; flex: none; padding: 1.5rem; position: sticky; top: 0; align-self: flex-start; max-height: 100vh; overflow-y: auto; }
+.side summary { display: none; }
 .side .group { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin: 1.2rem 0 0.3rem; }
 .side ul { list-style: none; margin: 0; padding: 0; }
 .side a { display: block; padding: 0.2rem 0.6rem; border-radius: 6px; color: var(--text); }
@@ -69,10 +70,30 @@ footer p { margin: 0.2rem 0; }
 .prose th { background: var(--mantle); }
 .prose .edit { margin-top: 3rem; font-size: 0.9rem; }
 
+img, svg, video { max-width: 100%; height: auto; }
+.prose { overflow-wrap: break-word; }
+
 @media (max-width: 48rem) {
-  .hero { flex-direction: column; align-items: flex-start; gap: 1.5rem; padding-top: 2.5rem; }
+  .bar { padding: 0.7rem 1rem; }
+  .bar nav a { margin-left: 1rem; }
+  .home main { padding: 0 1rem; }
+  .hero { flex-direction: column; align-items: flex-start; gap: 1.25rem; padding: 2rem 0 2rem; }
+  .hero > div { min-width: 0; width: 100%; }
   .hero h1 { font-size: 2.2rem; }
+  .buddy { font-size: 1.5rem; }
+  .lede { font-size: 1.05rem; }
+  .install code { font-size: 0.8rem; }
+  .start li { gap: 0.2rem; }
+  .start li a { min-width: 100%; }
   .shell { flex-direction: column; }
-  .side { position: static; width: auto; max-height: none; border-bottom: 1px solid var(--surface); padding: 0.5rem 1.5rem 1rem; }
-  .prose { padding: 1rem 1.25rem 3rem; }
+  .side { position: static; width: auto; max-height: none; border-bottom: 1px solid var(--surface); padding: 0.5rem 1rem; }
+  .side summary { display: block; cursor: pointer; padding: 0.5rem 0.6rem; font-weight: 600; border-radius: 6px; list-style: none; }
+  .side summary::-webkit-details-marker { display: none; }
+  .side summary::after { content: "\25be"; float: right; color: var(--dim); }
+  .side details[open] summary::after { content: "\25b4"; }
+  .side details[open] summary { margin-bottom: 0.3rem; }
+  .side a { padding: 0.45rem 0.6rem; }
+  .prose { padding: 1rem 1rem 3rem; }
+  .prose h1 { font-size: 1.6rem; }
+  .prose pre { margin-left: -1rem; margin-right: -1rem; border-radius: 0; padding: 0.9rem 1rem; }
 }

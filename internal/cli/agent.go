@@ -97,11 +97,15 @@ func resumeFlags(s config.Settings, root string) []string {
 }
 
 // claudeProjectDir is where Claude Code keeps the conversations run in root:
-// the real path with everything but letters and digits turned into -
+// the real path with everything but letters and digits turned into -. It is ""
+// when there is no home directory to look in
 func claudeProjectDir(root string) string {
 	dir := os.Getenv("CLAUDE_CONFIG_DIR")
 	if dir == "" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
 		dir = filepath.Join(home, ".claude")
 	}
 	if real, err := filepath.EvalSymlinks(root); err == nil {
@@ -115,7 +119,11 @@ var nonAlnum = regexp.MustCompile(`[^A-Za-z0-9]`)
 
 // anyConversation says whether Claude Code has a conversation to continue in root
 func anyConversation(root string) bool {
-	files, _ := filepath.Glob(filepath.Join(claudeProjectDir(root), "*.jsonl"))
+	dir := claudeProjectDir(root)
+	if dir == "" {
+		return false
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
 	return len(files) > 0
 }
 
@@ -138,7 +146,11 @@ func savedConversation(root string) string {
 	if id == "" {
 		return ""
 	}
-	if _, err := os.Stat(filepath.Join(claudeProjectDir(root), id+".jsonl")); err != nil {
+	dir := claudeProjectDir(root)
+	if dir == "" {
+		return ""
+	}
+	if _, err := os.Stat(filepath.Join(dir, id+".jsonl")); err != nil {
 		return ""
 	}
 

@@ -129,4 +129,15 @@ func TestResumeFlags(t *testing.T) {
 	if got := resumeFlags(cont, root); !slices.Equal(got, []string{"--continue"}) {
 		t.Fatalf("own dir: %q", got)
 	}
+
+	// no home directory and no config dir set: nowhere to look, so nothing to
+	// continue (not a lookup relative to the working directory)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("HOME", "")
+	if dir := claudeProjectDir(root); dir != "" {
+		t.Fatalf("no home: %q", dir)
+	}
+	if anyConversation(root) {
+		t.Fatal("no home but a conversation was found")
+	}
 }

@@ -87,11 +87,12 @@ footer p { margin: 0.2rem 0; }
   .start li a { min-width: 100%; }
   .shell { flex-direction: column; }
   .side { position: static; align-self: stretch; width: auto; max-height: none; border-bottom: 1px solid var(--surface); padding: 0; }
-  .side .toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; color: var(--text); font: 600 1rem var(--sans); padding: 0.8rem 1rem; cursor: pointer; }
+  .js .side .toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; color: var(--text); font: 600 1rem var(--sans); padding: 0.8rem 1rem; cursor: pointer; }
   .side .toggle::after { content: "\25be"; color: var(--dim); }
   .side .toggle[aria-expanded="true"]::after { content: "\25b4"; }
-  .side nav { display: none; padding: 0 0.4rem 0.8rem; }
-  .side .toggle[aria-expanded="true"] + nav { display: block; }
+  .side nav { padding: 0 0.4rem 0.8rem; }
+  .js .side nav { display: none; }
+  .js .side .toggle[aria-expanded="true"] + nav { display: block; }
   .side .group { margin-top: 0.6rem; padding: 0 0.6rem; }
   .side a { padding: 0.45rem 0.6rem; }
   .prose { padding: 1rem 1rem 3rem; }

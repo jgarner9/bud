@@ -209,5 +209,5 @@ Releases come from `VERSION`: run Claude Code's `/bud:release` (from [bud-plugin
 [MIT](LICENSE). The plugins bud installs keep their own licenses.
 
 <div align="center">
-<sub>[o.o] beep boop, built one commit at a time</sub>
+<sub>[o.o] beep boop</sub>
 </div>

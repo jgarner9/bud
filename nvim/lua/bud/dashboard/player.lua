@@ -7,6 +7,10 @@ local moves = require("bud.dashboard.moves")
 
 local M = {}
 
+-- LuaJIT's math.random starts from the same seed every time; seeded once
+-- here for the shuffle and for the dashboard's tagline
+math.randomseed(vim.uv.hrtime())
+
 -- one tick is how long a frame's hold counts in, pause is the breath between
 -- moves; swapped in tests
 M.tick_ms = 80
@@ -21,7 +25,6 @@ M.order, M.at = nil, 0
 --- next_move returns the name of the next move in the cycle.
 function M.next_move()
   if not M.order then
-    math.randomseed(vim.uv.hrtime())
     M.order = vim.deepcopy(moves.names)
     for i = #M.order, 2, -1 do
       local j = math.random(i)

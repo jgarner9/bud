@@ -476,7 +476,6 @@ function M.open(opts)
   -- config.json's dashboard section, read once
   local settings = config.get("dashboard", {})
   local taglines = require("bud.dashboard.taglines")
-  math.randomseed(vim.uv.hrtime())
   current = {
     buf = buf,
     git = {},

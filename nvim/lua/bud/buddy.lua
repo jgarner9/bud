@@ -14,7 +14,7 @@ local groups = { bot = "BudBuddy", fx = "BudBuddySpark" }
 -- the moves and their player, loaded by open
 local moves, player
 
--- state while he's on: { buf, win, stop }; nil when he's off
+-- state while he's on: { buf, win, frame, stop, resize }; nil when he's off
 local current
 
 local function sleepy()
@@ -55,16 +55,30 @@ local function room()
   return vim.o.columns >= moves.width * 3 and vim.o.lines >= moves.height * 3
 end
 
--- window opens the float in the current tab page, or moves it back to its
--- corner; false when he's stepping aside
-local function window()
+local function buffer()
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].bufhidden = "hide"
+  vim.bo[buf].filetype = "bud-buddy"
+  return buf
+end
+
+-- window makes sure the float is up in the current tab page, opening it again
+-- after something closed it (:only) or wiped its buffer; moved puts it back
+-- in its corner after a resize. False when he's stepping aside
+local function window(moved)
   if dashboard_showing() or not room() then
     hide()
     return false
   end
+  if not vim.api.nvim_buf_is_valid(current.buf) then
+    hide()
+    current.buf = buffer()
+  end
   if current.win and vim.api.nvim_win_is_valid(current.win) then
     if vim.api.nvim_win_get_tabpage(current.win) == vim.api.nvim_get_current_tabpage() then
-      vim.api.nvim_win_set_config(current.win, place())
+      if moved then
+        vim.api.nvim_win_set_config(current.win, place())
+      end
       return true
     end
     hide()
@@ -79,8 +93,9 @@ local function window()
 end
 
 -- show draws a frame (nil: standing still) into his buffer
-local function show(frame)
-  if not window() then
+local function show(frame, moved)
+  current.frame = frame
+  if not window(moved) then
     return
   end
   local asleep = sleepy()
@@ -124,15 +139,21 @@ function M.open()
   player = require("bud.dashboard.player")
   vim.api.nvim_set_hl(0, "BudBuddy", { link = "Function", default = true })
   vim.api.nvim_set_hl(0, "BudBuddySpark", { link = "DiagnosticWarn", default = true })
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.bo[buf].bufhidden = "hide"
-  vim.bo[buf].filetype = "bud-buddy"
-  current = { buf = buf }
+  current = { buf = buffer() }
   show(nil)
-  current.stop = player.start({ show = show, ready = window, sleepy = sleepy })
+  current.stop = player.start({
+    show = function(frame)
+      show(frame)
+    end,
+    ready = function()
+      return window()
+    end,
+    sleepy = sleepy,
+  })
+  -- the frame he's on, in the corner's new place or the tab just entered
   current.resize = vim.api.nvim_create_autocmd({ "VimResized", "TabEnter" }, {
     callback = function()
-      show(nil)
+      show(current.frame, true)
     end,
   })
 end
@@ -145,7 +166,9 @@ function M.close()
   current.stop()
   vim.api.nvim_del_autocmd(current.resize)
   hide()
-  vim.api.nvim_buf_delete(current.buf, { force = true })
+  if vim.api.nvim_buf_is_valid(current.buf) then
+    vim.api.nvim_buf_delete(current.buf, { force = true })
+  end
   current = nil
 end
 

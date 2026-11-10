@@ -102,6 +102,31 @@ end, 5) then
   error("the buddy never came back after the dashboard")
 end
 
+-- :only closes floats too; he's back by the next move
+vim.cmd("only")
+eq(#floats(), 0, ":only closed the float")
+if not vim.wait(2000, function()
+  return #floats() == 1
+end, 5) then
+  error("the buddy never came back after :only")
+end
+
+-- his buffer wiped from under him: a new one, and he still turns off and on
+vim.cmd("%bwipeout!")
+if
+  not vim.wait(2000, function()
+    return #floats() == 1 and buddy.lines() ~= nil and #buddy.lines() == moves.height
+  end, 5)
+then
+  error("the buddy never came back after his buffer was wiped")
+end
+vim.cmd("%bwipeout!")
+buddy.toggle()
+eq(buddy.on(), false, "turns off with his buffer gone")
+buddy.toggle()
+eq(#floats(), 1, "and on again")
+editor = vim.api.nvim_get_current_win()
+
 -- off: the float and its buffer go
 local buf = vim.api.nvim_win_get_buf(floats()[1])
 buddy.toggle()

@@ -29,6 +29,8 @@ curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh
 
 The script downloads the release for your platform, checks its signature and checksum, puts `bud` in `~/.local/bin`, and offers to run `bud install`. That asks for a profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree (on Linux, a Neovim or tree-sitter-cli that is missing or too old is downloaded and checksum-verified instead), then sets up the config, plugins and language tools, Claude Code and clod.
 
+**Requirements:** macOS or Linux on amd64 or arm64, and a terminal using a [Nerd Font](https://www.nerdfonts.com) for the icons. `bud install` takes care of the rest (Neovim 0.12+, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, and each enabled language's toolchain), showing every command before it runs. `bud launch` and the desktop app open bud in Kitty or Ghostty; plain `bud` runs in any terminal.
+
 <details>
 <summary><b>Read the script first, pass options, or build from source</b></summary>
 
@@ -116,6 +118,8 @@ Each project gets one Claude Code session, shared by everything that uses it:
 
 Bare `bud` opens a dashboard: your projects with their git state, a health line, and banners for doctor problems and updates, each with a one-key fix. Opening a directory registers it as a project; `bud projects` pins and manages them.
 
+The robot on the dashboard plays 22 moves, from a backflip to a moonwalk. `<leader>ub` gives him a corner of the editor too, where he keeps you company while you work (`ui.buddy` starts him there).
+
 ### Tools
 
 Small Neovim extensions in a directory of their own, loaded after the first screen. Write one, or have Claude write and test it with `:BudGen`. [docs/tools.md](docs/tools.md).
@@ -147,10 +151,12 @@ bud main.go util.go # open files from the project they belong to
 | `bud projects` | List, add, remove and pin projects |
 | `bud config` | Read and write settings by key |
 | `bud claude` | Check and set up Claude Code |
+| `bud issue` | Say where issues filed from the editor go in Linear |
 | `bud chat` · `bud agent` | Claude Code outside the editor |
 | `bud kit` | Sync bud's Claude Code plugins |
 | `bud tools` | Manage editor tools |
 | `bud launch` · `bud bundle` | Open bud in a new terminal window · install the desktop app |
+| `bud bootstrap` | Install bud on another machine over SSH |
 | `bud uninstall` | Remove everything bud installed |
 
 Global flags go before the command: `bud [--verbose] [--profile full|minimal] <command> [flags] [args]`. Every command and flag: [docs/commands.md](docs/commands.md). Shell completion: `eval "$(bud completion zsh)"`.
@@ -177,17 +183,9 @@ The rest: [docs/keys.md](docs/keys.md).
 
 `<leader>,` opens the settings screen; `bud config` does the same from the shell. Every key and its default: [docs/config.md](docs/config.md). When something's off, start with `bud doctor`, then [docs/troubleshooting.md](docs/troubleshooting.md).
 
-## Roadmap
+## Status
 
-- [x] CLI, isolated config, installer, doctor, uninstall
-- [x] Plugins, lazy loading, the language engine and eight languages
-- [x] Dashboard and project registry
-- [x] Background self-update with rollback, signed releases, nightly channel
-- [x] Layouts, a Kitty/Ghostty launcher, app bundles
-- [x] Claude Code built in: per-project sessions, its TUI, inline actions, reviewed edits, chat
-- [x] Settings screen, `bud config`, completions, docs, debugging
-
-The full plan and every decision are in [`BASE.md`](BASE.md).
+Bud is at 1.0 and in maintenance mode: everything above is built, and new features arrive when daily use asks for one. Releases are on the [releases page](https://github.com/jgarner9/bud/releases); the full plan and every decision are in [`BASE.md`](BASE.md).
 
 ## Hacking on Bud
 

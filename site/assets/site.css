@@ -57,7 +57,7 @@ footer p { margin: 0.2rem 0; }
 /* the docs */
 .shell { display: flex; max-width: 76rem; margin: 0 auto; }
 .side { width: 15rem; flex: none; padding: 1.5rem; position: sticky; top: 0; align-self: flex-start; max-height: 100vh; overflow-y: auto; }
-.side .toggle { display: none; }
+.toggle, .scrim { display: none; }
 .side .group { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin: 1.2rem 0 0.3rem; }
 .side ul { list-style: none; margin: 0; padding: 0; }
 .side a { display: block; padding: 0.2rem 0.6rem; border-radius: 6px; color: var(--text); }
@@ -87,15 +87,31 @@ footer p { margin: 0.2rem 0; }
   .start li a { min-width: 100%; }
   .shell { flex-direction: column; }
   .side { position: static; align-self: stretch; width: auto; max-height: none; border-bottom: 1px solid var(--surface); padding: 0; }
-  .js .side .toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; color: var(--text); font: 600 1rem var(--sans); padding: 0.8rem 1rem; cursor: pointer; }
-  .side .toggle::after { content: "\25be"; color: var(--dim); }
-  .side .toggle[aria-expanded="true"]::after { content: "\25b4"; }
   .side nav { padding: 0 0.4rem 0.8rem; }
-  .js .side nav { display: none; }
-  .js .side .toggle[aria-expanded="true"] + nav { display: block; }
+  /* with its script, the sidebar is a drawer under a header that stays put */
+  html.js { scroll-padding-top: 3.5rem; }
+  .js .doc .bar { position: sticky; top: 0; z-index: 30; background: var(--base); }
+  .js .toggle { display: block; width: 2.5rem; height: 2.5rem; margin: -0.5rem 0.25rem -0.5rem -0.6rem; padding: 0; background: none; border: 0; border-radius: 6px; cursor: pointer; }
+  .js .doc .brand { margin-right: auto; }
+  .toggle span, .toggle span::before, .toggle span::after { display: block; width: 1.25rem; height: 2px; border-radius: 1px; background: var(--text); transition: transform 0.2s, background 0.2s; }
+  .toggle span { position: relative; margin: 0 auto; }
+  .toggle span::before, .toggle span::after { content: ""; position: absolute; left: 0; }
+  .toggle span::before { top: -6px; }
+  .toggle span::after { top: 6px; }
+  .menu-open .toggle span { background: transparent; }
+  .menu-open .toggle span::before { transform: translateY(6px) rotate(45deg); }
+  .menu-open .toggle span::after { transform: translateY(-6px) rotate(-45deg); }
+  .js .side { position: fixed; top: 0; bottom: 0; left: 0; z-index: 20; width: min(18rem, 82vw); padding: 3.9rem 0 0; background: var(--mantle); border: 0; border-right: 1px solid var(--surface); overflow-y: auto; overscroll-behavior: contain; transform: translateX(-100%); visibility: hidden; transition: transform 0.2s ease, visibility 0.2s; }
+  .js.menu-open .side { transform: none; visibility: visible; }
+  .js .scrim { display: block; position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.5); opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
+  .js.menu-open .scrim { opacity: 1; visibility: visible; }
+  .js.menu-open body { overflow: hidden; }
   .side .group { margin-top: 0.6rem; padding: 0 0.6rem; }
   .side a { padding: 0.45rem 0.6rem; }
   .prose { padding: 1rem 1rem 3rem; }
   .prose h1 { font-size: 1.6rem; }
   .prose > .highlighter-rouge pre, .prose > pre { margin-left: -1rem; margin-right: -1rem; border-radius: 0; padding: 0.9rem 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .side, .scrim, .toggle span, .toggle span::before, .toggle span::after { transition: none !important; }
 }

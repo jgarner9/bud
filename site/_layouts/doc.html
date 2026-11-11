@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
 {% include head.html %}
-<script>document.documentElement.className = "js"; // the phone menu collapses only when its script can open it</script>
+<script>document.documentElement.className = "js"; // the phone menu is a drawer only when its script can open it</script>
 </head>
 <body class="doc">
 <header class="bar">
+  <button class="toggle" id="toggle" type="button" aria-expanded="false" aria-controls="side" aria-label="Docs menu"><span></span></button>
   <a class="brand" href="{{ '/' | relative_url }}"><span class="face">[o.o]</span> bud</a>
   <nav>
     <a href="{{ '/docs/setup.html' | relative_url }}">Docs</a>
@@ -13,9 +14,8 @@
   </nav>
 </header>
 <div class="shell">
-  <aside class="side">
-    <button class="toggle" id="toggle" type="button" aria-expanded="false" aria-controls="nav">Docs menu</button>
-    <nav id="nav" aria-label="Docs">
+  <aside class="side" id="side">
+    <nav aria-label="Docs">
     {% for group in site.data.nav %}
     <p class="group">{{ group.title }}</p>
     <ul>
@@ -27,6 +27,7 @@
     {% endfor %}
     </nav>
   </aside>
+  <div class="scrim" id="scrim"></div>
   <main class="prose">
     <h1>{{ page.title }}</h1>
     {{ content }}
@@ -34,12 +35,30 @@
   </main>
 </div>
 <script>
-// on a phone the sidebar is a menu, closed until its button is pressed
+// on a phone the sidebar is a drawer: the header's button slides it in, and
+// the button again, the page behind it or Escape closes it
 (function () {
+  var root = document.documentElement;
   var toggle = document.getElementById("toggle");
-  toggle.addEventListener("click", function () {
-    var open = toggle.getAttribute("aria-expanded") !== "true";
+  function set(open) {
+    root.classList.toggle("menu-open", open);
     toggle.setAttribute("aria-expanded", open);
+  }
+  toggle.addEventListener("click", function () {
+    set(!root.classList.contains("menu-open"));
+  });
+  document.getElementById("scrim").addEventListener("click", function () {
+    set(false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && root.classList.contains("menu-open")) {
+      set(false);
+      toggle.focus();
+    }
+  });
+  // a link to this page's own heading doesn't reload, so close for it too
+  document.getElementById("side").addEventListener("click", function (e) {
+    if (e.target.closest("a")) set(false);
   });
 })();
 </script>

@@ -828,8 +828,8 @@ One task is one commit with its own check, and `just check` passes after each. B
 **Lane A: the editor (Lua).**
 
 1. **ACP facts and the fake agent.** `docs/internals/acp.md`: the calls, the events, how each backend starts and signs in, what OpenClaw's bridge leaves out. A fake ACP agent for Lua tests. Done when a Lua test drives a prompt, a permission and a cancel through it.
-2. **`bud.ai.acp`, the protocol client.** [1] JSON-RPC both ways over a job: requests, responses, notifications, the agent's own requests (`session/request_permission`, `fs/*`), and a dropped process.
-3. **`bud.ai.agent`, the session.** [2] A session per root on the configured backend, with `bud.ai.claude`'s contract; the status line; idle handling.
+2. **`bud.ai.acp`, the protocol client.** [1] JSON-RPC both ways over a job: requests, responses, notifications, the agent's own requests (`session/request_permission`, `fs/*`), and a dropped process. Built, with task 1's fake agent and `docs/internals/acp.md`.
+3. **`bud.ai.agent`, the session.** [2] A session per root on the configured backend, with `bud.ai.claude`'s contract; the status line; idle handling. Built; nothing starts it yet.
 4. **Permissions and the edit review** on `session/request_permission`, with the diff when there is one (D134). [3]
 5. **The consumers move:** chat, inline actions, sharing a selection, the commit message, the generator, issues and work. [4]
 6. **Cut the Claude Code transport out of the editor:** `claude.lua`'s process handling and `bridge/`. [5]
@@ -839,7 +839,7 @@ One task is one commit with its own check, and `just check` passes after each. B
 **Lane B: the CLI (Go).**
 
 9. **Backend settings:** `ai.backend`, `ai.agent.chat_layout`, `ai.openclaw.url`, `ai.openclaw.token_file`, `ai.custom.command`, with a migration from `ai.claude.*` (D133). Built: the keys, defaults and validation; the migration waits for task 11.
-10. **`bud ai status|setup` and the doctor check:** the backend's command, its version, and for OpenClaw the Gateway answering. [9]
+10. **`bud ai status|setup` and the doctor check:** the backend's command, its version, and for OpenClaw the Gateway answering. [9] Built: `internal/agent`, `bud ai`, the doctor's "AI backend" check.
 11. **Cut `bud claude`, clod's setup and cloud work** (D129, D130). [10]
 12. **The dashboard banner and the settings screen** on the backend. [3, 10]
 

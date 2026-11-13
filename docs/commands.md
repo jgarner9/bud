@@ -68,6 +68,15 @@ bud [global flags] <command> [command flags] [args]
 
 Every key and its default is in the [config reference](config.md).
 
+## The AI backend
+
+bud is moving to talk to its AI over the Agent Client Protocol (ACP), with an OpenClaw Gateway as the default backend (`ai.backend`). Until that lands, the editor still runs Claude Code directly (below).
+
+| Command | What it does |
+| --- | --- |
+| `bud ai status [--json]` | Which backend is set, the command it runs, whether that's installed, and for OpenClaw whether the Gateway at `ai.openclaw.url` answers, with a fix for each problem. |
+| `bud ai setup [--yes]` | Installs the backend's command with npm if it's missing (asking first), then for OpenClaw asks for the Gateway's URL and the file holding its token, and saves them. Models sign in on the Gateway host (`openclaw onboard` there). |
+
 ## Claude Code
 
 | Command | What it does |

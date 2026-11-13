@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"jgarner.dev/bud"
+	"jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/bundle"
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
@@ -143,6 +144,8 @@ func Run(opts Options) []Result {
 			results = append(results, r)
 		}
 	}
+
+	results = append(results, checkAgent(cfg, opts.Quick))
 
 	cr, status := checkClaude(cfg)
 	results = append(results, cr)
@@ -510,6 +513,43 @@ func checkClaude(cfg config.Settings) (Result, claude.Status) {
 	}
 
 	return r, s
+}
+
+// agentCheck is swappable in tests
+var agentCheck = agent.Check
+
+// AgentCheck is the AI backend check's name
+const AgentCheck = "AI backend"
+
+// checkAgent checks the backend ai.backend names (D131): its command, and
+// for OpenClaw the Gateway (not with --quick, which skips the network). It
+// only warns: bud works without AI
+func checkAgent(cfg config.Settings, quick bool) Result {
+	r := Result{Name: AgentCheck}
+	st := agentCheck(cfg, quick)
+	var detail []string
+	if st.Version != "" {
+		detail = append(detail, st.Version)
+	}
+	if st.Reachable {
+		detail = append(detail, "Gateway at "+st.Gateway+" answering")
+	}
+	if len(st.Problems) == 0 {
+		r.Detail = st.Backend
+		if len(detail) > 0 {
+			r.Detail += ": " + strings.Join(detail, ", ")
+		}
+		return r
+	}
+	var whats, fixes []string
+	for _, p := range st.Problems {
+		whats = append(whats, p.What)
+		fixes = append(fixes, p.Fix)
+	}
+	r.Status = Warn
+	r.Detail = st.Backend + ": " + strings.Join(whats, "; ")
+	r.Fix = strings.Join(fixes, "; ")
+	return r
 }
 
 // checkProjects reads the project registry. A broken one only warns: bud still

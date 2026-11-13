@@ -12,6 +12,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/bundle"
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
@@ -852,4 +853,27 @@ func fakeServers(names ...string) string {
 	}
 
 	return strings.Join(entries, ", ")
+}
+
+// the AI backend check only warns, and names each problem's fix (D131)
+func TestCheckAgent(t *testing.T) {
+	orig := agentCheck
+	t.Cleanup(func() { agentCheck = orig })
+	agentCheck = func(cfg config.Settings, quick bool) agent.Status {
+		return agent.Status{Backend: "openclaw", Version: "OpenClaw 2026.11.3", Gateway: "home:18789", Reachable: true}
+	}
+	r := checkAgent(config.Defaults(), false)
+	if r.Status != OK || r.Detail != "openclaw: OpenClaw 2026.11.3, Gateway at home:18789 answering" {
+		t.Errorf("ready: %+v", r)
+	}
+	agentCheck = func(cfg config.Settings, quick bool) agent.Status {
+		return agent.Status{Backend: "openclaw", Problems: []agent.Problem{
+			{What: "openclaw isn't installed", Fix: "npm install -g openclaw", Hard: true},
+			{What: "the Gateway token file can be read by others", Fix: "chmod 600 f"},
+		}}
+	}
+	r = checkAgent(config.Defaults(), true)
+	if r.Status != Warn || !strings.Contains(r.Detail, "isn't installed; the Gateway") || r.Fix != "npm install -g openclaw; chmod 600 f" {
+		t.Errorf("problems: %+v", r)
+	}
 }

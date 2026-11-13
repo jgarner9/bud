@@ -94,17 +94,39 @@ func TestCheckNotInstalled(t *testing.T) {
 	}
 }
 
+// no URL: the CLI's own Gateway, from OpenClaw's config, else this machine's
 func TestCheckOpenClawLocal(t *testing.T) {
-	dialed := fakeTools(t, []string{"openclaw"})
+	cfgFile := filepath.Join(t.TempDir(), "openclaw.json")
+	orig := openclawConfig
+	t.Cleanup(func() { openclawConfig = orig })
+	openclawConfig = func() string { return cfgFile }
+
+	dialed := fakeTools(t, []string{"openclaw"}, "127.0.0.1:18789")
 	st := Check(settings(nil), false)
-	if !st.Ready() || len(st.Problems) != 0 {
-		t.Fatalf("not ready: %+v", st.Problems)
+	if !st.Ready() || len(st.Problems) != 0 || !st.Reachable {
+		t.Fatalf("local gateway: %+v", st)
 	}
 	if st.Version != "openclaw 1.2.3" || st.Bin != "/fake/bin/openclaw" {
 		t.Errorf("version %q, bin %q", st.Version, st.Bin)
 	}
-	if len(*dialed) != 0 {
-		t.Errorf("dialed %v with no URL set", *dialed)
+	if !reflect.DeepEqual(*dialed, []string{"127.0.0.1:18789"}) {
+		t.Errorf("dialed %v, want this machine's default", *dialed)
+	}
+
+	// the port OpenClaw is set to
+	os.WriteFile(cfgFile, []byte(`{"gateway":{"port":19001}}`), 0o600)
+	*dialed = nil
+	Check(settings(nil), false)
+	if !reflect.DeepEqual(*dialed, []string{"127.0.0.1:19001"}) {
+		t.Errorf("dialed %v, want the configured port", *dialed)
+	}
+
+	// the CLI's remote Gateway
+	os.WriteFile(cfgFile, []byte(`{"gateway":{"remote":{"url":"wss://home.tail.ts.net:18789"}}}`), 0o600)
+	*dialed = nil
+	st = Check(settings(nil), false)
+	if !reflect.DeepEqual(*dialed, []string{"home.tail.ts.net:18789"}) || st.Reachable {
+		t.Errorf("dialed %v (reachable %v), want the remote, down", *dialed, st.Reachable)
 	}
 }
 

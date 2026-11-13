@@ -168,15 +168,15 @@ func checkOpenClaw(st *Status, oc config.OpenClaw, quick bool) {
 			})
 		}
 	}
-	if oc.URL == "" {
-		// the CLI's own gateway.remote.url, else a Gateway on this machine
-		st.Gateway = "the openclaw CLI's own (gateway.remote.url, else this machine)"
-		return
+	target := oc.URL
+	if target == "" {
+		// the CLI's own: gateway.remote.url, else a Gateway on this machine
+		target = cliGateway()
 	}
-	u, err := url.Parse(oc.URL)
+	u, err := url.Parse(target)
 	if err != nil || (u.Scheme != "ws" && u.Scheme != "wss") || u.Hostname() == "" {
 		st.Problems = append(st.Problems, Problem{
-			What: fmt.Sprintf("ai.openclaw.url %q isn't a ws:// or wss:// URL", oc.URL),
+			What: fmt.Sprintf("ai.openclaw.url %q isn't a ws:// or wss:// URL", target),
 			Fix:  "bud config set ai.openclaw.url wss://HOST:18789",
 			Hard: true,
 		})
@@ -205,6 +205,44 @@ func checkOpenClaw(st *Status, oc config.OpenClaw, quick bool) {
 		return
 	}
 	st.Reachable = true
+}
+
+// openclawConfig is OpenClaw's own config file; swappable in tests
+var openclawConfig = func() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".openclaw", "openclaw.json")
+}
+
+// cliGateway is the Gateway the openclaw CLI reaches with no --url: its
+// gateway.remote.url, else this machine's on gateway.port (18789 by
+// default). A config bud can't read as plain JSON counts as none
+func cliGateway() string {
+	local := "ws://127.0.0.1:18789"
+	data, err := os.ReadFile(openclawConfig())
+	if err != nil {
+		return local
+	}
+	var cfg struct {
+		Gateway struct {
+			Port   int `json:"port"`
+			Remote struct {
+				URL string `json:"url"`
+			} `json:"remote"`
+		} `json:"gateway"`
+	}
+	if json.Unmarshal(data, &cfg) != nil {
+		return local
+	}
+	if cfg.Gateway.Remote.URL != "" {
+		return cfg.Gateway.Remote.URL
+	}
+	if cfg.Gateway.Port > 0 {
+		return fmt.Sprintf("ws://127.0.0.1:%d", cfg.Gateway.Port)
+	}
+	return local
 }
 
 // plainOK says whether OpenClaw takes plain ws:// to host: loopback,

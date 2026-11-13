@@ -3,6 +3,8 @@
 -- idle shell, never a busy one, and nothing while a :qa is about to fail
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
+-- the claude backend (D131): bud.ai.claude and Claude Code's TUI
+dofile("tests/lua/lib/claude_backend.lua")
 vim.o.shell = "sh"
 
 local function eq(got, want, what)

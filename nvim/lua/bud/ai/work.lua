@@ -12,7 +12,8 @@
 -- issue and pushes a branch named after it. bud only starts it, remembers the
 -- session's link, and notices when the branch shows up on origin.
 
-local claude = require("bud.ai.claude")
+-- the configured backend's session (D131)
+local ai = require("bud.ai.session")
 
 local M = {}
 
@@ -438,7 +439,7 @@ local function on_done(run, d)
   end
   run.state = result.status == "done" and "done" or "failed"
   run.summary, run.commit = result.summary, result.commit
-  claude.drop(run.key)
+  ai.drop(run.key)
   notify(
     ("%s %s on %s: %s"):format(
       run.id,
@@ -639,9 +640,9 @@ function M.start(id, title, repo, where)
     state = "working",
   }
   M.runs[id] = run
-  claude.session(run.worktree, { key = run.key, resume = "new", extra = true })
+  ai.session(run.worktree, { key = run.key, resume = "new", extra = true })
   local unsub
-  unsub = claude.on("done", function(d, s)
+  unsub = ai.on("done", function(d, s)
     if s.key ~= run.key then
       return
     end
@@ -650,7 +651,7 @@ function M.start(id, title, repo, where)
       unsub()
     end
   end)
-  if not claude.send(M.prompt(run), { key = run.key }) then
+  if not ai.send(M.prompt(run), { key = run.key }) then
     unsub()
     run.state = "failed"
     return run
@@ -666,7 +667,7 @@ function M.answer(id, text)
     return false
   end
   run.state, run.question = "working", nil
-  return claude.send(text, { key = run.key })
+  return ai.send(text, { key = run.key })
 end
 
 -- diff opens what the run changed against its base, in a tab of its own

@@ -2,6 +2,8 @@
 -- :BudClaude term hands the session to Claude Code's TUI and back (D48)
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
+-- the claude backend (D131): bud.ai.claude and Claude Code's TUI
+dofile("tests/lua/lib/claude_backend.lua")
 vim.o.shell = "sh"
 
 local function eq(got, want, what)

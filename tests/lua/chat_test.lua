@@ -2,6 +2,8 @@
 -- Chat (JGA-165): Claude Code's own TUI as bud-ide's chat agent, in its own tab
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
+-- the claude backend (D131): bud.ai.claude and Claude Code's TUI
+dofile("tests/lua/lib/claude_backend.lua")
 vim.o.shell = "sh"
 
 local function eq(got, want, what)

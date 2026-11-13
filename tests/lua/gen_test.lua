@@ -3,6 +3,8 @@
 -- turned on or off; a fake claude stands in for the files it would write
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
+-- the claude backend (D131): bud.ai.claude and Claude Code's TUI
+dofile("tests/lua/lib/claude_backend.lua")
 
 local function eq(got, want, what)
   if not vim.deep_equal(got, want) then

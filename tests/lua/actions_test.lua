@@ -2,6 +2,8 @@
 -- Inline actions and the commit message draft, on a fake claude
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
+-- the claude backend (D131): bud.ai.claude and Claude Code's TUI
+dofile("tests/lua/lib/claude_backend.lua")
 
 local function eq(got, want, what)
   if not vim.deep_equal(got, want) then

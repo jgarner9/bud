@@ -168,6 +168,7 @@ eq(vim.fn.readfile(file), { "edited" }, "and it's saved")
 eq(vim.bo[buf].modified, false, "not left modified")
 eq(named("tool_use")[1].kind, "edit", "tool_use kind")
 eq(named("tool_update")[#named("tool_update")].status, "completed", "tool done")
+eq(named("done")[5].text, "Edited.", "done.text is the answer after the last tool call")
 
 -- a read sees the unsaved buffer
 vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "unsaved", "lines" })
@@ -296,6 +297,21 @@ replay("perm-reject")
 upd = named("tool_update")[#named("tool_update")]
 eq(upd.status, "failed", "denied exec failed")
 assert(upd.output:find("user-denied", 1, true), upd.output)
+
+-- bud.ai.session runs on bud.ai.agent for any backend but claude
+local session = require("bud.ai.session")
+eq(session.module(), agent, "openclaw: bud.ai.agent")
+eq(session.status(proj), agent.status(proj), "calls go to it")
+local config = require("bud.config")
+local real_get = config.get
+config.get = function(key, default)
+  if key == "ai.backend" then
+    return "claude"
+  end
+  return real_get(key, default)
+end
+eq(session.module(), require("bud.ai.claude"), "claude: bud.ai.claude, until task 6")
+config.get = real_get
 
 -- the status line names the backend
 vim.cmd.cd(proj)

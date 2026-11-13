@@ -10,7 +10,8 @@
 -- while a report is being proposed or reviewed and allows them once you've
 -- said y; reads are allowed throughout (bud.ai.permissions.policies).
 
-local claude = require("bud.ai.claude")
+-- the configured backend's session (D131)
+local ai = require("bud.ai.session")
 
 local M = {}
 
@@ -255,7 +256,7 @@ end
 
 local function finish(run)
   M.runs[run.key] = nil
-  claude.drop(run.key)
+  ai.drop(run.key)
 end
 
 local show_review
@@ -283,7 +284,7 @@ end
 function M.file(run)
   run.state = "filing"
   local text = "File these:\n```bud-issues\n" .. vim.json.encode(run.proposal) .. "\n```"
-  if claude.send(text, { key = run.key }) then
+  if ai.send(text, { key = run.key }) then
     vim.notify("bud: filing in " .. describe(run.target) .. "…")
   else
     finish(run)
@@ -438,9 +439,9 @@ function M.start(report, target, root, ctx)
   local run = { key = key, root = vim.uv.fs_realpath(root) or root, target = target, state = "proposing" }
   M.runs[key] = run
   -- a conversation of its own, never the project's
-  claude.session(run.root, { key = key, resume = "new", extra = true })
+  ai.session(run.root, { key = key, resume = "new", extra = true })
   local unsub
-  unsub = claude.on("done", function(d, s)
+  unsub = ai.on("done", function(d, s)
     if s.key ~= key then
       return
     end
@@ -458,7 +459,7 @@ function M.start(report, target, root, ctx)
       on_filed(run, d)
     end
   end)
-  if not claude.send(M.prompt(report, target, ctx), { key = key }) then
+  if not ai.send(M.prompt(report, target, ctx), { key = key }) then
     unsub()
     finish(run)
     return nil

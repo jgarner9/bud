@@ -922,6 +922,12 @@ function M.setup()
   if not cfg.autostart then
     return
   end
+  -- another backend (D131): its ACP session starts instead, and Claude Code
+  -- only when something asks for it
+  if require("bud.ai.agent").backend() ~= "claude" then
+    require("bud.ai.agent").setup()
+    return
+  end
   local minutes = tonumber(cfg.idle_minutes) or 30
   if minutes > 0 then
     idle_timer = idle_timer or vim.uv.new_timer()
@@ -966,7 +972,9 @@ end
 -- opened starts the session for a project opened from inside bud (the
 -- dashboard, <leader>p), unless ai.claude.autostart is off
 function M.opened(root)
-  if settings().autostart then
+  if settings().autostart and require("bud.ai.agent").backend() ~= "claude" then
+    require("bud.ai.agent").session(root)
+  elseif settings().autostart then
     M.session(root)
   end
 end

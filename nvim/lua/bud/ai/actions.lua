@@ -3,7 +3,8 @@
 -- edits come as diffs to accept or reject (the IDE bridge's openDiff); and
 -- draft a commit message on the project's headless session.
 
-local claude = require("bud.ai.claude")
+-- the configured backend's session (D131)
+local ai = require("bud.ai.session")
 
 local M = {}
 
@@ -71,9 +72,9 @@ function M.commit()
     vim.notify("bud: nothing staged to write a message for", vim.log.levels.INFO)
     return
   end
-  local s = claude.session()
+  local s = ai.session()
   local unsub
-  unsub = claude.on("done", function(d, session)
+  unsub = ai.on("done", function(d, session)
     if session.key ~= s.key then
       return
     end
@@ -86,7 +87,7 @@ function M.commit()
     vim.api.nvim_buf_set_lines(buf, 0, 0, false, msg)
     vim.notify("bud: drafted the commit message; edit away, then :wq")
   end)
-  if not claude.send(M.commit_prompt(diff, git({ "log", "--oneline", "-10" }))) then
+  if not ai.send(M.commit_prompt(diff, git({ "log", "--oneline", "-10" }))) then
     unsub()
     return
   end

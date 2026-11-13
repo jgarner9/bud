@@ -58,9 +58,36 @@ local function show(t, side)
   return win
 end
 
--- available says whether there's a Claude Code to open, for the layout's chat pane
+-- backend is the configured AI backend (D131): "claude" runs Claude Code's
+-- own TUI on bud's Claude session, as before; the others run their own TUI
+-- (bud.ai.agent.tui), OpenClaw's on the project's Gateway session
+local function backend()
+  return require("bud.ai.agent").backend()
+end
+
+-- available says whether there's a TUI to open, for the layout's chat pane
 function M.available()
-  return claude.bin() ~= nil and require("bud.config").get("ai.claude.autostart", true)
+  if backend() == "claude" then
+    return claude.bin() ~= nil and require("bud.config").get("ai.claude.autostart", true)
+  end
+  local spec = require("bud.ai.agent").tui(root_of())
+  return spec ~= nil and vim.fn.executable(spec.argv[1]) == 1
+end
+
+-- launch is the TUI's command line and environment for root
+local function launch(root)
+  if backend() == "claude" then
+    local argv, why = claude.handover(root)
+    return argv, why, claude.bridge_env(root), true
+  end
+  local spec, why = require("bud.ai.agent").tui(root)
+  if not spec then
+    return nil, why
+  end
+  if vim.fn.executable(spec.argv[1]) ~= 1 then
+    return nil, ("%s isn't installed: run bud ai setup"):format(spec.argv[1])
+  end
+  return spec.argv, nil, spec.env, false
 end
 
 -- open shows root's TUI (default: the current project's), starting it when
@@ -72,12 +99,12 @@ function M.open(opts)
   local t = terms[root]
   local win = t and window(t)
   if not t then
-    local argv, why = claude.handover(root)
+    local argv, why, env, handed = launch(root)
     if not argv then
       vim.notify("bud: " .. why, vim.log.levels.WARN)
       return nil
     end
-    t = { buf = vim.api.nvim_create_buf(false, true), last_used = now(), root = root }
+    t = { buf = vim.api.nvim_create_buf(false, true), last_used = now(), root = root, claude = handed }
     terms[root] = t
     vim.bo[t.buf].bufhidden = "hide"
     -- jk to Normal mode, where <leader>ac hides it and <leader>w moves on
@@ -87,7 +114,7 @@ function M.open(opts)
       t.job = vim.fn.jobstart(argv, {
         term = true,
         cwd = root,
-        env = claude.bridge_env(root),
+        env = env,
         on_exit = function()
           vim.schedule(function()
             M._closed(root)
@@ -251,7 +278,9 @@ function M._closed(root)
     return
   end
   terms[root] = nil
-  claude.handback(root)
+  if t.claude then
+    claude.handback(root)
+  end
   if vim.api.nvim_buf_is_valid(t.buf) then
     for _, win in ipairs(vim.fn.win_findbuf(t.buf)) do
       if #vim.api.nvim_list_wins() > 1 then

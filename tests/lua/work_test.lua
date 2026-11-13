@@ -2,6 +2,8 @@
 -- Claude working a filed issue in a worktree (JGA-126), on a fake claude
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
+-- the claude backend (D131): bud.ai.claude and Claude Code's TUI
+dofile("tests/lua/lib/claude_backend.lua")
 dofile("tests/lua/lib/nui.lua")
 
 local function eq(got, want, what)

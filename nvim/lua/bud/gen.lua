@@ -9,7 +9,8 @@
 -- The conversation shows as a log in a split, where i asks for changes; each
 -- reply runs the checks again.
 
-local claude = require("bud.ai.claude")
+-- the configured backend's session (D131)
+local ai = require("bud.ai.session")
 
 local M = {}
 
@@ -173,7 +174,7 @@ end
 -- ask sends a follow-up (asking for changes), from the log's i or Enter
 local function ask()
   vim.ui.input({ prompt = "Ask for changes: " }, function(text)
-    if text and vim.trim(text) ~= "" and claude.send(text, { key = M.key }) then
+    if text and vim.trim(text) ~= "" and ai.send(text, { key = M.key }) then
       log({ "", "> " .. text, "" })
     end
   end)
@@ -206,19 +207,19 @@ local function listen(dir)
     return session.key == M.key
   end
   state.unsub = {
-    claude.on("message", function(d, session)
+    ai.on("message", function(d, session)
       if mine(session) and d.role == "assistant" and d.text then
         log(vim.list_extend(vim.split(d.text, "\n", { plain = true }), { "" }))
       end
     end),
-    claude.on("tool_use", function(d, session)
+    ai.on("tool_use", function(d, session)
       if mine(session) then
         local input = type(d.input) == "table" and d.input or {}
         local what = input.file_path or input.path or input.command or ""
         log(("● %s %s"):format(d.name, type(what) == "string" and vim.fn.fnamemodify(what, ":~:.") or ""))
       end
     end),
-    claude.on("done", function(d, session)
+    ai.on("done", function(d, session)
       if mine(session) then
         if not d.ok then
           log({ "✗ " .. (d.text or "Claude stopped"), "" })
@@ -242,7 +243,7 @@ function M.run(request)
     return
   end
   local dir = user_tools()
-  claude.drop(M.key)
+  ai.drop(M.key)
   close()
   state = { title = "BudGen: " .. request, buf = vim.api.nvim_create_buf(false, true) }
   vim.bo[state.buf].bufhidden = "hide"
@@ -257,9 +258,9 @@ function M.run(request)
   end, { buffer = state.buf, nowait = true, desc = "Close the generator's log" })
   state.before = snapshot(dir)
   listen(dir)
-  claude.session(dir, { key = M.key, extra = true, resume = "new" })
+  ai.session(dir, { key = M.key, extra = true, resume = "new" })
   show()
-  if claude.send(M.prompt(request, template()), { key = M.key }) then
+  if ai.send(M.prompt(request, template()), { key = M.key }) then
     log({ "> " .. request, "" })
   end
 end
@@ -277,7 +278,7 @@ end
 
 function M._reset()
   close()
-  claude.drop(M.key)
+  ai.drop(M.key)
   state = {}
 end
 

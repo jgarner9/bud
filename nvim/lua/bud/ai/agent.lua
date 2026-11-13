@@ -114,6 +114,44 @@ function M.argv(backend, get, root)
   return nil, ("ai.backend: %q isn't a backend bud knows"):format(tostring(backend))
 end
 
+-- token reads the Gateway token from ai.openclaw.token_file, for the TUI,
+-- which takes it only from the environment (OPENCLAW_GATEWAY_TOKEN) or argv
+local function token(get)
+  local file = get("ai.openclaw.token_file", "")
+  if file == "" then
+    return nil
+  end
+  local ok, lines = pcall(vim.fn.readfile, vim.fn.expand(file), "", 1)
+  return ok and lines[1] and vim.trim(lines[1]) or nil
+end
+
+-- tui is the backend's own TUI on root's session, for the AI pane: { argv,
+-- env }, or nil and why there's none. OpenClaw's opens the same Gateway
+-- session bud's calls use (D139), so the pane and bud share one thread
+function M.tui(root, get)
+  get = get or function(key, default)
+    return cfg().get(key, default)
+  end
+  local backend = M.backend()
+  if backend == "openclaw" then
+    local argv = { "openclaw", "tui" }
+    local url = get("ai.openclaw.url", "")
+    if url ~= "" then
+      vim.list_extend(argv, { "--url", url })
+    end
+    vim.list_extend(argv, { "--session", M.session_key(root, get("ai.openclaw.agent", "main")) })
+    local t = token(get)
+    return { argv = argv, env = t and { OPENCLAW_GATEWAY_TOKEN = t } or nil }
+  elseif backend == "codex" then
+    return { argv = { "codex" } }
+  elseif backend == "opencode" then
+    return { argv = { "opencode", root } }
+  elseif backend == "claude" then
+    return nil, "the claude backend's TUI is Claude Code's own (bud.ai.claude)"
+  end
+  return nil, ("the %s backend has no TUI bud knows"):format(backend)
+end
+
 -- M.command lets tests swap the backend's command line for the fake agent's
 M.command = function(root)
   return M.argv(M.backend(), nil, root)
@@ -221,10 +259,13 @@ function M.handle(s, update)
   if kind == "agent_message_chunk" then
     local text = acp.text(update.content)
     s.reply = (s.reply or "") .. text
+    s.final = (s.final or "") .. text
     emit("chunk", { text = text }, s)
   elseif kind == "agent_thought_chunk" then
     emit("thought", { text = acp.text(update.content) }, s)
   elseif kind == "tool_call" then
+    -- the answer is what comes after the last tool call
+    s.final = ""
     s.tools[update.toolCallId] = update
     emit("tool_use", {
       id = update.toolCallId,
@@ -460,7 +501,7 @@ end
 
 -- prompt runs one turn
 local function prompt(s, item)
-  s.reply = ""
+  s.reply, s.final = "", ""
   s.tools = {}
   set_status(s, "busy")
   s.conn:request(
@@ -609,6 +650,30 @@ function M.statusline()
   end
   local marks = { starting = "…", ready = "●", busy = "◐", stopped = "○", missing = "✗", error = "✗" }
   return ("%s %s"):format(s.backend or M.backend(), marks[s.status] or s.status)
+end
+
+-- setup starts the agent for how bud was opened, like bud.ai.claude's (the
+-- 4.2 table): a project dir, or files from their root, and nothing for bare
+-- bud; it adds the status line and the idle reap
+local idle_timer
+function M.setup()
+  require("bud.statusline").add(M.statusline)
+  local group = vim.api.nvim_create_augroup("bud.ai.agent", { clear = true })
+  vim.api.nvim_create_autocmd("VimLeavePre", { group = group, desc = "Stop the AI agents", callback = M.stop_all })
+  local minutes = tonumber(cfg().get("ai.claude.idle_minutes", 30)) or 30
+  if minutes > 0 then
+    idle_timer = idle_timer or vim.uv.new_timer()
+    idle_timer:start(
+      60 * 1000,
+      60 * 1000,
+      vim.schedule_wrap(function()
+        M.reap(minutes)
+      end)
+    )
+  end
+  if vim.env.BUD_OPEN == "project" or vim.fn.argc() > 0 then
+    M.session()
+  end
 end
 
 -- _reset forgets every session and listener, for tests

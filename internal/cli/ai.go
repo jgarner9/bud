@@ -24,7 +24,7 @@ func AI() *Command {
 	var asJSON, yes bool
 	return &Command{
 		Name:  "ai",
-		Usage: "Checks and sets up the AI backend (OpenClaw by default)",
+		Usage: "Checks and sets up the AI backend (ai.backend: claude, openclaw, codex, opencode)",
 		Subs: []*Command{
 			{
 				Name:  "status",

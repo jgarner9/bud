@@ -222,22 +222,11 @@ function M.write_file(path, content)
 end
 
 -- M.permission answers a permission request: req is { session, tool, options,
--- diffs, title }, and respond takes the chosen option's id, or nil for
--- cancelled. bud.ai.permissions replaces it with the review (D134); this is
--- the plain one
+-- diffs, title, input, raw }, and respond takes the chosen option's id, or
+-- nil for cancelled. It's bud's permission prompt, and the diff review when
+-- the request carries a diff (D134); tests swap it
 M.permission = function(req, respond)
-  local items = {}
-  for _, o in ipairs(req.options) do
-    table.insert(items, o)
-  end
-  vim.ui.select(items, {
-    prompt = ("%s wants to: %s"):format(req.session.backend, req.title or "use a tool"),
-    format_item = function(o)
-      return o.name
-    end,
-  }, function(choice)
-    respond(choice and choice.optionId or nil)
-  end)
+  require("bud.ai.permissions").acp(req, respond)
 end
 
 -- patch is the unified diff a finished edit reports, when the backend says

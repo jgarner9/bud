@@ -260,5 +260,52 @@ vim.api.nvim_feedkeys("q", "x", false)
 eq(second and second.behavior, "deny", "the second answered too")
 vim.o.tabclose = ""
 
+-- ACP requests (bud.ai.agent, D134) go through the same prompt and answer
+-- with the agent's own option ids
+local options = {
+  { optionId = "allow-once", name = "Allow once", kind = "allow_once" },
+  { optionId = "deny", name = "Deny", kind = "reject_once" },
+}
+local function acp_req(command)
+  return {
+    session = { root = tmp, backend = "openclaw" },
+    tool = "exec: " .. command,
+    title = "exec: " .. command,
+    input = { command = command },
+    options = options,
+    diffs = {},
+    raw = { toolCall = { toolCallId = "call-1", kind = "execute" } },
+  }
+end
+eq({ perms.acp_tool(acp_req("make lint")) }, { "Bash", { command = "make lint" } }, "an exec is a Bash command")
+local chosen
+perms.acp(acp_req("make lint"), function(id)
+  chosen = id
+end)
+shown = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
+eq(shown:find("openclaw wants to use Bash", 1, true) ~= nil, true, "names the backend")
+eq(shown:find("make lint", 1, true) ~= nil, true, "shows the command")
+vim.api.nvim_feedkeys("y", "x", false)
+eq(chosen, "allow-once", "y picks the allow option")
+chosen = nil
+perms.acp(acp_req("rm -rf /"), function(id)
+  chosen = id
+end)
+vim.api.nvim_feedkeys("n", "x", false)
+eq(chosen, "deny", "n picks the reject option")
+
+-- a diff becomes a Write of the whole file as it would be
+vim.fn.writefile({ "keep", "old line", "keep too" }, tmp .. "/acp.txt")
+local req = acp_req("x")
+req.raw.toolCall.kind = "edit"
+req.diffs = { { path = tmp .. "/acp.txt", old = "old line", new = "new line" } }
+eq(
+  { perms.acp_tool(req) },
+  { "Write", { file_path = tmp .. "/acp.txt", content = "keep\nnew line\nkeep too\n" } },
+  "a partial diff applied to the file"
+)
+req.diffs = { { path = tmp .. "/fresh.txt", new = "brand new\n" } }
+eq(select(2, perms.acp_tool(req)).content, "brand new\n", "a new file is its new text")
+
 vim.fn.delete(tmp, "rf")
 print("permissions_test: ok")

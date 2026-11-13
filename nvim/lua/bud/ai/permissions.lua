@@ -122,7 +122,7 @@ local show_next
 local function prompt(req, done)
   local lines = {
     "",
-    "  [o.o]  Claude Code wants to use " .. req.tool,
+    "  [o.o]  " .. (req.who or "Claude Code") .. " wants to use " .. req.tool,
     "",
     "    " .. M.summary(req.tool, req.input),
     "",
@@ -161,7 +161,7 @@ local function prompt(req, done)
         key = "r",
         label = "deny and say why",
         fn = function()
-          vim.ui.input({ prompt = "Tell Claude why not: " }, function(why)
+          vim.ui.input({ prompt = "Tell " .. (req.who or "Claude") .. " why not: " }, function(why)
             done(deny(why and why ~= "" and ("The user said no: " .. why) or nil))
           end)
         end,
@@ -181,10 +181,11 @@ local function ask(req, done)
         path = path,
         contents = after,
         name = "permission-" .. (req.id or path),
-        title = "Claude wants to " .. (req.tool == "Write" and "write" or "edit") .. " " .. vim.fn.fnamemodify(
-          path,
-          ":~:."
-        ),
+        title = (req.who or "Claude")
+          .. " wants to "
+          .. (req.tool == "Write" and "write" or "edit")
+          .. " "
+          .. vim.fn.fnamemodify(path, ":~:."),
       }, function(accepted, text)
         if not accepted then
           return done(deny("The user rejected this edit."))
@@ -234,9 +235,70 @@ function M.request(req)
   if mine and mine[M.key(req.tool, req.input)] then
     return req.respond(allow(req.input))
   end
-  require("bud.ai.claude")._emit("permission_request", { tool = req.tool, input = req.input }, req.root)
+  if not req.acp then
+    require("bud.ai.claude")._emit("permission_request", { tool = req.tool, input = req.input }, req.root)
+  end
   table.insert(queue, req)
   show_next()
+end
+
+-- acp_tool turns an ACP permission request (bud.ai.agent's req: tool,
+-- input, diffs, raw) into the tool and input the prompt and the review know:
+-- a diff becomes a Write of the whole file as it would be, so it opens as a
+-- diff to accept (D134); a command becomes Bash
+function M.acp_tool(req)
+  local d = req.diffs and req.diffs[1]
+  if d and d.path then
+    local now = read(d.path)
+    local after = d.new
+    if d.old and now and now ~= d.old then
+      local replaced, n = replace(now, d.old, d.new or "", false)
+      if n == 1 then
+        after = replaced
+      end
+    end
+    return "Write", { file_path = d.path, content = after or "" }
+  end
+  local call = req.raw and req.raw.toolCall or {}
+  local input = type(req.input) == "table" and req.input or {}
+  if call.kind == "execute" then
+    return "Bash", { command = input.command or req.title or req.tool }
+  end
+  return req.tool or "a tool", input
+end
+
+-- acp asks about an ACP agent's permission request (bud.ai.agent: req with
+-- options, respond(option_id)) through the same queue, policies and dialog,
+-- answering with the agent's own allow or reject option. A diff the user
+-- changes in the review is accepted as the agent's: ACP's answer can't
+-- carry an edited version
+function M.acp(req, respond)
+  local function pick(kinds)
+    for _, kind in ipairs(kinds) do
+      for _, o in ipairs(req.options or {}) do
+        if o.kind == kind then
+          return o.optionId
+        end
+      end
+    end
+  end
+  local tool, input = M.acp_tool(req)
+  local call = req.raw and req.raw.toolCall or {}
+  M.request({
+    tool = tool,
+    input = input,
+    root = req.session and req.session.root,
+    id = call.toolCallId,
+    who = req.session and req.session.backend or "the agent",
+    acp = true,
+    respond = function(result)
+      if result.behavior == "allow" then
+        respond(pick({ "allow_once", "allow_always" }))
+      else
+        respond(pick({ "reject_once", "reject_always" }))
+      end
+    end,
+  })
 end
 
 -- pending is how many questions are waiting, the one on screen included

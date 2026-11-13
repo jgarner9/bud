@@ -75,6 +75,24 @@ turn("replay " .. repo .. "/tests/fixtures/openclaw/edit.log")
 assert(text():find("```diff\n--- notes.txt\n+++ notes.txt", 1, true), text())
 assert(text():find("+gamma", 1, true), text())
 
+-- thinking is one line, a plan a checklist
+turn("think")
+assert(text():find("> thinking…\n\n> plan:\n> - [x] look\n> - [ ] fix", 1, true), text())
+eq(#vim.tbl_filter(function(l)
+  return l == "> thinking…"
+end, view.lines(proj)), 1, "one thinking line for two thoughts")
+assert(text():find("Thought about it.", 1, true), text())
+
+-- the backend's slash commands complete in the prompt
+vim.cmd.cd(proj)
+eq(
+  vim.tbl_map(function(i)
+    return i.word
+  end, view.complete(0, "/st")),
+  { "/status" },
+  "slash commands"
+)
+
 -- an error says so
 turn("fail")
 assert(text():find("> ✗ scripted failure", 1, true), text())

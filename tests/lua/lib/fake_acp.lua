@@ -4,6 +4,7 @@
 -- a scripted turn picked by the prompt's first word:
 --
 --   hello        two message chunks, then end_turn
+--   think        thoughts, a plan and slash commands, then a reply
 --   echo         a message listing the prompt's blocks (text, links, resources)
 --   edit <path>  a tool call with a diff, asks permission; when allowed it
 --                writes "edited\n" through the client's fs/write_text_file
@@ -89,7 +90,23 @@ local function turn(msg)
   local word, rest = text:match("^(%S+)%s*(.*)$")
   word = word or ""
 
-  if word == "hello" then
+  if word == "think" then
+    update(sid, { sessionUpdate = "agent_thought_chunk", content = { type = "text", text = "hmm" } })
+    update(sid, { sessionUpdate = "agent_thought_chunk", content = { type = "text", text = " more" } })
+    update(sid, {
+      sessionUpdate = "plan",
+      entries = {
+        { content = "look", priority = "high", status = "completed" },
+        { content = "fix", priority = "high", status = "pending" },
+      },
+    })
+    update(sid, {
+      sessionUpdate = "available_commands_update",
+      availableCommands = { { name = "status", description = "Show status" }, { name = "help", description = "Help" } },
+    })
+    say(sid, "Thought about it.")
+    return { stopReason = "end_turn" }
+  elseif word == "hello" then
     say(sid, "Hello ")
     say(sid, "from the fake.")
     return { stopReason = "end_turn" }

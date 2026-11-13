@@ -9,7 +9,8 @@
 --   require("bud.ai.view").toggle()        -- <leader>av
 --   require("bud.ai.view").open({ layout = "full" })
 --
--- In the prompt: <CR> sends, <C-c> stops the reply. In the conversation: q
+-- In the prompt: <CR> sends, <C-c> stops the reply, <C-x><C-o> after a /
+-- completes the backend's slash commands. In the conversation: q
 -- goes back to the editor.
 
 local M = {}
@@ -100,7 +101,7 @@ local function listen(v)
     end),
     on("chunk", function(d, s)
       if mine(s) then
-        v.in_user = false
+        v.in_user, v.thinking = false, false
         if not v.replying then
           v.replying = true
           append(v, { "", "## " .. agent().backend(), "", "" })
@@ -140,12 +141,48 @@ local function listen(v)
         append(v, { "" })
       end
     end),
+    on("thought", function(_, s)
+      -- one line while it thinks, not the thinking itself
+      if mine(s) and not v.thinking then
+        v.thinking = true
+        append(v, { "", "> thinking…" })
+      end
+    end),
+    on("plan", function(d, s)
+      if mine(s) then
+        local lines = { "", "> plan:" }
+        for _, e in ipairs(d.entries or {}) do
+          local box = e.status == "completed" and "[x]" or (e.status == "in_progress" and "[~]" or "[ ]")
+          table.insert(lines, ("> - %s %s"):format(box, e.content or ""))
+        end
+        append(v, lines)
+      end
+    end),
     on("status", function(_, s)
       if mine(s) then
         redraw_title(v)
       end
     end),
   }
+end
+
+-- complete is the prompt's completion of the backend's slash commands
+-- (<C-x><C-o> after a /): what the agent listed in available_commands_update
+function M.complete(findstart, base)
+  if findstart == 1 then
+    local line = vim.api.nvim_get_current_line():sub(1, vim.fn.col(".") - 1)
+    local slash = line:find("/[%w%-_]*$")
+    return slash and slash - 1 or -3
+  end
+  local s = agent().get(vim.fn.getcwd())
+  local items = {}
+  for _, c in ipairs(s and s.commands or {}) do
+    local word = "/" .. c.name
+    if word:sub(1, #base) == base then
+      table.insert(items, { word = word, menu = c.description })
+    end
+  end
+  return items
 end
 
 -- send sends what's typed in the prompt
@@ -172,6 +209,7 @@ local function create(root)
   vim.bo[v.input].buftype = "prompt"
   vim.bo[v.input].bufhidden = "hide"
   vim.fn.prompt_setprompt(v.input, "› ")
+  vim.bo[v.input].omnifunc = "v:lua.require'bud.ai.view'.complete"
   vim.fn.prompt_setcallback(v.input, function(text)
     send(v, text)
   end)

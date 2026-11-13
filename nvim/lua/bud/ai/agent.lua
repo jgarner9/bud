@@ -374,6 +374,7 @@ function M.handle(s, update)
       raw = call,
     }, s)
   elseif kind == "plan" then
+    s.final = ""
     emit("plan", { entries = update.entries or {} }, s)
   elseif kind == "available_commands_update" then
     s.commands = update.availableCommands or {}

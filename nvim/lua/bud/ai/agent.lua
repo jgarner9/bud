@@ -326,16 +326,15 @@ end
 -- path), compared by real path: never vim.fn.bufnr, which reads its argument
 -- as a pattern and can match another buffer's name
 local function loaded(path)
-  local base = vim.fs.basename(path)
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     local name = vim.api.nvim_buf_get_name(buf)
-    -- the cheap test first: only a buffer with the same file name can be it
+    -- the name itself first (cheap), then by real path: a file open through
+    -- a symlink of another name is still that file
     if
       name ~= ""
-      and vim.fs.basename(name) == base
       and vim.api.nvim_buf_is_loaded(buf)
       and vim.bo[buf].buftype == ""
-      and real(name) == path
+      and (name == path or real(name) == path)
     then
       return buf
     end
@@ -546,6 +545,8 @@ local function fail_start(s, conn, why)
   -- a connection already replaced (a restart), or one being stopped, is not
   -- this session's failure: its exit handler says what happened
   if s.conn ~= conn or s.stopping then
+    -- already replaced or stopping: just make sure its process goes
+    pcall(conn.close, conn)
     return
   end
   s.conn = nil

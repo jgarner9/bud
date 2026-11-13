@@ -245,6 +245,14 @@ agent.write_file(proj .. "/creds", "pwned\n")
 eq(vim.fn.readfile(secret), { "keep me" }, "the outside file is untouched")
 eq(vim.fn.readfile(proj .. "/creds"), { "pwned" }, "the write went where it said")
 
+-- a file open through a symlink of another name is written through its buffer
+vim.fn.writefile({ "v1" }, proj .. "/real.txt")
+vim.uv.fs_symlink(proj .. "/real.txt", proj .. "/alias.txt")
+vim.cmd.edit(proj .. "/alias.txt")
+local alias_buf = vim.api.nvim_get_current_buf()
+agent.write_file(agent.resolve(proj, proj .. "/real.txt"), "v2\n")
+eq(vim.api.nvim_buf_get_lines(alias_buf, 0, -1, false), { "v2" }, "the open buffer got the write")
+
 -- interrupt: an open permission question is answered cancelled
 agent.permission = function(req, respond)
   asked = { req = req, respond = respond }

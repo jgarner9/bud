@@ -50,8 +50,8 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
    - **One Gateway at home with the laptop paired as a node:** this doesn't work for editing. OpenClaw's docs say node-hosted sessions run in a managed workspace (an empty folder or a fresh checkout), never your open project.
 
    So I recommend a Gateway on the laptop, signed in to Claude Code and ChatGPT Plus, with the home server's Gateway kept for the phone and the web UI.
-2. **Where the Gateway token lives** (BASE.md 7.1). I recommend a mode-600 file named by `ai.openclaw.token_file`, which is what bud does now. The keychain could come later.
-3. **Should OpenClaw ask before running commands** (7.2)? It's the Gateway's `tools.exec.mode`, and it applies to every surface. I recommend `ask` (`openclaw config set tools.exec.mode ask` on the server), which is how bud has worked so far.
+2. **Where the Gateway token lives** (BASE.md 7.2). I recommend a mode-600 file named by `ai.openclaw.token_file`, which is what bud does now. The keychain could come later.
+3. **Should OpenClaw ask before running commands** (7.3)? It's the Gateway's `tools.exec.mode`, and it applies to every surface. I recommend `ask` (`openclaw config set tools.exec.mode ask` on the server), which is how bud has worked so far.
 4. **Claude subscription through OpenClaw.** Reports from April 2026 say Anthropic stopped third-party tools drawing on the Claude subscription bucket, which conflicts with OpenClaw's docs on `claude-cli` reuse. Check Anthropic's current terms before relying on it. ChatGPT Plus through Codex OAuth looks solid.
 5. **Cloud work** (BASE.md 7.4): D129 removed it when Claude Code was leaving altogether. Now that Claude Code stays as a backend (D135), I recommend keeping it for as long as `claude` is installed, so I didn't remove it. Your call.
 6. **The error on a redirected buffer.** You asked for an error when something tries to change a pane. I raise the error *and* open the file in the editor window, so nothing you picked is lost. Say if you'd rather it only refused.

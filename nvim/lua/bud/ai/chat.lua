@@ -67,12 +67,27 @@ function M.open(opts)
     vim.cmd.startinsert()
     return
   end
-  local bin = claude.bin()
-  if not bin then
-    vim.notify("bud: Claude Code isn't installed: run bud claude setup", vim.log.levels.WARN)
-    return
+  local argv, extra
+  local agent = require("bud.ai.agent")
+  if agent.backend() ~= "claude" then
+    -- the backend's own TUI on its chat session (D131), the one bud chat opens
+    local spec, why = agent.chat_tui(chat_dir())
+    if not spec then
+      vim.notify("bud: " .. why, vim.log.levels.WARN)
+      return
+    elseif vim.fn.executable(spec.argv[1]) ~= 1 then
+      vim.notify(("bud: %s isn't installed: run bud ai setup"):format(spec.argv[1]), vim.log.levels.WARN)
+      return
+    end
+    argv, extra = spec.argv, spec.env
+  else
+    local bin = claude.bin()
+    if not bin then
+      vim.notify("bud: Claude Code isn't installed: run bud claude setup", vim.log.levels.WARN)
+      return
+    end
+    argv = M.argv(bin, opts)
   end
-  local argv = M.argv(bin, opts)
   vim.cmd.tabnew()
   state = { tab = vim.api.nvim_get_current_tabpage(), buf = vim.api.nvim_get_current_buf() }
   -- jk to Normal mode, where <leader>ch goes back and <leader>w moves on
@@ -84,7 +99,7 @@ function M.open(opts)
   state.job = vim.fn.jobstart(argv, {
     term = true,
     cwd = chat_dir(),
-    env = env(),
+    env = vim.tbl_extend("force", env(), extra or {}),
     clear_env = true,
     on_exit = function()
       vim.schedule(function()

@@ -13,6 +13,7 @@ import (
 func TestChatRunsClaudeCodeAsTheChatAgentOutsideAnyProject(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", state)
+	claudeBackend(t)
 	t.Setenv("HOME", t.TempDir())
 	cc := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", cc)

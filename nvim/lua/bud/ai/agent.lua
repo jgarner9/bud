@@ -152,6 +152,20 @@ function M.tui(root, get)
   return nil, ("the %s backend has no TUI bud knows"):format(backend)
 end
 
+-- chat_tui is the backend's own TUI for chat (<leader>ch, bud chat): on
+-- OpenClaw, the Gateway's one chat session, agent:<agent>:bud:chat, the
+-- same key bud chat opens (internal/agent.ChatKey); elsewhere in dir
+function M.chat_tui(dir, get)
+  get = get or function(key, default)
+    return cfg().get(key, default)
+  end
+  local spec, why = M.tui(dir, get)
+  if spec and M.backend() == "openclaw" then
+    spec.argv[#spec.argv] = ("agent:%s:bud:chat"):format(get("ai.openclaw.agent", "main"))
+  end
+  return spec, why
+end
+
 -- M.command lets tests swap the backend's command line for the fake agent's
 M.command = function(root)
   return M.argv(M.backend(), nil, root)

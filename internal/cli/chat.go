@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	backend "jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -26,7 +27,7 @@ func Chat() *Command {
 	var resume bool
 	return &Command{
 		Name:  "chat",
-		Usage: "Chats with Claude Code, in chat mode: chat [--resume]",
+		Usage: "Chats with the AI backend, outside any project: chat [--resume]",
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&resume, "resume", false, "pick an earlier chat to carry on")
 		},
@@ -44,10 +45,6 @@ func chat(g *Globals, args []string, resume bool) error {
 	if len(args) > 0 {
 		return usageErrorf("chat takes no arguments; --resume picks an earlier chat")
 	}
-	bin := claude.Find()
-	if bin == "" {
-		return errors.New("Claude Code isn't installed: run bud claude setup")
-	}
 	p, err := paths.Resolve()
 	if err != nil {
 		return err
@@ -55,6 +52,16 @@ func chat(g *Globals, args []string, resume bool) error {
 	dir := p.Chat()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
+	}
+	if s := machineSettings(); s.AI.Backend != "claude" {
+		if resume {
+			return usageErrorf("--resume is Claude Code's; %s keeps one chat, which opens where it left off", s.AI.Backend)
+		}
+		return execBackendTUI(g, s, backend.ChatKey(s.AI.OpenClaw.Agent), dir)
+	}
+	bin := claude.Find()
+	if bin == "" {
+		return errors.New("Claude Code isn't installed: run bud claude setup")
 	}
 
 	var flags []string

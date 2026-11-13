@@ -81,5 +81,23 @@ term.stop_all()
 wait(function()
   return not term.running(proj)
 end, "the TUI to stop")
+
+-- chat (<leader>ch) runs it on the Gateway's chat session, outside the project
+vim.fn.delete(tmp .. "/bin/argv.log")
+local chat = require("bud.ai.chat")
+chat.dir = function()
+  return tmp .. "/chat"
+end
+chat.open()
+wait(function()
+  return vim.fn.filereadable(tmp .. "/bin/argv.log") == 1
+end, "the chat TUI")
+eq(
+  vim.fn.readfile(tmp .. "/bin/argv.log")[1],
+  "tui --url wss://home.example.ts.net:18789 --session agent:main:bud:chat",
+  "openclaw tui on the chat session"
+)
+eq(chat.running(), true, "chat running")
+chat._reset()
 vim.fn.delete(tmp, "rf")
 print("term_backend_test: ok")

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	backend "jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/paths"
@@ -26,7 +27,7 @@ func init() {
 func Agent() *Command {
 	return &Command{
 		Name:  "agent",
-		Usage: "Opens Claude Code in a project, outside the editor: agent [path] (default: the current dir)",
+		Usage: "Opens the AI backend's own TUI in a project, outside the editor: agent [path] (default: the current dir)",
 		Run:   agent,
 	}
 }
@@ -43,6 +44,22 @@ var execClaude = func(dir string, argv, env []string) error {
 // BUD_BIN pointing at this bud, as nvim's sessions have it, so bud-ide's
 // SessionStart hook knows the session is bud's and adds its notes on
 // working inside bud (D77)
+// execBackendTUI replaces bud with the configured backend's own TUI on the
+// session key (OpenClaw) or in dir (the others)
+func execBackendTUI(g *Globals, s config.Settings, key, dir string) error {
+	argv, extra, err := backend.TUI(s, key, dir)
+	if err != nil {
+		return err
+	}
+	bin, err := exec.LookPath(argv[0])
+	if err != nil {
+		return fmt.Errorf("%s isn't installed: run bud ai setup", argv[0])
+	}
+	argv[0] = bin
+	g.Logf("running %q in %s", argv, dir)
+	return execClaude(dir, argv, append(agentEnv(), extra...))
+}
+
 func agentEnv() []string {
 	env := os.Environ()
 	self, err := os.Executable()
@@ -62,12 +79,21 @@ func agent(g *Globals, args []string) error {
 	if err != nil {
 		return err
 	}
+	s := machineSettings()
+	if s.AI.Backend != "claude" {
+		// the backend's own TUI (D131); OpenClaw's on the project's
+		// Gateway session, the one the editor uses (D139)
+		root := ws.Root
+		if real, err := filepath.EvalSymlinks(root); err == nil {
+			root = real
+		}
+		return execBackendTUI(g, s, backend.SessionKey(root, s.AI.OpenClaw.Agent), ws.Root)
+	}
 	bin := claude.Find()
 	if bin == "" {
 		return errors.New("Claude Code isn't installed: run bud claude setup")
 	}
 
-	s := machineSettings()
 	argv, err := tuiArgv(s, bin, resumeFlags(s, ws.Root))
 	if err != nil {
 		return err

@@ -46,6 +46,8 @@ local with_root = agent.argv("openclaw", get, "/home/me/code/My Proj")
 eq(with_root[7], "--session", "a session flag")
 assert(with_root[8]:match("^agent:main:bud:my%-proj%-%x%x%x%x%x%x$"), with_root[8])
 eq(agent.session_key("/a/api") ~= agent.session_key("/b/api"), true, "same name, different dirs, different keys")
+-- pinned in internal/agent too, so bud agent opens the editor's session
+eq(agent.session_key("/home/me/code/My Proj"), "agent:main:bud:my-proj-371d07", "the key Go makes")
 settings["ai.openclaw.agent"] = "coder"
 assert(agent.argv("openclaw", get, "/x/y")[8]:find("^agent:coder:bud:y%-"), "the agent id from config")
 settings["ai.openclaw.agent"] = nil

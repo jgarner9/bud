@@ -173,3 +173,44 @@ func TestPlainOK(t *testing.T) {
 		}
 	}
 }
+
+// the key matches the editor's (bud.ai.agent.session_key), so the shell and
+// the editor share one Gateway session per project
+func TestSessionKey(t *testing.T) {
+	// the same literal is pinned in tests/lua/agent_test.lua
+	if got := SessionKey("/home/me/code/My Proj", ""); got != "agent:main:bud:my-proj-371d07" {
+		t.Errorf("key %q", got)
+	}
+	if SessionKey("/a/api", "main") == SessionKey("/b/api", "main") {
+		t.Error("same name, different dirs, same key")
+	}
+	if got := SessionKey("/x/y", "coder"); !strings.HasPrefix(got, "agent:coder:bud:y-") {
+		t.Errorf("agent id: %q", got)
+	}
+	if ChatKey("") != "agent:main:bud:chat" {
+		t.Errorf("chat key %q", ChatKey(""))
+	}
+}
+
+func TestTUI(t *testing.T) {
+	dir := t.TempDir()
+	token := filepath.Join(dir, "token")
+	os.WriteFile(token, []byte("secret\n"), 0o600)
+	argv, env, err := TUI(settings(func(s *config.Settings) {
+		s.AI.OpenClaw.URL = "wss://home:18789"
+		s.AI.OpenClaw.TokenFile = token
+	}), "agent:main:bud:x-abc123", "/p")
+	if err != nil || !reflect.DeepEqual(argv, []string{"openclaw", "tui", "--url", "wss://home:18789", "--session", "agent:main:bud:x-abc123"}) ||
+		!reflect.DeepEqual(env, []string{"OPENCLAW_GATEWAY_TOKEN=secret"}) {
+		t.Errorf("openclaw: %q %q %v", argv, env, err)
+	}
+	if argv, _, _ := TUI(settings(func(s *config.Settings) { s.AI.Backend = "opencode" }), "", "/p"); !reflect.DeepEqual(argv, []string{"opencode", "/p"}) {
+		t.Errorf("opencode: %q", argv)
+	}
+	if _, _, err := TUI(settings(func(s *config.Settings) { s.AI.Backend = "custom" }), "", "/p"); err == nil {
+		t.Error("custom has no TUI")
+	}
+	if _, _, err := TUI(settings(func(s *config.Settings) { s.AI.OpenClaw.TokenFile = filepath.Join(dir, "nope") }), "k", "/p"); err == nil {
+		t.Error("a missing token file is an error")
+	}
+}

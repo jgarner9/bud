@@ -6,12 +6,15 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -221,4 +224,57 @@ func plainOK(host string) bool {
 	}
 	_, cgnat, _ := net.ParseCIDR("100.64.0.0/10")
 	return cgnat.Contains(ip)
+}
+
+// SessionKey is the OpenClaw Gateway session bud uses for the project at
+// root (D139), the same key the editor's bud.ai.agent.session_key makes:
+// agent:<agentID>:bud:<dir name>-<first 6 hex of sha256(root)>
+func SessionKey(root, agentID string) string {
+	if agentID == "" {
+		agentID = "main"
+	}
+	name := nonKey.ReplaceAllString(strings.ToLower(filepath.Base(root)), "-")
+	sum := sha256.Sum256([]byte(root))
+	return fmt.Sprintf("agent:%s:bud:%s-%s", agentID, name, hex.EncodeToString(sum[:])[:6])
+}
+
+// ChatKey is the Gateway session bud chat and the editor's chat use: one
+// conversation that's no project's
+func ChatKey(agentID string) string {
+	if agentID == "" {
+		agentID = "main"
+	}
+	return "agent:" + agentID + ":bud:chat"
+}
+
+var nonKey = regexp.MustCompile(`[^a-z0-9\-_.]`)
+
+// TUI is the backend's own TUI for the session key (OpenClaw) or dir (the
+// others): its argv and the environment it adds. The claude backend's TUI
+// is Claude Code's, which the claude commands build; custom has none
+func TUI(s config.Settings, key, dir string) ([]string, []string, error) {
+	switch s.AI.Backend {
+	case "openclaw", "":
+		argv := []string{"openclaw", "tui"}
+		if u := s.AI.OpenClaw.URL; u != "" {
+			argv = append(argv, "--url", u)
+		}
+		argv = append(argv, "--session", key)
+		var env []string
+		if f := s.AI.OpenClaw.TokenFile; f != "" {
+			data, err := os.ReadFile(expandHome(f))
+			if err != nil {
+				return nil, nil, fmt.Errorf("reading the Gateway token: %w", err)
+			}
+			line, _, _ := strings.Cut(string(data), "\n")
+			// the TUI takes a token only on its command line or here
+			env = append(env, "OPENCLAW_GATEWAY_TOKEN="+strings.TrimSpace(line))
+		}
+		return argv, env, nil
+	case "codex":
+		return []string{"codex"}, nil, nil
+	case "opencode":
+		return []string{"opencode", dir}, nil, nil
+	}
+	return nil, nil, fmt.Errorf("the %s backend has no TUI bud knows", s.AI.Backend)
 }

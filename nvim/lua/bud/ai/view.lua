@@ -125,7 +125,8 @@ end
 local function redraw_title(v)
   for _, win in ipairs(v.wins) do
     if vim.api.nvim_win_is_valid(win) then
-      vim.wo[win].winbar = require("bud.ai.review").escape(title(v))
+      -- %% for %: a project dir's name could hold %{...}, which a winbar runs
+      vim.wo[win].winbar = (title(v):gsub("%%", "%%%%"))
     end
   end
 end

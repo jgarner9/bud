@@ -243,4 +243,31 @@ eq(#vim.tbl_filter(function(w)
 end, vim.api.nvim_tabpage_list_wins(0)), 1, "the pane is back, locked")
 vim.bo[vim.api.nvim_win_get_buf(refused_editor)].modified = false
 
+-- the same in the only tab, where a refused :q also fires ExitPre: the panes
+-- come back and the lock stays on
+vim.cmd.tabonly()
+vim.cmd.only()
+local only_editor = vim.api.nvim_get_current_win()
+vim.bo.modified = true
+local solo = pane()
+before_quit = opened
+vim.api.nvim_set_current_win(only_editor)
+vim.o.hidden = false
+pcall(vim.cmd.quit)
+vim.o.hidden = true
+wait(function()
+  return opened > before_quit
+end, "the pane after a refused :q in the only tab")
+vim.wait(50)
+local back = vim.tbl_filter(function(w)
+  return lock.spec(w) ~= nil
+end, vim.api.nvim_tabpage_list_wins(0))[1]
+errors = {}
+vim.api.nvim_win_close(back, false)
+wait(function()
+  return #errors > 0
+end, "the lock to still be on")
+vim.bo[vim.api.nvim_win_get_buf(only_editor)].modified = false
+_ = solo
+
 print("lock_test: ok")

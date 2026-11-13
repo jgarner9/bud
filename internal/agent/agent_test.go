@@ -61,7 +61,7 @@ func TestArgv(t *testing.T) {
 			s.AI.OpenClaw.URL = "wss://home.example.ts.net:18789"
 			s.AI.OpenClaw.TokenFile = "~/.config/openclaw/gateway-token"
 		}, []string{"openclaw", "acp", "--url", "wss://home.example.ts.net:18789", "--token-file", filepath.Join(home, ".config/openclaw/gateway-token")}, ""},
-		{"claude", func(s *config.Settings) { s.AI.Backend = "claude" }, []string{"claude-agent-acp"}, ""},
+		{"claude", func(s *config.Settings) { s.AI.Backend = "claude" }, []string{"claude"}, ""},
 		{"codex", func(s *config.Settings) { s.AI.Backend = "codex" }, []string{"codex-acp"}, ""},
 		{"opencode", func(s *config.Settings) { s.AI.Backend = "opencode" }, []string{"opencode", "acp"}, ""},
 		{"custom", func(s *config.Settings) {

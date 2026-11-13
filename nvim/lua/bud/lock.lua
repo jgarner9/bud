@@ -190,6 +190,11 @@ function M.setup()
     group = group,
     callback = function()
       exiting = true
+      -- Neovim may still refuse to exit (unsaved changes): then it's running
+      -- a tick later, and the lock is back on
+      vim.schedule(function()
+        exiting = false
+      end)
     end,
   })
   -- :q in the tab's last window that isn't a pane takes the panes with it,
@@ -220,7 +225,8 @@ function M.setup()
       -- is still there and bud didn't exit, so the panes come back
       local tab = vim.api.nvim_get_current_tabpage()
       vim.schedule(function()
-        if exiting or not vim.api.nvim_win_is_valid(cur) or not vim.api.nvim_tabpage_is_valid(tab) then
+        -- not exiting: the ExitPre a refused :q fires has been undone by now
+        if not vim.api.nvim_win_is_valid(cur) or not vim.api.nvim_tabpage_is_valid(tab) then
           return
         end
         local seen = {}

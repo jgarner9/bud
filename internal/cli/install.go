@@ -108,11 +108,14 @@ func install(g *Globals, args []string, yes bool) error {
 		}
 	}
 
-	if s.AI.Agent.Autostart && s.AI.Backend != "claude" {
-		// another backend (D131): its command and, for OpenClaw, the Gateway
-		fmt.Println()
-		if err := installBackend(pr, yes, s.AI.Backend); err != nil {
-			fmt.Printf("The AI backend (%s) isn't set up (%v); 'bud ai setup' tries again.\n", s.AI.Backend, err)
+	if s.AI.Backend != "claude" {
+		// another backend (D131): its command and, for OpenClaw, the Gateway;
+		// never Claude Code's setup, whatever ai.claude.autostart says
+		if s.AI.Agent.Autostart {
+			fmt.Println()
+			if err := installBackend(pr, yes, s.AI.Backend); err != nil {
+				fmt.Printf("The AI backend (%s) isn't set up (%v); 'bud ai setup' tries again.\n", s.AI.Backend, err)
+			}
 		}
 	} else if s.AI.Claude.Autostart {
 		fmt.Println()

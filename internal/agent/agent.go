@@ -22,7 +22,6 @@ import (
 // Install says how to get each backend's command, for messages
 var Install = map[string]string{
 	"openclaw": "npm install -g openclaw",
-	"claude":   "npm install -g @agentclientprotocol/claude-agent-acp",
 	"codex":    "npm install -g @zed-industries/codex-acp",
 	"opencode": "npm install -g @opencode/cli",
 }
@@ -40,7 +39,8 @@ func Argv(s config.Settings) ([]string, error) {
 		}
 		return argv, nil
 	case "claude":
-		return []string{"claude-agent-acp"}, nil
+		// Claude Code directly, not over ACP yet (D140)
+		return []string{"claude"}, nil
 	case "codex":
 		return []string{"codex-acp"}, nil
 	case "opencode":
@@ -128,11 +128,6 @@ func Check(s config.Settings, quick bool) Status {
 	if err != nil {
 		st.Problems = append(st.Problems, Problem{What: err.Error(), Fix: "bud config set ai.backend openclaw", Hard: true})
 		return st
-	}
-	if st.Backend == "claude" {
-		// the claude backend still runs Claude Code directly, not over ACP
-		// (D140), so it's the claude command that has to be there
-		argv = []string{"claude"}
 	}
 	st.Argv = argv
 	bin, err := lookPath(argv[0])

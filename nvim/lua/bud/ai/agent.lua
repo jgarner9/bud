@@ -159,6 +159,12 @@ function M.argv(backend, get)
   return nil, ("ai.backend: %q isn't a backend bud knows"):format(tostring(backend))
 end
 
+-- agent_id is ai.openclaw.agent, empty meaning main as in Go
+local function agent_id(get)
+  local v = get("ai.openclaw.agent", "")
+  return (v ~= nil and v ~= "") and v or "main"
+end
+
 -- token reads the Gateway token from ai.openclaw.token_file, for the TUI,
 -- which takes it only from the environment (OPENCLAW_GATEWAY_TOKEN) or argv
 local function token(get)
@@ -188,7 +194,7 @@ function M.tui(root, get)
     if not id then
       return nil, "the project's OpenClaw session didn't start: " .. (M.get(root) and M.get(root).why or "no answer")
     end
-    vim.list_extend(argv, { "--session", M.bridge_key(id, get("ai.openclaw.agent", "main")) })
+    vim.list_extend(argv, { "--session", M.bridge_key(id, agent_id(get)) })
     local t = token(get)
     return { argv = argv, env = t and { OPENCLAW_GATEWAY_TOKEN = t } or nil }
   elseif backend == "codex" then
@@ -215,7 +221,7 @@ function M.session_id(root, wait)
   root = root or vim.fn.getcwd()
   root = vim.uv.fs_realpath(root) or root
   local s = M.session(root)
-  if s.status ~= "ready" and s.status ~= "busy" then
+  if s.status == "starting" then
     vim.notify(("bud: starting %s…"):format(s.backend or M.backend()))
     vim.cmd.redraw()
     vim.wait(wait or 15000, function()
@@ -242,7 +248,7 @@ function M.chat_tui(dir, get)
     end
     vim.list_extend(argv, {
       "--session",
-      ("agent:%s:bud:chat"):format(get("ai.openclaw.agent", "") ~= "" and get("ai.openclaw.agent", "") or "main"),
+      ("agent:%s:bud:chat"):format(agent_id(get)),
     })
     local t = token(get)
     return { argv = argv, env = t and { OPENCLAW_GATEWAY_TOKEN = t } or nil }
@@ -273,11 +279,21 @@ end
 
 -- real is path with symlinks resolved: the nearest part that exists, by its
 -- realpath, with the rest that doesn't yet exist after it
+-- nil when a part of it is a symlink to nothing: a write would follow it
+-- to wherever it points
 local function real(path)
   local probe, rest = path, ""
-  while probe ~= "/" and not vim.uv.fs_realpath(probe) do
+  while not vim.uv.fs_realpath(probe) do
+    if vim.uv.fs_lstat(probe) then
+      return nil
+    end
+    local parent = vim.fs.dirname(probe)
+    -- "/" or "." (a relative name in a dir that's gone): nothing above it
+    if parent == probe then
+      break
+    end
     rest = "/" .. vim.fs.basename(probe) .. rest
-    probe = vim.fs.dirname(probe)
+    probe = parent
   end
   return (vim.uv.fs_realpath(probe) or probe) .. rest
 end
@@ -291,6 +307,9 @@ function M.resolve(root, path)
     return nil, ("%s isn't an absolute path"):format(tostring(path))
   end
   local p = real(vim.fs.normalize(path))
+  if not p then
+    return nil, ("%s goes through a symlink that points nowhere"):format(path)
+  end
   local r = vim.uv.fs_realpath(root) or root
   if p ~= r and p:sub(1, #r + 1) ~= r .. "/" then
     return nil, ("%s is outside the project (%s)"):format(path, root)
@@ -307,9 +326,17 @@ end
 -- path), compared by real path: never vim.fn.bufnr, which reads its argument
 -- as a pattern and can match another buffer's name
 local function loaded(path)
+  local base = vim.fs.basename(path)
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     local name = vim.api.nvim_buf_get_name(buf)
-    if name ~= "" and vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].buftype == "" and real(name) == path then
+    -- the cheap test first: only a buffer with the same file name can be it
+    if
+      name ~= ""
+      and vim.fs.basename(name) == base
+      and vim.api.nvim_buf_is_loaded(buf)
+      and vim.bo[buf].buftype == ""
+      and real(name) == path
+    then
       return buf
     end
   end
@@ -516,9 +543,12 @@ end
 -- session/new or load refused): the process goes, so the next send starts
 -- it again, and each message waiting for it is answered not sent
 local function fail_start(s, conn, why)
-  if s.conn == conn then
-    s.conn = nil
+  -- a connection already replaced (a restart), or one being stopped, is not
+  -- this session's failure: its exit handler says what happened
+  if s.conn ~= conn or s.stopping then
+    return
   end
+  s.conn = nil
   pcall(conn.close, conn)
   local queued = s.queue or {}
   s.queue = {}

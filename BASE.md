@@ -142,13 +142,21 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D121 | **Everything about the Claude setup is under `bud kit`.** | 2026-11-13 | Plan, 4.3. The other option was `bud claude`, beside `status` and `setup`. `bud kit` exists and already means bud's Claude setup; `bud claude status` points at `bud kit status`, and `bud claude setup` stays as what installs Claude Code and logs in. |
 | D122 | **Claude reaches the setup through the `bud kit` commands with `--json`, not an MCP server.** | 2026-11-13 | Plan, 4.3; settles how D117's skill works. The skill runs the commands through Bash. Options were that, or a small MCP server in the binary (`bud mcp`) with a typed tool per command. The commands have to exist anyway for use by hand, so a server would be a second interface to keep in step with them, and its tool names would sit in every request of every session, which D101 and D102 worked to cut. What a server would add is Desktop chat on a machine, and a change to the setup needs a checkout and a release, which is Claude Code's ground. It can be added later over the same commands if that turns out to matter. |
 | D123 | **`kit.json` holds every section, keyed by name, and `Load` refuses what it doesn't know.** | 2026-11-13 | JGA-244; the format is in `docs/internals/kit-manifest.md`. Servers, rules and account connectors are objects keyed by name, as marketplaces are, so `bud kit add` and `rm` edit one key. A server carries what clod spread over a feature folder: its `claude mcp add-json` definition with `${VAR}` placeholders, the values those need, its default modes, the command it requires, the account connector that delivers it, and the settings that go with it. Rule text and the cloud script are files beside `kit.json`, since they are prose and shell; a rule can also point into a marketplace's checkout, which is how `core.md` stays in bud-plugins. An unknown key is an error at any depth, and so is a placeholder with no declared value, because the kit is embedded and a typo would otherwise ship. `core` and `expected_mcp` are gone: the first is `account.instructions` and the `core.md` rule, and the second is derived (servers on by default in full mode that need no command on `PATH`), which gives the same three. Left in clod on purpose: the autosync hook (changes now arrive with a release, D111), the `plugin` feature (the kit's `plugins`), the deny rule for clod's `secrets.env`, and the checklist's personal skills and scheduled task, which are one person's and not the setup's. |
-| D124 | **bud's AI runs on OpenCode, so the model is whichever provider OpenCode is connected to.** | 2026-11-13 | Jason's pivot, plan in 4.4; supersedes D14 and D26. It is one harness and not an adapter layer (D3 stays superseded): bud drives OpenCode's server from Neovim and never talks to a model provider itself, so it still stores no AI keys, and sign-in is OpenCode's own. Checked on 2026-11-13 against OpenCode 2.1.2's docs and Anthropic's Claude Code legal page: a Claude Pro or Max subscription can't be used inside OpenCode (Anthropic prohibits it, and OpenCode dropped the plugin for it in 1.3.0), so Claude there means an API key, Bedrock or Vertex, while ChatGPT Plus, GitHub Copilot and local models work. |
-| D125 | **Claude Code comes out of bud up front, and the 1.0 line is the Claude Code release.** | 2026-11-13 | Jason chose deleting first over keeping Claude Code as a frozen second backend or deleting it once OpenCode was at parity. The 1.0 line (v1.0.0 to v1.0.2) is where bud on Claude Code stays. There is no fallback while the OpenCode session is built: `main` has no working AI between the cut and the session landing, no stable release is made in that gap (D80), and the nightly channel does carry it. What goes is the transport and everything that only served it: `bud.ai.claude`'s process and stream handling, the IDE bridge, `internal/claude`, `bud claude`, the kit's `claude plugin` sync and `ai.claude.*`. What was built on the session stays and moves to the new module: the permission prompt, the diff review, issues, work, the generator and the chat tab. |
-| D126 | **Bud 1.1 is bud on OpenCode: the session, and the kit re-aimed at OpenCode's config.** | 2026-11-13 | Supersedes D116, D113 and D118. From 4.3, the manifest, status, add and rm, MCP servers, and settings and rules carry over with OpenCode's config as the target (JGA-244, JGA-247, JGA-248, JGA-249, JGA-250). The claude.ai account, Desktop, the cloud script, taking over clod and moving bud-plugins leave the milestone for the backlog (JGA-241, JGA-245, JGA-251 to JGA-259), and clod keeps setting up Claude's own surfaces. D111, D115, D121, D122 and D123 hold with "OpenCode setup" read for "Claude setup"; D112, D114, D117 and D119 wait with the parked work. `VERSION` goes to 1.1.0 when the session, the kit and the docs are all on OpenCode. |
+| D124 | **(Superseded by D131.)** **bud's AI runs on OpenCode, so the model is whichever provider OpenCode is connected to.** | 2026-11-13 | Jason's pivot, plan in 4.4; supersedes D14 and D26. It is one harness and not an adapter layer (D3 stays superseded): bud drives OpenCode's server from Neovim and never talks to a model provider itself, so it still stores no AI keys, and sign-in is OpenCode's own. Checked on 2026-11-13 against OpenCode 2.1.2's docs and Anthropic's Claude Code legal page: a Claude Pro or Max subscription can't be used inside OpenCode (Anthropic prohibits it, and OpenCode dropped the plugin for it in 1.3.0), so Claude there means an API key, Bedrock or Vertex, while ChatGPT Plus, GitHub Copilot and local models work. |
+| D125 | **(Narrowed by D131 and D135.)** **Claude Code comes out of bud up front, and the 1.0 line is the Claude Code release.** | 2026-11-13 | Jason chose deleting first over keeping Claude Code as a frozen second backend or deleting it once OpenCode was at parity. The 1.0 line (v1.0.0 to v1.0.2) is where bud on Claude Code stays. There is no fallback while the OpenCode session is built: `main` has no working AI between the cut and the session landing, no stable release is made in that gap (D80), and the nightly channel does carry it. What goes is the transport and everything that only served it: `bud.ai.claude`'s process and stream handling, the IDE bridge, `internal/claude`, `bud claude`, the kit's `claude plugin` sync and `ai.claude.*`. What was built on the session stays and moves to the new module: the permission prompt, the diff review, issues, work, the generator and the chat tab. |
+| D126 | **(Superseded by D131 and D132.)** **Bud 1.1 is bud on OpenCode: the session, and the kit re-aimed at OpenCode's config.** | 2026-11-13 | Supersedes D116, D113 and D118. From 4.3, the manifest, status, add and rm, MCP servers, and settings and rules carry over with OpenCode's config as the target (JGA-244, JGA-247, JGA-248, JGA-249, JGA-250). The claude.ai account, Desktop, the cloud script, taking over clod and moving bud-plugins leave the milestone for the backlog (JGA-241, JGA-245, JGA-251 to JGA-259), and clod keeps setting up Claude's own surfaces. D111, D115, D121, D122 and D123 hold with "OpenCode setup" read for "Claude setup"; D112, D114, D117 and D119 wait with the parked work. `VERSION` goes to 1.1.0 when the session, the kit and the docs are all on OpenCode. |
 | D127 | **Bud 1.2 is delegation, a planning schema and docs mapped to code.** | 2026-11-13 | Jason set it: JGA-260 (the session model writes the spec, cheaper models write the code), JGA-246 (a planning schema and skills of his own, D120) and JGA-261 (each docs page mapped to the code it describes, with a test that fails when that code changes). It is planned in detail once 1.1 ships, because delegation changes shape on OpenCode: a coder can be any provider's model, or a local one. |
-| D128 | **The OpenCode pieces are named for OpenCode: `bud.ai.opencode`, `ai.opencode.*` and `bud opencode status\|setup`.** | 2026-11-13 | Plan, 4.4. A straight rename of `bud.ai.claude`, `ai.claude.*` and `bud claude`, so what runs is named and a machine's `config.json` migrates key for key. The other option was neutral names (`bud.ai.agent`, `ai.agent.*`, `bud ai`), which would survive another change of harness but hide what is run. |
+| D128 | **(Superseded by D133.)** **The OpenCode pieces are named for OpenCode: `bud.ai.opencode`, `ai.opencode.*` and `bud opencode status\|setup`.** | 2026-11-13 | Plan, 4.4. A straight rename of `bud.ai.claude`, `ai.claude.*` and `bud claude`, so what runs is named and a machine's `config.json` migrates key for key. The other option was neutral names (`bud.ai.agent`, `ai.agent.*`, `bud ai`), which would survive another change of harness but hide what is run. |
 | D129 | **Cloud work goes with Claude Code.** | 2026-11-13 | Plan, 4.4; follows D125. `ai.work.where = "cloud"` (JGA-237) ran `claude --cloud`, which only Claude Code has, so the setting, the cloud runs file and that half of `bud.ai.work` are removed. Working an issue in a local worktree stays. |
 | D130 | **bud no longer sets clod up.** | 2026-11-13 | Plan, 4.4. `setupClod`, `clod.repo` and `internal/cli/clod.go` come out, since bud needs no Claude Code on a machine. clod stays Jason's setup for Claude's own surfaces and is run by its own installer (D126). D89 and D90 stay superseded, with this as the reason in place of D113. |
+| D131 | **bud is backend-agnostic: it talks to its agent over the Agent Client Protocol (ACP v1), and the backend is a command line in config.** | 2026-11-13 | Jason, the morning after D124: "make it backend agnostic, with OpenClaw as the main option". Supersedes D124 and D126, D125's "no adapter layer", and D128's names (D133). ACP is JSON-RPC on stdio, newline-delimited, so `bud.ai.acp` is a job and a JSON decoder on `vim.fn.jobstart`, with no HTTP, WebSocket or signing in bud. Every harness Jason named already speaks it: `openclaw acp`, `opencode acp`, Claude Code through `claude-agent-acp`, Codex through `codex-acp`, Gemini CLI. The other options were OpenClaw's own Gateway protocol (WebSocket, Ed25519 device identity and pairing: too much to carry in Lua) and an adapter per harness (the work D125 wanted to avoid). `ai.backend` names an entry in `ai.backends` (`command`, `args`, `env`); four are built in. |
+| D132 | **OpenClaw is the default backend: a Gateway Jason hosts on his home server, reached with `openclaw acp`.** | 2026-11-13 | Jason: mostly local, one backend so every surface is consistent, with an app, a web UI and a TUI, and Claude Code and ChatGPT Plus behind it. OpenClaw has all of them: the Gateway (port 18789), its Control UI in a browser, the macOS and mobile apps, `openclaw tui`, Claude Code as the `claude-cli` runtime (the subscription of the `claude` login on the Gateway host) and ChatGPT Plus through Codex OAuth (`openclaw onboard --auth-choice openai-codex`). bud runs `openclaw acp --url <ai.openclaw.url> --token-file <ai.openclaw.token_file>`; the token file is the Gateway token, kept out of `config.json` and process listings. With no URL set, `openclaw acp` uses the CLI's own `gateway.remote.url` or a local Gateway. Reach the home server over Tailscale (`wss://` or a `.ts.net` name); OpenClaw only accepts plain `ws://` on loopback, private and Tailscale addresses. Checked against OpenClaw 2026.11.3's docs and packages; a run against the real Gateway is still to do (1.1 task 1). |
+| D133 | **The AI pieces get neutral names: `bud.ai.agent`, `ai.backend`, `ai.backends.*`, `ai.agent.*` and `bud ai status\|setup`.** | 2026-11-13 | Supersedes D128, whose rejected option this was: with more than one backend, a name like `bud.ai.opencode` would be wrong half the time. `bud agent` and `bud chat` keep their meaning (open the backend's own TUI, open chat). `ai.claude.*` migrates to `ai.agent.*` where a key still means something. |
+| D134 | **Edits are reviewed before they're written when the backend sends a diff, and afterwards with git when it doesn't.** | 2026-11-13 | Answers section 7's question on reviewing edits. ACP's `session/request_permission` carries the tool call, whose content can hold a `diff` (`path`, `oldText`, `newText`); the Claude Code and Codex adapters send it, and bud's diff review shows it. OpenClaw's ACP bridge relays exec approvals but no diffs ("not exposed"), so with OpenClaw an edit lands and the git pane and the session's changed-file list are the review. |
+| D135 | **Claude Code stays usable as a backend, so the kit's Claude setup stays.** | 2026-11-13 | Follows D131; narrows D125. What goes is Claude Code's transport: `claude -p` with stream-json, the IDE bridge, and `--permission-prompt-tool`. `claude-agent-acp` reads `~/.claude` like the CLI, so `bud kit sync` (4.1) and its plugins keep working for the `claude` backend. Teaching the kit OpenClaw's skills is 1.2. D129 (no cloud work) and D130 (no clod setup) stand: both were only ever Claude Code's. |
+| D136 | **Side panes are locked: only their toggles open and close them, and files open in the editor window.** | 2026-11-13 | Jason: `:q` or a buffer change in the tree, git, chat or terminal pane breaks the layout. A pane window refuses `:q`, `:close`, `:only` from it and any buffer change other than its own with an error naming its toggle key, and a file opened while a pane is focused goes to the editor window. `:qa` and `:wqa` still quit bud. |
+| D137 | **Chat opens as a pull-out pane or full screen, and a key switches between them.** | 2026-11-13 | Jason asked for both. The pane is the existing right-hand chat (D45 kinds); full screen gives the chat the whole tab, the editor and panes hidden until it's switched back. `ai.agent.chat_layout` (`pane` or `full`) picks how it opens. |
+| D138 | **bud draws its own chat from ACP events in 1.2; until then the pane runs the backend's TUI.** | 2026-11-13 | Jason wants the TUI inside bud to look exactly how he chooses. A chat drawn in Neovim from `session/update` events can take bud's colours, layout and keys; a backend's TUI can't. 1.1 runs `openclaw tui` (or the backend's own) in the pane, as D81 did with Claude Code's, and 1.2 replaces it. |
 
 ---
 
@@ -355,7 +363,7 @@ A key-hint popup (mini.clue, D74) documents all of it, so the keymap is self-des
 
 ## 4. AI layer
 
-> 1.1 moves this layer to OpenCode (4.4, D124-D126). Until that is built, this section, 4.1 and 4.2 describe what is in the tree: Claude Code.
+> 1.1 makes this layer backend-agnostic over ACP, with OpenClaw as the default backend (4.4, D131-D138). Until that is built, this section, 4.1 and 4.2 describe what is in the tree: Claude Code.
 
 Every part below runs on the project's Claude Code session (4.2) and is drawn by TUIs in Neovim. Three parts:
 
@@ -553,36 +561,46 @@ Three things make it deterministic rather than merely convenient. The commands d
 
 **What goes away:** the clod repo and its `clod` command, `clod.repo`, `jgarner9/clod-template`, `setupClod` and the `clod` record (`internal/cli/clod.go`), clod's `autosync` hook, and the account checklist as prose. `docs/setup.md` loses its clod step.
 
-### 4.4 bud on OpenCode (plan)
+### 4.4 A backend-agnostic agent, OpenClaw by default (plan)
 
-> Not built; this is the 1.1 release (D124-D126). The build order is in section 6 and what's still open is in section 7. Checked against OpenCode 2.1.2's docs on 2026-11-13. The first task pins a version and checks the rows marked "first task" against its OpenAPI spec and a running server.
+> Not built; this is the 1.1 release (D131-D138). It replaces the OpenCode plan (D124, D126), which got as far as checking OpenCode 2.2.7's API and was stopped before any code. The build order is in section 6 and what's still open is in section 7. Checked against the ACP v1 schema (`@agentclientprotocol/sdk` 2.6.0) and OpenClaw 2026.11.3's docs and packages.
 
-The aim is that everything in 4 and 4.2 works as it does now with OpenCode where Claude Code was, so the model becomes a setting in OpenCode and stops being a property of bud (D124). Claude Code is removed first, not kept beside it (D125).
+The aim is that everything in 4 and 4.2 works as it does now with any ACP agent where Claude Code was, and that the default agent is an OpenClaw Gateway on Jason's home server, so the editor, the OpenClaw apps, its web UI and its TUI all talk to the same sessions with the same models (D131, D132).
 
 **How the pieces map.**
 
-| Today, on Claude Code | On OpenCode | Checked |
-| --------------------- | ----------- | ------- |
-| `claude -p` with stream-json, one job per project root | One `opencode serve` per Neovim, started after the first screen, with a session per project root (`session.create` with the root as its directory) | `serve`, create and prompt: yes. One server holding several roots, and its port and password options: first task |
-| stream-json events through `handle` | The server's event stream (`GET /event`, server-sent events, live only with no replay) | Yes |
-| `:BudClaude term` on the same conversation, one driver at a time | `opencode attach <url>` in a terminal buffer on the same server | `attach`: yes. Opening it on a given session: first task |
-| The IDE bridge (WebSocket, lock file, `openDiff`, selection) | Gone. A selection or file goes with the message, and diagnostics come from OpenCode's own language servers | No equivalent found in the docs |
-| `--permission-prompt-tool` pointed at the bridge | `permission` set to `ask` in config, a permission event, and a reply over HTTP | The config: yes. The event's shape, whether an edit carries its diff, and the reply endpoint: first task |
-| `claude auth status` | `opencode auth list` | Yes |
-| Plugins from a marketplace, through `claude plugin` | Files: `~/.config/opencode/skills/<name>/SKILL.md`, `agents/<name>.md`, commands, and `opencode.json` (`mcp`, `instructions`, `permission`) | Skills, agents and `opencode.json`: yes. Where commands go: first task |
-| `~/.claude/rules` and `CLAUDE.md` | `~/.config/opencode/AGENTS.md` and `instructions`. A project's `CLAUDE.md` is read when it has no `AGENTS.md` | Yes |
-| bud-ide's SessionStart hook (the notes on working inside bud) | An instructions file bud names when it starts the server | First task |
-| `claude --cloud`, for `ai.work.where = "cloud"` | Nothing: cloud work is removed (D129) | n/a |
+| Today, on Claude Code | Over ACP | Checked |
+| --------------------- | -------- | ------- |
+| `claude -p` with stream-json, one job per project root | One ACP agent process per project root, started after the first screen: `initialize`, then `session/new` with the root as `cwd` | ACP schema: yes. Each backend's start-up time: task 1 |
+| stream-json events through `handle` | `session/update` notifications: `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`, `plan`, `available_commands_update`, `usage_update` | Schema: yes |
+| `result` ends a turn | The `session/prompt` response, with `stopReason` (`end_turn`, `max_tokens`, `max_turn_requests`, `refusal`, `cancelled`) | Schema: yes |
+| Interrupt over stdin | `session/cancel` notification; the prompt then answers `cancelled` | Schema: yes. OpenClaw maps it to a Gateway abort |
+| `--permission-prompt-tool` pointed at the bridge | `session/request_permission` from the agent, answered with one of its options (`allow_once`, `allow_always`, `reject_once`, `reject_always`) | Schema: yes. OpenClaw relays exec approvals only during a turn |
+| The diff review on `openDiff` | A `diff` item in the tool call's content, when the backend sends one (D134) | Claude and Codex adapters: from their docs. OpenClaw: none |
+| The IDE bridge's file reads and writes | `fs/read_text_file` and `fs/write_text_file`, so an agent reads unsaved buffers and writes through Neovim | Schema: yes. OpenClaw's bridge never calls them |
+| A selection or file with the message | `resource` blocks in the prompt (`embeddedContext`) or `resource_link`s | Schema: yes |
+| Conversation resume by id | `session/load` or `session/resume` where `agentCapabilities` says so; OpenClaw keeps sessions by Gateway key | Schema: yes |
+| `:BudClaude term`, Claude Code's TUI in a pane | The backend's own TUI in `bud.ai.term`: `openclaw tui --url ... --session <key>` for OpenClaw | OpenClaw docs: yes |
+| `claude auth status` | `bud ai status`: the backend's command found, and for OpenClaw the Gateway reachable with the token | Task 3 |
 
-**The module.** `bud.ai.opencode` (D128) takes `bud.ai.claude`'s place as the only thing that talks to the agent, with the same calls (`session`, `send`, `on`, `interrupt`, `status`, keyed and extra sessions), so each consumer changes a `require` and little else. Under it sits a small HTTP and server-sent-events client on `vim.uv`, written by hand as the bridge's WebSocket was, so no plugin is added. The server listens on localhost only, with a password bud generates at each start if OpenCode takes one (first task). It starts in a `vim.schedule` callback after `VimEnter`, as the Claude Code session does, so the first screen keeps its budget (D35).
+**The module.** `bud.ai.agent` (D133) takes `bud.ai.claude`'s place with the same calls (`session`, `send`, `on`, `interrupt`, `status`, `stop`, `restart`, keyed and extra sessions) and the same events (`message`, `tool_use`, `permission_request`, `done`, `exit`, `status`), so consumers change a `require`. Under it, `bud.ai.acp` is the protocol: a JSON-RPC connection over a job's stdin and stdout, with requests both ways. The agent starts in a `vim.schedule` callback after `VimEnter`, so the first screen keeps its budget (D35).
 
-**The kit.** `bud kit sync` stops calling `claude plugin` and writes OpenCode's files, under the rules 4.1 already has: the ledger records what bud wrote, bud touches nothing else, and what the manifest drops is taken out. Skills, agents and commands are copied from the bud-plugins checkout, servers become `mcp` entries, and rules become instructions. bud-plugins stays one source for both harnesses, since Claude's own surfaces still load it as a plugin. How a plugin's names carry over is an open question (7).
+**Backends.** `ai.backend` picks one of `ai.backends`; each is `{ command, args, env }`. Built in:
 
-**What a person does.** `bud opencode setup` installs OpenCode and hands over to its sign-in, `bud opencode status` and `bud doctor` say whether it is installed and connected to a provider, and the dashboard banner's `c` runs the setup. bud sets no model: OpenCode's config does, and the manifest may carry a default.
+| Name | Command | Notes |
+| ---- | ------- | ----- |
+| `openclaw` (default) | `openclaw acp --url <ai.openclaw.url> --token-file <ai.openclaw.token_file> --session-label bud:<project>` | URL and token file left out when unset, so the CLI's own remote config applies |
+| `claude` | `claude-agent-acp` | Claude Code with its own login and `~/.claude` (D135) |
+| `codex` | `codex-acp` | ChatGPT Plus through Codex's own login |
+| `opencode` | `opencode acp` | |
 
-**What goes away (D125):** `nvim/lua/bud/ai/claude.lua`'s process and stream handling, `nvim/lua/bud/ai/bridge/`, `internal/claude`, `bud claude`, `internal/cli/claudedir.go`, the Claude checks in `bud doctor` and `bud install`, the kit's `claude plugin` path and its `account.instructions` reminder, `ai.claude.*`, cloud work (`ai.work.where`, D129), and clod's setup (`internal/cli/clod.go`, `clod.repo`, D130). `bud agent` and `bud chat` stay as commands and open OpenCode's TUI.
+**OpenClaw, set up once.** On the home server: install OpenClaw, `openclaw onboard`, sign in Claude Code (`claude` login, then the model's `agentRuntime` set to `claude-cli`) and ChatGPT Plus (`--auth-choice openai-codex`), and run the Gateway as a service bound to the tailnet. On each machine: `npm i -g openclaw`, put the Gateway token in `~/.config/openclaw/gateway-token` (mode 600), and `bud config set ai.openclaw.url wss://<host>.ts.net:18789`. `bud ai setup` walks through the machine half and checks it; the server half is a page in the docs.
 
-**Tests.** No test starts a real OpenCode or reaches a provider. Lua tests talk to a fake server that replays recorded event streams, and Go tests put a fake `opencode` on `PATH` with `fakePath`, as they did a recorded `claude`.
+**Panes and chat.** The side panes are locked (D136). Chat opens as a pane or full screen (D137), running the backend's TUI until bud draws its own in 1.2 (D138).
+
+**What goes away:** `nvim/lua/bud/ai/claude.lua`'s process and stream handling, `nvim/lua/bud/ai/bridge/`, `internal/claude`'s login handling, `bud claude`, `internal/cli/claudedir.go`, `ai.claude.*` (migrated), cloud work (D129) and clod's setup (D130). The kit stays (D135).
+
+**Tests.** No test starts a real backend or reaches a provider. Lua tests drive `bud.ai.acp` against a fake ACP agent (a headless `nvim -l` script that replays scripted turns), and Go tests put a fake `openclaw` on `PATH` with `fakePath`.
 
 ---
 
@@ -803,55 +821,39 @@ All eight steps are built; this is the order they were planned in. Step 7's chat
 7. **The per-project Claude Code session and `bud.ai.claude` (4.2)**, then **`bud kit sync`**, then **chat mode** (Claude Code's TUI, D81) and the TUI pane, then the **tool generator** with lifecycle commands.
 8. Polish: settings UI, more languages, docs.
 
-### 1.1: bud on OpenCode (4.4, D126): not built
+### 1.1: a backend-agnostic agent, OpenClaw by default (4.4, D131-D138): in progress
 
-One task is one commit with its own check, and `just check` passes after each. A task's blockers are in brackets. Tasks whose blockers are done can run side by side, because each lane owns its files: lane A is `nvim/` and `tests/lua/`, lane B is `internal/` and `docs/config.md` outside the kit, lane C is `internal/kit` and `internal/cli/kit.go`, and lane D is the bud-plugins repo. Each code task updates the `docs/internals/` page for its area; the user docs wait for task 19. Issue ids are written in when the tasks are filed; the four that already have one are 4.3's issues, re-aimed.
-
-**First, alone.**
-
-1. **OpenCode facts, the contract and the test doubles.** Pin an OpenCode version. Check 4.4's "first task" rows against its OpenAPI spec and a running server, and write `docs/internals/opencode.md`: the endpoints, the events, the permission flow, attach, sign-in, config paths, and what can't be done. Write down the Lua module's calls and events. Record event streams as fixtures, and build the fake server for Lua tests and the fake `opencode` for Go tests. Done when a Lua test drives a prompt, a permission and an interrupt through the fake, and the page answers every "first task" row.
+One task is one commit with its own check, and `just check` passes after each. Blockers are in brackets. Lane A is `nvim/` and `tests/lua/`, lane B is `internal/` and `docs/config.md`. The OpenCode issues filed for the old plan (JGA-262 to JGA-276) are re-aimed or closed when Linear is reachable again.
 
 **Lane A: the editor (Lua).**
 
-2. **Cut Claude Code out of the editor.** [1] The new module as a stub with the contract's calls and status `missing`; every consumer requires it; `claude.lua`'s transport, `bridge/` and their tests go; the diff review moves out of `bridge/tools.lua` into a module of its own. Done when `just lua-test` and `just smoke` pass and nothing under `nvim/lua/bud/ai/` names `claude`.
-3. **The HTTP and event-stream client** on `vim.uv`. [1] Done when its tests pass against the fake server: a request, a streamed response split across reads, a dropped connection.
-4. **The session.** [2, 3] Server start and stop, a session per root, send, events, interrupt, status, the status line, idle handling. Done when its tests pass on the fake and the first screen is measured inside its budget (D35).
-5. **Permissions and the edit review** on OpenCode's permission events. [4]
-6. **The TUI pane and chat.** [4, 17] `opencode attach` in `bud.ai.term`, and chat as OpenCode's TUI running the `chat` agent.
-7. **Inline actions, sharing a selection and the commit message.** [4]
-8. **The generator, issues and work** on the new session, with their permission policies. [5]
+1. **ACP facts and the fake agent.** `docs/internals/acp.md`: the calls, the events, how each backend starts and signs in, what OpenClaw's bridge leaves out. A fake ACP agent for Lua tests. Done when a Lua test drives a prompt, a permission and a cancel through it.
+2. **`bud.ai.acp`, the protocol client.** [1] JSON-RPC both ways over a job: requests, responses, notifications, the agent's own requests (`session/request_permission`, `fs/*`), and a dropped process.
+3. **`bud.ai.agent`, the session.** [2] A session per root on the configured backend, with `bud.ai.claude`'s contract; the status line; idle handling.
+4. **Permissions and the edit review** on `session/request_permission`, with the diff when there is one (D134). [3]
+5. **The consumers move:** chat, inline actions, sharing a selection, the commit message, the generator, issues and work. [4]
+6. **Cut the Claude Code transport out of the editor:** `claude.lua`'s process handling and `bridge/`. [5]
+7. **Locked panes** (D136). Built.
+8. **Chat full screen and as a pane** (D137). Built.
 
 **Lane B: the CLI (Go).**
 
-9. **Cut Claude Code out of the CLI.** [1] `internal/claude`, `bud claude`, `claudedir.go`, `clod.go` and `clod.repo` (D130), `ai.work.where` (D129), the Claude checks in doctor and install, and `ai.claude.*`, with a migration for a machine's `config.json` to `ai.opencode.*` (D128). Done when `just test` passes and `bud doctor` on a machine with no `claude` reports nothing about it.
-10. **Find, check and set up OpenCode.** [9] `internal/opencode` (the binary, its version, `auth list`), the status and setup commands, the doctor check, the offer in `bud install`, and `bud agent` and `bud chat` opening OpenCode's TUI.
-11. **The dashboard banner and the settings screen.** [4, 10]
-
-**Lane C: the kit (Go).**
-
-12. **Sync writes OpenCode's files.** [9, 17] Skills, agents and commands from the bud-plugins checkout into OpenCode's config dir, under the ledger; the `claude plugin` path goes.
-13. **MCP servers into `opencode.json`,** with values from config and secrets from the keychain (JGA-249). [12]
-14. **Base settings and rules, with full and merge modes** (JGA-250). [12]
-15. **`bud kit status`** against OpenCode's config, with `--json` (JGA-247). [12]
-16. **`bud kit add`, `rm` and `adopt`** (JGA-248). [13]
-
-**Lane D: bud-plugins.**
-
-17. **OpenCode forms of the skills, agents and commands.** [1] Agent frontmatter OpenCode reads (`mode`, a provider's model id, `permission`), the `chat` agent read-only, the notes on working inside bud as an instructions file, and `tests/check.sh` checking both shapes. The session gate hook stays Claude-only until 1.2 (JGA-260).
+9. **Backend settings:** `ai.backend`, `ai.backends`, `ai.openclaw.url`, `ai.openclaw.token_file`, with a migration from `ai.claude.*` (D133). Built in part: the keys and their defaults.
+10. **`bud ai status|setup` and the doctor check:** the backend's command, its version, and for OpenClaw the Gateway answering. [9]
+11. **Cut `bud claude`, clod's setup and cloud work** (D129, D130). [10]
+12. **The dashboard banner and the settings screen** on the backend. [3, 10]
 
 **Last, in order.**
 
-18. **End to end on macOS and Linux with a real provider,** by hand, and the smoke test on the fake. [8, 11, 16]
-19. **The user docs.** [18] `docs/claude-code.md` and `docs/claude-tui.md` become OpenCode pages; setup, keys, commands, troubleshooting, the README and the site's nav follow; 4, 4.1 and 4.2 here are rewritten as built; `CLAUDE.md` loses its note about the change.
-20. **Release 1.1.0** with `bud:release`. [19]
+13. **End to end with the home Gateway,** by hand: Claude Code and ChatGPT Plus through OpenClaw, from macOS and Linux. [6, 12]
+14. **The user docs**, including OpenClaw's server setup. [13]
+15. **Release 1.1.0** with `bud:release`. [14]
 
-Done already: the kit manifest's servers, settings, rules, account and cloud sections (JGA-244).
+### 1.2: bud's own chat, the kit on OpenClaw, delegation, a planning schema and docs mapped to code (D127, D138): not planned in detail
 
-Parked in the backlog by D126, out of the milestone: guided account steps (JGA-251), the fixed pointer (JGA-254), Superpowers out everywhere (JGA-241), the kit skill (JGA-255), the how-to page (JGA-256), Desktop's import file (JGA-252), taking over a clod machine (JGA-257), the cloud script (JGA-253), the Neovim screen (JGA-258), and moving bud-plugins in (JGA-245, JGA-259).
-
-### 1.2: delegation, a planning schema and docs mapped to code (D127): not planned in detail
-
-- Delegation: the session model writes the spec, cheaper models write the code (JGA-260). On OpenCode a coder is an agent with its own model, from any provider or a local one, and the session gate becomes an OpenCode plugin or a permission rule.
+- bud's own chat drawn from ACP events, in bud's colours and keys, in the pane and full screen (D138).
+- The kit teaches OpenClaw: skills and agents into the Gateway's workspace, so every surface has them.
+- Delegation (JGA-260): on OpenClaw, a coder is an agent with its own model.
 - A planning schema and skills of Jason's own, in place of Superpowers (JGA-246, D120).
 - Docs: map each page to the code it describes, and fail a test when that code changes (JGA-261).
 
@@ -859,14 +861,13 @@ Parked in the backlog by D126, out of the milestone: guided account steps (JGA-2
 
 ## 7. Open questions for you
 
-Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50; one Claude setup everywhere: D118-D122; the move to OpenCode, what happens to Claude Code, and what 1.1 and 1.2 are: D124-D127; the names, cloud work and clod: D128-D130). What's left, both for 4.4:
+Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50; one Claude setup everywhere: D118-D122; the move to OpenCode and what 1.1 and 1.2 were: D124-D127; the names, cloud work and clod: D128-D130; the move to ACP and OpenClaw, reviewing edits, locked panes and chat full screen: D131-D138). What's left:
 
-1. **Reviewing edits.** Today an edit is a diff you accept before it is written. Answered after task 1.
-   - Keep that: ask on every edit and show its diff in the same review. It needs the permission event to carry the diff.
-   - Let OpenCode write, and review afterwards with git.
-   - Recommendation: keep the review if task 1 finds the diff is there.
-2. **Plugin names on OpenCode.** A Claude plugin's skill is `bud:code-style`; an OpenCode skill is named by its folder and has no colon. Answered with task 17.
-   - The sync writes `bud-code-style` and rewrites `bud:` references in the text it copies. One source, nothing generated is committed.
-   - bud-plugins commits a generated OpenCode tree beside the plugins.
-   - The skills are renamed for both harnesses.
-   - Recommendation: the sync rewrites.
+1. **One OpenClaw session per project, or one for everything.** OpenClaw keys sessions; the bridge can reuse one by label.
+   - One per project root (`--session-label bud:<project>`), so each project keeps its own thread on every surface.
+   - One shared session, so the web UI and the apps see a single running conversation.
+   - Recommendation: one per project, which is what bud does today (D25).
+2. **Where the Gateway token lives on each machine.** OpenClaw reads it from a file or `OPENCLAW_GATEWAY_TOKEN`.
+   - A file, `~/.config/openclaw/gateway-token` (mode 600), named by `ai.openclaw.token_file`.
+   - The macOS keychain and Linux secret service, read by `bud` at start.
+   - Recommendation: the file, which works over SSH and on every OS; the keychain can come later.

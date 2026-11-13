@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Bud is a Neovim-based IDE driven by a small Go CLI (`bud`). The CLI installs, launches, updates and syncs an isolated Neovim config (`NVIM_APPNAME=bud`, so it never touches `~/.config/nvim`). `BASE.md` is the full plan plus a numbered decision log (D1, D2, ...). Nearly all of it is built, but a few parts are still marked as later, so check the code before assuming a planned feature exists. When a decision changes, update `BASE.md` too.
 
-AI scope is **OpenCode only** (D124, which supersedes D26), and the move is in progress: 1.1 takes Claude Code out and puts OpenCode in (BASE.md 4.4 and the 1.1 build order in section 6). Until those tasks land, the tree still holds the Claude Code version: one session per project, started and owned by Neovim (D25, BASE.md 4.2), with Neovim TUIs built on the `bud.ai.claude` Lua module. Work on the AI layer follows the 1.1 tasks. Don't add an adapter layer, a second harness, a model provider or an API client unless asked (D125).
+AI is **backend-agnostic over ACP** (D131, superseding D124/D26), with an OpenClaw Gateway as the default backend (D132), and the move is in progress: 1.1 replaces Claude Code's stream-json transport with an ACP client (BASE.md 4.4 and the 1.1 build order in section 6). Until those tasks land, the tree still holds the Claude Code version: one session per project, started and owned by Neovim (D25, BASE.md 4.2), with Neovim TUIs built on the `bud.ai.claude` Lua module. New AI code talks ACP through `bud.ai.acp`; don't add a second protocol, a model provider or an API client unless asked.
 
 ## Docs
 

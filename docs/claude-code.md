@@ -1,6 +1,6 @@
 # Claude Code in bud
 
-bud's AI is Claude Code and nothing else. Neovim starts and owns one Claude Code session per project, and every AI feature in the editor goes through it, so they all share one conversation. bud stores no keys: Claude Code's own login is the only one.
+This page is the `claude` backend (`bud config set ai.backend claude`), which is how bud worked through 1.0. From 1.1 the AI backend is a setting, with an OpenClaw Gateway as the default: see [OpenClaw in bud](openclaw.md). On the `claude` backend, Neovim starts and owns one Claude Code session per project, and every AI feature in the editor goes through it, so they all share one conversation. bud stores no keys: Claude Code's own login is the only one.
 
 ## Setting it up
 

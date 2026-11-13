@@ -154,10 +154,11 @@ local function drawn(t)
 end
 
 -- send types text into root's TUI (default: the current project's) and
--- submits it, opening the TUI first, without taking the cursor, when it
+-- submits it (unless opts.submit is false), opening the TUI first, without taking the cursor, when it
 -- isn't showing. A TUI that's just started gets it once it has drawn
 function M.send(text, opts)
   opts = opts or {}
+  local submit = opts.submit ~= false
   local root = root_of(opts.root)
   if not M.open({ root = root, focus = false }) then
     return false
@@ -168,6 +169,9 @@ function M.send(text, opts)
       return
     end
     vim.fn.chansend(t.job, text)
+    if not submit then
+      return
+    end
     -- a beat apart, so Claude Code reads the Enter as submit, not as part of a paste
     vim.defer_fn(function()
       if terms[root] == t then

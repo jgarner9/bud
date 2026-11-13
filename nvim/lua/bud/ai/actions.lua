@@ -30,6 +30,24 @@ function M.range()
   return first == last and ("%s#L%d"):format(rel, first) or ("%s#L%d-%d"):format(rel, first, last)
 end
 
+-- mention is how the prompt points at where: Claude Code's @path#La-b, which
+-- its TUI resolves; other backends (D131) get "path lines a-b" in words,
+-- since their TUIs don't read Claude Code's syntax
+function M.mention(where, backend)
+  backend = backend or require("bud.ai.agent").backend()
+  if backend == "claude" then
+    return "@" .. where
+  end
+  local path, a, b = where:match("^(.-)#L(%d+)%-?(%d*)$")
+  if not path then
+    return where
+  end
+  if b == "" or b == a then
+    return ("%s line %s"):format(path, a)
+  end
+  return ("%s lines %s-%s"):format(path, a, b)
+end
+
 -- run sends one action for the selection to the project's TUI, opening it
 -- beside the code when it isn't showing
 function M.run(action)
@@ -39,7 +57,7 @@ function M.run(action)
     return
   end
   vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
-  require("bud.ai.term").send(M.prompts[action]:format("@" .. where))
+  require("bud.ai.term").send(M.prompts[action]:format(M.mention(where)))
 end
 
 local function git(args)

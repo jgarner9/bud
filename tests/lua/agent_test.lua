@@ -17,6 +17,8 @@ local function wait(cond, what)
   end
 end
 
+-- the repo, before any test changes dir
+local repo = vim.fn.getcwd()
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp .. "/proj", "p")
 local proj = vim.uv.fs_realpath(tmp .. "/proj")
@@ -76,7 +78,7 @@ agent._reset()
 -- the fake agent from here on
 local log = tmp .. "/acp.log"
 agent.command = function()
-  return { vim.v.progpath, "--clean", "--headless", "-l", vim.fn.getcwd() .. "/tests/lua/lib/fake_acp.lua" }
+  return { vim.v.progpath, "--clean", "--headless", "-l", repo .. "/tests/lua/lib/fake_acp.lua" }
 end
 local events = {}
 local function record(name)
@@ -142,11 +144,24 @@ eq(
   "the prompt's blocks"
 )
 
+-- a shared selection (<leader>as) goes with the next message, once
+vim.fn.writefile({ "one", "two", "three" }, proj .. "/c.lua")
+vim.cmd.cd(proj)
+agent.share(proj .. "/c.lua", 2, 3)
+agent.send("echo", { root = proj })
+turn_done(3)
+eq(
+  named("message")[3].text,
+  ("text:echo|resource:%s#L2-3:two\nthree"):format(vim.uri_from_fname(proj .. "/c.lua")),
+  "the shared lines went with it"
+)
+eq(s.shared, nil, "and only once")
+
 -- two sends in a row: the second waits for the first
 agent.send("hello", { root = proj })
 agent.send("hello", { root = proj })
-turn_done(4)
-eq(#named("message"), 4, "both ran, one after the other")
+turn_done(5)
+eq(#named("message"), 5, "both ran, one after the other")
 
 -- an edit: the permission request carries the diff, and an allow writes
 -- through the open buffer
@@ -160,7 +175,7 @@ agent.permission = function(req, respond)
   respond("allow")
 end
 agent.send("edit " .. file, { root = proj })
-turn_done(5)
+turn_done(6)
 eq(asked.tool, "Edit " .. file, "the tool's title")
 eq(asked.diffs, { { path = file, old = "old\n", new = "edited\n" } }, "the diff (D134)")
 eq(#asked.options, 3, "the options")
@@ -170,18 +185,18 @@ eq(vim.fn.readfile(file), { "edited" }, "and it's saved")
 eq(vim.bo[buf].modified, false, "not left modified")
 eq(named("tool_use")[1].kind, "edit", "tool_use kind")
 eq(named("tool_update")[#named("tool_update")].status, "completed", "tool done")
-eq(named("done")[5].text, "Edited.", "done.text is the answer after the last tool call")
+eq(named("done")[6].text, "Edited.", "done.text is the answer after the last tool call")
 
 -- a read sees the unsaved buffer
 vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "unsaved", "lines" })
 agent.send("read " .. file, { root = proj })
-turn_done(6)
+turn_done(7)
 eq(named("message")[#named("message")].text, "Read: unsaved\nlines\n", "unsaved changes reach the agent")
 
 -- a file that isn't open is written on disk
 local other = proj .. "/sub/new.txt"
 agent.send("edit " .. other, { root = proj })
-turn_done(7)
+turn_done(8)
 eq(vim.fn.readfile(other), { "edited" }, "written on disk, its dir made")
 
 -- interrupt: an open permission question is answered cancelled
@@ -193,8 +208,8 @@ wait(function()
   return asked.respond ~= nil
 end, "the permission question")
 eq(agent.interrupt(proj), true, "interrupted")
-turn_done(8)
-eq(named("done")[8].stop_reason, "cancelled", "cancelled")
+turn_done(9)
+eq(named("done")[9].stop_reason, "cancelled", "cancelled")
 
 -- interrupt a slow reply
 agent.send("slow", { root = proj })
@@ -202,15 +217,15 @@ wait(function()
   return s.status == "busy" and (s.reply or "") ~= ""
 end, "the slow turn")
 agent.interrupt(proj)
-turn_done(9)
-eq(named("done")[9].stop_reason, "cancelled", "slow turn cancelled")
+turn_done(10)
+eq(named("done")[10].stop_reason, "cancelled", "slow turn cancelled")
 eq(s.status, "ready", "ready after the cancel")
 
 -- an error from the agent
 agent.send("fail", { root = proj })
-turn_done(10)
-eq(named("done")[10].ok, false, "not ok")
-eq(named("done")[10].error, "scripted failure", "the error")
+turn_done(11)
+eq(named("done")[11].ok, false, "not ok")
+eq(named("done")[11].error, "scripted failure", "the error")
 
 -- a crash: done not ok, exit crashed, status error with the exit code
 agent.send("crash", { root = proj })
@@ -223,12 +238,12 @@ wait(function()
   return s.status == "error"
 end, "error status")
 assert(s.why:find("exit 3", 1, true), s.why)
-eq(named("done")[11].ok, false, "the crashed turn isn't ok")
+eq(named("done")[12].ok, false, "the crashed turn isn't ok")
 
 -- the next send starts it again
 agent.send("hello", { root = proj })
-turn_done(12)
-eq(named("done")[12].ok, true, "works after a restart")
+turn_done(13)
+eq(named("done")[13].ok, true, "works after a restart")
 
 -- keyed sessions sit beside the project's
 local issue = agent.session(proj, { key = "issue:JGA-1", extra = true, env = { FAKE_ACP_LOG = log } })
@@ -256,7 +271,7 @@ end, "reaped")
 
 -- turns recorded from a real OpenClaw Gateway through openclaw acp
 -- (tests/fixtures/openclaw), replayed by the fake
-local fixtures = vim.fn.getcwd() .. "/tests/fixtures/openclaw/"
+local fixtures = repo .. "/tests/fixtures/openclaw/"
 events = {}
 agent.session(proj)
 wait(function()

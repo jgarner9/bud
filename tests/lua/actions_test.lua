@@ -140,6 +140,11 @@ eq(asked:find("chore: start", 1, true) ~= nil, true, "recent commits for the sty
 eq(asked:find("+func hi() {}", 1, true) ~= nil, true, "the staged diff")
 
 claude._reset()
+-- other backends (D131) get the place in words, not Claude Code's @-syntax
+eq(actions.mention("main.go#L3-4", "claude"), "@main.go#L3-4", "claude's mention")
+eq(actions.mention("main.go#L3-4", "openclaw"), "main.go lines 3-4", "a range in words")
+eq(actions.mention("main.go#L4", "openclaw"), "main.go line 4", "a line in words")
+
 require("bud.ai.bridge").stop()
 vim.fn.delete(tmp, "rf")
 print("actions_test: ok")

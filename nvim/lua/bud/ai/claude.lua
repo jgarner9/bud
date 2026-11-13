@@ -908,7 +908,7 @@ function M.setup()
     end
     M.share(vim.api.nvim_buf_get_name(0), math.min(first, last), math.max(first, last))
     vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
-  end, { desc = "Share the selection with Claude Code" })
+  end, { desc = "Share the selection with the AI" })
   require("bud.statusline").add(M.statusline)
   require("bud.ai.actions").setup()
   require("bud.ai.issue").setup()
@@ -957,6 +957,9 @@ end
 function M.share(path, first, last)
   if path == "" then
     return
+  end
+  if require("bud.ai.agent").backend() ~= "claude" then
+    return require("bud.ai.agent").share(path, first, last)
   end
   local s = sessions[root_of()]
   if s and s.term then

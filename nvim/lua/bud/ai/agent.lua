@@ -553,6 +553,11 @@ function M.send(text, opts)
   if not (s.conn and s.conn:running()) and s.status ~= "starting" then
     start(s)
   end
+  -- a selection shared since the last message goes with this one
+  if s.shared and not opts.selection then
+    opts = vim.tbl_extend("force", opts, { selection = s.shared })
+    s.shared = nil
+  end
   table.insert(s.queue, { text = text, opts = opts })
   s.last_used = now()
   flush(s)
@@ -653,6 +658,24 @@ function M.statusline()
   end
   local marks = { starting = "…", ready = "●", busy = "◐", stopped = "○", missing = "✗", error = "✗" }
   return ("%s %s"):format(s.backend or M.backend(), marks[s.status] or s.status)
+end
+
+-- share points the agent at lines first..last (1-based) of path (D131):
+-- typed into the backend's TUI when it's running, without pressing Enter,
+-- else sent with the next message as its selection
+function M.share(path, first, last)
+  local rel = vim.fn.fnamemodify(path, ":.")
+  local where = first == last and ("%s line %d"):format(rel, first) or ("%s lines %d-%d"):format(rel, first, last)
+  local term = require("bud.ai.term")
+  if term.running() then
+    term.send(where .. " ", { submit = false })
+  else
+    local s = M.session()
+    local lines = vim.fn.bufnr(path) > 0 and vim.api.nvim_buf_get_lines(vim.fn.bufnr(path), first - 1, last, false)
+      or vim.list_slice(vim.fn.readfile(path), first, last)
+    s.shared = { path = path, first = first, last = last, text = table.concat(lines, "\n") }
+  end
+  vim.notify(("bud: shared %s with %s"):format(where, M.backend()))
 end
 
 -- setup starts the agent for how bud was opened, like bud.ai.claude's (the

@@ -111,3 +111,38 @@ func TestAISetupInstalls(t *testing.T) {
 		t.Errorf("installed %q", installed)
 	}
 }
+
+// bud install on a backend other than claude offers bud ai setup
+func TestInstallBackend(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	out := captureStdout(t, func() {
+		if err := installBackend(nil, false, "openclaw"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(out, "run 'bud ai setup'") {
+		t.Errorf("no terminal: %q", out)
+	}
+	pr := newPrompter(strings.NewReader("n\n"), &strings.Builder{})
+	out = captureStdout(t, func() {
+		if err := installBackend(pr, false, "openclaw"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(out, "Skipped") {
+		t.Errorf("said no: %q", out)
+	}
+	withAICheck(t, backend.Status{Backend: "openclaw", Argv: []string{"openclaw", "acp"}})
+	var installed string
+	orig := npmInstall
+	t.Cleanup(func() { npmInstall = orig })
+	npmInstall = func(pkg string) error { installed = pkg; return nil }
+	captureStdout(t, func() {
+		if err := installBackend(nil, true, "openclaw"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if installed != "openclaw" {
+		t.Errorf("--yes installed %q", installed)
+	}
+}

@@ -77,6 +77,10 @@ func aiStatus(asJSON bool) error {
 	if err != nil {
 		return err
 	}
+	if s.AI.Backend == "claude" && !asJSON {
+		fmt.Println("Backend: claude, which runs Claude Code directly until bud moves it onto claude-agent-acp; bud claude status checks it.")
+		return nil
+	}
 	st := aiCheck(s, false)
 	if asJSON {
 		out := aiStatusJSON{st.Backend, st.Argv, st.Bin, st.Version, st.Gateway, st.Reachable, st.Ready(), st.Problems}

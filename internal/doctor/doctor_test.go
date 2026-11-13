@@ -478,8 +478,10 @@ func TestCheckClaude(t *testing.T) {
 	orig := claudeCheck
 	t.Cleanup(func() { claudeCheck = orig })
 	on := config.Defaults()
-	off := config.Defaults()
+	on.AI.Backend = "claude"
+	off := on
 	off.AI.Claude.Autostart = false
+	openclaw := config.Defaults()
 
 	for _, c := range []struct {
 		name   string
@@ -494,6 +496,7 @@ func TestCheckClaude(t *testing.T) {
 		{"missing", on, claude.Status{}, nil, Warn, "not installed"},
 		{"provider elsewhere", on, claude.Status{Bin: "/c", Version: "2.1.0", Elsewhere: "Amazon Bedrock"}, nil, Warn, "runs it on Amazon Bedrock"},
 		{"missing and not wanted", off, claude.Status{}, nil, OK, "autostart is off"},
+		{"missing on another backend", openclaw, claude.Status{}, nil, OK, "ai.backend is openclaw"},
 		{"broken", on, claude.Status{Bin: "/c"}, errors.New("boom"), Warn, "boom"},
 	} {
 		claudeCheck = func() (claude.Status, error) { return c.status, c.err }

@@ -108,7 +108,13 @@ func install(g *Globals, args []string, yes bool) error {
 		}
 	}
 
-	if s.AI.Claude.Autostart {
+	if s.AI.Claude.Autostart && s.AI.Backend != "claude" {
+		// another backend (D131): its command and, for OpenClaw, the Gateway
+		fmt.Println()
+		if err := installBackend(pr, yes, s.AI.Backend); err != nil {
+			fmt.Printf("The AI backend (%s) isn't set up (%v); 'bud ai setup' tries again.\n", s.AI.Backend, err)
+		}
+	} else if s.AI.Claude.Autostart {
 		fmt.Println()
 		if err := installClaude(pr, yes); err != nil {
 			fmt.Printf("Claude Code isn't set up (%v); 'bud claude setup' tries again.\n", err)
@@ -138,6 +144,25 @@ func install(g *Globals, args []string, yes bool) error {
 
 // swappable in tests: the desktop app on the full profile (BASE.md 5.2 step 5)
 var installBundle = func(g *Globals) error { return bundleCmd(g, nil, false, false, "") }
+
+// installBackend offers bud ai setup for a backend other than claude; bud
+// works without it, so saying no only says how to do it later
+func installBackend(pr *prompter, yes bool, backend string) error {
+	if pr == nil && !yes {
+		fmt.Printf("The AI backend (%s) isn't set up here; run 'bud ai setup' for the AI parts.\n", backend)
+		return nil
+	}
+	if pr != nil && !yes {
+		ok, err := pr.confirmYes(fmt.Sprintf("Set up %s for bud's AI now?", backend))
+		if err != nil || !ok {
+			if err == nil {
+				fmt.Println("Skipped; 'bud ai setup' does it later.")
+			}
+			return err
+		}
+	}
+	return aiSetup(pr, yes)
+}
 
 // installClaude offers Claude Code's setup (BASE.md 4.2). bud works without
 // it, so saying no, or having nobody to ask, is fine

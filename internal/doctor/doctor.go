@@ -145,7 +145,11 @@ func Run(opts Options) []Result {
 		}
 	}
 
-	results = append(results, checkAgent(cfg, opts.Quick))
+	// the claude backend still runs Claude Code directly (until 1.1 task 6),
+	// which the claude code check covers
+	if cfg.AI.Backend != "claude" {
+		results = append(results, checkAgent(cfg, opts.Quick))
+	}
 
 	cr, status := checkClaude(cfg)
 	results = append(results, cr)
@@ -500,6 +504,9 @@ func checkClaude(cfg config.Settings) (Result, claude.Status) {
 	switch {
 	case err != nil:
 		r.Status, r.Detail = Warn, err.Error()
+	case s.Bin == "" && cfg.AI.Backend != "claude":
+		// another backend runs the editor's AI (D131)
+		r.Detail = "not installed (ai.backend is " + cfg.AI.Backend + ")"
 	case s.Bin == "" && !cfg.AI.Claude.Autostart:
 		r.Detail = "not installed (ai.claude.autostart is off)"
 	case s.Bin == "":

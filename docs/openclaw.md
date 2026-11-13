@@ -9,9 +9,9 @@ This is new in 1.1 and still being built. What works today: the AI pane, chat, `
 OpenClaw runs its tools (edits, commands) on the Gateway's machine, not where bud runs. So a Gateway on your home server alone would work on the server's files, not the project on your laptop. Two ways to set it up:
 
 - **A Gateway on the machine you code on** (loopback, `ws://127.0.0.1:18789`). bud's edits and commands act on your project; the home server's Gateway serves the apps and the web UI. This is what bud has been checked against.
-- **One Gateway at home, your laptop paired as a node that hosts sessions** (`nodeHost.workerRuns.enabled` on the laptop's node host), so tools run on the laptop and every surface shares one set of sessions. Not checked with bud yet.
+- **One Gateway at home, your laptop paired as a node that hosts sessions** (`nodeHost.workerRuns.enabled`). Tools would run on the laptop, but in a session-owned managed workspace (an empty folder or a fresh checkout), not the project you have open, and `openclaw acp` can't ask for a node. So this doesn't suit editing in bud.
 
-The steps below work for either; for the first, run them on your laptop with `gateway.bind loopback`.
+So for coding, run a Gateway on the laptop (`gateway.bind loopback`) and point bud at it; keep the home server's for the phone and the web UI. The steps below are the same on either machine.
 
 ## On the server (once)
 

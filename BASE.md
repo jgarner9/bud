@@ -866,8 +866,8 @@ Answered questions are now decisions in the table above (dashboard extras: D37; 
 
 1. **Where the Gateway runs, given that OpenClaw's tools run on the Gateway's host.** An edit or a command acts on the files of the machine the Gateway (or the node hosting the session) is on, so a Gateway on the home server alone would edit the server's copy, not the laptop's project.
    - A Gateway on each machine you code on (loopback), with the home server's Gateway for the apps and the web UI. Works today; checked.
-   - One Gateway on the home server, with each laptop paired as an OpenClaw node that hosts sessions (`nodeHost.workerRuns.enabled`), so tools run on the laptop. One set of sessions everywhere, but whether `openclaw acp` sessions can be placed on a node isn't checked yet.
-   - Recommendation: start with a Gateway on the laptop ("mostly local"), and try the node setup once the rest works.
+   - One Gateway on the home server, with each laptop paired as an OpenClaw node that hosts sessions (`nodeHost.workerRuns.enabled`). Tools then run on the laptop, but OpenClaw's docs say a node-hosted session works in a session-owned managed workspace (an empty folder or a fresh checkout) and doesn't browse the device's files, so it still wouldn't edit the project you have open; `openclaw acp` has no way to ask for a node either.
+   - Recommendation: a Gateway on the laptop ("mostly local"), signed in to Claude Code and ChatGPT Plus there, with the home server's Gateway for the phone and the web UI. bud's sessions then live on the laptop's Gateway; its web UI (`openclaw dashboard`) shows them.
 2. **Where the Gateway token lives on each machine.** OpenClaw reads it from a file or `OPENCLAW_GATEWAY_TOKEN`.
    - A file, `~/.config/openclaw/gateway-token` (mode 600), named by `ai.openclaw.token_file`.
    - The macOS keychain and Linux secret service, read by `bud` at start.

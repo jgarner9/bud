@@ -68,3 +68,14 @@ bud ai status                                  # installed, Gateway answering?
 ## Other backends
 
 `ai.backend` can also be `claude` (Claude Code directly, as before 1.1), `codex` (`codex-acp`, ChatGPT Plus through Codex's own login), `opencode` (`opencode acp`), or `custom` with `ai.custom.command` for any other ACP agent. `bud ai setup` installs the command for the first three. See [config](config.md).
+
+To try Claude Code over ACP before bud moves its `claude` backend there, run it as a custom backend with bud's own chat:
+
+```sh
+npm install -g @agentclientprotocol/claude-agent-acp
+bud config set ai.backend custom
+bud config set ai.custom.command '["claude-agent-acp"]'
+bud config set ai.agent.chat_ui bud
+```
+
+Edits then come to bud's diff review before they're written, since Claude Code's adapter sends each one with its diff.

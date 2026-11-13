@@ -41,7 +41,9 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
 17. **A second real backend checked:** last night's OpenCode 2.2.7 through `opencode acp`, driven by bud's chat with the same scripted model. Session, streaming and an edit in the project all work, and bud's chat now shows the standard ACP diff OpenCode sends. With OpenCode set to ask before edits, its permission request carried the diff, so the review-before-write path (D134) is proven on a real backend too. The protocol layer isn't tied to OpenClaw.
 18. `bud ai status` checks a Gateway on the laptop too (the recommended setup): with no URL set, it reads OpenClaw's own config and dials the local Gateway. Checked against a running one.
 19. The diff review moved out of the IDE bridge into `bud.ai.review`, so it outlives the bridge if task 6 removes it.
-20. The README and troubleshooting page mention the backend. `just check` (everything CI runs, smoke included) passed after item 14.
+20. **Security:** agents can read and write files through bud only inside the project (symlinks and `..` resolved), so a backend reached over the network can't pull anything else off your machine. The Gateway token goes to `openclaw tui` only through its environment, never a command line or a log.
+21. bud's chat: `<Up>`/`<Down>` recall your messages, chat mode (`<leader>ch`) uses it when `chat_ui = "bud"`, and the pane takes its layout's width. `bud ai status` runs `openclaw gateway health` on a laptop Gateway, which proves the token too. The guide has a table of the connection errors and their fixes, all checked against the real Gateway.
+22. The README and troubleshooting page mention the backend. `just check` (everything CI runs, smoke included) passed after item 14.
 
 ## Decisions waiting on you
 

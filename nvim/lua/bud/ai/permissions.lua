@@ -1,7 +1,7 @@
 -- Claude Code's permission questions as Neovim UI (BASE.md 4.2, JGA-82). A
 -- headless session runs with --permission-prompt-tool pointed at the
 -- bridge's approve tool, so each "may I?" comes here: an edit opens as a diff
--- to accept or reject (bud.ai.bridge.tools.review), anything else as a small
+-- to accept or reject (bud.ai.review), anything else as a small
 -- prompt. bud never changes Claude Code's permission mode; "allow for this
 -- session" is only remembered here, for the session's Neovim lifetime.
 
@@ -177,7 +177,7 @@ local function ask(req, done)
   if edit_tools[req.tool] then
     local path, now, after = M.proposal(req.tool, req.input)
     if path then
-      require("bud.ai.bridge.tools").review({
+      require("bud.ai.review").review({
         path = path,
         contents = after,
         name = "permission-" .. (req.id or path),

@@ -69,6 +69,9 @@ assert(text():find("## you\n\nhello\n\n## openclaw\n\nHello from the fake.", 1, 
 vim.fn.writefile({ "old" }, proj .. "/f.txt")
 turn("edit " .. proj .. "/f.txt")
 assert(text():find("> ✓ Edit " .. proj .. "/f.txt", 1, true), text())
+-- the ACP diff the backend sent, shown as one (as OpenCode sends)
+assert(text():find("-old\n+edited", 1, true), text())
+eq(view.patch({ diffs = { { path = "a.txt", old = "x\n", new = "x\n" } } }), nil, "no change, no diff")
 
 -- OpenClaw's edit: the patch it reports afterwards is shown (D134)
 turn("replay " .. repo .. "/tests/fixtures/openclaw/edit.log")

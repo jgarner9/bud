@@ -577,7 +577,7 @@ The aim is that everything in 4 and 4.2 works as it does now with any ACP agent 
 | `result` ends a turn | The `session/prompt` response, with `stopReason` (`end_turn`, `max_tokens`, `max_turn_requests`, `refusal`, `cancelled`) | Schema: yes |
 | Interrupt over stdin | `session/cancel` notification; the prompt then answers `cancelled` | Schema: yes. OpenClaw maps it to a Gateway abort |
 | `--permission-prompt-tool` pointed at the bridge | `session/request_permission` from the agent, answered with one of its options (`allow_once`, `allow_always`, `reject_once`, `reject_always`) | Schema: yes. OpenClaw relays exec approvals only during a turn |
-| The diff review on `openDiff` | A `diff` item in the tool call's content, when the backend sends one (D134) | Claude and Codex adapters: not checked yet. OpenClaw: none (checked) |
+| The diff review on `openDiff` | A `diff` item in the tool call's content, when the backend sends one (D134) | OpenCode 2.2.7: on the finished edit (checked). Claude and Codex adapters: not checked yet. OpenClaw: none (checked) |
 | The IDE bridge's file reads and writes | `fs/read_text_file` and `fs/write_text_file`, so an agent reads unsaved buffers and writes through Neovim | Schema: yes. OpenClaw's bridge never calls them |
 | A selection or file with the message | `resource` blocks in the prompt (`embeddedContext`) or `resource_link`s | Schema: yes |
 | Conversation resume by id | `session/load` or `session/resume` where `agentCapabilities` says so; OpenClaw keeps sessions by Gateway key | Schema: yes |

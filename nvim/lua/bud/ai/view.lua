@@ -168,9 +168,11 @@ local function listen(v)
       local t = mine(s) and v.tools[d.id]
       if t then
         set_line(v, t.line, ("> %s %s"):format(marks[d.status] or marks.in_progress, t.name))
-        if d.patch and d.status == "completed" then
-          -- an edit the backend made without asking (D134): show what changed
-          local diff = vim.split(vim.trim(d.patch), "\n", { plain = true })
+        local patch = d.status == "completed" and M.patch(d) or nil
+        if patch then
+          -- what an edit changed (D134): OpenClaw's own patch, or one made
+          -- from the ACP diff the backend sent (OpenCode, Claude Code)
+          local diff = vim.split(vim.trim(patch), "\n", { plain = true })
           table.insert(diff, 1, "```diff")
           table.insert(diff, "```")
           append(v, diff)
@@ -230,6 +232,25 @@ function M.complete(findstart, base)
     end
   end
   return items
+end
+
+-- patch is the unified diff to show for a finished tool update: the one the
+-- backend reported (OpenClaw), else one made from its ACP diffs, each file's
+-- under its name; nil when it changed nothing
+function M.patch(d)
+  if d.patch then
+    return d.patch
+  end
+  local parts = {}
+  for _, diff in ipairs(d.diffs or {}) do
+    local old, new = diff.old or "", diff.new or ""
+    if old ~= new then
+      local name = vim.fn.fnamemodify(diff.path or "", ":.")
+      local body = vim.diff(old, new, { result_type = "unified", ctxlen = 2 })
+      table.insert(parts, ("--- %s\n+++ %s\n%s"):format(name, name, body))
+    end
+  end
+  return #parts > 0 and table.concat(parts, "\n") or nil
 end
 
 -- send sends what's typed in the prompt

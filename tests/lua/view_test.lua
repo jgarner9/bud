@@ -131,6 +131,19 @@ eq(#vim.api.nvim_tabpage_list_wins(0), 2, "conversation and prompt only")
 view.close(proj)
 eq(#vim.api.nvim_list_tabpages(), tabs, "the tab goes")
 
+-- a backend that can't start says so in the chat
+local command = agent.command
+agent.command = function()
+  return { "no-such-acp-agent-bud-test" }
+end
+agent.stop(proj)
+wait(function()
+  return agent.status(proj) == "stopped"
+end, "stopped")
+view.send("anyone there?", proj)
+assert(text():find("> ✗ not sent: no%-such%-acp%-agent%-bud%-test isn't installed"), text())
+agent.command = command
+
 -- ai.agent.chat_ui = "bud": <leader>ac (term.toggle) and <leader>aF use it
 vim.fn.writefile({ vim.json.encode({ ai = { agent = { chat_ui = "bud" } } }) }, tmp .. "/config.json")
 local term = require("bud.ai.term")

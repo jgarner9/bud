@@ -241,7 +241,10 @@ local function send(v, text)
   append(v, { "", "## you", "" })
   append(v, vim.split(text, "\n", { plain = true }))
   v.replying, v.in_user = false, false
-  agent().send(text, { root = v.root })
+  if not agent().send(text, { root = v.root }) then
+    local sess = agent().get(v.root)
+    append(v, { "", "> ✗ not sent: " .. ((sess and sess.why) or "the agent isn't running") })
+  end
 end
 
 -- create makes root's two buffers and hooks them to the session

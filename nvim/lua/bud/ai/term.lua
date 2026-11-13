@@ -23,6 +23,12 @@ local function now()
   return vim.uv.hrtime() / 1e6
 end
 
+-- layout_choice is how the AI chat opens: "pane" (the pull-out) or "full"
+local function layout_choice()
+  local v = require("bud.config").get("ai.agent.chat_layout", "pane")
+  return v == "full" and "full" or "pane"
+end
+
 local function window(t)
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     if vim.api.nvim_win_get_buf(win) == t.buf then
@@ -160,9 +166,76 @@ function M.send(text, opts)
   return true
 end
 
--- toggle hides the current project's TUI when it's showing, else opens it
+-- full_tab is the tab holding root's TUI full screen, nil when it isn't
+local function full_tab(t)
+  return t and t.full and vim.api.nvim_tabpage_is_valid(t.full) and t.full or nil
+end
+
+-- full shows root's TUI full screen (D137): a tab of its own, the editor and
+-- panes left as they were in theirs. Called again from that tab, it goes
+-- back, to the pane when ai.agent.chat_layout is "pane"
+function M.full(opts)
+  opts = opts or {}
+  local lock = require("bud.lock")
+  local root = root_of(opts.root)
+  local t = terms[root]
+  local tab = full_tab(t)
+  if tab and vim.api.nvim_get_current_tabpage() == tab then
+    t.full = nil
+    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+      lock.release(w)
+    end
+    if #vim.api.nvim_list_tabpages() > 1 then
+      vim.cmd.tabclose(vim.api.nvim_tabpage_get_number(tab))
+    end
+    if layout_choice() == "pane" then
+      M.open({ root = root })
+    end
+    return
+  elseif tab then
+    vim.api.nvim_set_current_tabpage(tab)
+    vim.cmd.startinsert()
+    return
+  end
+  -- start it, or take it out of its pane
+  if not M.open({ root = root, focus = false }) then
+    return
+  end
+  t = terms[root]
+  local pane = window(t)
+  if pane then
+    lock.hide(pane)
+  end
+  vim.cmd.tabnew()
+  local blank = vim.api.nvim_get_current_buf()
+  local win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(win, t.buf)
+  if blank ~= t.buf and vim.api.nvim_buf_is_valid(blank) then
+    vim.api.nvim_buf_delete(blank, { force = true })
+  end
+  for opt, value in pairs({ number = false, relativenumber = false, signcolumn = "no" }) do
+    vim.api.nvim_set_option_value(opt, value, { scope = "local", win = win })
+  end
+  t.full = vim.api.nvim_get_current_tabpage()
+  lock.lock(win, {
+    name = "the full-screen AI chat",
+    key = "<leader>aF",
+    reopen = function()
+      t.full = nil
+      return M.full({ root = root })
+    end,
+  })
+  t.last_used = now()
+  vim.cmd.startinsert()
+end
+
+-- toggle hides the current project's TUI when it's showing, else opens it,
+-- as a pane or full screen by ai.agent.chat_layout (D137)
 function M.toggle()
   local t = terms[root_of()]
+  if full_tab(t) or layout_choice() == "full" then
+    return M.full()
+  end
   local win = t and window(t)
   if win then
     require("bud.lock").hide(win)

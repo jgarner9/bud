@@ -257,3 +257,27 @@ func TestClodRepoValidate(t *testing.T) {
 		}
 	}
 }
+
+// ai.backend picks a known agent, and custom needs its command (D131)
+func TestBackendValidate(t *testing.T) {
+	s := Defaults()
+	if s.AI.Backend != "openclaw" || s.AI.Agent.ChatLayout != "pane" {
+		t.Fatalf("defaults: backend %q, chat_layout %q", s.AI.Backend, s.AI.Agent.ChatLayout)
+	}
+	s.AI.Backend = "gpt"
+	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "ai.backend") {
+		t.Errorf("unknown backend: %v", err)
+	}
+	s.AI.Backend = "custom"
+	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "ai.custom.command") {
+		t.Errorf("custom with no command: %v", err)
+	}
+	s.AI.Custom.Command = []string{"gemini", "--experimental-acp"}
+	if err := s.Validate(); err != nil {
+		t.Errorf("custom with a command: %v", err)
+	}
+	s.AI.Agent.ChatLayout = "half"
+	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "chat_layout") {
+		t.Errorf("unknown chat layout: %v", err)
+	}
+}

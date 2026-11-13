@@ -62,6 +62,11 @@ bud config edit                           # open it in bud's editor, then check 
 
 | Key | Default | What it does |
 | --- | --- | --- |
+| `ai.backend` | `"openclaw"` | Which agent bud talks to, over the Agent Client Protocol (ACP): `openclaw` (an OpenClaw Gateway, through `openclaw acp`), `claude` (Claude Code, through `claude-agent-acp`), `codex` (Codex, through `codex-acp`), `opencode` (`opencode acp`), or `custom` (`ai.custom.command`). Being built for 1.1: until it lands, the editor still runs Claude Code directly. |
+| `ai.agent.chat_layout` | `"pane"` | How `<leader>ac` opens the AI chat: `pane`, the pull-out on the right, or `full`, a tab of its own. `<leader>aF` switches between them either way. |
+| `ai.openclaw.url` | `""` | The OpenClaw Gateway's WebSocket URL, such as `wss://home.your-tailnet.ts.net:18789`. Empty uses the `openclaw` CLI's own `gateway.remote.url`, else a Gateway on this machine. |
+| `ai.openclaw.token_file` | `""` | A file holding the Gateway token (keep it mode 600), passed as `--token-file` so the token stays out of `config.json` and process listings. Empty uses the CLI's own credentials. |
+| `ai.custom.command` | `[]` | The command line of an ACP agent bud doesn't know by name, used when `ai.backend` is `custom`, such as `["gemini", "--experimental-acp"]`. |
 | `ai.claude.autostart` | `true` | Start a Claude Code session when a project opens. Off, bud only starts one when you use an AI feature. |
 | `ai.claude.resume` | `"new"` | Reopening a project starts a fresh conversation, on the model your settings choose. `"continue"` carries on bud's last conversation there instead (kept in `~/.local/state/bud/claude-sessions.json`, so never one you started yourself, or an issue, gen or chat conversation) and keeps the model that conversation was on. `bud agent` follows the same rule. |
 | `ai.claude.idle_minutes` | `30` | Stop a session nothing has used for this long; the next use starts it again on the same conversation. `0` never stops one. |

@@ -144,6 +144,40 @@ end, "a TUI in a project with no conversation")
 eq(argv_log()[5], "", "nothing to resume or continue")
 eq(term.running(fresh), true, "still open")
 
+-- full screen (D137): the same TUI in a tab of its own, and back to the pane
+vim.api.nvim_set_current_win(editor)
+local tabs = #vim.api.nvim_list_tabpages()
+term.open({ root = fresh, focus = false })
+local fbuf = vim.api.nvim_win_get_buf(term.open({ root = fresh, focus = false }))
+term.full({ root = fresh })
+eq(#vim.api.nvim_list_tabpages(), tabs + 1, "a tab of its own")
+eq(vim.api.nvim_get_current_buf(), fbuf, "the same TUI, full screen")
+eq(#vim.api.nvim_tabpage_list_wins(0), 1, "nothing else in that tab")
+vim.cmd.stopinsert()
+term.full({ root = fresh })
+eq(#vim.api.nvim_list_tabpages(), tabs, "the tab goes")
+eq(#vim.fn.win_findbuf(fbuf), 1, "back in its pane")
+eq(term.running(fresh), true, "still running")
+vim.cmd.stopinsert()
+
+-- ai.agent.chat_layout = "full" makes the toggle open it full screen
+local cfg = require("bud.config")
+local get = cfg.get
+cfg.get = function(key, default)
+  if key == "ai.agent.chat_layout" then
+    return "full"
+  end
+  return get(key, default)
+end
+vim.cmd.tcd(fresh)
+term.toggle()
+eq(#vim.api.nvim_list_tabpages(), tabs + 1, "the toggle opens it full screen")
+vim.cmd.stopinsert()
+term.toggle()
+eq(#vim.api.nvim_list_tabpages(), tabs, "and the toggle goes back")
+cfg.get = get
+vim.cmd.stopinsert()
+
 -- the layout's chat pane is the TUI
 require("bud.layout.panes")
 eq(require("bud.layout").providers.chat.available(), true, "chat pane available with claude")

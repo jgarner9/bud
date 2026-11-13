@@ -138,9 +138,12 @@ function M.check()
     else
       local buf = vim.api.nvim_win_get_buf(win)
       if buf ~= spec.buf then
-        if spec.allow and spec.allow(buf) then
+        -- its own kind (the explorer's next directory), or its own buffer is
+        -- gone (:bd): either way this is the pane's buffer now
+        local takes = (spec.allow and spec.allow(buf)) or not vim.api.nvim_buf_is_valid(spec.buf)
+        if takes then
           spec.buf = buf
-        elseif vim.api.nvim_buf_is_valid(spec.buf) then
+        else
           vim.api.nvim_win_set_buf(win, spec.buf)
           local target = M.editor(spec.tab)
           if target then
@@ -155,9 +158,6 @@ function M.check()
           else
             err(spec, "its buffer can't change")
           end
-        else
-          -- its own buffer is gone (:bd), so this is the pane's buffer now
-          spec.buf = buf
         end
       end
     end

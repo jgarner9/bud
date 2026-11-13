@@ -66,6 +66,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | `bud bundle` and the desktop apps | `docs/internals/bundles.md` |
 | `bud update`, rollback, the background check | `docs/internals/updater.md` |
 | `bud claude`, clod, the Claude Code check | `docs/internals/claude-code.md` |
+| `bud.ai.acp`, the backends (OpenClaw, Claude Code, Codex, OpenCode) and the fake ACP agent | `docs/internals/acp.md` |
 | `bud.ai.*`: the session, the TUI pane, the IDE bridge, permissions, chat, inline actions, tools, the generator, filing and working issues | `docs/internals/claude-session.md` |
 | `bud kit`, marketplaces, plugins | `docs/internals/kit.md` |
 | The format of `kit/kit.json` and what `kit.Load` checks | `docs/internals/kit-manifest.md` |

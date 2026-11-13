@@ -52,7 +52,9 @@ function M.restore(path)
   if not M.enabled() or vim.fn.filereadable(file) == 0 then
     return false
   end
-  local ok, err = pcall(vim.cmd.source, vim.fn.fnameescape(file))
+  -- a session file starts with :only and :tabonly, which close the panes:
+  -- that's the session's doing, not a :q to undo (D136)
+  local ok, err = pcall(require("bud.lock").quietly, vim.cmd.source, vim.fn.fnameescape(file))
   if not ok then
     vim.notify("bud: restoring the session failed: " .. tostring(err), vim.log.levels.WARN)
   end

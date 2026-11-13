@@ -126,6 +126,22 @@ end)
 vim.wait(100)
 eq(#panes(), 0, "closed quietly")
 
+-- restoring a session (:only first) is quiet too
+local sessions = require("bud.sessions")
+win = pane()
+local session_file = vim.fn.tempname() .. ".vim"
+vim.fn.writefile({ "silent only" }, session_file)
+sessions.file = function()
+  return session_file
+end
+sessions.enabled = function()
+  return true
+end
+errors = {}
+eq(sessions.restore("/x"), true, "restored")
+vim.wait(100)
+eq({ #panes(), #errors }, { 0, 0 }, "the session closed the pane without a fight")
+
 -- editor() skips panes and side windows
 win = pane()
 vim.api.nvim_set_current_win(win)

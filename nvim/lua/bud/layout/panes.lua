@@ -67,7 +67,7 @@ layout.register("chat", {
   end,
   open = function(pane)
     if own_chat() then
-      return require("bud.ai.view").open({ layout = "pane", focus = false })
+      return require("bud.ai.view").open({ layout = "pane", focus = false, width = pane.size })
     end
     return require("bud.ai.term").open({ side = pane.side, focus = false })
   end,

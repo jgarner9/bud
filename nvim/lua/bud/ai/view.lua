@@ -362,7 +362,8 @@ end
 
 -- open shows root's chat (default: the current project's), as a pane on the
 -- right or full screen (opts.layout, else ai.agent.chat_layout), and returns
--- the conversation's window. opts.focus = false doesn't start typing: a pane
+-- the conversation's window. opts.width is the pane's (a share of the
+-- screen under 1, else columns). opts.focus = false doesn't start typing: a pane
 -- leaves the cursor where it was, full screen puts it on the conversation
 function M.open(opts)
   opts = opts or {}
@@ -390,7 +391,8 @@ function M.open(opts)
       vim.api.nvim_buf_delete(blank, { force = true })
     end
   else
-    local width = M.width < 1 and math.floor(vim.o.columns * M.width) or M.width
+    local share = opts.width or M.width
+    local width = share < 1 and math.floor(vim.o.columns * share) or math.floor(share)
     log_win = vim.api.nvim_open_win(v.log, false, { split = "right", win = -1, width = width })
     vim.wo[log_win].winfixwidth = true
     vim.w[log_win].bud_side = true

@@ -145,6 +145,12 @@ eq(view.showing(proj), false, "closed")
 eq(#vim.api.nvim_tabpage_list_wins(0), 1, "just the editor")
 assert(text():find("Hello from the fake.", 1, true), "the conversation stays")
 
+-- a layout's size sets the pane's width
+view.close(proj)
+local narrow = view.open({ root = proj, focus = false, width = 30 })
+eq(vim.api.nvim_win_get_width(narrow), 30, "the width it was given")
+view.close(proj)
+
 -- full screen: a tab of its own
 local tabs = #vim.api.nvim_list_tabpages()
 view.open({ root = proj, layout = "full", focus = false })

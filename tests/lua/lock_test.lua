@@ -80,6 +80,45 @@ wait(function()
 end, "the pane after :only")
 eq(#errors, 1, "an error after :only")
 
+-- two windows of one pane closed at once come back once, with one error
+errors = {}
+local pair = {}
+local function pair_pane()
+  opened = opened + 1
+  pair = {}
+  for i = 1, 2 do
+    local b = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(b, 0, -1, false, { "pair " .. i })
+    local w = vim.api.nvim_open_win(b, false, { split = "right", win = -1, width = 20 })
+    table.insert(pair, w)
+    lock.lock(w, {
+      name = "the pair",
+      key = "<leader>p",
+      reopen = function()
+        for _, x in ipairs(pair) do
+          if vim.api.nvim_win_is_valid(x) then
+            lock.close(x)
+          end
+        end
+        return pair_pane()
+      end,
+    })
+  end
+  return pair[1]
+end
+pair_pane()
+local before = opened
+vim.cmd.only()
+wait(function()
+  return #errors >= 2
+end, "the errors after closing both kinds")
+vim.wait(100)
+eq(opened - before, 2, "the explorer and the pair reopened once each")
+eq(#errors, 2, "one error per pane")
+for _, w in ipairs(pair) do
+  lock.close(w)
+end
+
 -- a file opened in the pane goes to the editor window instead
 errors = {}
 win = panes()[1]

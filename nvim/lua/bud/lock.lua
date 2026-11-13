@@ -101,6 +101,38 @@ function M.editor(tab)
   end
 end
 
+-- closed collects the panes closed without their toggle in one go (an :only
+-- closes several), reopened once each, with one error per pane
+local closed = {}
+
+local function reopen_all()
+  local specs = closed
+  closed = {}
+  if exiting then
+    return
+  end
+  local back = vim.api.nvim_get_current_win()
+  local seen = {}
+  for _, spec in ipairs(specs) do
+    -- a pane of two windows (bud's chat) comes back once
+    local id = spec.name .. "\0" .. tostring(spec.tab)
+    if not seen[id] and vim.api.nvim_tabpage_is_valid(spec.tab) then
+      seen[id] = true
+      if vim.api.nvim_get_current_tabpage() ~= spec.tab then
+        vim.api.nvim_set_current_tabpage(spec.tab)
+      end
+      local ok, e = pcall(spec.reopen)
+      if not ok then
+        vim.notify(("bud: reopening %s failed: %s"):format(spec.name, e), vim.log.levels.WARN)
+      end
+      err(spec, "it only closes with its toggle")
+    end
+  end
+  if vim.api.nvim_win_is_valid(back) then
+    vim.api.nvim_set_current_win(back)
+  end
+end
+
 -- reopened handles a locked pane closed without its toggle: it opens again
 local function reopened(win)
   local spec = locked[win]
@@ -108,23 +140,10 @@ local function reopened(win)
   if not spec or exiting or suspended > 0 then
     return
   end
-  vim.schedule(function()
-    if exiting or not vim.api.nvim_tabpage_is_valid(spec.tab) then
-      return
-    end
-    local back = vim.api.nvim_get_current_win()
-    if vim.api.nvim_get_current_tabpage() ~= spec.tab then
-      vim.api.nvim_set_current_tabpage(spec.tab)
-    end
-    local ok, e = pcall(spec.reopen)
-    if not ok then
-      vim.notify(("bud: reopening %s failed: %s"):format(spec.name, e), vim.log.levels.WARN)
-    end
-    if vim.api.nvim_win_is_valid(back) then
-      vim.api.nvim_set_current_win(back)
-    end
-    err(spec, "it only closes with its toggle")
-  end)
+  if #closed == 0 then
+    vim.schedule(reopen_all)
+  end
+  table.insert(closed, spec)
 end
 
 -- check puts each locked pane's own buffer back when another one landed in
@@ -218,7 +237,7 @@ end
 
 -- _reset forgets every lock, for tests
 function M._reset()
-  locked, exiting, suspended = {}, false, 0
+  locked, exiting, suspended, closed = {}, false, 0, {}
 end
 
 return M

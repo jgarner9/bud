@@ -2,44 +2,52 @@
 
 Delete this file before merging the branch. It's here so the note exists even if the session stopped mid-step.
 
-Branch: `bud/upbeat-wright-g2fwv6`. Kept up to date as the work goes; the last section says where it stopped.
+Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test ./...`, the whole Lua suite and `just smoke` pass at the last commit.
 
-## Heads-up
+## Read this first
 
-- **Linear, Basic Memory, Context7 and Exa all failed to connect this session** (502 from the connector proxy). I couldn't read your restructured 1.1/1.2 milestones in Linear or file issues there, so the plan lives in BASE.md (4.4, section 6, section 7) and the task list below. The OpenCode issues JGA-262 to JGA-276 are now out of date: re-aim or close them when Linear is back.
-- The OpenCode facts pass from last night never got committed, apart from D128-D130, which this morning's decisions supersede or keep (see below).
+- **The default backend is now OpenClaw.** Until your Gateway is set up, `bud config set ai.backend claude` keeps today's Claude Code behaviour exactly; every Claude Code test runs that way. The setup guide is the new [docs/openclaw.md](docs/openclaw.md): the server half and the per-machine half.
+- **Linear, Basic Memory, Context7 and Exa all failed to connect this session** (502 from the connector proxy). I couldn't read your restructured 1.1/1.2 milestones or file anything there, so the plan lives in BASE.md (4.4, section 6, section 7). The OpenCode issues JGA-262 to JGA-276 are out of date: re-aim or close them when Linear is back.
 
-## What I decided, and why (BASE.md D131-D138)
+## What I decided, and why (BASE.md D131-D139)
 
 - **D131 Backend-agnostic over ACP.** bud talks the Agent Client Protocol: JSON lines on stdio, which Lua handles with a job. OpenClaw (`openclaw acp`), Claude Code (`claude-agent-acp`), Codex (`codex-acp`), OpenCode (`opencode acp`) and Gemini all speak it, so a backend is a command line. I rejected OpenClaw's own Gateway WebSocket protocol, which needs Ed25519 device signing and pairing (too much to carry in Lua), and adapters per harness.
-- **D132 OpenClaw is the default,** a Gateway on your home server reached over Tailscale. It has everything you listed: the web Control UI, the apps, `openclaw tui`, Claude Code through its `claude-cli` runtime, and ChatGPT Plus through Codex OAuth. bud runs `openclaw acp --url ... --token-file ...`.
-- **D133 Neutral names:** `bud.ai.agent`, `ai.backend`, `ai.agent.*`, `bud ai status|setup`. This supersedes D128's `opencode` names.
-- **D134 Edit review:** before the write when the backend sends a diff (Claude and Codex do), afterwards with git when it doesn't. OpenClaw's bridge sends no diffs.
-- **D135 Claude Code stays usable** as a backend, so the kit stays. Only its stream-json transport and the IDE bridge go. D129 (no cloud work) and D130 (no clod setup) stand.
-- **D136 Locked panes** and **D137 chat pane or full screen**: built, see below.
-- **D138 bud's own chat UI** drawn from ACP events, in your colours and keys, is 1.2. Until then the pane runs the backend's TUI.
+- **D132 OpenClaw is the default:** a Gateway on your home server, reached over Tailscale. It has the web Control UI, the apps, `openclaw tui`, Claude Code through its `claude-cli` runtime, and ChatGPT Plus through Codex OAuth.
+- **D133 Neutral names:** `bud.ai.agent`, `ai.backend`, `ai.agent.*`, `bud ai status|setup`.
+- **D134 Edit review:** before the write when the backend sends a diff (Claude, Codex), afterwards when it doesn't. OpenClaw writes edits without asking and reports the patch after.
+- **D135 Claude Code stays usable** as a backend, so the kit stays. D129 (no cloud work) and D130 (no clod setup) stand.
+- **D136 Locked panes, D137 chat pane or full screen:** built.
+- **D138 bud's own chat UI**, drawn from ACP events in your colours and keys, is 1.2. Until then the pane runs the backend's TUI.
+- **D139 One OpenClaw Gateway session per project,** `agent:main:bud:<project>-<hash>`, verified against a real Gateway.
 
-## Done
+## Done (newest last)
 
-- BASE.md: D131-D138, 4.4 rewritten, the 1.1 and 1.2 build order rewritten, and section 7's open questions replaced. CLAUDE.md's AI paragraph updated.
-- **Locked panes** (`bud.lock`): the explorer, git pane, AI pane and terminal close only by their toggles. `:q`, `:close` or `:only` puts the pane straight back with an error naming the key, and a file opened while a pane has the cursor goes to the editor window, with an error. New `<leader>gs` toggles the git pane. Test: `tests/lua/lock_test.lua`.
-- **Chat full screen:** `<leader>aF` moves the AI chat into a tab of its own and back. `ai.agent.chat_layout = "full"` makes `<leader>ac` open it that way. Tested in `claude_term_test.lua`.
-- **Settings:** `ai.backend` (default `openclaw`), `ai.agent.chat_layout`, `ai.openclaw.url`, `ai.openclaw.token_file` and `ai.custom.command`, with validation and docs.
-- **`bud.ai.acp`**, the ACP v1 client, plus a fake ACP agent (a headless nvim script) for tests. Test: `tests/lua/acp_test.lua`. The protocol notes are in `docs/internals/acp.md`.
-- **`bud.ai.agent`**, the session layer with `bud.ai.claude`'s calls and events. It streams replies, queues sends, handles permissions with their diffs, reads and writes files through open buffers, interrupts, recovers from crashes, and runs keyed sessions and the idle reap. Nothing starts it yet. Test: `tests/lua/agent_test.lua`.
-- **`bud ai status [--json]` / `bud ai setup`**, plus the doctor's "AI backend" check (`internal/agent`). Setup installs a missing backend with npm, after asking, and asks for the Gateway URL and token file.
-- **Checked against a real OpenClaw Gateway.** I ran OpenClaw 2026.11.3 on loopback with a scripted local model (no real provider, nothing of yours) and drove the real `openclaw acp` with bud's own client. Prompts, streaming, cancel, edits, exec and approvals all work. Those streams are now test fixtures (`tests/fixtures/openclaw/`), and the tests replay them through the whole stack. What I learned:
-  - Edits run without asking, and the patch arrives afterwards. D134 holds, and bud now picks that patch up for review.
-  - Exec asks only when the Gateway's `tools.exec.mode` is `ask`. The default, `full`, never asks.
-  - `--session <key>` makes a per-project session and continues it on the next run, so I built D139: one Gateway session per project.
+1. BASE.md: the decisions, 4.4 rewritten, the 1.1 and 1.2 build order rewritten (with what's built marked in each task), and section 7's open questions. CLAUDE.md's AI paragraph updated.
+2. **Locked panes** (`bud.lock`): the explorer, git pane, AI pane and terminal close only by their toggles. `:q`, `:close` or `:only` puts the pane straight back with an error naming the key, and a file opened while a pane has the cursor goes to the editor window, with an error. New `<leader>gs` toggles the git pane. Session restore and the layout close panes quietly.
+3. **Chat full screen:** `<leader>aF` moves the AI chat into a tab of its own and back. `ai.agent.chat_layout = "full"` makes `<leader>ac` open it that way.
+4. **Settings:** `ai.backend`, `ai.agent.chat_layout`, `ai.openclaw.url`, `ai.openclaw.token_file`, `ai.openclaw.agent`, `ai.custom.command`. The settings screen has an AI section.
+5. **`bud.ai.acp`**, the ACP client, plus a fake ACP agent (a headless nvim script) for tests.
+6. **`bud.ai.agent`**, the session layer with `bud.ai.claude`'s calls and events, and **`bud.ai.session`**, which picks the configured backend's session. The commit message, the generator, issues and work go through it.
+7. **Checked against a real OpenClaw Gateway.** OpenClaw 2026.11.3 ran on loopback with a scripted local model: no real provider, nothing of yours. bud's own client drove the real `openclaw acp`, and prompts, streaming, cancel, edits, exec and approvals all work. The streams are now test fixtures replayed through the whole stack.
+8. **The AI pane, chat, `bud agent` and `bud chat`** run `openclaw tui` on the project's Gateway session, with the token passed in the environment. I checked against the real Gateway that the TUI shows the thread bud's calls wrote. Inline actions type into the TUI, and `<leader>as` shares a selection.
+9. **Permission questions** from any ACP backend use bud's own prompt (`y` / `a` / `n`) and the diff review.
+10. **`bud ai status [--json]` / `bud ai setup`**, the doctor's "ai backend" check, and the dashboard's banner, health line and `c` key all follow the backend.
+11. **docs/openclaw.md** (on the site's sidebar), plus `docs/internals/acp.md` for working on it.
 
 ## Decisions waiting on you
 
-1. **One OpenClaw session per project:** I decided this by default (D139) after the real-Gateway test confirmed it works. The key is `agent:main:bud:<project>-<hash>`, and `ai.openclaw.agent` changes the agent. Say if you'd rather have one shared session.
-2. **Where the Gateway token lives** (BASE.md 7.1). I recommend a mode-600 file named by `ai.openclaw.token_file`.
-5. **Should OpenClaw ask before running commands** (7.2)? It's the Gateway's `tools.exec.mode`, and the setting applies to every surface. I recommend `ask` (`openclaw config set tools.exec.mode ask` on the server), which is how bud has worked so far.
+1. **Where the Gateway token lives** (BASE.md 7.1). I recommend a mode-600 file named by `ai.openclaw.token_file`, which is what bud does now. The keychain could come later.
+2. **Should OpenClaw ask before running commands** (7.2)? It's the Gateway's `tools.exec.mode`, and it applies to every surface. I recommend `ask` (`openclaw config set tools.exec.mode ask` on the server), which is how bud has worked so far.
 3. **Claude subscription through OpenClaw.** Reports from April 2026 say Anthropic stopped third-party tools drawing on the Claude subscription bucket, which conflicts with OpenClaw's docs on `claude-cli` reuse. Check Anthropic's current terms before relying on it. ChatGPT Plus through Codex OAuth looks solid.
 4. **The error on a redirected buffer.** You asked for an error when something tries to change a pane. I raise the error *and* open the file in the editor window, so nothing you picked is lost. Say if you'd rather it only refused.
+5. **One OpenClaw session per project** (D139): I decided this with my recommendation, once it was verified. Say if you'd rather have one shared session.
+
+## Left in 1.1 (BASE.md section 6)
+
+- Task 6: move the `claude` backend onto `claude-agent-acp` and remove the stream-json transport and the IDE bridge. Not started; the `claude` backend still runs on the old path.
+- Task 9's config migration from `ai.claude.*` to `ai.agent.*`, and task 11 (remove `bud claude`, clod's setup and cloud work).
+- Task 13: an end-to-end run with your real home Gateway, Claude Code and ChatGPT Plus. This needs you.
+- Task 14 (the user docs beyond docs/openclaw.md) and task 15 (release 1.1.0).
 
 ## Where it stopped
 

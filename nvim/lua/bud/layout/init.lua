@@ -132,6 +132,7 @@ end
 local function close()
   for _, win in ipairs(wins) do
     if vim.api.nvim_win_is_valid(win) and #vim.api.nvim_tabpage_list_wins(0) > 1 then
+      require("bud.lock").release(win)
       pcall(vim.api.nvim_win_close, win, false)
     end
   end

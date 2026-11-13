@@ -62,6 +62,18 @@ function M.open(opts)
   vim.wo[pane].relativenumber = false
   vim.wo[pane].signcolumn = "no"
   require("oil").open(vim.fn.getcwd())
+  -- locked (D136): <leader>e and <leader>E open and close it, and a file
+  -- that lands in it goes to the editor window
+  require("bud.lock").lock(pane, {
+    name = "the explorer",
+    key = "<leader>e",
+    reopen = function()
+      return M.open({ side = opts.side, size = opts.size })
+    end,
+    allow = function(b)
+      return vim.bo[b].filetype == "oil"
+    end,
+  })
   if opts.focus then
     cursor.hide("explorer")
   else
@@ -78,7 +90,7 @@ function M.close()
   end
   local was_in = vim.api.nvim_get_current_win() == pane
   if #vim.api.nvim_tabpage_list_wins(0) > 1 then
-    vim.api.nvim_win_close(pane, false)
+    require("bud.lock").close(pane)
   end
   pane = nil
   cursor.show("explorer")

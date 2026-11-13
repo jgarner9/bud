@@ -38,6 +38,9 @@ Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that f
 | `-` | Edit the parent directory as a buffer (oil). |
 | `<leader>t` | Show or hide the terminal along the bottom. |
 | `<leader>ac` | Show or hide Claude Code's pane. |
+| `<leader>gs` | Show or hide the git pane (changed files, neo-tree). |
+
+The panes are locked: only these keys open and close them. `:q`, `:close` or `:only` puts a pane straight back with an error naming its key, and a file opened while a pane has the cursor (`:e`, a picker, a buffer switch) opens in the editor window instead, with the same error. `:qa` and the `<leader>q` keys still quit bud.
 
 ## Code
 

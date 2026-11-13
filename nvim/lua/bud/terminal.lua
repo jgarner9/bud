@@ -74,13 +74,14 @@ function M.arrange()
   end
 end
 
-function M.toggle()
+-- open shows the terminal (starting a shell when there's none) and returns
+-- its window. opts.focus = false leaves the cursor where it was
+function M.open(opts)
+  opts = opts or {}
   if M.is_open() then
-    vim.api.nvim_win_hide(win)
-    win = nil
-    return
+    return win
   end
-
+  local back = vim.api.nvim_get_current_win()
   local fresh = not (buf and vim.api.nvim_buf_is_valid(buf))
   if fresh then
     buf = vim.api.nvim_create_buf(false, true)
@@ -100,7 +101,7 @@ function M.toggle()
         -- the shell is gone, so the next press starts a new one
         vim.schedule(function()
           if M.is_open() and vim.api.nvim_win_get_buf(win) == buf then
-            vim.api.nvim_win_close(win, true)
+            require("bud.lock").close(win, true)
           end
           if buf and vim.api.nvim_buf_is_valid(buf) then
             vim.api.nvim_buf_delete(buf, { force = true })
@@ -110,7 +111,31 @@ function M.toggle()
       end,
     })
   end
-  vim.cmd.startinsert()
+  -- locked (D136): only <leader>t hides it
+  require("bud.lock").lock(win, {
+    name = "the terminal",
+    key = "<leader>t",
+    reopen = function()
+      return M.open({ focus = false })
+    end,
+  })
+  if opts.focus == false then
+    if vim.api.nvim_win_is_valid(back) then
+      vim.api.nvim_set_current_win(back)
+    end
+  else
+    vim.cmd.startinsert()
+  end
+  return win
+end
+
+function M.toggle()
+  if M.is_open() then
+    require("bud.lock").hide(win)
+    win = nil
+    return
+  end
+  M.open()
 end
 
 -- job is the terminal's shell job, nil when there's none (bud.quit)

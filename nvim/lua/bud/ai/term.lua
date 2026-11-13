@@ -40,6 +40,14 @@ local function show(t, side)
   end
   -- a side pane: above the <leader>t terminal, beside the editor
   vim.w[win].bud_side = true
+  -- locked (D136): only <leader>ac hides it
+  require("bud.lock").lock(win, {
+    name = "the AI pane",
+    key = "<leader>ac",
+    reopen = function()
+      return M.open({ root = t.root, side = side, focus = false })
+    end,
+  })
   require("bud.terminal").arrange()
   return win
 end
@@ -63,7 +71,7 @@ function M.open(opts)
       vim.notify("bud: " .. why, vim.log.levels.WARN)
       return nil
     end
-    t = { buf = vim.api.nvim_create_buf(false, true), last_used = now() }
+    t = { buf = vim.api.nvim_create_buf(false, true), last_used = now(), root = root }
     terms[root] = t
     vim.bo[t.buf].bufhidden = "hide"
     -- jk to Normal mode, where <leader>ac hides it and <leader>w moves on
@@ -157,7 +165,7 @@ function M.toggle()
   local t = terms[root_of()]
   local win = t and window(t)
   if win then
-    vim.api.nvim_win_hide(win)
+    require("bud.lock").hide(win)
   else
     M.open()
   end
@@ -174,7 +182,9 @@ function M._closed(root)
   if vim.api.nvim_buf_is_valid(t.buf) then
     for _, win in ipairs(vim.fn.win_findbuf(t.buf)) do
       if #vim.api.nvim_list_wins() > 1 then
-        vim.api.nvim_win_close(win, true)
+        require("bud.lock").close(win, true)
+      else
+        require("bud.lock").release(win)
       end
     end
     vim.api.nvim_buf_delete(t.buf, { force = true })

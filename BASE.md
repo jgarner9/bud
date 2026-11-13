@@ -146,6 +146,9 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D125 | **Claude Code comes out of bud up front, and the 1.0 line is the Claude Code release.** | 2026-11-13 | Jason chose deleting first over keeping Claude Code as a frozen second backend or deleting it once OpenCode was at parity. The 1.0 line (v1.0.0 to v1.0.2) is where bud on Claude Code stays. There is no fallback while the OpenCode session is built: `main` has no working AI between the cut and the session landing, no stable release is made in that gap (D80), and the nightly channel does carry it. What goes is the transport and everything that only served it: `bud.ai.claude`'s process and stream handling, the IDE bridge, `internal/claude`, `bud claude`, the kit's `claude plugin` sync and `ai.claude.*`. What was built on the session stays and moves to the new module: the permission prompt, the diff review, issues, work, the generator and the chat tab. |
 | D126 | **Bud 1.1 is bud on OpenCode: the session, and the kit re-aimed at OpenCode's config.** | 2026-11-13 | Supersedes D116, D113 and D118. From 4.3, the manifest, status, add and rm, MCP servers, and settings and rules carry over with OpenCode's config as the target (JGA-244, JGA-247, JGA-248, JGA-249, JGA-250). The claude.ai account, Desktop, the cloud script, taking over clod and moving bud-plugins leave the milestone for the backlog (JGA-241, JGA-245, JGA-251 to JGA-259), and clod keeps setting up Claude's own surfaces. D111, D115, D121, D122 and D123 hold with "OpenCode setup" read for "Claude setup"; D112, D114, D117 and D119 wait with the parked work. `VERSION` goes to 1.1.0 when the session, the kit and the docs are all on OpenCode. |
 | D127 | **Bud 1.2 is delegation, a planning schema and docs mapped to code.** | 2026-11-13 | Jason set it: JGA-260 (the session model writes the spec, cheaper models write the code), JGA-246 (a planning schema and skills of his own, D120) and JGA-261 (each docs page mapped to the code it describes, with a test that fails when that code changes). It is planned in detail once 1.1 ships, because delegation changes shape on OpenCode: a coder can be any provider's model, or a local one. |
+| D128 | **The OpenCode pieces are named for OpenCode: `bud.ai.opencode`, `ai.opencode.*` and `bud opencode status\|setup`.** | 2026-11-13 | Plan, 4.4. A straight rename of `bud.ai.claude`, `ai.claude.*` and `bud claude`, so what runs is named and a machine's `config.json` migrates key for key. The other option was neutral names (`bud.ai.agent`, `ai.agent.*`, `bud ai`), which would survive another change of harness but hide what is run. |
+| D129 | **Cloud work goes with Claude Code.** | 2026-11-13 | Plan, 4.4; follows D125. `ai.work.where = "cloud"` (JGA-237) ran `claude --cloud`, which only Claude Code has, so the setting, the cloud runs file and that half of `bud.ai.work` are removed. Working an issue in a local worktree stays. |
+| D130 | **bud no longer sets clod up.** | 2026-11-13 | Plan, 4.4. `setupClod`, `clod.repo` and `internal/cli/clod.go` come out, since bud needs no Claude Code on a machine. clod stays Jason's setup for Claude's own surfaces and is run by its own installer (D126). D89 and D90 stay superseded, with this as the reason in place of D113. |
 
 ---
 
@@ -569,15 +572,15 @@ The aim is that everything in 4 and 4.2 works as it does now with OpenCode where
 | Plugins from a marketplace, through `claude plugin` | Files: `~/.config/opencode/skills/<name>/SKILL.md`, `agents/<name>.md`, commands, and `opencode.json` (`mcp`, `instructions`, `permission`) | Skills, agents and `opencode.json`: yes. Where commands go: first task |
 | `~/.claude/rules` and `CLAUDE.md` | `~/.config/opencode/AGENTS.md` and `instructions`. A project's `CLAUDE.md` is read when it has no `AGENTS.md` | Yes |
 | bud-ide's SessionStart hook (the notes on working inside bud) | An instructions file bud names when it starts the server | First task |
-| `claude --cloud`, for `ai.work.where = "cloud"` | Nothing. Open question (7) | n/a |
+| `claude --cloud`, for `ai.work.where = "cloud"` | Nothing: cloud work is removed (D129) | n/a |
 
-**The module.** One Lua module takes `bud.ai.claude`'s place as the only thing that talks to the agent, with the same calls (`session`, `send`, `on`, `interrupt`, `status`, keyed and extra sessions), so each consumer changes a `require` and little else. Its name is an open question (7). Under it sits a small HTTP and server-sent-events client on `vim.uv`, written by hand as the bridge's WebSocket was, so no plugin is added. The server listens on localhost only, with a password bud generates at each start if OpenCode takes one (first task). It starts in a `vim.schedule` callback after `VimEnter`, as the Claude Code session does, so the first screen keeps its budget (D35).
+**The module.** `bud.ai.opencode` (D128) takes `bud.ai.claude`'s place as the only thing that talks to the agent, with the same calls (`session`, `send`, `on`, `interrupt`, `status`, keyed and extra sessions), so each consumer changes a `require` and little else. Under it sits a small HTTP and server-sent-events client on `vim.uv`, written by hand as the bridge's WebSocket was, so no plugin is added. The server listens on localhost only, with a password bud generates at each start if OpenCode takes one (first task). It starts in a `vim.schedule` callback after `VimEnter`, as the Claude Code session does, so the first screen keeps its budget (D35).
 
 **The kit.** `bud kit sync` stops calling `claude plugin` and writes OpenCode's files, under the rules 4.1 already has: the ledger records what bud wrote, bud touches nothing else, and what the manifest drops is taken out. Skills, agents and commands are copied from the bud-plugins checkout, servers become `mcp` entries, and rules become instructions. bud-plugins stays one source for both harnesses, since Claude's own surfaces still load it as a plugin. How a plugin's names carry over is an open question (7).
 
-**What a person does.** A setup command installs OpenCode and hands over to its sign-in, a status command and `bud doctor` say whether it is installed and connected to a provider, and the dashboard banner's `c` runs the setup. bud sets no model: OpenCode's config does, and the manifest may carry a default.
+**What a person does.** `bud opencode setup` installs OpenCode and hands over to its sign-in, `bud opencode status` and `bud doctor` say whether it is installed and connected to a provider, and the dashboard banner's `c` runs the setup. bud sets no model: OpenCode's config does, and the manifest may carry a default.
 
-**What goes away (D125):** `nvim/lua/bud/ai/claude.lua`'s process and stream handling, `nvim/lua/bud/ai/bridge/`, `internal/claude`, `bud claude`, `internal/cli/claudedir.go`, the Claude checks in `bud doctor` and `bud install`, the kit's `claude plugin` path and its `account.instructions` reminder, and `ai.claude.*`. `bud agent` and `bud chat` stay as commands and open OpenCode's TUI.
+**What goes away (D125):** `nvim/lua/bud/ai/claude.lua`'s process and stream handling, `nvim/lua/bud/ai/bridge/`, `internal/claude`, `bud claude`, `internal/cli/claudedir.go`, the Claude checks in `bud doctor` and `bud install`, the kit's `claude plugin` path and its `account.instructions` reminder, `ai.claude.*`, cloud work (`ai.work.where`, D129), and clod's setup (`internal/cli/clod.go`, `clod.repo`, D130). `bud agent` and `bud chat` stay as commands and open OpenCode's TUI.
 
 **Tests.** No test starts a real OpenCode or reaches a provider. Lua tests talk to a fake server that replays recorded event streams, and Go tests put a fake `opencode` on `PATH` with `fakePath`, as they did a recorded `claude`.
 
@@ -820,7 +823,7 @@ One task is one commit with its own check, and `just check` passes after each. A
 
 **Lane B: the CLI (Go).**
 
-9. **Cut Claude Code out of the CLI.** [1] `internal/claude`, `bud claude`, `claudedir.go`, the Claude checks in doctor and install, and `ai.claude.*`, with a migration for a machine's `config.json`. Done when `just test` passes and `bud doctor` on a machine with no `claude` reports nothing about it.
+9. **Cut Claude Code out of the CLI.** [1] `internal/claude`, `bud claude`, `claudedir.go`, `clod.go` and `clod.repo` (D130), `ai.work.where` (D129), the Claude checks in doctor and install, and `ai.claude.*`, with a migration for a machine's `config.json` to `ai.opencode.*` (D128). Done when `just test` passes and `bud doctor` on a machine with no `claude` reports nothing about it.
 10. **Find, check and set up OpenCode.** [9] `internal/opencode` (the binary, its version, `auth list`), the status and setup commands, the doctor check, the offer in `bud install`, and `bud agent` and `bud chat` opening OpenCode's TUI.
 11. **The dashboard banner and the settings screen.** [4, 10]
 
@@ -856,25 +859,13 @@ Parked in the backlog by D126, out of the milestone: guided account steps (JGA-2
 
 ## 7. Open questions for you
 
-Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50; one Claude setup everywhere: D118-D122; the move to OpenCode, what happens to Claude Code, and what 1.1 and 1.2 are: D124-D127). What's left, all for 4.4:
+Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50; one Claude setup everywhere: D118-D122; the move to OpenCode, what happens to Claude Code, and what 1.1 and 1.2 are: D124-D127; the names, cloud work and clod: D128-D130). What's left, both for 4.4:
 
-1. **Names.** Needed before tasks 2 and 9.
-   - A straight rename: `bud.ai.opencode`, `ai.opencode.*`, `bud opencode status|setup`. What runs is named, and the config migration is mechanical.
-   - Neutral names: `bud.ai.agent`, `ai.agent.*`, `bud ai status|setup`. They survive another change of harness, but hide what is run.
-   - Recommendation: the straight rename.
-2. **Cloud work.** `ai.work.where = "cloud"` (JGA-237) runs `claude --cloud`. Needed before tasks 8 and 9.
-   - Drop it with the rest of Claude Code. Work in a local worktree stays.
-   - Keep it, as the one place bud still calls `claude`.
-   - Recommendation: drop it, which is what D125 says.
-3. **clod in `bud install`.** `setupClod` and `clod.repo` clone and run your Claude setup on a new machine. Needed before task 9.
-   - Take them out. clod is run by its own installer, and bud needs no Claude Code on a machine.
-   - Keep them, so one command still sets up a machine's Claude as well.
-   - Recommendation: take them out.
-4. **Reviewing edits.** Today an edit is a diff you accept before it is written. Answered after task 1.
+1. **Reviewing edits.** Today an edit is a diff you accept before it is written. Answered after task 1.
    - Keep that: ask on every edit and show its diff in the same review. It needs the permission event to carry the diff.
    - Let OpenCode write, and review afterwards with git.
    - Recommendation: keep the review if task 1 finds the diff is there.
-5. **Plugin names on OpenCode.** A Claude plugin's skill is `bud:code-style`; an OpenCode skill is named by its folder and has no colon. Answered with task 17.
+2. **Plugin names on OpenCode.** A Claude plugin's skill is `bud:code-style`; an OpenCode skill is named by its folder and has no colon. Answered with task 17.
    - The sync writes `bud-code-style` and rewrites `bud:` references in the text it copies. One source, nothing generated is committed.
    - bud-plugins commits a generated OpenCode tree beside the plugins.
    - The skills are renamed for both harnesses.

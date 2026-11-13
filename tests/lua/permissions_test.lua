@@ -294,6 +294,16 @@ end)
 vim.api.nvim_feedkeys("n", "x", false)
 eq(chosen, "deny", "n picks the reject option")
 
+-- an interrupted turn takes its question back: the dialog closes
+local withdraw = perms.acp(acp_req("sleep 100"), function() end)
+eq(perms.pending(), 1, "asking")
+eq(vim.api.nvim_win_get_config(0).relative ~= "", true, "the dialog is up")
+withdraw()
+wait(function()
+  return perms.pending() == 0
+end, "the question to go")
+eq(vim.api.nvim_win_get_config(0).relative, "", "the dialog closed")
+
 -- a diff becomes a Write of the whole file as it would be
 vim.fn.writefile({ "keep", "old line", "keep too" }, tmp .. "/acp.txt")
 local req = acp_req("x")

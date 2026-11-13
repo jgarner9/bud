@@ -313,10 +313,11 @@ end
 
 -- M.permission answers a permission request: req is { session, tool, options,
 -- diffs, title, input, raw }, and respond takes the chosen option's id, or
--- nil for cancelled. It's bud's permission prompt, and the diff review when
+-- nil for cancelled. It may return a function that takes the question back,
+-- which interrupt calls. It's bud's permission prompt, and the diff review when
 -- the request carries a diff (D134); tests swap it
 M.permission = function(req, respond)
-  require("bud.ai.permissions").acp(req, respond)
+  return require("bud.ai.permissions").acp(req, respond)
 end
 
 -- patch is the unified diff a finished edit reports, when the backend says
@@ -416,7 +417,11 @@ local function on_request(s, method, params, respond)
     end
     s.asking[answer] = true
     emit("permission_request", req, s)
-    M.permission(req, answer)
+    -- the permission UI may hand back a way to take the question back
+    local withdraw = M.permission(req, answer)
+    if not done and type(withdraw) == "function" then
+      s.asking[answer] = withdraw
+    end
   elseif method == "fs/read_text_file" then
     local text, err = M.read_file(params.path, params.line, params.limit)
     if text then
@@ -678,8 +683,11 @@ function M.interrupt(root)
   if not (s and s.conn and s.id) then
     return false
   end
-  for answer in pairs(s.asking or {}) do
+  for answer, withdraw in pairs(s.asking or {}) do
     answer(nil)
+    if type(withdraw) == "function" then
+      withdraw()
+    end
   end
   s.queue = {}
   s.conn:notify("session/cancel", { sessionId = s.id })

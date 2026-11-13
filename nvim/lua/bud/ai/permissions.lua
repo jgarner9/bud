@@ -130,7 +130,7 @@ local function prompt(req, done)
   if req.root then
     table.insert(lines, 3, "         in " .. vim.fn.fnamemodify(req.root, ":~"))
   end
-  require("bud.ui").dialog({
+  req.handle = require("bud.ui").dialog({
     title = "permission",
     lines = lines,
     actions = {
@@ -269,7 +269,8 @@ end
 
 -- acp asks about an ACP agent's permission request (bud.ai.agent: req with
 -- options, respond(option_id)) through the same queue, policies and dialog,
--- answering with the agent's own allow or reject option. A diff the user
+-- answering with the agent's own allow or reject option. It returns a
+-- function that takes the question back. A diff the user
 -- changes in the review is accepted as the agent's: ACP's answer can't
 -- carry an edited version
 function M.acp(req, respond)
@@ -284,7 +285,7 @@ function M.acp(req, respond)
   end
   local tool, input = M.acp_tool(req)
   local call = req.raw and req.raw.toolCall or {}
-  M.request({
+  local r = {
     tool = tool,
     input = input,
     root = req.session and req.session.root,
@@ -298,7 +299,30 @@ function M.acp(req, respond)
         respond(pick({ "reject_once", "reject_always" }))
       end
     end,
-  })
+  }
+  M.request(r)
+  -- for the agent to take the question back when the turn is interrupted
+  return function()
+    M.withdraw(r)
+  end
+end
+
+-- withdraw takes back a question the asker no longer needs answered (an
+-- interrupted ACP turn): off the screen when it's showing, else out of the
+-- queue
+function M.withdraw(req)
+  if showing == req then
+    if req.handle and req.handle.close then
+      req.handle.close()
+    end
+    return
+  end
+  for i, r in ipairs(queue) do
+    if r == req then
+      table.remove(queue, i)
+      return
+    end
+  end
 end
 
 -- pending is how many questions are waiting, the one on screen included

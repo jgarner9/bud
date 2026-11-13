@@ -57,7 +57,6 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
 
 - Task 6: move the `claude` backend onto `claude-agent-acp` and remove the stream-json transport and the IDE bridge. Not started; the `claude` backend still runs on the old path.
 - Task 9's config migration from `ai.claude.*` to `ai.agent.*` (41 references across 17 files, mostly on the Claude path task 6 rewrites, so it's best done with task 6), and task 11 (remove `bud claude`, clod's setup and cloud work).
-- Known small gap: interrupting a reply cancels a pending permission question, but its dialog stays on screen until dismissed (the late answer is ignored).
 - Task 13: an end-to-end run with your real home Gateway, Claude Code and ChatGPT Plus. This needs you.
 - Task 14 (the user docs beyond docs/openclaw.md) and task 15 (release 1.1.0).
 

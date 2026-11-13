@@ -65,6 +65,18 @@ bud ai status                                  # installed, Gateway answering?
 - **`:BudAgent`** shows the project's session (backend, status, session id); `:BudAgent restart` and `:BudAgent stop` do what they say. `:BudAgent option` picks one of the session's settings OpenClaw offers (`thought_level`, `fast_mode`, `reasoning_level`, `verbose_level` and others) and a value; `:BudAgent option fast_mode on` sets one directly. A model that doesn't take a value says why. `<leader>av` is bud's own chat on the same session.
 - **The token** goes to `openclaw acp` as `--token-file` and to `openclaw tui` in its environment, never on a command line.
 
+## When it doesn't connect
+
+`:BudAgent` (or the status line) shows why, in OpenClaw's own words, a few seconds after a project opens:
+
+| It says | Fix |
+| --- | --- |
+| `openclaw isn't installed` | `bud ai setup`, or `npm install -g openclaw` (Node 24.16+). |
+| `ACP bridge failed: connect ECONNREFUSED ...` | No Gateway at that address: start it (`openclaw gateway`, or its service), check Tailscale, or fix `ai.openclaw.url`. |
+| `ACP bridge failed: unauthorized: gateway token mismatch` | The token file doesn't hold that Gateway's token: `openclaw gateway auth-token` on the Gateway's machine prints it. |
+
+`bud ai status` checks the same things from the shell, without starting a session. `:BudAgent restart` tries again once it's fixed.
+
 ## Other backends
 
 `ai.backend` can also be `claude` (Claude Code directly, as before 1.1), `codex` (`codex-acp`, ChatGPT Plus through Codex's own login), `opencode` (`opencode acp`), or `custom` with `ai.custom.command` for any other ACP agent. `bud ai setup` installs the command for the first three. See [config](config.md).

@@ -61,11 +61,22 @@ banners, clean, claude = dashboard.doctor_banners({
 eq(banners, { { level = "warn", text = "Claude Code isn't set up, press c" } }, "claude banner, not a doctor warning")
 eq({ clean, claude.detail }, { false, "not installed" }, "claude result comes back")
 
--- health line's Claude Code part
-eq(dashboard.claude_health(nil, false), "no claude yet", "before doctor, not on PATH")
-eq(dashboard.claude_health(nil, true), "claude ready", "before doctor, on PATH")
-eq(dashboard.claude_health({ status = "warn" }, true), "claude not set up", "logged out")
-eq(dashboard.claude_health({ status = "ok" }, true), "claude ready", "ready")
+-- on another backend (D131) its own check gives the banner, and Claude
+-- Code's says nothing
+banners, clean, claude = dashboard.doctor_banners({
+  { name = "claude code", status = "warn", detail = "not installed" },
+  { name = "ai backend", status = "warn", detail = "openclaw: openclaw isn't installed" },
+}, "openclaw")
+eq(banners, { { level = "warn", text = "openclaw isn't set up, press c" } }, "the backend's banner")
+eq(claude.detail, "openclaw: openclaw isn't installed", "the backend's result comes back")
+banners, clean = dashboard.doctor_banners({ { name = "ai backend", status = "ok" } }, "openclaw")
+eq({ banners, clean }, { {}, true }, "openclaw set up")
+
+-- health line's AI part
+eq(dashboard.ai_health("claude", nil, false), "no claude yet", "before doctor, not on PATH")
+eq(dashboard.ai_health("claude", nil, true), "claude ready", "before doctor, on PATH")
+eq(dashboard.ai_health("claude", { status = "warn" }, true), "claude not set up", "logged out")
+eq(dashboard.ai_health("openclaw", { status = "ok" }, true), "openclaw ready", "ready")
 
 -- git
 eq(

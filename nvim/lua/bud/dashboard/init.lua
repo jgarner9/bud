@@ -31,18 +31,27 @@ function M.mood(state, hour)
   return "normal"
 end
 
--- doctor_banners turns `bud doctor --json` output into banners. Claude Code
--- gets its own, with its own key, since setting it up is one command; its
--- result comes back too, for the health line
-function M.doctor_banners(results)
+-- ai_check is the doctor check that says whether the AI backend is set up:
+-- Claude Code's own for the claude backend, else bud's "ai backend" (D131)
+function M.ai_check(backend)
+  return backend == "claude" and "claude code" or "ai backend"
+end
+
+-- doctor_banners turns `bud doctor --json` output into banners. The AI
+-- backend gets its own, with its own key, since setting it up is one
+-- command; its result comes back too, for the health line
+function M.doctor_banners(results, backend)
+  backend = backend or "claude"
   local fails, warns = 0, 0
-  local claude
+  local ai
   for _, r in ipairs(results) do
-    if r.name == "claude code" then
-      claude = r
-    elseif r.status == "fail" then
+    -- the other backend's check is not this one's business
+    local other = r.name ~= M.ai_check(backend) and (r.name == "claude code" or r.name == "ai backend")
+    if r.name == M.ai_check(backend) then
+      ai = r
+    elseif not other and r.status == "fail" then
       fails = fails + 1
-    elseif r.status == "warn" then
+    elseif not other and r.status == "warn" then
       warns = warns + 1
     end
   end
@@ -56,20 +65,21 @@ function M.doctor_banners(results)
   if warns > 0 then
     table.insert(banners, { level = "warn", text = plural(warns, "doctor warning") .. ", press d" })
   end
-  local claude_ok = not claude or claude.status == "ok"
-  if not claude_ok then
-    table.insert(banners, { level = "warn", text = "Claude Code isn't set up, press c" })
+  local ai_ok = not ai or ai.status == "ok"
+  if not ai_ok then
+    local name = backend == "claude" and "Claude Code" or backend
+    table.insert(banners, { level = "warn", text = name .. " isn't set up, press c" })
   end
-  return banners, fails + warns == 0 and claude_ok, claude
+  return banners, fails + warns == 0 and ai_ok, ai
 end
 
--- claude_health is the health line's Claude Code part: from doctor once it's
--- back, until then from whether claude is on PATH
-function M.claude_health(result, executable)
+-- ai_health is the health line's AI part: from doctor once it's back, until
+-- then from whether the backend's command is on PATH
+function M.ai_health(backend, result, executable)
   if result then
-    return result.status == "ok" and "claude ready" or "claude not set up"
+    return result.status == "ok" and (backend .. " ready") or (backend .. " not set up")
   end
-  return executable and "claude ready" or "no claude yet"
+  return executable and (backend .. " ready") or ("no " .. backend .. " yet")
 end
 
 -- update_banner turns update.json (what `bud update --background` found, D9)
@@ -114,7 +124,10 @@ local function health()
     table.insert(parts, (icons.startup .. " %d ms"):format(vim.g.bud_startup_ms))
   end
   table.insert(parts, icons.plugins .. " " .. #require("bud.pack").names .. " plugins")
-  table.insert(parts, icons.claude .. " " .. M.claude_health(current.claude, vim.fn.executable("claude") == 1))
+  local backend = require("bud.ai.agent").backend()
+  local argv = require("bud.ai.agent").argv(backend)
+  local bin = backend == "claude" and "claude" or (argv and argv[1] or backend)
+  table.insert(parts, icons.claude .. " " .. M.ai_health(backend, current.claude, vim.fn.executable(bin) == 1))
   return table.concat(parts, " · ")
 end
 
@@ -265,11 +278,12 @@ local function keys(buf)
   map("u", function()
     cli.terminal({ "update" })
   end, "Update")
-  -- chat (Claude Code's TUI in chat mode, JGA-165), or setting up Claude
-  -- Code first when the banner says it isn't
+  -- chat (the backend's TUI, JGA-165), or setting the backend up first when
+  -- the banner says it isn't
   map("c", function()
     if current.claude and current.claude.status ~= "ok" then
-      cli.terminal({ "claude", "setup" })
+      local claude = require("bud.ai.agent").backend() == "claude"
+      cli.terminal(claude and { "claude", "setup" } or { "ai", "setup" })
     else
       require("bud.ai.chat").open()
     end
@@ -396,7 +410,7 @@ local function load()
         local ok, results = pcall(vim.json.decode, res.stdout or "")
         if ok and type(results) == "table" then
           local clean
-          current.banners, clean, current.claude = M.doctor_banners(results)
+          current.banners, clean, current.claude = M.doctor_banners(results, require("bud.ai.agent").backend())
           current.doctor = { clean = clean }
           draw()
         end

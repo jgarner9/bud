@@ -519,7 +519,7 @@ func checkClaude(cfg config.Settings) (Result, claude.Status) {
 var agentCheck = agent.Check
 
 // AgentCheck is the AI backend check's name
-const AgentCheck = "AI backend"
+const AgentCheck = "ai backend"
 
 // checkAgent checks the backend ai.backend names (D131): its command, and
 // for OpenClaw the Gateway (not with --quick, which skips the network). It

@@ -842,7 +842,7 @@ One task is one commit with its own check, and `just check` passes after each. B
 9. **Backend settings:** `ai.backend`, `ai.agent.chat_layout`, `ai.openclaw.url`, `ai.openclaw.token_file`, `ai.custom.command`, with a migration from `ai.claude.*` (D133). Built: the keys, defaults and validation; the migration waits for task 11.
 10. **`bud ai status|setup` and the doctor check:** the backend's command, its version, and for OpenClaw the Gateway answering. [9] Built: `internal/agent`, `bud ai`, the doctor's "AI backend" check.
 11. **Cut `bud claude`, clod's setup and cloud work** (D129, D130). [10]
-12. **The dashboard banner and the settings screen** on the backend. [3, 10]
+12. **The dashboard banner and the settings screen** on the backend. [3, 10] Built: the banner, health line and `c` follow `ai.backend` (`bud ai setup` for any but claude), and the settings screen has an AI section.
 
 **Last, in order.**
 

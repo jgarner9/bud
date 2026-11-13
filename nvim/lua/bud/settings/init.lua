@@ -54,6 +54,21 @@ M.sections = {
     },
   },
   {
+    title = "AI",
+    rows = {
+      {
+        key = "ai.backend",
+        label = "Backend",
+        kind = "choice",
+        choices = { "openclaw", "claude", "codex", "opencode", "custom" },
+      },
+      { key = "ai.agent.chat_layout", label = "Chat opens as", kind = "choice", choices = { "pane", "full" } },
+      { key = "ai.openclaw.url", label = "OpenClaw Gateway URL", kind = "text" },
+      { key = "ai.openclaw.token_file", label = "Gateway token file", kind = "text" },
+      { key = "ai.openclaw.agent", label = "OpenClaw agent", kind = "text" },
+    },
+  },
+  {
     title = "Claude Code",
     rows = {
       { key = "ai.claude.autostart", label = "Start with a project", kind = "bool" },
@@ -261,6 +276,12 @@ function M.change()
       local n = tonumber(text or "")
       if n then
         set(row.key, n)
+      end
+    end)
+  elseif row.kind == "text" then
+    vim.ui.input({ prompt = row.label .. ": ", default = value or "" }, function(text)
+      if text then
+        set(row.key, vim.trim(text))
       end
     end)
   elseif row.kind == "list" then

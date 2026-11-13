@@ -61,6 +61,7 @@ bud ai status                                  # installed, Gateway answering?
 - **Chat** (`<leader>ch`, `bud chat`) is one more session, `agent:main:bud:chat`, outside any project.
 - **The AI pane** runs `openclaw tui` on the project's session. `<leader>aF` makes it full screen and back, and `ai.agent.chat_layout = "full"` opens it that way.
 - **Permission questions** (with `tools.exec.mode` at `ask`) come up as bud's own prompt: `y` allows once, `a` allows that command for the rest of the session, `n` denies.
+- **`:BudAgent`** shows the project's session (backend, status, session id); `:BudAgent restart` and `:BudAgent stop` do what they say. `<leader>av` is bud's own chat on the same session.
 - **The token** goes to `openclaw acp` as `--token-file` and to `openclaw tui` in its environment, never on a command line.
 
 ## Other backends

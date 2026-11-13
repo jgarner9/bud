@@ -784,8 +784,49 @@ end
 -- 4.2 table): a project dir, or files from their root, and nothing for bare
 -- bud; it adds the status line and the idle reap
 local idle_timer
+-- describe is :BudAgent's one-line status of root's session
+function M.describe(root)
+  local s = M.get(root)
+  if not s then
+    return ("%s: no session for this project yet"):format(M.backend())
+  end
+  local parts = { ("%s: %s"):format(s.backend or M.backend(), s.status) }
+  if s.why then
+    table.insert(parts, "(" .. s.why .. ")")
+  end
+  if s.agent_info and s.agent_info.name then
+    table.insert(parts, ("· %s %s"):format(s.agent_info.name, s.agent_info.version or ""))
+  end
+  if s.id then
+    table.insert(parts, "· session " .. s.id)
+  end
+  return table.concat(parts, " ")
+end
+
+-- command is :BudAgent [status|restart|stop]
+function M.command_line(sub)
+  sub = sub ~= "" and sub or "status"
+  if sub == "restart" then
+    M.restart()
+  elseif sub == "stop" then
+    M.stop()
+  elseif sub ~= "status" then
+    return vim.notify("bud: :BudAgent takes status, restart or stop", vim.log.levels.WARN)
+  end
+  vim.notify(M.describe())
+end
+
 function M.setup()
   require("bud.statusline").add(M.statusline)
+  vim.api.nvim_create_user_command("BudAgent", function(o)
+    M.command_line(o.args)
+  end, {
+    nargs = "?",
+    desc = "The AI backend's session: its status, or restart or stop it",
+    complete = function()
+      return { "status", "restart", "stop" }
+    end,
+  })
   local group = vim.api.nvim_create_augroup("bud.ai.agent", { clear = true })
   vim.api.nvim_create_autocmd("VimLeavePre", { group = group, desc = "Stop the AI agents", callback = M.stop_all })
   local minutes = tonumber(cfg().get("ai.claude.idle_minutes", 30)) or 30

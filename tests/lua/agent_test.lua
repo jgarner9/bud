@@ -375,6 +375,11 @@ end
 eq(session.module(), require("bud.ai.claude"), "claude: bud.ai.claude, until task 6")
 config.get = real_get
 
+-- :BudAgent's status line
+local described = agent.describe(proj)
+assert(described:find("^openclaw: %a+"), described)
+assert(described:find("fake%-acp 1.0.0"), described)
+
 -- the status line names the backend
 vim.cmd.cd(proj)
 assert(agent.statusline():find("openclaw", 1, true), agent.statusline())

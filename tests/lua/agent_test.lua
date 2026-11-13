@@ -375,6 +375,36 @@ end
 eq(session.module(), require("bud.ai.claude"), "claude: bud.ai.claude, until task 6")
 config.get = real_get
 
+-- the backend's settings (ACP config options), as :BudAgent option sets them
+local function option(id)
+  for _, o in ipairs(agent.options(proj)) do
+    if o.id == id then
+      return o.currentValue
+    end
+  end
+end
+eq(option("thought_level"), "adaptive", "the backend's settings come with the session")
+local set_err = "unset"
+agent.set_option(proj, "thought_level", "high", function(err)
+  set_err = err
+end)
+wait(function()
+  return set_err ~= "unset"
+end, "the setting")
+eq({ set_err, option("thought_level") }, { nil, "high" }, "set")
+set_err = "unset"
+agent.set_option(proj, "fast_mode", "on", function(err)
+  set_err = err
+end)
+wait(function()
+  return set_err ~= "unset"
+end, "the boolean")
+eq(option("fast_mode"), true, "a boolean goes as one")
+agent.set_option(proj, "nope", "x", function(err)
+  set_err = err
+end)
+assert(set_err:find('no setting "nope"', 1, true), set_err)
+
 -- :BudAgent's status line
 local described = agent.describe(proj)
 assert(described:find("^openclaw: %a+"), described)

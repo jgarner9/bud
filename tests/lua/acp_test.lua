@@ -192,5 +192,13 @@ conn:request("session/prompt", {}, function(e)
 end)
 eq(failed.message, "the agent isn't running", "requests after the exit fail at once")
 
+-- an error's detail (OpenClaw's data.details) joins its message
+eq(
+  acp.why({ message = "Internal error", data = { details = "No session found" } }),
+  "Internal error: No session found",
+  "detail"
+)
+eq(acp.why({ message = "Invalid params", data = { sessionId = {} } }), "Invalid params", "no detail")
+
 vim.fn.delete(tmp, "rf")
 print("acp_test: ok")

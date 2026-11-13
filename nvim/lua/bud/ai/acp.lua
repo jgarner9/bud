@@ -217,6 +217,21 @@ function M.text(content)
   return ""
 end
 
+-- why is an error's message with the detail an agent put in its data
+-- (OpenClaw answers "Internal error" with the reason in data.details)
+function M.why(err)
+  if type(err) ~= "table" then
+    return tostring(err)
+  end
+  local msg = err.message or "failed"
+  local data = err.data
+  local detail = type(data) == "table" and (data.details or data.message) or (type(data) == "string" and data or nil)
+  if type(detail) == "string" and detail ~= "" and detail ~= msg then
+    msg = msg .. ": " .. detail
+  end
+  return msg
+end
+
 -- diffs lists the diff items in a tool call's content: { path, old, new }
 function M.diffs(tool_call)
   local found = {}

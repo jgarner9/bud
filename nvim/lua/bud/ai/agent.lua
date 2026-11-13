@@ -378,6 +378,8 @@ function M.handle(s, update)
     emit("plan", { entries = update.entries or {} }, s)
   elseif kind == "available_commands_update" then
     s.commands = update.availableCommands or {}
+  elseif kind == "config_option_update" then
+    s.options = update.configOptions or s.options
   elseif kind == "usage_update" then
     s.usage = update
   end
@@ -506,17 +508,20 @@ start = function(s)
     clientInfo = { name = "bud", version = vim.env.BUD_VERSION or "dev" },
   }, function(ierr, init)
     if ierr then
-      set_status(s, "error", "initialize: " .. (ierr.message or "failed"))
+      set_status(s, "error", "initialize: " .. acp.why(ierr))
       return
     end
     s.caps = (init and init.agentCapabilities) or {}
     s.agent_info = init and init.agentInfo
     local function opened(nerr, res)
       if nerr or not (res and (res.sessionId or s.id)) then
-        set_status(s, "error", "session: " .. ((nerr and nerr.message) or "no session id"))
+        set_status(s, "error", "session: " .. (nerr and acp.why(nerr) or "no session id"))
         return
       end
       s.id = (res and res.sessionId) or s.id
+      if res and res.configOptions then
+        s.options = res.configOptions
+      end
       if s.key == s.root then
         save_id(s.root, s.backend, s.id)
       end
@@ -622,7 +627,7 @@ local function prompt(s, item)
         ok = err == nil and stop ~= "refusal",
         text = reply,
         stop_reason = stop,
-        error = err and err.message,
+        error = err and acp.why(err),
       }, s)
       set_status(s, "ready")
       flush(s)
@@ -784,6 +789,84 @@ end
 -- 4.2 table): a project dir, or files from their root, and nothing for bare
 -- bud; it adds the status line and the idle reap
 local idle_timer
+-- options lists the session's settings the backend offers (ACP config
+-- options: OpenClaw's thought_level, reasoning_level, fast_mode and the like)
+function M.options(root)
+  local s = M.get(root)
+  return s and s.options or {}
+end
+
+-- set_option sets one of them; cb(err) when the backend has answered
+function M.set_option(root, id, value, cb)
+  local s = M.get(root)
+  local opt
+  for _, o in ipairs(s and s.options or {}) do
+    if o.id == id then
+      opt = o
+    end
+  end
+  local function fail(why)
+    if cb then
+      cb(why)
+    else
+      vim.notify("bud: " .. why, vim.log.levels.WARN)
+    end
+  end
+  if not (s and s.conn and s.id) then
+    return fail("no session to set it on")
+  elseif not opt then
+    return fail(("%s offers no setting %q"):format(s.backend or M.backend(), id))
+  end
+  local params = { sessionId = s.id, configId = id }
+  if opt.type == "boolean" then
+    params.type, params.value = "boolean", value == true or value == "true" or value == "on"
+  else
+    params.value = tostring(value)
+  end
+  s.conn:request("session/set_config_option", params, function(err, res)
+    if not err and res and res.configOptions then
+      s.options = res.configOptions
+    end
+    if cb then
+      cb(err and acp.why(err) or nil)
+    elseif err then
+      vim.notify("bud: " .. acp.why(err), vim.log.levels.WARN)
+    else
+      vim.notify(("bud: %s is %s"):format(id, tostring(params.value)))
+    end
+  end)
+end
+
+-- pick_option is :BudAgent option with no arguments: pick a setting, then
+-- its value
+local function pick_option(root)
+  local opts = M.options(root)
+  if #opts == 0 then
+    return vim.notify(("bud: %s offers no settings"):format(M.backend()))
+  end
+  vim.ui.select(opts, {
+    prompt = "Setting",
+    format_item = function(o)
+      return ("%s (%s)"):format(o.name or o.id, tostring(o.currentValue))
+    end,
+  }, function(o)
+    if not o then
+      return
+    end
+    local values = o.type == "boolean" and { { value = "true" }, { value = "false" } } or (o.options or {})
+    vim.ui.select(values, {
+      prompt = o.name or o.id,
+      format_item = function(v)
+        return v.name or v.value
+      end,
+    }, function(v)
+      if v then
+        M.set_option(root, o.id, v.value)
+      end
+    end)
+  end)
+end
+
 -- describe is :BudAgent's one-line status of root's session
 function M.describe(root)
   local s = M.get(root)
@@ -803,15 +886,21 @@ function M.describe(root)
   return table.concat(parts, " ")
 end
 
--- command is :BudAgent [status|restart|stop]
-function M.command_line(sub)
-  sub = sub ~= "" and sub or "status"
-  if sub == "restart" then
+-- command is :BudAgent [status|restart|stop|option [id value]]
+function M.command_line(args)
+  local words = vim.split(vim.trim(args or ""), "%s+", { trimempty = true })
+  local sub = words[1] or "status"
+  if sub == "option" then
+    if words[2] and words[3] then
+      return M.set_option(nil, words[2], words[3])
+    end
+    return pick_option()
+  elseif sub == "restart" then
     M.restart()
   elseif sub == "stop" then
     M.stop()
   elseif sub ~= "status" then
-    return vim.notify("bud: :BudAgent takes status, restart or stop", vim.log.levels.WARN)
+    return vim.notify("bud: :BudAgent takes status, restart, stop or option", vim.log.levels.WARN)
   end
   vim.notify(M.describe())
 end
@@ -822,9 +911,9 @@ function M.setup()
     M.command_line(o.args)
   end, {
     nargs = "?",
-    desc = "The AI backend's session: its status, or restart or stop it",
+    desc = "The AI backend's session: its status, restart or stop it, or set an option",
     complete = function()
-      return { "status", "restart", "stop" }
+      return { "status", "restart", "stop", "option" }
     end,
   })
   local group = vim.api.nvim_create_augroup("bud.ai.agent", { clear = true })

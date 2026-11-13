@@ -74,6 +74,22 @@ end
 
 local sessions = 0
 
+-- its settings, like OpenClaw's (session/set_config_option changes them)
+local options = {
+  {
+    id = "thought_level",
+    name = "Thinking",
+    type = "select",
+    currentValue = "adaptive",
+    options = {
+      { name = "Low", value = "low" },
+      { name = "High", value = "high" },
+      { name = "Adaptive", value = "adaptive" },
+    },
+  },
+  { id = "fast_mode", name = "Fast", type = "boolean", currentValue = false },
+}
+
 local function prompt_text(blocks)
   for _, b in ipairs(blocks or {}) do
     if b.type == "text" then
@@ -217,7 +233,14 @@ while true do
     })
   elseif msg.method == "session/new" then
     sessions = sessions + 1
-    send({ id = msg.id, result = { sessionId = "sess-" .. sessions } })
+    send({ id = msg.id, result = { sessionId = "sess-" .. sessions, configOptions = options } })
+  elseif msg.method == "session/set_config_option" then
+    for _, o in ipairs(options) do
+      if o.id == msg.params.configId then
+        o.currentValue = msg.params.value
+      end
+    end
+    send({ id = msg.id, result = { configOptions = options } })
   elseif msg.method == "session/load" and msg.params.sessionId == "gone" then
     send({ id = msg.id, error = { code = -32002, message = "no such session" } })
   elseif msg.method == "session/load" then

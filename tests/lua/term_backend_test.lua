@@ -41,8 +41,21 @@ vim.fn.writefile({
 }, tmp .. "/bin/openclaw")
 vim.fn.setfperm(tmp .. "/bin/openclaw", "rwxr-xr-x")
 
+local repo = vim.fn.getcwd()
 local agent = require("bud.ai.agent")
 local term = require("bud.ai.term")
+-- the session itself runs on the fake ACP agent, which can load saved ones
+agent.command = function()
+  return {
+    "env",
+    "FAKE_ACP_LOAD=1",
+    vim.v.progpath,
+    "--clean",
+    "--headless",
+    "-l",
+    repo .. "/tests/lua/lib/fake_acp.lua",
+  }
+end
 -- the project's saved ACP session (D139), which the TUI opens
 agent.ids_file = function()
   return tmp .. "/agent-sessions.json"
@@ -76,7 +89,7 @@ end, "the TUI to start")
 eq(
   vim.fn.readfile(tmp .. "/bin/argv.log")[1],
   "tui --url wss://home.example.ts.net:18789 --session agent:main:acp-bridge:abc123",
-  "openclaw tui on the project's saved session"
+  "openclaw tui on the project's saved session, once the backend loaded it"
 )
 eq(vim.fn.readfile(tmp .. "/bin/token.log")[1], "secret-token", "the token from the file, in the environment")
 eq(require("bud.ai.claude").status(proj), "stopped", "no Claude Code session touched")
@@ -89,6 +102,27 @@ term.stop_all()
 wait(function()
   return not term.running(proj)
 end, "the TUI to stop")
+
+-- a saved session the backend no longer has: the pane opens the new one
+-- bud's agent made, never the dead id (D139)
+term.stop_all()
+wait(function()
+  return not term.running(proj)
+end, "the TUI to stop again")
+agent._reset()
+vim.fn.writefile({ vim.json.encode({ [proj] = { backend = "openclaw", id = "gone" } }) }, tmp .. "/agent-sessions.json")
+vim.fn.delete(tmp .. "/bin/argv.log")
+term.open({ root = proj, focus = false })
+wait(function()
+  return vim.fn.filereadable(tmp .. "/bin/argv.log") == 1
+end, "the TUI on the new session")
+local live = agent.get(proj).id
+eq(live ~= "gone", true, "a new session")
+assert(
+  vim.fn.readfile(tmp .. "/bin/argv.log")[1]:find("acp-bridge:" .. live, 1, true),
+  "the pane is on bud's live session"
+)
+term.stop_all()
 
 -- chat (<leader>ch) runs it on the Gateway's chat session, outside the project
 vim.fn.delete(tmp .. "/bin/argv.log")

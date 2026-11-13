@@ -108,7 +108,7 @@ func install(g *Globals, args []string, yes bool) error {
 		}
 	}
 
-	if s.AI.Claude.Autostart && s.AI.Backend != "claude" {
+	if s.AI.Agent.Autostart && s.AI.Backend != "claude" {
 		// another backend (D131): its command and, for OpenClaw, the Gateway
 		fmt.Println()
 		if err := installBackend(pr, yes, s.AI.Backend); err != nil {

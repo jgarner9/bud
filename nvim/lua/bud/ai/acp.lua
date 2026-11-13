@@ -177,7 +177,8 @@ function M.connect(argv, opts)
   end
   local ok, job = pcall(vim.fn.jobstart, argv, {
     cwd = opts.cwd,
-    env = opts.env,
+    -- jobstart refuses an empty env table (E475)
+    env = (opts.env and next(opts.env)) and opts.env or nil,
     on_stdout = function(_, data)
       conn:_feed(data)
     end,

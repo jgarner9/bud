@@ -6,6 +6,12 @@
 
 local M = {}
 
+-- escape makes text safe to show in a winbar or status line: % is special
+-- there (%{expr} runs Vimscript), so each becomes %%
+function M.escape(text)
+  return (tostring(text):gsub("%%", "%%%%"))
+end
+
 local diffs = {}
 
 -- numbers each review's autocmd group: a replacement under the same name
@@ -127,8 +133,10 @@ function M.review(opts, on_done)
   vim.bo[d.proposed].modified = false
   pcall(vim.api.nvim_buf_set_name, d.proposed, "bud://" .. name .. " (proposed) " .. vim.fs.basename(old or name))
   vim.cmd.diffthis()
+  -- %% for every %: the title can carry an agent's file name, and a winbar
+  -- runs %{...} as code (an option set from Lua isn't sandboxed)
   vim.wo.winbar = "%#DiffAdd# "
-    .. (opts.title or "The proposed edit")
+    .. M.escape(opts.title or "The proposed edit")
     .. " %* ga or :w accept   q (or closing it) reject   (you can edit it first)"
 
   local function map(lhs, accepted, desc)

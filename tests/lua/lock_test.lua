@@ -222,4 +222,25 @@ eq(#vim.tbl_filter(function(w)
   return lock.spec(w) ~= nil
 end, vim.api.nvim_list_wins()), 0, "nothing reopened")
 
+-- a :q Neovim refuses (unsaved changes) gives the panes back
+vim.cmd.tabnew()
+local refused_editor = vim.api.nvim_get_current_win()
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "unsaved" })
+vim.bo.modified = true
+pane()
+local before_quit = opened
+vim.api.nvim_set_current_win(refused_editor)
+-- without 'hidden', :q on a changed buffer is refused (E37)
+vim.o.hidden = false
+pcall(vim.cmd.quit)
+vim.o.hidden = true
+wait(function()
+  return opened > before_quit
+end, "the pane to come back after a refused :q")
+eq(vim.api.nvim_win_is_valid(refused_editor), true, "still there: the quit was refused")
+eq(#vim.tbl_filter(function(w)
+  return lock.spec(w) ~= nil
+end, vim.api.nvim_tabpage_list_wins(0)), 1, "the pane is back, locked")
+vim.bo[vim.api.nvim_win_get_buf(refused_editor)].modified = false
+
 print("lock_test: ok")

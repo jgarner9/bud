@@ -120,7 +120,11 @@ end
 
 -- bridge_key is the Gateway session key of the ACP session id
 function M.bridge_key(id, agent_id)
-  return ("agent:%s:acp-bridge:%s"):format(agent_id or "main", id)
+  -- empty is unset, as in Go's BridgeKey: the settings screen can save ""
+  if agent_id == nil or agent_id == "" then
+    agent_id = "main"
+  end
+  return ("agent:%s:acp-bridge:%s"):format(agent_id, id)
 end
 
 -- argv is the command line that starts backend as an ACP agent, or nil and
@@ -202,24 +206,25 @@ function M.tui_bin(backend)
   return ({ openclaw = "openclaw", codex = "codex", opencode = "opencode" })[backend or M.backend()]
 end
 
--- session_id is root's ACP session id: the live one, else the saved one,
--- else it starts the session and waits up to wait ms (default 15 s) for it
+-- session_id is root's ACP session id once the backend has opened it (a
+-- saved id only after session/load accepted it, so the pane never lands on
+-- a session the backend dropped), starting the session and waiting up to
+-- wait ms (default 15 s) when needed. A Gateway that can't be reached fails
+-- within seconds, which ends the wait
 function M.session_id(root, wait)
   root = root or vim.fn.getcwd()
   root = vim.uv.fs_realpath(root) or root
-  local s = sessions[root]
-  if s and s.id then
+  local s = M.session(root)
+  if s.status ~= "ready" and s.status ~= "busy" then
+    vim.notify(("bud: starting %s…"):format(s.backend or M.backend()))
+    vim.cmd.redraw()
+    vim.wait(wait or 15000, function()
+      return s.status == "ready" or s.status == "busy" or s.status == "error" or s.status == "missing"
+    end, 20)
+  end
+  if s.status == "ready" or s.status == "busy" then
     return s.id
   end
-  local saved = M.saved_id(root)
-  if saved then
-    return saved
-  end
-  s = M.session(root)
-  vim.wait(wait or 15000, function()
-    return s.id ~= nil or s.status == "error" or s.status == "missing"
-  end, 20)
-  return s.id
 end
 
 -- chat_tui is the backend's own TUI for chat (<leader>ch, bud chat): on
@@ -235,7 +240,10 @@ function M.chat_tui(dir, get)
     if url ~= "" then
       vim.list_extend(argv, { "--url", url })
     end
-    vim.list_extend(argv, { "--session", ("agent:%s:bud:chat"):format(get("ai.openclaw.agent", "main")) })
+    vim.list_extend(argv, {
+      "--session",
+      ("agent:%s:bud:chat"):format(get("ai.openclaw.agent", "") ~= "" and get("ai.openclaw.agent", "") or "main"),
+    })
     local t = token(get)
     return { argv = argv, env = t and { OPENCLAW_GATEWAY_TOKEN = t } or nil }
   end
@@ -263,28 +271,48 @@ end
 -- file reads and writes, through the buffer when the file is open (D131), so
 -- the agent sees unsaved changes and its writes land in the editor
 
-local function loaded(path)
-  local buf = vim.fn.bufnr(path)
-  if buf > 0 and vim.api.nvim_buf_is_loaded(buf) then
-    return buf
-  end
-end
-
--- inside says whether path is root or under it, after resolving symlinks
--- and .. (a file that doesn't exist yet by its nearest existing parent)
-function M.inside(root, path)
-  if type(path) ~= "string" or path == "" then
-    return false
-  end
-  path = vim.fs.normalize(vim.fn.fnamemodify(path, ":p"))
+-- real is path with symlinks resolved: the nearest part that exists, by its
+-- realpath, with the rest that doesn't yet exist after it
+local function real(path)
   local probe, rest = path, ""
   while probe ~= "/" and not vim.uv.fs_realpath(probe) do
     rest = "/" .. vim.fs.basename(probe) .. rest
     probe = vim.fs.dirname(probe)
   end
-  local real = (vim.uv.fs_realpath(probe) or probe) .. rest
-  root = vim.uv.fs_realpath(root) or root
-  return real == root or real:sub(1, #root + 1) == root .. "/"
+  return (vim.uv.fs_realpath(probe) or probe) .. rest
+end
+
+-- resolve is the file an agent's request names, as the one string bud then
+-- checks and uses: an absolute path (ACP's rule), .. and symlinks resolved,
+-- inside root. Anything else is refused with why, so a request can't pass
+-- the check under one name and reach another file
+function M.resolve(root, path)
+  if type(path) ~= "string" or path:sub(1, 1) ~= "/" then
+    return nil, ("%s isn't an absolute path"):format(tostring(path))
+  end
+  local p = real(vim.fs.normalize(path))
+  local r = vim.uv.fs_realpath(root) or root
+  if p ~= r and p:sub(1, #r + 1) ~= r .. "/" then
+    return nil, ("%s is outside the project (%s)"):format(path, root)
+  end
+  return p
+end
+
+-- inside says whether path is root or under it (M.resolve)
+function M.inside(root, path)
+  return M.resolve(root, path) ~= nil
+end
+
+-- loaded is the loaded buffer holding exactly the file at path (a resolved
+-- path), compared by real path: never vim.fn.bufnr, which reads its argument
+-- as a pattern and can match another buffer's name
+local function loaded(path)
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(buf)
+    if name ~= "" and vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].buftype == "" and real(name) == path then
+      return buf
+    end
+  end
 end
 
 function M.read_file(path, line, limit)
@@ -439,23 +467,27 @@ local function on_request(s, method, params, respond)
     if not done and type(withdraw) == "function" then
       s.asking[answer] = withdraw
     end
-  elseif (method == "fs/read_text_file" or method == "fs/write_text_file") and not M.inside(s.root, params.path) then
-    -- only the session's project: a backend reached over the network must
-    -- not read or write the rest of this machine through bud
-    respond(nil, { code = -32602, message = ("%s is outside the project (%s)"):format(tostring(params.path), s.root) })
-  elseif method == "fs/read_text_file" then
-    local text, err = M.read_file(params.path, params.line, params.limit)
-    if text then
-      respond({ content = text })
-    else
-      respond(nil, { code = -32002, message = err })
+  elseif method == "fs/read_text_file" or method == "fs/write_text_file" then
+    -- only the session's project, by the path checked: a backend reached over
+    -- the network must not read or write the rest of this machine through bud
+    local path, why = M.resolve(s.root, params.path)
+    if not path then
+      return respond(nil, { code = -32602, message = why })
     end
-  elseif method == "fs/write_text_file" then
-    local ok, err = M.write_file(params.path, params.content or "")
-    if ok then
-      respond(nil)
+    if method == "fs/read_text_file" then
+      local text, err = M.read_file(path, params.line, params.limit)
+      if text then
+        respond({ content = text })
+      else
+        respond(nil, { code = -32002, message = err })
+      end
     else
-      respond(nil, { code = -32603, message = err })
+      local ok, err = M.write_file(path, params.content or "")
+      if ok then
+        respond(nil)
+      else
+        respond(nil, { code = -32603, message = err })
+      end
     end
   else
     respond(nil, { code = -32601, message = "bud doesn't handle " .. method })
@@ -477,6 +509,22 @@ local function evict(keep)
   local over = #running + 1 - M.max_sessions
   for i = 1, over do
     M.stop(running[i].key)
+  end
+end
+
+-- fail_start ends a start that went wrong after the process was up (initialize,
+-- session/new or load refused): the process goes, so the next send starts
+-- it again, and each message waiting for it is answered not sent
+local function fail_start(s, conn, why)
+  if s.conn == conn then
+    s.conn = nil
+  end
+  pcall(conn.close, conn)
+  local queued = s.queue or {}
+  s.queue = {}
+  set_status(s, "error", why)
+  for _ in ipairs(queued) do
+    emit("done", { ok = false, text = "", error = why }, s)
   end
 end
 
@@ -534,14 +582,14 @@ start = function(s)
     clientInfo = { name = "bud", version = vim.env.BUD_VERSION or "dev" },
   }, function(ierr, init)
     if ierr then
-      set_status(s, "error", "initialize: " .. acp.why(ierr))
+      fail_start(s, conn, "initialize: " .. acp.why(ierr))
       return
     end
     s.caps = (init and init.agentCapabilities) or {}
     s.agent_info = init and init.agentInfo
     local function opened(nerr, res)
       if nerr or not (res and (res.sessionId or s.id)) then
-        set_status(s, "error", "session: " .. (nerr and acp.why(nerr) or "no session id"))
+        fail_start(s, conn, "session: " .. (nerr and acp.why(nerr) or "no session id"))
         return
       end
       s.id = (res and res.sessionId) or s.id
@@ -738,9 +786,10 @@ function M.restart(root)
     return M.session(root)
   end
   if s.conn then
+    -- not s.stopping: the old process's exit is ignored once s.conn moves
+    -- on, so the flag would only mark the new one's crash as a stop
     local old = s.conn
     s.conn = nil
-    s.stopping = true
     old:close()
   end
   start(s)
@@ -807,11 +856,19 @@ function M.share(path, first, last)
     term.send(where .. " ", { submit = false })
   else
     local s = M.session()
-    local lines = vim.fn.bufnr(path) > 0 and vim.api.nvim_buf_get_lines(vim.fn.bufnr(path), first - 1, last, false)
+    local buf = loaded(real(vim.fs.normalize(vim.fn.fnamemodify(path, ":p"))))
+    local lines = buf and vim.api.nvim_buf_get_lines(buf, first - 1, last, false)
       or vim.list_slice(vim.fn.readfile(path), first, last)
     s.shared = { path = path, first = first, last = last, text = table.concat(lines, "\n") }
   end
   vim.notify(("bud: shared %s with %s"):format(where, M.backend()))
+end
+
+-- own_chat says whether the AI chat is bud's own (D138): ai.agent.chat_ui =
+-- "bud" on a backend that runs over ACP; the claude backend keeps Claude
+-- Code's TUI until it does (D140)
+function M.own_chat()
+  return cfg().get("ai.agent.chat_ui", "tui") == "bud" and M.backend() ~= "claude"
 end
 
 -- autostart says whether a project's agent starts when it opens

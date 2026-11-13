@@ -129,10 +129,18 @@ func Check(s config.Settings, quick bool) Status {
 		st.Problems = append(st.Problems, Problem{What: err.Error(), Fix: "bud config set ai.backend openclaw", Hard: true})
 		return st
 	}
+	if st.Backend == "claude" {
+		// the claude backend still runs Claude Code directly, not over ACP
+		// (D140), so it's the claude command that has to be there
+		argv = []string{"claude"}
+	}
 	st.Argv = argv
 	bin, err := lookPath(argv[0])
 	if err != nil {
 		fix := Install[st.Backend]
+		if st.Backend == "claude" {
+			fix = "bud claude setup"
+		}
 		if fix == "" {
 			fix = "install " + argv[0] + " or change ai.custom.command"
 		}

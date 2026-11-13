@@ -194,6 +194,19 @@ eq(view.showing(proj), false, "<leader>ac closed it")
 require("bud.layout.panes")
 eq(require("bud.layout").providers.chat.available(), true, "the layout's chat pane is available")
 
+-- on the claude backend chat_ui = "bud" doesn't apply: Claude Code's TUI
+-- stays, everywhere alike (D140)
+vim.fn.writefile(
+  { vim.json.encode({ ai = { backend = "claude", agent = { chat_ui = "bud" } } }) },
+  tmp .. "/config.json"
+)
+eq(agent.own_chat(), false, "not on claude")
+vim.fn.writefile(
+  { vim.json.encode({ ai = { backend = "openclaw", agent = { chat_ui = "bud" } } }) },
+  tmp .. "/config.json"
+)
+eq(agent.own_chat(), true, "on openclaw")
+
 -- chat mode (<leader>ch) is bud's chat too, full screen, outside the project
 local chat = require("bud.ai.chat")
 chat.dir = function()

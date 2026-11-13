@@ -17,7 +17,7 @@
 --                then its stop reason
 --
 -- Everything it receives is appended to $FAKE_ACP_LOG, one JSON line each.
--- FAKE_ACP_LOAD=1 advertises loadSession; loading the session "gone" fails.
+-- FAKE_ACP_NEW_FAIL=1 refuses session/new. FAKE_ACP_LOAD=1 advertises loadSession; loading the session "gone" fails.
 
 local log = os.getenv("FAKE_ACP_LOG")
 
@@ -231,6 +231,8 @@ while true do
         authMethods = {},
       },
     })
+  elseif msg.method == "session/new" and os.getenv("FAKE_ACP_NEW_FAIL") == "1" then
+    send({ id = msg.id, error = { code = -32000, message = "no sessions today" } })
   elseif msg.method == "session/new" then
     sessions = sessions + 1
     send({ id = msg.id, result = { sessionId = "sess-" .. sessions, configOptions = options } })

@@ -84,6 +84,20 @@ func TestArgv(t *testing.T) {
 	}
 }
 
+// the claude backend still runs Claude Code directly (D140)
+func TestCheckClaude(t *testing.T) {
+	fakeTools(t, []string{"claude"})
+	st := Check(settings(func(s *config.Settings) { s.AI.Backend = "claude" }), false)
+	if !st.Ready() || !reflect.DeepEqual(st.Argv, []string{"claude"}) || st.Bin != "/fake/bin/claude" {
+		t.Errorf("claude: %+v", st)
+	}
+	fakeTools(t, nil)
+	st = Check(settings(func(s *config.Settings) { s.AI.Backend = "claude" }), false)
+	if st.Ready() || st.Problems[0].Fix != "bud claude setup" {
+		t.Errorf("claude missing: %+v", st)
+	}
+}
+
 func TestCheckNotInstalled(t *testing.T) {
 	fakeTools(t, nil)
 	st := Check(settings(nil), false)

@@ -210,10 +210,30 @@ function M.setup()
           table.insert(panes, w)
         end
       end
+      local specs = {}
       for _, w in ipairs(panes) do
+        table.insert(specs, locked[w])
         M.release(w)
         pcall(vim.api.nvim_win_close, w, true)
       end
+      -- Neovim may still refuse the quit (unsaved changes): then the window
+      -- is still there and bud didn't exit, so the panes come back
+      local tab = vim.api.nvim_get_current_tabpage()
+      vim.schedule(function()
+        if exiting or not vim.api.nvim_win_is_valid(cur) or not vim.api.nvim_tabpage_is_valid(tab) then
+          return
+        end
+        local seen = {}
+        for _, spec in ipairs(specs) do
+          if not seen[spec.name] then
+            seen[spec.name] = true
+            pcall(spec.reopen)
+          end
+        end
+        if vim.api.nvim_win_is_valid(cur) then
+          vim.api.nvim_set_current_win(cur)
+        end
+      end)
     end,
   })
   vim.api.nvim_create_autocmd("WinClosed", {

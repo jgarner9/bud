@@ -304,6 +304,44 @@ wait(function()
 end, "the question to go")
 eq(vim.api.nvim_win_get_config(0).relative, "", "the dialog closed")
 
+-- an agent's diff outside the project is refused before the review opens,
+-- and nothing it names can run code through the review's winbar
+local refused
+local bad = acp_req("x")
+bad.raw.toolCall.kind = "edit"
+bad.diffs = { { path = "/etc/%{system('touch " .. tmp .. "/pwned')}.txt", new = "x" } }
+perms.acp(bad, function(id)
+  refused = id
+end)
+eq(refused, "deny", "outside the project: rejected")
+eq(perms.pending(), 0, "no review opened")
+eq(require("bud.ai.review").escape("a %{x} b"), "a %%{x} b", "% is escaped for a winbar")
+local inside = acp_req("x")
+inside.raw.toolCall.kind = "edit"
+inside.diffs = { { path = tmp .. "/%{system('touch " .. tmp .. "/pwned2')}.txt", new = "x\n" } }
+perms.acp(inside, function() end)
+vim.cmd.redraw()
+eq(vim.fn.filereadable(tmp .. "/pwned2"), 0, "a % in a file name stays text in the review's winbar")
+vim.cmd("silent! tabclose")
+
+-- withdrawing an edit's question closes its diff review, and the queue moves on
+local tabs_before = #vim.api.nvim_list_tabpages()
+local edit_req = acp_req("x")
+edit_req.raw.toolCall.kind = "edit"
+edit_req.diffs = { { path = tmp .. "/w.txt", new = "w\n" } }
+local take_back = perms.acp(edit_req, function() end)
+eq(#vim.api.nvim_list_tabpages(), tabs_before + 1, "the review opened")
+take_back()
+wait(function()
+  return perms.pending() == 0
+end, "the review to go")
+wait(function()
+  return #vim.api.nvim_list_tabpages() == tabs_before
+end, "its tab to close")
+perms.acp(acp_req("echo next"), function() end)
+eq(vim.api.nvim_win_get_config(0).relative ~= "", true, "the next question shows")
+vim.api.nvim_feedkeys("n", "x", false)
+
 -- a diff becomes a Write of the whole file as it would be
 vim.fn.writefile({ "keep", "old line", "keep too" }, tmp .. "/acp.txt")
 local req = acp_req("x")

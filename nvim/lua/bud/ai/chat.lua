@@ -63,7 +63,7 @@ end
 -- own says whether chat is bud's own (ai.agent.chat_ui = "bud", D138):
 -- bud.ai.view, full screen, on a session in chat's dir
 local function own()
-  return require("bud.config").get("ai.agent.chat_ui", "tui") == "bud" and require("bud.ai.agent").backend() ~= "claude"
+  return require("bud.ai.agent").own_chat()
 end
 
 function M.open(opts)

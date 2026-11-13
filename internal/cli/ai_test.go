@@ -158,3 +158,21 @@ func TestInstallBackend(t *testing.T) {
 		t.Errorf("--yes installed %q", installed)
 	}
 }
+
+// on the default claude backend, setup hands over to bud claude setup and
+// installs nothing
+func TestAISetupClaude(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	withAICheck(t, backend.Status{Backend: "claude", Argv: []string{"claude"}})
+	orig := npmInstall
+	t.Cleanup(func() { npmInstall = orig })
+	npmInstall = func(pkg string) error { t.Fatalf("installed %s", pkg); return nil }
+	out := captureStdout(t, func() {
+		if err := aiSetup(nil, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(out, "bud claude setup") {
+		t.Errorf("no hand-over: %q", out)
+	}
+}

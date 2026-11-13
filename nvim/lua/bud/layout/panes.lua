@@ -59,7 +59,7 @@ end
 -- chat is the project's Claude Code TUI (D48)
 -- (or bud's own chat, ai.agent.chat_ui = "bud", D138)
 local function own_chat()
-  return require("bud.config").get("ai.agent.chat_ui", "tui") == "bud"
+  return require("bud.ai.agent").own_chat()
 end
 layout.register("chat", {
   available = function()

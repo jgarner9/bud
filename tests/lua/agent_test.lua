@@ -50,6 +50,7 @@ eq(
 eq(#agent.argv("openclaw", get), 6, "no session flag")
 eq(agent.bridge_key("abc"), "agent:main:acp-bridge:abc", "the bridge's key")
 eq(agent.bridge_key("abc", "coder"), "agent:coder:acp-bridge:abc", "with another agent")
+eq(agent.bridge_key("abc", ""), "agent:main:acp-bridge:abc", "empty is main, as in Go")
 eq(agent.argv("claude", get), { "claude-agent-acp" }, "claude")
 eq(agent.argv("codex", get), { "codex-acp" }, "codex")
 eq(agent.argv("opencode", get), { "opencode", "acp" }, "opencode")
@@ -217,6 +218,8 @@ eq(agent.inside(proj, proj .. "/a/b.txt"), true, "inside")
 eq(agent.inside(proj, proj .. "/../elsewhere.txt"), false, "climbing out")
 eq(agent.inside(proj, "/etc/passwd"), false, "elsewhere")
 eq(agent.inside(proj, proj .. "-sibling/x"), false, "a sibling with the same prefix")
+eq(agent.inside(proj, "a/b.txt"), false, "a relative path: ACP's paths are absolute")
+eq(agent.resolve(proj, proj .. "/x/../y.txt"), proj .. "/y.txt", "resolved once, used as checked")
 vim.fn.mkdir(tmp .. "/outside", "p")
 vim.uv.fs_symlink(tmp .. "/outside", proj .. "/link")
 eq(agent.inside(proj, proj .. "/link/secret.txt"), false, "through a symlink out")
@@ -228,6 +231,17 @@ assert(
   named("message")[#named("message")].text:find("outside the project", 1, true),
   named("message")[#named("message")].text
 )
+
+-- a request can't reach an open buffer outside the project by naming part
+-- of it: bud finds buffers by exact path, never by pattern
+local secret = tmp .. "/outside/creds"
+vim.fn.writefile({ "keep me" }, secret)
+vim.cmd.badd(vim.fn.fnameescape(secret))
+vim.fn.bufload(vim.fn.bufnr(secret))
+eq(agent.read_file(proj .. "/creds"), nil, "no buffer matched by part of its name")
+agent.write_file(proj .. "/creds", "pwned\n")
+eq(vim.fn.readfile(secret), { "keep me" }, "the outside file is untouched")
+eq(vim.fn.readfile(proj .. "/creds"), { "pwned" }, "the write went where it said")
 
 -- interrupt: an open permission question is answered cancelled
 agent.permission = function(req, respond)
@@ -310,6 +324,44 @@ wait(function()
 end, "a fresh session")
 eq(s.id ~= "gone", true, "a new id")
 eq(agent.saved_id(proj, "openclaw"), s.id, "and it's saved")
+
+-- a session the agent refuses after starting: what was waiting is answered
+-- not sent, and the next send starts it again
+local broken = agent.session(proj, { key = "broken", extra = true, env = { FAKE_ACP_NEW_FAIL = "1" } })
+local before_fail = #named("done")
+agent.send("hello", { key = "broken" })
+wait(function()
+  return broken.status == "error"
+end, "the refused session")
+assert(broken.why:find("no sessions today", 1, true), broken.why)
+wait(function()
+  return #named("done") > before_fail
+end, "the waiting message's answer")
+eq(named("done")[#named("done")].ok, false, "not sent")
+eq(#broken.queue, 0, "nothing kept for later")
+eq(broken.conn, nil, "the process is gone")
+broken.env = nil
+agent.send("hello", { key = "broken" })
+wait(function()
+  return #named("done") > before_fail + 1
+end, "the retry")
+eq(named("done")[#named("done")].ok, true, "the next send started it again")
+agent.drop("broken")
+
+-- a crash after :BudAgent restart is still a crash
+agent.restart(proj)
+wait(function()
+  return s.status == "ready"
+end, "restarted")
+agent.send("crash", { root = proj })
+wait(function()
+  return s.status == "error" or s.status == "stopped"
+end, "the crash after the restart")
+eq(s.status, "error", "reported as a crash")
+agent.session(proj)
+wait(function()
+  return s.status == "ready"
+end, "back after the crash")
 
 -- keyed sessions sit beside the project's
 local issue = agent.session(proj, { key = "issue:JGA-1", extra = true, env = { FAKE_ACP_LOG = log } })

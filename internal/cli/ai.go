@@ -77,10 +77,6 @@ func aiStatus(asJSON bool) error {
 	if err != nil {
 		return err
 	}
-	if s.AI.Backend == "claude" && !asJSON {
-		fmt.Println("Backend: claude, which runs Claude Code directly until bud moves it onto claude-agent-acp; bud claude status checks it.")
-		return nil
-	}
 	st := aiCheck(s, false)
 	if asJSON {
 		out := aiStatusJSON{st.Backend, st.Argv, st.Bin, st.Version, st.Gateway, st.Reachable, st.Ready(), st.Problems}
@@ -145,6 +141,11 @@ func aiSetup(pr *prompter, yes bool) error {
 	p, f, s, err := loadSettings()
 	if err != nil {
 		return err
+	}
+	if s.AI.Backend == "claude" {
+		// Claude Code directly (D140): its own setup does it
+		fmt.Println("The claude backend runs Claude Code directly; bud claude setup installs it and signs it in.")
+		return nil
 	}
 	st := aiCheck(s, true)
 	if st.Bin == "" && len(st.Argv) > 0 {
@@ -216,7 +217,7 @@ func askOpenClaw(pr *prompter, f *config.File, oc config.OpenClaw) (bool, error)
 	if def == "" {
 		def = "~/.config/openclaw/gateway-token"
 	}
-	tf, err := pr.ask("File holding the Gateway token (chmod 600; bud never reads it)", def)
+	tf, err := pr.ask("File holding the Gateway token (chmod 600; bud passes it to openclaw, never on a command line)", def)
 	if err != nil {
 		return false, err
 	}

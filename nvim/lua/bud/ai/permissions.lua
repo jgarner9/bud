@@ -177,10 +177,11 @@ local function ask(req, done)
   if edit_tools[req.tool] then
     local path, now, after = M.proposal(req.tool, req.input)
     if path then
+      req.review = "permission-" .. (req.id or path)
       require("bud.ai.review").review({
         path = path,
         contents = after,
-        name = "permission-" .. (req.id or path),
+        name = req.review,
         title = (req.who or "Claude")
           .. " wants to "
           .. (req.tool == "Write" and "write" or "edit")
@@ -283,6 +284,22 @@ function M.acp(req, respond)
       end
     end
   end
+  -- an edit outside the session's project is refused before anything opens
+  -- it: the review would otherwise show (and write) a file the agent picked
+  local root = req.session and req.session.root
+  for _, d in ipairs(req.diffs or {}) do
+    if root and not require("bud.ai.agent").inside(root, d.path) then
+      vim.notify(
+        ("bud: refused %s's edit of %s, outside the project"):format(
+          req.session.backend or "the agent",
+          tostring(d.path)
+        ),
+        vim.log.levels.WARN
+      )
+      respond(pick({ "reject_once", "reject_always" }))
+      return function() end
+    end
+  end
   local tool, input = M.acp_tool(req)
   local call = req.raw and req.raw.toolCall or {}
   local r = {
@@ -312,8 +329,11 @@ end
 -- queue
 function M.withdraw(req)
   if showing == req then
+    -- a dialog, or a diff review: closing either says no and frees the queue
     if req.handle and req.handle.close then
       req.handle.close()
+    elseif req.review then
+      require("bud.ai.review").close(req.review)
     end
     return
   end

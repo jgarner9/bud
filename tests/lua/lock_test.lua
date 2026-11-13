@@ -167,4 +167,20 @@ eq(terminal.is_open(), false, "the toggle hides it")
 eq(terminal.job(), job, "the same shell keeps running")
 eq(#errors, 1, "no new error for the toggle")
 
+-- :q in the last window that isn't a pane takes the panes with it (here in
+-- a second tab, so the test's Neovim stays)
+vim.cmd.tabnew()
+local tab_editor = vim.api.nvim_get_current_win()
+pane()
+pane()
+eq(#vim.api.nvim_tabpage_list_wins(0), 3, "editor and two panes")
+local tabs = #vim.api.nvim_list_tabpages()
+vim.api.nvim_set_current_win(tab_editor)
+vim.cmd.quit()
+vim.wait(100)
+eq(#vim.api.nvim_list_tabpages(), tabs - 1, "the tab closed, panes and all")
+eq(#vim.tbl_filter(function(w)
+  return lock.spec(w) ~= nil
+end, vim.api.nvim_list_wins()), 0, "nothing reopened")
+
 print("lock_test: ok")

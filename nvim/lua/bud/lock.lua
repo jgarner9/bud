@@ -3,7 +3,8 @@
 -- one any other way (:q, :close, <C-w>c, :only from beside it) opens it again
 -- at once with an error naming its toggle, and a buffer that lands in one
 -- (:e, :b, a picker) is put back and opened in the editor window instead,
--- with the same error. :qa and the quit keys still quit bud.
+-- with the same error. :qa and the quit keys still quit bud, and :q in the
+-- last window that isn't a pane takes the panes with it.
 --
 --   local lock = require("bud.lock")
 --   lock.lock(win, { name = "the explorer", key = "<leader>e", reopen = fn, allow = fn })
@@ -170,6 +171,30 @@ function M.setup()
     group = group,
     callback = function()
       exiting = true
+    end,
+  })
+  -- :q in the tab's last window that isn't a pane takes the panes with it,
+  -- so bud quits (or the tab closes) as it would without them
+  vim.api.nvim_create_autocmd("QuitPre", {
+    group = group,
+    callback = function()
+      local cur = vim.api.nvim_get_current_win()
+      if locked[cur] or vim.api.nvim_win_get_config(cur).relative ~= "" then
+        return
+      end
+      local panes = {}
+      for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        if w ~= cur and vim.api.nvim_win_get_config(w).relative == "" then
+          if not locked[w] then
+            return
+          end
+          table.insert(panes, w)
+        end
+      end
+      for _, w in ipairs(panes) do
+        M.release(w)
+        pcall(vim.api.nvim_win_close, w, true)
+      end
     end,
   })
   vim.api.nvim_create_autocmd("WinClosed", {

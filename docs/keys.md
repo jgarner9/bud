@@ -42,7 +42,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that f
 | `<leader>av` | bud's own chat with the AI, on any backend: the conversation drawn in Neovim, a prompt under it (`<CR>` sends, `<C-c>` stops the reply). Pane or full screen by `ai.agent.chat_layout`; `ai.agent.chat_ui = "bud"` puts it on `<leader>ac` too. |
 | `<leader>aF` | The AI chat full screen, in a tab of its own, or back to the pane. `ai.agent.chat_layout = "full"` makes `<leader>ac` open it that way. |
 
-The panes are locked: only these keys open and close them. `:q`, `:close` or `:only` puts a pane straight back with an error naming its key, and a file opened while a pane has the cursor (`:e`, a picker, a buffer switch) opens in the editor window instead, with the same error. `:qa` and the `<leader>q` keys still quit bud.
+The panes are locked: only these keys open and close them. `:q`, `:close` or `:only` puts a pane straight back with an error naming its key, and a file opened while a pane has the cursor (`:e`, a picker, a buffer switch) opens in the editor window instead, with the same error. `:qa` and the `<leader>q` keys still quit bud, and `:q` in the last file window takes the panes with it, so it quits as it would without them.
 
 ## Code
 

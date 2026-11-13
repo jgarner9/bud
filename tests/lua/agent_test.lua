@@ -208,6 +208,24 @@ agent.send("edit " .. other, { root = proj })
 turn_done(8)
 eq(vim.fn.readfile(other), { "edited" }, "written on disk, its dir made")
 
+-- files outside the project are refused: a remote backend can't reach the
+-- rest of this machine through bud
+eq(agent.inside(proj, proj .. "/a/b.txt"), true, "inside")
+eq(agent.inside(proj, proj .. "/../elsewhere.txt"), false, "climbing out")
+eq(agent.inside(proj, "/etc/passwd"), false, "elsewhere")
+eq(agent.inside(proj, proj .. "-sibling/x"), false, "a sibling with the same prefix")
+vim.fn.mkdir(tmp .. "/outside", "p")
+vim.uv.fs_symlink(tmp .. "/outside", proj .. "/link")
+eq(agent.inside(proj, proj .. "/link/secret.txt"), false, "through a symlink out")
+local outside_file = tmp .. "/outside/secret.txt"
+vim.fn.writefile({ "secret" }, outside_file)
+agent.send("read " .. outside_file, { root = proj })
+turn_done(9)
+assert(
+  named("message")[#named("message")].text:find("outside the project", 1, true),
+  named("message")[#named("message")].text
+)
+
 -- interrupt: an open permission question is answered cancelled
 agent.permission = function(req, respond)
   asked = { req = req, respond = respond }
@@ -217,8 +235,8 @@ wait(function()
   return asked.respond ~= nil
 end, "the permission question")
 eq(agent.interrupt(proj), true, "interrupted")
-turn_done(9)
-eq(named("done")[9].stop_reason, "cancelled", "cancelled")
+turn_done(10)
+eq(named("done")[10].stop_reason, "cancelled", "cancelled")
 
 -- interrupt a slow reply
 agent.send("slow", { root = proj })
@@ -226,15 +244,15 @@ wait(function()
   return s.status == "busy" and (s.reply or "") ~= ""
 end, "the slow turn")
 agent.interrupt(proj)
-turn_done(10)
-eq(named("done")[10].stop_reason, "cancelled", "slow turn cancelled")
+turn_done(11)
+eq(named("done")[11].stop_reason, "cancelled", "slow turn cancelled")
 eq(s.status, "ready", "ready after the cancel")
 
 -- an error from the agent
 agent.send("fail", { root = proj })
-turn_done(11)
-eq(named("done")[11].ok, false, "not ok")
-eq(named("done")[11].error, "scripted failure", "the error")
+turn_done(12)
+eq(named("done")[12].ok, false, "not ok")
+eq(named("done")[12].error, "scripted failure", "the error")
 
 -- a crash: done not ok, exit crashed, status error with the exit code
 agent.send("crash", { root = proj })
@@ -247,12 +265,12 @@ wait(function()
   return s.status == "error"
 end, "error status")
 assert(s.why:find("exit 3", 1, true), s.why)
-eq(named("done")[12].ok, false, "the crashed turn isn't ok")
+eq(named("done")[13].ok, false, "the crashed turn isn't ok")
 
 -- the next send starts it again
 agent.send("hello", { root = proj })
-turn_done(13)
-eq(named("done")[13].ok, true, "works after a restart")
+turn_done(14)
+eq(named("done")[14].ok, true, "works after a restart")
 
 -- the session id is saved per project, for the next start (D139)
 eq(agent.saved_id(proj, "openclaw"), s.id, "saved")

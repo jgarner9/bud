@@ -270,6 +270,23 @@ local function loaded(path)
   end
 end
 
+-- inside says whether path is root or under it, after resolving symlinks
+-- and .. (a file that doesn't exist yet by its nearest existing parent)
+function M.inside(root, path)
+  if type(path) ~= "string" or path == "" then
+    return false
+  end
+  path = vim.fs.normalize(vim.fn.fnamemodify(path, ":p"))
+  local probe, rest = path, ""
+  while probe ~= "/" and not vim.uv.fs_realpath(probe) do
+    rest = "/" .. vim.fs.basename(probe) .. rest
+    probe = vim.fs.dirname(probe)
+  end
+  local real = (vim.uv.fs_realpath(probe) or probe) .. rest
+  root = vim.uv.fs_realpath(root) or root
+  return real == root or real:sub(1, #root + 1) == root .. "/"
+end
+
 function M.read_file(path, line, limit)
   local lines
   local buf = loaded(path)
@@ -422,6 +439,10 @@ local function on_request(s, method, params, respond)
     if not done and type(withdraw) == "function" then
       s.asking[answer] = withdraw
     end
+  elseif (method == "fs/read_text_file" or method == "fs/write_text_file") and not M.inside(s.root, params.path) then
+    -- only the session's project: a backend reached over the network must
+    -- not read or write the rest of this machine through bud
+    respond(nil, { code = -32602, message = ("%s is outside the project (%s)"):format(tostring(params.path), s.root) })
   elseif method == "fs/read_text_file" then
     local text, err = M.read_file(params.path, params.line, params.limit)
     if text then

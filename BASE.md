@@ -1,6 +1,6 @@
 # Bud IDE: BASE plan
 
-> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is the plan for 1.1: D111-D123); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
+> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later. The AI layer is changing harness: 1.1 moves bud from Claude Code to OpenCode (4.4, D124-D126), which is a plan and not built, so 4, 4.1 and 4.2 still describe what is in the tree. 4.3 (one Claude setup everywhere, D111-D123) was the plan for 1.1 and is re-aimed by D126. The decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
 > Date: 2026-10-24, updated 2026-11-13
 
 ## 0. The one-paragraph version
@@ -32,7 +32,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D11 | **Terminals: Kitty and Ghostty**, Kitty is the default when none is configured. | 2026-10-26 | Others (WezTerm, Alacritty, iTerm2) can come later as one launcher file each. |
 | D12 | **The dashboard and pane layouts live inside Neovim.** | 2026-10-26 | One process, works over SSH and in any terminal. Keybinds stay the same on the dashboard, in the editor and in chat, so muscle memory carries across. |
 | D13 | **XDG paths on macOS too**, and machine config lives in state: `~/.local/state/bud/config.json`. | 2026-10-26 | Matches where Neovim already looks, and gives one code path. Keeping machine config out of `~/.config/bud` means `bud dev link` can point that dir at a checkout without dragging local settings into the repo. |
-| D14 | **Claude Code is the AI backend, and chat runs through it.** Narrowed by D26: no other providers or harnesses for now. | 2026-10-26 | Generated tools stay machine-local in `user-tools/` until promoted. The goal is Neovim-native TUIs that drive Claude Code, not just a terminal pane, see 4.2. |
+| D14 | **Superseded by D124.** ~~Claude Code is the AI backend, and chat runs through it. Narrowed by D26: no other providers or harnesses for now.~~ | 2026-10-26 | Generated tools stay machine-local in `user-tools/` until promoted. The goal is Neovim-native TUIs that drive Claude Code, not just a terminal pane, see 4.2. |
 | D15 | **Secrets come from env vars or the OS keychain only.** | 2026-10-26 | `secret-tool` on Linux, Keychain on macOS. No password-manager CLI for now. |
 | D16 | **System packages:** Homebrew on macOS; on Linux pacman first, then apt, then dnf. No Homebrew-on-Linux. | 2026-10-26 | Until the installers are real, `bud install` fails with a clear list of what's missing and how to get it, instead of pretending. |
 | D17 | **`install.sh` owns its own flags**, including `--profile` and `--yes`, and asks before running `bud install`. | 2026-10-26 | It reads the answer from `/dev/tty`, since stdin is the script under `curl \| sh`. With no terminal and no `--yes`, it installs the binary and skips `bud install` with a note. The profile is handed to `bud install` as `bud --profile <name> install`, with `--yes` when given, and `bud install` gets the terminal as stdin so it can ask its own questions. |
@@ -44,7 +44,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D23 | **Chat history is per machine for now.** | 2026-10-26 | Chat runs through Claude Code (D14), so history lives in its sessions. Syncing them between machines is a nice-to-have, not worth much effort. |
 | D24 | **Start from scratch.** No existing Neovim config to migrate and no Claude Code setup to adopt. | 2026-10-26 | |
 | D25 | **Opening a project or files also starts Claude Code there**, as one session per project that every bud AI UI shares. | 2026-10-26 | Neovim starts and owns it (the Go CLI execs into nvim, so it can't keep a child), right after the UI is up so startup never waits. It runs in the project root, gets the opened files as context, and is reachable from Lua through `bud.ai.claude`, so the chat pane, full-screen chat, inline actions and any TUI you build all talk to the same session. See 4.2. |
-| D26 | **Claude Code only, to begin with.** bud's AI is the per-project Claude Code session (D25) plus the TUIs you build in Neovim on top of it. | 2026-10-26 | Out of scope for now: other harnesses (OpenCode, Hermes), the adapter layer, other model providers, a direct API client, and inline ghost-text completion. Auth is Claude Code's own login (subscription or API key), so bud stores no AI keys. `kit/` is Claude Code setup synced into `~/.claude` (4.1). `bud.ai.claude`'s interface avoids Claude Code specifics, so another backend could be added later without rewriting the TUIs, but nothing is built for that. |
+| D26 | **Superseded by D124.** ~~Claude Code only, to begin with. bud's AI is the per-project Claude Code session (D25) plus the TUIs you build in Neovim on top of it.~~ | 2026-10-26 | Out of scope for now: other harnesses (OpenCode, Hermes), the adapter layer, other model providers, a direct API client, and inline ghost-text completion. Auth is Claude Code's own login (subscription or API key), so bud stores no AI keys. `kit/` is Claude Code setup synced into `~/.claude` (4.1). `bud.ai.claude`'s interface avoids Claude Code specifics, so another backend could be added later without rewriting the TUIs, but nothing is built for that. |
 | D27 | **Plugins are managed by Neovim's built-in `vim.pack`, not lazy.nvim.** | 2026-10-27 | lazy.nvim had no commits in 6 months; `vim.pack` ships with Neovim. Measured: lazy.nvim alone cost ~5.3 ms of a 14.6 ms headless start. `nvim-pack-lock.json` ships in the binary like the old lockfile, and `bud.pack.restore()` (run by install/update) drops plugins a release removed and checks the rest out at their locked revision. `vim.pack` has no lazy loading, so `bud.pack` has its own (`event`, `ft`, `cmd`, `keys`; JGA-107): blink.cmp and diffview load on first use, taking headless startup from ~42 ms to ~25 ms. Requires Neovim 0.12 (D19). |
 | D28 | **fzf-lua is the picker.** | 2026-10-27 | Over snacks.picker, which had 5 commits in 6 months against fzf-lua's 130. Adds `fzf` as a system dependency. |
 | D29 | **The plugin set for milestone 2** (reviewed for maintenance: commits in the 6 months to 2026-10-27). | 2026-10-27 | Nav: fzf-lua (D28), mini.jump2d (`gw` labels every word start with two-character labels like Helix, `s` jumps by one character then label; replaces flash.nvim), bud's own `bud.marks` for pinned files (harpoon, grapple and arrow are all unmaintained), aerial.nvim, neo-tree.nvim (+ plenary, nui, nvim-web-devicons), oil.nvim, which-key.nvim. oil owns directory buffers and `-`; neo-tree's netrw hijack is off, so it only opens as the side pane. Diagnostics list is fzf-lua's diagnostics picker on `<leader>x`, not trouble.nvim. Editor/UI/git: blink.cmp (pinned to a release tag), mini.statusline with bud's own sections, catppuccin (Macchiato), gitsigns.nvim, diffview-plus.nvim (diffview.nvim is unmaintained). Languages: nvim-lspconfig (server settings for `vim.lsp.config`), mason.nvim, conform.nvim, nvim-lint, nvim-treesitter `main` branch, whose `tree-sitter` CLI and C compiler become `installer.Deps` that install and doctor track. mini.nvim comes in as one plugin for jump2d and statusline. Debugging (nvim-dap) is deferred (JGA-108). Dropped: flash, harpoon, trouble, lualine, diffview, snacks, todo-comments. |
@@ -131,17 +131,21 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D110 | **The docs are a site too, built from the same Markdown.** | 2026-11-10 | bud is a personal tool that happens to be public (D89), so the setup has to be something a person can follow without asking: `docs/setup.md` walks the whole thing in order (the binary, `bud install`, Claude Code, clod, the kit, claude.ai, another machine) and says which parts are Jason's and how to change each. The site, https://bud.jgarner.dev, is a landing page plus those pages: `site/` holds the landing page, one layout and one stylesheet, `scripts/site.sh` copies `docs/*.md` in unchanged, and GitHub Pages' own Jekyll builds it (`.github/workflows/pages.yml`, on a push to main), so there is no second copy of any page and no generator to maintain. Options were: Pages' Jekyll over the repo's files (chosen), a Go generator (the standard library has no Markdown, D1) or a docs framework (a Node toolchain for eleven pages). `docs/internals/` stays on GitHub only. `just site-test` fails when a page is missing from the sidebar. |
 | D111 | **One manifest in bud is the desired state of the Claude setup on every surface.** | 2026-11-13 | Plan, 4.3. The goal is the same Claude everywhere: Claude Code and Desktop on each machine, the claude.ai account (web, phone, Cowork), cloud sessions and Remote Control sessions. Today that state is spread over three repos and a prose checklist: `kit/kit.json` here (plugins), clod (MCP servers, settings, rules, Desktop's import file), bud-plugins (skills, `core.md`) and clod's `desktop/claude-ai.md` (what the account should hold). `kit/` grows back into the whole of it: marketplaces and plugins as now, plus MCP servers, base settings, rules and the account's expected connectors, plugins and instructions. Amends D77, which emptied the kit of everything but plugins: what Claude *does* still lives in the plugins, but what a machine and the account *have* is the kit's again. The cost to know about: the kit is embedded (D5), so a change to a server or setting reaches machines with a bud release, where a push to clod reached them at the next session start. Skills still update on a push, since plugins track commits. |
 | D112 | **The claude.ai account is read and guided, never written.** | 2026-11-13 | Plan, 4.3. Checked on 2026-11-12: there is no supported way to change a personal account's connectors, personal preferences or plugin marketplaces from outside claude.ai (the Plugins API is for Claude Enterprise organizations and still can't create a marketplace). Options were guided steps (chosen), a skill that drives claude.ai's settings pages in a browser (brittle, Desktop only), or claude.ai's internal API with a session cookie (unsupported, and bud would hold a session credential, against D26). So bud reads what Claude Code can see of the account (`claude plugin list` for `@synced` plugins, `claude mcp list` for connectors), compares it with the manifest, and for anything only the account can change it names the step, opens the settings page and records that it was done, the way `bud kit core --pasted` does now (JGA-179). |
-| D113 | **clod's job moves into bud, and the clod repo is retired.** | 2026-11-13 | Plan, 4.3. Supersedes D89 and D90. bud becomes the one tool on every machine, the work Mac included (binary only, `install.sh --no-install` then `bud claude setup`, which D89 already allowed for). What clod's `install.sh` does is ported to Go under `internal/kit`: full and merge modes (merge leaves a third-party provider's settings alone), features as kit entries a machine turns on or off, MCP servers through `claude mcp` with values from `config.json` and secrets from the keychain under service `bud` (unchanged), the `core.md` rule copied into `~/.claude/rules/`, and Desktop's import file on a third-party provider. clod was audited on 2026-11-13 and holds nothing private: every key is a `${VAR}` placeholder, the tailnet host is written `<tailnet>`, there is no account id, region or employer host, and its 10 commits carry no personal email. So its content can be public. It is ported fresh, without clod's git history, and with the wording made generic on the way ("a self-hosted notes connector", "a machine on a third-party provider"). `clod.repo`, `jgarner9/clod-template` and `setupClod` go once a machine has been taken over. |
+| D113 | **Superseded by D126.** ~~clod's job moves into bud, and the clod repo is retired.~~ | 2026-11-13 | Plan, 4.3. Supersedes D89 and D90. bud becomes the one tool on every machine, the work Mac included (binary only, `install.sh --no-install` then `bud claude setup`, which D89 already allowed for). What clod's `install.sh` does is ported to Go under `internal/kit`: full and merge modes (merge leaves a third-party provider's settings alone), features as kit entries a machine turns on or off, MCP servers through `claude mcp` with values from `config.json` and secrets from the keychain under service `bud` (unchanged), the `core.md` rule copied into `~/.claude/rules/`, and Desktop's import file on a third-party provider. clod was audited on 2026-11-13 and holds nothing private: every key is a `${VAR}` placeholder, the tailnet host is written `<tailnet>`, there is no account id, region or employer host, and its 10 commits carry no personal email. So its content can be public. It is ported fresh, without clod's git history, and with the wording made generic on the way ("a self-hosted notes connector", "a machine on a third-party provider"). `clod.repo`, `jgarner9/clod-template` and `setupClod` go once a machine has been taken over. |
 | D114 | **What the account should hold is data in the public manifest.** | 2026-11-13 | Plan, 4.3. The other option was per-machine config, which keeps the connector list out of the public repo but then has to sync some other way, against the point of D111. Connector names (Linear, Exa, Context7) are generic; the Basic Memory URL and every key stay on the machine. Replaces clod's `desktop/claude-ai.md`, a dated prose snapshot that had to be kept true by hand. |
 | D115 | **Every change to the setup follows one loop: change the manifest, sync, do the guided steps, and status comes back clean.** | 2026-11-13 | Plan, 4.3 ("Changing the setup"). Jason asked for a system to follow when adding, updating or removing a connector, a plugin or a skill, in place of remembering which of three repos and which settings page each one lives in. The manifest is always changed first and the surfaces are brought to it, never the other way round, so a change made by hand on one surface shows in `bud kit status` as drift with two ways out: adopt it into the manifest or take it back out. Builds on D58 (`bud kit add` and `rm` in a checkout, `enable` and `disable` for one machine), which covers plugins and marketplaces today and is widened to servers and account connectors. |
-| D116 | **Bud 1.1 is one Claude setup everywhere.** | 2026-11-13 | Jason set the target. 1.1 is 4.3's build order: steps 1 to 5 (the manifest and status, guided account steps and the change loop, the clod port, cloud, the Neovim screen), and step 6 (bud-plugins into this repo) only if that open question is answered yes. The steps can ship in patch releases as they land, since each is useful on its own; `VERSION` goes to 1.1.0 with the one that retires clod (D113), which is the change a person setting up a machine will notice. |
+| D116 | **Superseded by D126.** ~~Bud 1.1 is one Claude setup everywhere.~~ | 2026-11-13 | Jason set the target. 1.1 is 4.3's build order: steps 1 to 5 (the manifest and status, guided account steps and the change loop, the clod port, cloud, the Neovim screen), and step 6 (bud-plugins into this repo) only if that open question is answered yes. The steps can ship in patch releases as they land, since each is useful on its own; `VERSION` goes to 1.1.0 with the one that retires clod (D113), which is the change a person setting up a machine will notice. |
 | D117 | **The setup is configured by asking Claude, which drives deterministic commands through a skill.** | 2026-11-13 | Plan, 4.3 ("Configuring by asking"). Jason's clarification of D115: the system he follows is natural language ("add the Sentry connector, off by default", "take Resend out everywhere", "why does the work Mac differ?"), not a set of commands to remember. Claude decides nothing about how a change is made: a skill names the loop of D115 and the `bud kit` command for each step, every command it uses has `--json` and `--dry-run`, and the skill always shows the dry run and asks before the real one. So the same request gives the same change whoever asks and on whichever machine, and everything Claude can do, a person can do by hand with the same commands. The guided account steps (D112) are read out by Claude one at a time, with the page to open, and marked done when Jason says so. On a surface with no `bud` binary (claude.ai on the web or the phone) the skill can only explain the steps and say where to run them. |
-| D118 | **bud-plugins moves into this repo, as 1.1's last step, once claude.ai is seen to sync a marketplace from a subdirectory.** | 2026-11-13 | Plan, 4.3; amends D77 and D116 (step 6 is now part of 1.1, not conditional on a question). One repo holds the CLI, the manifest and the plugins. The untested point is whether claude.ai's marketplace sync accepts a marketplace that is a subdirectory of a larger repo (Claude Code can, with `--sparse`); that is checked by hand on the account before anything moves, and if it fails this comes back as a question. When it ships, the rule in `CLAUDE.md` that a skill is changed in bud-plugins and never here turns over, and each place that names `jgarner9/bud-plugins` (the account's marketplace, the manifest, the cloud script) is repointed, the account's by a guided step. |
+| D118 | **Superseded by D126.** ~~bud-plugins moves into this repo, as 1.1's last step, once claude.ai is seen to sync a marketplace from a subdirectory.~~ | 2026-11-13 | Plan, 4.3; amends D77 and D116 (step 6 is now part of 1.1, not conditional on a question). One repo holds the CLI, the manifest and the plugins. The untested point is whether claude.ai's marketplace sync accepts a marketplace that is a subdirectory of a larger repo (Claude Code can, with `--sparse`); that is checked by hand on the account before anything moves, and if it fails this comes back as a question. When it ships, the rule in `CLAUDE.md` that a skill is changed in bud-plugins and never here turns over, and each place that names `jgarner9/bud-plugins` (the account's marketplace, the manifest, the cloud script) is repointed, the account's by a guided step. |
 | D119 | **claude.ai's personal preferences hold a fixed pointer, pasted once; the instructions themselves become a skill.** | 2026-11-13 | Plan, 4.3. The paste was the one step nothing can automate (D112), repeated whenever `core.md` changed. Now the pasted text is a few fixed lines naming the persona and telling Claude to load `bud:core` first, and what `core.md` said lives in that skill, which updates on a push like any other. Jason took the known risk: a skill load in every conversation, and reliance on the pointer being followed. Machines don't rely on it: the sync still writes the full instructions as a rule under `~/.claude/rules/`, taken from the skill's file, since a rule always loads. `bud kit core --pasted` stays for the one paste; the changed-since-pasted warning (JGA-179) only fires if the pointer itself ever changes. |
 | D120 | **Superpowers is out everywhere.** | 2026-11-13 | Plan, 4.3; completes D100, which dropped it from the kit while clod's `plugin` feature and the account still installed it (JGA-241). The manifest lists it under the account as not wanted, so status shows it until the guided step to turn it off is done, and the clod port carries no pinned-plugin path. Jason will write a planning schema and skills of his own in its place; that is separate work, not part of 1.1. |
 | D121 | **Everything about the Claude setup is under `bud kit`.** | 2026-11-13 | Plan, 4.3. The other option was `bud claude`, beside `status` and `setup`. `bud kit` exists and already means bud's Claude setup; `bud claude status` points at `bud kit status`, and `bud claude setup` stays as what installs Claude Code and logs in. |
 | D122 | **Claude reaches the setup through the `bud kit` commands with `--json`, not an MCP server.** | 2026-11-13 | Plan, 4.3; settles how D117's skill works. The skill runs the commands through Bash. Options were that, or a small MCP server in the binary (`bud mcp`) with a typed tool per command. The commands have to exist anyway for use by hand, so a server would be a second interface to keep in step with them, and its tool names would sit in every request of every session, which D101 and D102 worked to cut. What a server would add is Desktop chat on a machine, and a change to the setup needs a checkout and a release, which is Claude Code's ground. It can be added later over the same commands if that turns out to matter. |
 | D123 | **`kit.json` holds every section, keyed by name, and `Load` refuses what it doesn't know.** | 2026-11-13 | JGA-244; the format is in `docs/internals/kit-manifest.md`. Servers, rules and account connectors are objects keyed by name, as marketplaces are, so `bud kit add` and `rm` edit one key. A server carries what clod spread over a feature folder: its `claude mcp add-json` definition with `${VAR}` placeholders, the values those need, its default modes, the command it requires, the account connector that delivers it, and the settings that go with it. Rule text and the cloud script are files beside `kit.json`, since they are prose and shell; a rule can also point into a marketplace's checkout, which is how `core.md` stays in bud-plugins. An unknown key is an error at any depth, and so is a placeholder with no declared value, because the kit is embedded and a typo would otherwise ship. `core` and `expected_mcp` are gone: the first is `account.instructions` and the `core.md` rule, and the second is derived (servers on by default in full mode that need no command on `PATH`), which gives the same three. Left in clod on purpose: the autosync hook (changes now arrive with a release, D111), the `plugin` feature (the kit's `plugins`), the deny rule for clod's `secrets.env`, and the checklist's personal skills and scheduled task, which are one person's and not the setup's. |
+| D124 | **bud's AI runs on OpenCode, so the model is whichever provider OpenCode is connected to.** | 2026-11-13 | Jason's pivot, plan in 4.4; supersedes D14 and D26. It is one harness and not an adapter layer (D3 stays superseded): bud drives OpenCode's server from Neovim and never talks to a model provider itself, so it still stores no AI keys, and sign-in is OpenCode's own. Checked on 2026-11-13 against OpenCode 2.1.2's docs and Anthropic's Claude Code legal page: a Claude Pro or Max subscription can't be used inside OpenCode (Anthropic prohibits it, and OpenCode dropped the plugin for it in 1.3.0), so Claude there means an API key, Bedrock or Vertex, while ChatGPT Plus, GitHub Copilot and local models work. |
+| D125 | **Claude Code comes out of bud up front, and the 1.0 line is the Claude Code release.** | 2026-11-13 | Jason chose deleting first over keeping Claude Code as a frozen second backend or deleting it once OpenCode was at parity. The 1.0 line (v1.0.0 to v1.0.2) is where bud on Claude Code stays. There is no fallback while the OpenCode session is built: `main` has no working AI between the cut and the session landing, no stable release is made in that gap (D80), and the nightly channel does carry it. What goes is the transport and everything that only served it: `bud.ai.claude`'s process and stream handling, the IDE bridge, `internal/claude`, `bud claude`, the kit's `claude plugin` sync and `ai.claude.*`. What was built on the session stays and moves to the new module: the permission prompt, the diff review, issues, work, the generator and the chat tab. |
+| D126 | **Bud 1.1 is bud on OpenCode: the session, and the kit re-aimed at OpenCode's config.** | 2026-11-13 | Supersedes D116, D113 and D118. From 4.3, the manifest, status, add and rm, MCP servers, and settings and rules carry over with OpenCode's config as the target (JGA-244, JGA-247, JGA-248, JGA-249, JGA-250). The claude.ai account, Desktop, the cloud script, taking over clod and moving bud-plugins leave the milestone for the backlog (JGA-241, JGA-245, JGA-251 to JGA-259), and clod keeps setting up Claude's own surfaces. D111, D115, D121, D122 and D123 hold with "OpenCode setup" read for "Claude setup"; D112, D114, D117 and D119 wait with the parked work. `VERSION` goes to 1.1.0 when the session, the kit and the docs are all on OpenCode. |
+| D127 | **Bud 1.2 is delegation, a planning schema and docs mapped to code.** | 2026-11-13 | Jason set it: JGA-260 (the session model writes the spec, cheaper models write the code), JGA-246 (a planning schema and skills of his own, D120) and JGA-261 (each docs page mapped to the code it describes, with a test that fails when that code changes). It is planned in detail once 1.1 ships, because delegation changes shape on OpenCode: a coder can be any provider's model, or a local one. |
 
 ---
 
@@ -348,7 +352,9 @@ A key-hint popup (mini.clue, D74) documents all of it, so the keymap is self-des
 
 ## 4. AI layer
 
-Claude Code only, for now (D26). Every part below runs on the project's Claude Code session (4.2) and is drawn by TUIs in Neovim. Three parts:
+> 1.1 moves this layer to OpenCode (4.4, D124-D126). Until that is built, this section, 4.1 and 4.2 describe what is in the tree: Claude Code.
+
+Every part below runs on the project's Claude Code session (4.2) and is drawn by TUIs in Neovim. Three parts:
 
 1. **Assistance:** Claude Code's own TUI in a side pane (`<leader>ac`), "explain / refactor / write tests for selection" (`<leader>ae` / `af` / `at`, typed into that TUI, edits come as diffs to accept, D81) and commit-message drafting (`<leader>am` in a commit message, or `:BudCommitMessage`). Claude Code's own login is the only auth.
 2. **Tool generator (`:BudGen` in nvim, `bud tools gen` in the CLI):** you describe what you want ("a command that opens the test file for the current file", "add Zig support"), the AI writes either a **tool** (`manifest.json` + `init.lua`) or a **language spec**, shows you a diff, and on accept it lands in `user-tools/` and loads immediately, no restart.
@@ -448,7 +454,7 @@ Flag names and the bridge protocol details get re-checked against Claude Code's 
 
 ### 4.3 One Claude setup everywhere (plan)
 
-> Not built; this is the 1.1 release (D116). Decisions D111-D123; the build order is in section 6 and what's still open is in section 7.
+> Not built, and re-aimed by D126: this was the 1.1 release (D116). The manifest, status, add and rm, servers, and settings and rules carry over to 1.1 with OpenCode's config as the target (4.4); the account, Desktop, cloud and clod parts below are parked in the backlog, and clod keeps doing that job. Decisions D111-D123. The text below is the plan as it was written for Claude.
 
 The aim is that Claude is the same on every surface, and that one screen says where it isn't. bud holds the desired state in one manifest (D111), applies it wherever a local process can be wired, and for the claude.ai account, which nothing outside claude.ai can write, it reads, compares and guides (D112). clod's work moves into bud (D113), so a machine needs one binary and there is one place to look.
 
@@ -543,6 +549,37 @@ Three rules keep this honest. **Drift is shown, not fixed silently:** something 
 Three things make it deterministic rather than merely convenient. The commands do the work and validate their own input, so a wrong guess by Claude is a usage error, not a half-written file. Every write has a dry run that the skill must show first. And status is the only source of what's true: the skill reads it again after each step instead of remembering what it did.
 
 **What goes away:** the clod repo and its `clod` command, `clod.repo`, `jgarner9/clod-template`, `setupClod` and the `clod` record (`internal/cli/clod.go`), clod's `autosync` hook, and the account checklist as prose. `docs/setup.md` loses its clod step.
+
+### 4.4 bud on OpenCode (plan)
+
+> Not built; this is the 1.1 release (D124-D126). The build order is in section 6 and what's still open is in section 7. Checked against OpenCode 2.1.2's docs on 2026-11-13. The first task pins a version and checks the rows marked "first task" against its OpenAPI spec and a running server.
+
+The aim is that everything in 4 and 4.2 works as it does now with OpenCode where Claude Code was, so the model becomes a setting in OpenCode and stops being a property of bud (D124). Claude Code is removed first, not kept beside it (D125).
+
+**How the pieces map.**
+
+| Today, on Claude Code | On OpenCode | Checked |
+| --------------------- | ----------- | ------- |
+| `claude -p` with stream-json, one job per project root | One `opencode serve` per Neovim, started after the first screen, with a session per project root (`session.create` with the root as its directory) | `serve`, create and prompt: yes. One server holding several roots, and its port and password options: first task |
+| stream-json events through `handle` | The server's event stream (`GET /event`, server-sent events, live only with no replay) | Yes |
+| `:BudClaude term` on the same conversation, one driver at a time | `opencode attach <url>` in a terminal buffer on the same server | `attach`: yes. Opening it on a given session: first task |
+| The IDE bridge (WebSocket, lock file, `openDiff`, selection) | Gone. A selection or file goes with the message, and diagnostics come from OpenCode's own language servers | No equivalent found in the docs |
+| `--permission-prompt-tool` pointed at the bridge | `permission` set to `ask` in config, a permission event, and a reply over HTTP | The config: yes. The event's shape, whether an edit carries its diff, and the reply endpoint: first task |
+| `claude auth status` | `opencode auth list` | Yes |
+| Plugins from a marketplace, through `claude plugin` | Files: `~/.config/opencode/skills/<name>/SKILL.md`, `agents/<name>.md`, commands, and `opencode.json` (`mcp`, `instructions`, `permission`) | Skills, agents and `opencode.json`: yes. Where commands go: first task |
+| `~/.claude/rules` and `CLAUDE.md` | `~/.config/opencode/AGENTS.md` and `instructions`. A project's `CLAUDE.md` is read when it has no `AGENTS.md` | Yes |
+| bud-ide's SessionStart hook (the notes on working inside bud) | An instructions file bud names when it starts the server | First task |
+| `claude --cloud`, for `ai.work.where = "cloud"` | Nothing. Open question (7) | n/a |
+
+**The module.** One Lua module takes `bud.ai.claude`'s place as the only thing that talks to the agent, with the same calls (`session`, `send`, `on`, `interrupt`, `status`, keyed and extra sessions), so each consumer changes a `require` and little else. Its name is an open question (7). Under it sits a small HTTP and server-sent-events client on `vim.uv`, written by hand as the bridge's WebSocket was, so no plugin is added. The server listens on localhost only, with a password bud generates at each start if OpenCode takes one (first task). It starts in a `vim.schedule` callback after `VimEnter`, as the Claude Code session does, so the first screen keeps its budget (D35).
+
+**The kit.** `bud kit sync` stops calling `claude plugin` and writes OpenCode's files, under the rules 4.1 already has: the ledger records what bud wrote, bud touches nothing else, and what the manifest drops is taken out. Skills, agents and commands are copied from the bud-plugins checkout, servers become `mcp` entries, and rules become instructions. bud-plugins stays one source for both harnesses, since Claude's own surfaces still load it as a plugin. How a plugin's names carry over is an open question (7).
+
+**What a person does.** A setup command installs OpenCode and hands over to its sign-in, a status command and `bud doctor` say whether it is installed and connected to a provider, and the dashboard banner's `c` runs the setup. bud sets no model: OpenCode's config does, and the manifest may carry a default.
+
+**What goes away (D125):** `nvim/lua/bud/ai/claude.lua`'s process and stream handling, `nvim/lua/bud/ai/bridge/`, `internal/claude`, `bud claude`, `internal/cli/claudedir.go`, the Claude checks in `bud doctor` and `bud install`, the kit's `claude plugin` path and its `account.instructions` reminder, and `ai.claude.*`. `bud agent` and `bud chat` stay as commands and open OpenCode's TUI.
+
+**Tests.** No test starts a real OpenCode or reaches a provider. Lua tests talk to a fake server that replays recorded event streams, and Go tests put a fake `opencode` on `PATH` with `fakePath`, as they did a recorded `claude`.
 
 ---
 
@@ -763,37 +800,82 @@ All eight steps are built; this is the order they were planned in. Step 7's chat
 7. **The per-project Claude Code session and `bud.ai.claude` (4.2)**, then **`bud kit sync`**, then **chat mode** (Claude Code's TUI, D81) and the TUI pane, then the **tool generator** with lifecycle commands.
 8. Polish: settings UI, more languages, docs.
 
-### 1.1: one Claude setup everywhere (4.3, D116): not built
+### 1.1: bud on OpenCode (4.4, D126): not built
 
-Each step ships and is useful on its own, and the first two move no repo. The issues are in Linear's Bud IDE project, milestone 1.1; an issue's blockers are in brackets.
+One task is one commit with its own check, and `just check` passes after each. A task's blockers are in brackets. Tasks whose blockers are done can run side by side, because each lane owns its files: lane A is `nvim/` and `tests/lua/`, lane B is `internal/` and `docs/config.md` outside the kit, lane C is `internal/kit` and `internal/cli/kit.go`, and lane D is the bud-plugins repo. Each code task updates the `docs/internals/` page for its area; the user docs wait for task 19. Issue ids are written in when the tasks are filed; the four that already have one are 4.3's issues, re-aimed.
 
-1. **The manifest and a read-only status.**
-   - Kit manifest: add servers, settings, rules, account and cloud sections (JGA-244)
-   - `bud kit status`: report every surface against the manifest, with `--json` (JGA-247) [JGA-244]
-2. **Guided account steps and the change loop.**
-   - Guided account steps: name the step, open the page, mark it done (JGA-251) [JGA-247]
-   - `bud kit add` and `rm` for servers and connectors, and `bud kit adopt` for drift (JGA-248) [JGA-244]
-   - Fixed pointer: move `core.md` into a `bud:core` skill and paste the pointer once (JGA-254) [JGA-251]
-   - Superpowers out everywhere (JGA-241) [JGA-251]
-   - Kit skill: configure the Claude setup by asking Claude (JGA-255) [JGA-247, JGA-248]
-   - How-to page: changing the Claude setup (JGA-256) [JGA-248]
-3. **Port clod, a piece at a time.**
-   - MCP servers, with values from config and secrets from the keychain (JGA-249) [JGA-244]
-   - Base settings and rules, with full and merge modes (JGA-250) [JGA-244]
-   - Desktop's import file on a third-party provider (JGA-252) [JGA-250]
-   - Take over a clod machine, remove `setupClod` and `clod.repo`, and release 1.1.0 (JGA-257) [JGA-249, JGA-250, JGA-252]
-4. **Cloud:** the environment's setup script installs bud and runs the sync (JGA-253) [JGA-249, JGA-250]
-5. **The Neovim screen** over `bud kit status --json` (JGA-258) [JGA-247, JGA-251]
-6. **bud-plugins into this repo** (D118).
-   - Check that claude.ai syncs a marketplace from a subdirectory, by hand (JGA-245)
-   - Move bud-plugins into this repo and repoint every surface (JGA-259) [JGA-257, JGA-245]
+**First, alone.**
 
-Outside 1.1: a planning schema and skills of Jason's own, in place of Superpowers (JGA-246, D120).
+1. **OpenCode facts, the contract and the test doubles.** Pin an OpenCode version. Check 4.4's "first task" rows against its OpenAPI spec and a running server, and write `docs/internals/opencode.md`: the endpoints, the events, the permission flow, attach, sign-in, config paths, and what can't be done. Write down the Lua module's calls and events. Record event streams as fixtures, and build the fake server for Lua tests and the fake `opencode` for Go tests. Done when a Lua test drives a prompt, a permission and an interrupt through the fake, and the page answers every "first task" row.
+
+**Lane A: the editor (Lua).**
+
+2. **Cut Claude Code out of the editor.** [1] The new module as a stub with the contract's calls and status `missing`; every consumer requires it; `claude.lua`'s transport, `bridge/` and their tests go; the diff review moves out of `bridge/tools.lua` into a module of its own. Done when `just lua-test` and `just smoke` pass and nothing under `nvim/lua/bud/ai/` names `claude`.
+3. **The HTTP and event-stream client** on `vim.uv`. [1] Done when its tests pass against the fake server: a request, a streamed response split across reads, a dropped connection.
+4. **The session.** [2, 3] Server start and stop, a session per root, send, events, interrupt, status, the status line, idle handling. Done when its tests pass on the fake and the first screen is measured inside its budget (D35).
+5. **Permissions and the edit review** on OpenCode's permission events. [4]
+6. **The TUI pane and chat.** [4, 17] `opencode attach` in `bud.ai.term`, and chat as OpenCode's TUI running the `chat` agent.
+7. **Inline actions, sharing a selection and the commit message.** [4]
+8. **The generator, issues and work** on the new session, with their permission policies. [5]
+
+**Lane B: the CLI (Go).**
+
+9. **Cut Claude Code out of the CLI.** [1] `internal/claude`, `bud claude`, `claudedir.go`, the Claude checks in doctor and install, and `ai.claude.*`, with a migration for a machine's `config.json`. Done when `just test` passes and `bud doctor` on a machine with no `claude` reports nothing about it.
+10. **Find, check and set up OpenCode.** [9] `internal/opencode` (the binary, its version, `auth list`), the status and setup commands, the doctor check, the offer in `bud install`, and `bud agent` and `bud chat` opening OpenCode's TUI.
+11. **The dashboard banner and the settings screen.** [4, 10]
+
+**Lane C: the kit (Go).**
+
+12. **Sync writes OpenCode's files.** [9, 17] Skills, agents and commands from the bud-plugins checkout into OpenCode's config dir, under the ledger; the `claude plugin` path goes.
+13. **MCP servers into `opencode.json`,** with values from config and secrets from the keychain (JGA-249). [12]
+14. **Base settings and rules, with full and merge modes** (JGA-250). [12]
+15. **`bud kit status`** against OpenCode's config, with `--json` (JGA-247). [12]
+16. **`bud kit add`, `rm` and `adopt`** (JGA-248). [13]
+
+**Lane D: bud-plugins.**
+
+17. **OpenCode forms of the skills, agents and commands.** [1] Agent frontmatter OpenCode reads (`mode`, a provider's model id, `permission`), the `chat` agent read-only, the notes on working inside bud as an instructions file, and `tests/check.sh` checking both shapes. The session gate hook stays Claude-only until 1.2 (JGA-260).
+
+**Last, in order.**
+
+18. **End to end on macOS and Linux with a real provider,** by hand, and the smoke test on the fake. [8, 11, 16]
+19. **The user docs.** [18] `docs/claude-code.md` and `docs/claude-tui.md` become OpenCode pages; setup, keys, commands, troubleshooting, the README and the site's nav follow; 4, 4.1 and 4.2 here are rewritten as built; `CLAUDE.md` loses its note about the change.
+20. **Release 1.1.0** with `bud:release`. [19]
+
+Done already: the kit manifest's servers, settings, rules, account and cloud sections (JGA-244).
+
+Parked in the backlog by D126, out of the milestone: guided account steps (JGA-251), the fixed pointer (JGA-254), Superpowers out everywhere (JGA-241), the kit skill (JGA-255), the how-to page (JGA-256), Desktop's import file (JGA-252), taking over a clod machine (JGA-257), the cloud script (JGA-253), the Neovim screen (JGA-258), and moving bud-plugins in (JGA-245, JGA-259).
+
+### 1.2: delegation, a planning schema and docs mapped to code (D127): not planned in detail
+
+- Delegation: the session model writes the spec, cheaper models write the code (JGA-260). On OpenCode a coder is an agent with its own model, from any provider or a local one, and the session gate becomes an OpenCode plugin or a permission rule.
+- A planning schema and skills of Jason's own, in place of Superpowers (JGA-246, D120).
+- Docs: map each page to the code it describes, and fail a test when that code changes (JGA-261).
 
 ---
 
 ## 7. Open questions for you
 
-Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50). What's left:
+Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50; one Claude setup everywhere: D118-D122; the move to OpenCode, what happens to Claude Code, and what 1.1 and 1.2 are: D124-D127). What's left, all for 4.4:
 
-None right now. For one Claude setup everywhere (4.3), all five were answered on 2026-11-13: bud-plugins moves in (D118), the pasted instructions become a fixed pointer (D119), Superpowers is out everywhere (D120), it all sits under `bud kit` (D121), and Claude reaches it through the commands, not an MCP server (D122).
+1. **Names.** Needed before tasks 2 and 9.
+   - A straight rename: `bud.ai.opencode`, `ai.opencode.*`, `bud opencode status|setup`. What runs is named, and the config migration is mechanical.
+   - Neutral names: `bud.ai.agent`, `ai.agent.*`, `bud ai status|setup`. They survive another change of harness, but hide what is run.
+   - Recommendation: the straight rename.
+2. **Cloud work.** `ai.work.where = "cloud"` (JGA-237) runs `claude --cloud`. Needed before tasks 8 and 9.
+   - Drop it with the rest of Claude Code. Work in a local worktree stays.
+   - Keep it, as the one place bud still calls `claude`.
+   - Recommendation: drop it, which is what D125 says.
+3. **clod in `bud install`.** `setupClod` and `clod.repo` clone and run your Claude setup on a new machine. Needed before task 9.
+   - Take them out. clod is run by its own installer, and bud needs no Claude Code on a machine.
+   - Keep them, so one command still sets up a machine's Claude as well.
+   - Recommendation: take them out.
+4. **Reviewing edits.** Today an edit is a diff you accept before it is written. Answered after task 1.
+   - Keep that: ask on every edit and show its diff in the same review. It needs the permission event to carry the diff.
+   - Let OpenCode write, and review afterwards with git.
+   - Recommendation: keep the review if task 1 finds the diff is there.
+5. **Plugin names on OpenCode.** A Claude plugin's skill is `bud:code-style`; an OpenCode skill is named by its folder and has no colon. Answered with task 17.
+   - The sync writes `bud-code-style` and rewrites `bud:` references in the text it copies. One source, nothing generated is committed.
+   - bud-plugins commits a generated OpenCode tree beside the plugins.
+   - The skills are renamed for both harnesses.
+   - Recommendation: the sync rewrites.

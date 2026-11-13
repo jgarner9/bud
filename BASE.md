@@ -1,6 +1,6 @@
 # Bud IDE: BASE plan
 
-> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is a plan: D111-D114); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
+> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is a plan: D111-D115); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
 > Date: 2026-10-24, updated 2026-11-13
 
 ## 0. The one-paragraph version
@@ -133,6 +133,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D112 | **The claude.ai account is read and guided, never written.** | 2026-11-13 | Plan, 4.3. Checked on 2026-11-12: there is no supported way to change a personal account's connectors, personal preferences or plugin marketplaces from outside claude.ai (the Plugins API is for Claude Enterprise organizations and still can't create a marketplace). Options were guided steps (chosen), a skill that drives claude.ai's settings pages in a browser (brittle, Desktop only), or claude.ai's internal API with a session cookie (unsupported, and bud would hold a session credential, against D26). So bud reads what Claude Code can see of the account (`claude plugin list` for `@synced` plugins, `claude mcp list` for connectors), compares it with the manifest, and for anything only the account can change it names the step, opens the settings page and records that it was done, the way `bud kit core --pasted` does now (JGA-179). |
 | D113 | **clod's job moves into bud, and the clod repo is retired.** | 2026-11-13 | Plan, 4.3. Supersedes D89 and D90. bud becomes the one tool on every machine, the work Mac included (binary only, `install.sh --no-install` then `bud claude setup`, which D89 already allowed for). What clod's `install.sh` does is ported to Go under `internal/kit`: full and merge modes (merge leaves a third-party provider's settings alone), features as kit entries a machine turns on or off, MCP servers through `claude mcp` with values from `config.json` and secrets from the keychain under service `bud` (unchanged), the `core.md` rule copied into `~/.claude/rules/`, and Desktop's import file on a third-party provider. clod was audited on 2026-11-13 and holds nothing private: every key is a `${VAR}` placeholder, the tailnet host is written `<tailnet>`, there is no account id, region or employer host, and its 10 commits carry no personal email. So its content can be public. It is ported fresh, without clod's git history, and with the wording made generic on the way ("a self-hosted notes connector", "a machine on a third-party provider"). `clod.repo`, `jgarner9/clod-template` and `setupClod` go once a machine has been taken over. |
 | D114 | **What the account should hold is data in the public manifest.** | 2026-11-13 | Plan, 4.3. The other option was per-machine config, which keeps the connector list out of the public repo but then has to sync some other way, against the point of D111. Connector names (Linear, Exa, Context7) are generic; the Basic Memory URL and every key stay on the machine. Replaces clod's `desktop/claude-ai.md`, a dated prose snapshot that had to be kept true by hand. |
+| D115 | **Every change to the setup follows one loop: change the manifest, sync, do the guided steps, and status comes back clean.** | 2026-11-13 | Plan, 4.3 ("Changing the setup"). Jason asked for a system to follow when adding, updating or removing a connector, a plugin or a skill, in place of remembering which of three repos and which settings page each one lives in. The manifest is always changed first and the surfaces are brought to it, never the other way round, so a change made by hand on one surface shows in `bud kit status` as drift with two ways out: adopt it into the manifest or take it back out. Builds on D58 (`bud kit add` and `rm` in a checkout, `enable` and `disable` for one machine), which covers plugins and marketplaces today and is widened to servers and account connectors. |
 
 ---
 
@@ -439,7 +440,7 @@ Flag names and the bridge protocol details get re-checked against Claude Code's 
 
 ### 4.3 One Claude setup everywhere (plan)
 
-> Not built. Decisions D111-D114; the build order is in section 6 and what's still open is in section 7.
+> Not built. Decisions D111-D115; the build order is in section 6 and what's still open is in section 7.
 
 The aim is that Claude is the same on every surface, and that one screen says where it isn't. bud holds the desired state in one manifest (D111), applies it wherever a local process can be wired, and for the claude.ai account, which nothing outside claude.ai can write, it reads, compares and guides (D112). clod's work moves into bud (D113), so a machine needs one binary and there is one place to look.
 
@@ -497,6 +498,28 @@ A machine clod set up is taken over once: bud runs `clod uninstall`, syncs the k
  settings
    base settings      ✓ merged        ·               ·
 ```
+
+**Changing the setup (D115).** One loop, whatever is changing:
+
+1. **Change the manifest**, in a bud checkout: `bud kit add`, `bud kit rm`, or an edit to the entry. A skill is the exception: it is a file in its plugin, so the change is made there.
+2. **Try it here.** With a dev link, `bud kit sync --dry-run` lists what would change on this machine, and `bud kit sync` does it.
+3. **Ship it.** A manifest change goes out with a bud release; a skill change goes out on a push, since plugins track commits.
+4. **Do the guided steps.** `bud kit status` lists what only the account can change, each with its page. They are done once, on any machine, because the account is shared.
+5. **Check.** `bud kit status` shows nothing differing. Other machines get there at their next `bud update`, and cloud sessions at their next fresh container.
+
+What that means for each kind of thing:
+
+| Changing | Add | Update | Remove |
+| -------- | --- | ------ | ------ |
+| A connector (a hosted service the account holds, such as Linear) | `bud kit add connector`, saying whether it's on by default and how machines the account doesn't reach get it. Guided: add it at Customize → Connectors. Elsewhere the sync adds it as a server | Edit the entry (its URL, its default). Guided when the account's copy has to change | `bud kit rm`. The sync takes it off machines where bud added it; guided: remove it from the account. Status shows "on the account, not wanted" until that's done |
+| A local MCP server (Serena, Headroom) | `bud kit add server`, with the command it needs on PATH. Nothing for the account | Edit the entry; the sync replaces what the ledger says bud added | `bud kit rm`; the sync removes it |
+| A plugin | Add it to its marketplace, then `bud kit add plugin`. Guided: turn it on for the account | Nothing to do for content: the sync updates bud's plugins every time. A pinned version is changed in the marketplace | `bud kit rm`; the sync uninstalls bud's copy. Guided: turn it off on the account |
+| A skill, agent or command | A new folder in its plugin; run the plugin repo's check; push | Edit it; push | Delete it; push. No surface needs a step for any of the three |
+| The always-on instructions (`core.md`) | n/a | Edit; push. The rule on each machine follows at the next sync. Guided: paste it into the account's personal preferences | n/a |
+| A value or key one machine needs | `bud config set` for a plain value, the keychain for a key | The same | The same |
+| Whether one machine has an entry | `bud kit enable` | n/a | `bud kit disable` |
+
+Three rules keep this honest. **Drift is shown, not fixed silently:** something on a machine or the account that the manifest doesn't list appears in status as "not in the manifest", with `bud kit adopt` to write it into a checkout's manifest or the step to remove it; bud never removes what it didn't add (D56). **A removal is finished only when status says so**, since the account half can lag behind the machine half. **What bud can't see, it records:** the pasted instructions are compared by hash, and that record is kept per machine, so a second machine asks once more until it's marked there too.
 
 **What goes away:** the clod repo and its `clod` command, `clod.repo`, `jgarner9/clod-template`, `setupClod` and the `clod` record (`internal/cli/clod.go`), clod's `autosync` hook, and the account checklist as prose. `docs/setup.md` loses its clod step.
 
@@ -724,7 +747,7 @@ All eight steps are built; this is the order they were planned in. Step 7's chat
 Each step ships and is useful on its own, and the first two move no repo.
 
 1. **The manifest and a read-only status.** `kit.json` gains `servers`, `settings`, `rules`, `account` and `cloud`, filled from what clod and its checklist say today. `bud kit status` reports every surface it can see against it, and changes nothing. This is the consistency check, before anything is ported.
-2. **Guided account steps.** The `core --pasted` idea made general: each account item that differs names its step, opens its page and can be marked done. Doctor's `core.md` and `claude setup` checks read the same data.
+2. **Guided account steps.** The `core --pasted` idea made general: each account item that differs names its step, opens its page and can be marked done. Doctor's `core.md` and `claude setup` checks read the same data. `bud kit add` and `rm` are widened to servers and connectors, `bud kit adopt` writes drift into the manifest, and `docs/` gets a how-to with the table from "Changing the setup" (D115).
 3. **Port clod, a piece at a time:** MCP servers with their values and secrets; then base settings and rules, with merge mode; then Desktop's import file; then taking over a machine clod set up, after which `setupClod` and `clod.repo` are removed and the clod repo is archived (D113).
 4. **Cloud:** the environment's setup script installs bud and runs the sync.
 5. **The Neovim screen** over `bud kit status --json`.

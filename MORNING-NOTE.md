@@ -45,17 +45,17 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
 
 ## Decisions waiting on you
 
-0. **Where the Gateway runs (the big one).** OpenClaw runs tools on the Gateway's own machine, so a Gateway only on your home server would edit the server's files, not your laptop's project. Options are in BASE.md 7.1 and docs/openclaw.md:
+1. **Where the Gateway runs (the big one).** OpenClaw runs tools on the Gateway's own machine, so a Gateway only on your home server would edit the server's files, not your laptop's project. Options are in BASE.md 7.1 and docs/openclaw.md:
    - **A Gateway on each laptop:** bud has been checked against this end to end. The home server's Gateway still serves the apps and the web UI.
    - **One Gateway at home with the laptop paired as a node:** this doesn't work for editing. OpenClaw's docs say node-hosted sessions run in a managed workspace (an empty folder or a fresh checkout), never your open project.
 
    So I recommend a Gateway on the laptop, signed in to Claude Code and ChatGPT Plus, with the home server's Gateway kept for the phone and the web UI.
-1. **Where the Gateway token lives** (BASE.md 7.1). I recommend a mode-600 file named by `ai.openclaw.token_file`, which is what bud does now. The keychain could come later.
-2. **Should OpenClaw ask before running commands** (7.2)? It's the Gateway's `tools.exec.mode`, and it applies to every surface. I recommend `ask` (`openclaw config set tools.exec.mode ask` on the server), which is how bud has worked so far.
-3. **Claude subscription through OpenClaw.** Reports from April 2026 say Anthropic stopped third-party tools drawing on the Claude subscription bucket, which conflicts with OpenClaw's docs on `claude-cli` reuse. Check Anthropic's current terms before relying on it. ChatGPT Plus through Codex OAuth looks solid.
-4. **The error on a redirected buffer.** You asked for an error when something tries to change a pane. I raise the error *and* open the file in the editor window, so nothing you picked is lost. Say if you'd rather it only refused.
-6. **Cloud work** (BASE.md 7.4): D129 removed it when Claude Code was leaving altogether. Now that Claude Code stays as a backend (D135), I recommend keeping it for as long as `claude` is installed, so I didn't remove it. Your call.
-5. **One OpenClaw session per project** (D139): I decided this with my recommendation, once it was verified. Say if you'd rather have one shared session.
+2. **Where the Gateway token lives** (BASE.md 7.1). I recommend a mode-600 file named by `ai.openclaw.token_file`, which is what bud does now. The keychain could come later.
+3. **Should OpenClaw ask before running commands** (7.2)? It's the Gateway's `tools.exec.mode`, and it applies to every surface. I recommend `ask` (`openclaw config set tools.exec.mode ask` on the server), which is how bud has worked so far.
+4. **Claude subscription through OpenClaw.** Reports from April 2026 say Anthropic stopped third-party tools drawing on the Claude subscription bucket, which conflicts with OpenClaw's docs on `claude-cli` reuse. Check Anthropic's current terms before relying on it. ChatGPT Plus through Codex OAuth looks solid.
+5. **Cloud work** (BASE.md 7.4): D129 removed it when Claude Code was leaving altogether. Now that Claude Code stays as a backend (D135), I recommend keeping it for as long as `claude` is installed, so I didn't remove it. Your call.
+6. **The error on a redirected buffer.** You asked for an error when something tries to change a pane. I raise the error *and* open the file in the editor window, so nothing you picked is lost. Say if you'd rather it only refused.
+7. **One OpenClaw session per project** (D139): I decided this with my recommendation, once it was verified. Say if you'd rather have one shared session.
 
 ## Left in 1.1 (BASE.md section 6)
 
@@ -71,7 +71,7 @@ At the last commit, everything on the branch is pushed and `just check` passes i
 
 **Recommended first steps for you:**
 
-1. Read decisions 0 to 5 above. 0 (where the Gateway runs) shapes the rest.
+1. Read the decisions above; the first (where the Gateway runs) shapes the rest.
 2. On your laptop: `npm i -g openclaw` (needs Node 24.16+), `openclaw onboard`, then `bud ai status`.
 3. Try bud's own chat with `<leader>av` and the OpenClaw TUI pane with `<leader>ac`, and tell me how you want the chat to look.
 4. When Linear is back, re-aim or close JGA-262 to JGA-276, and file the 1.1 tasks from BASE.md section 6.

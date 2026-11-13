@@ -9,7 +9,8 @@
 --   require("bud.ai.view").toggle()        -- <leader>av
 --   require("bud.ai.view").open({ layout = "full" })
 --
--- In the prompt: <CR> sends, <C-c> stops the reply, <C-x><C-o> after a /
+-- In the prompt: <CR> sends, <C-c> stops the reply, <Up>/<Down> recall your
+-- earlier messages, <C-x><C-o> after a /
 -- completes the backend's slash commands. In the conversation: q
 -- goes back to the editor.
 
@@ -253,12 +254,33 @@ function M.patch(d)
   return #parts > 0 and table.concat(parts, "\n") or nil
 end
 
+-- recall puts an earlier (step -1) or later (step 1) message of yours in
+-- the prompt, as a shell's history does; past the newest it's empty again
+function M.recall(root, step)
+  local v = views[root_of(root)]
+  if not v or #v.history == 0 then
+    return
+  end
+  local i = (v.recall or (#v.history + 1)) + step
+  i = math.max(1, math.min(i, #v.history + 1))
+  v.recall = i
+  local text = v.history[i] or ""
+  local prompt = vim.fn.prompt_getprompt(v.input)
+  local last = vim.api.nvim_buf_line_count(v.input)
+  vim.api.nvim_buf_set_lines(v.input, last - 1, last, false, { prompt .. text })
+  for _, w in ipairs(vim.fn.win_findbuf(v.input)) do
+    vim.api.nvim_win_set_cursor(w, { last, #prompt + #text })
+  end
+end
+
 -- send sends what's typed in the prompt
 local function send(v, text)
   text = vim.trim(text or "")
   if text == "" then
     return
   end
+  table.insert(v.history, text)
+  v.recall = nil
   append(v, { "", "## you", "" })
   append(v, vim.split(text, "\n", { plain = true }))
   v.replying, v.in_user = false, false
@@ -270,7 +292,7 @@ end
 
 -- create makes root's two buffers and hooks them to the session
 local function create(root)
-  local v = { root = root, tools = {}, wins = {} }
+  local v = { root = root, tools = {}, wins = {}, history = {} }
   v.log = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(v.log, "bud://chat/" .. vim.fs.basename(root))
   vim.bo[v.log].filetype = "markdown"
@@ -290,6 +312,12 @@ local function create(root)
   map(v.input, { "i", "n" }, "<C-c>", function()
     agent().interrupt(root)
   end, "Stop the reply")
+  map(v.input, "i", "<Up>", function()
+    M.recall(root, -1)
+  end, "An earlier message")
+  map(v.input, "i", "<Down>", function()
+    M.recall(root, 1)
+  end, "A later message")
   map(v.log, "n", "q", function()
     local editor = require("bud.lock").editor()
     if editor then

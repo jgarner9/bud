@@ -60,8 +60,17 @@ end
 
 -- open goes to the chat tab, starting the TUI when it isn't running.
 -- opts.resume opens Claude Code's picker of earlier chats
+-- own says whether chat is bud's own (ai.agent.chat_ui = "bud", D138):
+-- bud.ai.view, full screen, on a session in chat's dir
+local function own()
+  return require("bud.config").get("ai.agent.chat_ui", "tui") == "bud" and require("bud.ai.agent").backend() ~= "claude"
+end
+
 function M.open(opts)
   opts = opts or {}
+  if own() then
+    return require("bud.ai.view").open({ root = chat_dir(), layout = "full" })
+  end
   if tab_valid() then
     vim.api.nvim_set_current_tabpage(state.tab)
     vim.cmd.startinsert()
@@ -112,6 +121,13 @@ end
 
 -- toggle goes to chat, or back to the tab you came from
 function M.toggle()
+  if own() then
+    local view = require("bud.ai.view")
+    if view.showing(chat_dir()) then
+      return view.close(chat_dir())
+    end
+    return M.open()
+  end
   if tab_valid() and vim.api.nvim_get_current_tabpage() == state.tab then
     vim.cmd.stopinsert()
     vim.cmd.tabprevious()

@@ -109,6 +109,25 @@ eq(#vim.tbl_filter(function(m)
   return m[4].line_hl_group == "BudChatYou"
 end, painted) > 0, true, "your headings are painted")
 
+-- <Up> and <Down> in the prompt recall your messages
+local input = vim.fn.bufnr("bud://chat/proj") -- the conversation
+for _, b in ipairs(vim.api.nvim_list_bufs()) do
+  if vim.bo[b].buftype == "prompt" then
+    input = b
+  end
+end
+local function prompt_line()
+  return vim.api.nvim_buf_get_lines(input, -2, -1, false)[1]
+end
+view.recall(proj, -1)
+eq(prompt_line(), "› think", "the latest")
+view.recall(proj, -1)
+assert(prompt_line():find("^› replay "), prompt_line())
+view.recall(proj, 1)
+eq(prompt_line(), "› think", "forward again")
+view.recall(proj, 1)
+eq(prompt_line(), "› ", "past the newest, empty")
+
 -- an error says so
 turn("fail")
 assert(text():find("> ✗ scripted failure", 1, true), text())
@@ -164,6 +183,20 @@ term.toggle()
 eq(view.showing(proj), false, "<leader>ac closed it")
 require("bud.layout.panes")
 eq(require("bud.layout").providers.chat.available(), true, "the layout's chat pane is available")
+
+-- chat mode (<leader>ch) is bud's chat too, full screen, outside the project
+local chat = require("bud.ai.chat")
+chat.dir = function()
+  return tmp .. "/chat"
+end
+local tabs_before = #vim.api.nvim_list_tabpages()
+chat.toggle()
+local chat_root = vim.uv.fs_realpath(tmp .. "/chat")
+eq(view.showing(chat_root), true, "chat opened bud's chat")
+eq(#vim.api.nvim_list_tabpages(), tabs_before + 1, "full screen")
+vim.cmd.stopinsert()
+chat.toggle()
+eq(view.showing(chat_root), false, "and closed it")
 
 view._reset()
 agent._reset()

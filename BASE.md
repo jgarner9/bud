@@ -853,7 +853,7 @@ One task is one commit with its own check, and `just check` passes after each. B
 ### 1.2: bud's own chat, the kit on OpenClaw, delegation, a planning schema and docs mapped to code (D127, D138): not planned in detail
 
 - bud's own chat drawn from ACP events, in bud's colours and keys, in the pane and full screen (D138). Built as a first version: `bud.ai.view` (`<leader>av`, or `<leader>ac` with `ai.agent.chat_ui = "bud"`), a markdown conversation with streamed replies, a line per tool call with its state, OpenClaw's after-the-fact patch as a diff, and a prompt line. Since then: thoughts as one line, plans as a checklist, the history `session/load` replays, and completion of the backend's slash commands. Still to come: styling of its own beyond markdown's, images, and choosing a model or mode from it.
-- The kit teaches OpenClaw: skills and agents into the Gateway's workspace, so every surface has them.
+- The kit teaches OpenClaw. Checked in OpenClaw 2026.11.3's docs: its skills follow the AgentSkills `SKILL.md` format Claude Code uses, and it loads extra skill roots from `skills.load.extraDirs` (lowest precedence) besides `<state-dir>/skills` and the workspace's. So `bud kit sync` on a machine with a Gateway can add the bud-plugins skill dirs to `skills.load.extraDirs` (`openclaw config set`), recorded in the ledger, with nothing copied or converted. Skills are named by folder there (`code-style`, not `bud:code-style`), which is section 7's old plugin-names question again.
 - Delegation (JGA-260): on OpenClaw, a coder is an agent with its own model.
 - A planning schema and skills of Jason's own, in place of Superpowers (JGA-246, D120).
 - Docs: map each page to the code it describes, and fail a test when that code changes (JGA-261).

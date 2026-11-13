@@ -39,6 +39,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that f
 | `<leader>t` | Show or hide the terminal along the bottom. |
 | `<leader>ac` | Show or hide Claude Code's pane. |
 | `<leader>gs` | Show or hide the git pane (changed files, neo-tree). |
+| `<leader>av` | bud's own chat with the AI, on any backend: the conversation drawn in Neovim, a prompt under it (`<CR>` sends, `<C-c>` stops the reply). Pane or full screen by `ai.agent.chat_layout`; `ai.agent.chat_ui = "bud"` puts it on `<leader>ac` too. |
 | `<leader>aF` | The AI chat full screen, in a tab of its own, or back to the pane. `ai.agent.chat_layout = "full"` makes `<leader>ac` open it that way. |
 
 The panes are locked: only these keys open and close them. `:q`, `:close` or `:only` puts a pane straight back with an error naming its key, and a file opened while a pane has the cursor (`:e`, a picker, a buffer switch) opens in the editor window instead, with the same error. `:qa` and the `<leader>q` keys still quit bud.

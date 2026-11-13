@@ -207,6 +207,9 @@ end
 -- back, to the pane when ai.agent.chat_layout is "pane"
 function M.full(opts)
   opts = opts or {}
+  if require("bud.config").get("ai.agent.chat_ui", "tui") == "bud" then
+    return require("bud.ai.view").full(opts.root)
+  end
   local lock = require("bud.lock")
   local root = root_of(opts.root)
   local t = terms[root]
@@ -263,6 +266,10 @@ end
 -- toggle hides the current project's TUI when it's showing, else opens it,
 -- as a pane or full screen by ai.agent.chat_layout (D137)
 function M.toggle()
+  -- bud's own chat instead of a TUI (D138)
+  if require("bud.config").get("ai.agent.chat_ui", "tui") == "bud" then
+    return require("bud.ai.view").toggle()
+  end
   local t = terms[root_of()]
   if full_tab(t) or layout_choice() == "full" then
     return M.full()

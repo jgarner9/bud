@@ -63,6 +63,7 @@ M.sections = {
         choices = { "openclaw", "claude", "codex", "opencode", "custom" },
       },
       { key = "ai.agent.chat_layout", label = "Chat opens as", kind = "choice", choices = { "pane", "full" } },
+      { key = "ai.agent.chat_ui", label = "Chat drawn by", kind = "choice", choices = { "tui", "bud" } },
       { key = "ai.openclaw.url", label = "OpenClaw Gateway URL", kind = "text" },
       { key = "ai.openclaw.token_file", label = "Gateway token file", kind = "text" },
       { key = "ai.openclaw.agent", label = "OpenClaw agent", kind = "text" },

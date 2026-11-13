@@ -110,6 +110,9 @@ type Agent struct {
 	// how the AI chat opens (D137): "pane", the pull-out on the right, or
 	// "full", a tab of its own
 	ChatLayout string `json:"chat_layout"`
+	// what draws the AI chat (D138): "tui", the backend's own TUI, or
+	// "bud", bud's own chat drawn from the agent's events
+	ChatUI string `json:"chat_ui"`
 }
 
 // OpenClaw is the Gateway the openclaw backend reaches (D132)
@@ -193,7 +196,7 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
-		AI: AI{Backend: "openclaw", Agent: Agent{ChatLayout: "pane"}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
+		AI: AI{Backend: "openclaw", Agent: Agent{ChatLayout: "pane", ChatUI: "tui"}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
 			Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"}},
 	}
@@ -211,6 +214,7 @@ func (s Settings) Validate() error {
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
 		{"ai.backend", s.AI.Backend, Backends},
 		{"ai.agent.chat_layout", s.AI.Agent.ChatLayout, []string{"pane", "full"}},
+		{"ai.agent.chat_ui", s.AI.Agent.ChatUI, []string{"tui", "bud"}},
 		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},
 		{"ai.claude.config", s.AI.Claude.Config, []string{"home", "bud"}},
 		{"ai.work.where", s.AI.Work.Where, []string{"local", "cloud"}},

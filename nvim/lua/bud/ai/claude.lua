@@ -912,6 +912,7 @@ function M.setup()
   require("bud.statusline").add(M.statusline)
   require("bud.ai.actions").setup()
   require("bud.ai.issue").setup()
+  require("bud.ai.view").setup()
 
   local group = vim.api.nvim_create_augroup("bud.ai.claude", { clear = true })
   vim.api.nvim_create_autocmd("VimLeavePre", {

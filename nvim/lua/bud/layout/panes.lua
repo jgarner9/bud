@@ -57,11 +57,18 @@ function M.toggle_git()
   git_open({ side = "right" })
 end
 -- chat is the project's Claude Code TUI (D48)
+-- (or bud's own chat, ai.agent.chat_ui = "bud", D138)
+local function own_chat()
+  return require("bud.config").get("ai.agent.chat_ui", "tui") == "bud"
+end
 layout.register("chat", {
   available = function()
-    return require("bud.ai.term").available()
+    return own_chat() or require("bud.ai.term").available()
   end,
   open = function(pane)
+    if own_chat() then
+      return require("bud.ai.view").open({ layout = "pane", focus = false })
+    end
     return require("bud.ai.term").open({ side = pane.side, focus = false })
   end,
 })

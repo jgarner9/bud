@@ -101,32 +101,42 @@ func TestCheckOpenClawLocal(t *testing.T) {
 	t.Cleanup(func() { openclawConfig = orig })
 	openclawConfig = func() string { return cfgFile }
 
-	dialed := fakeTools(t, []string{"openclaw"}, "127.0.0.1:18789")
+	dialed := fakeTools(t, []string{"openclaw"})
+	healthy, why := true, ""
+	origHealth := gatewayHealth
+	t.Cleanup(func() { gatewayHealth = origHealth })
+	asked := 0
+	gatewayHealth = func(bin string) (bool, string) { asked++; return healthy, why }
+
+	// the CLI's own Gateway gets a real health check, not a dial
 	st := Check(settings(nil), false)
-	if !st.Ready() || len(st.Problems) != 0 || !st.Reachable {
-		t.Fatalf("local gateway: %+v", st)
+	if !st.Ready() || len(st.Problems) != 0 || !st.Reachable || asked != 1 || len(*dialed) != 0 {
+		t.Fatalf("local gateway: %+v, health asked %d, dialed %v", st, asked, *dialed)
 	}
-	if st.Version != "openclaw 1.2.3" || st.Bin != "/fake/bin/openclaw" {
-		t.Errorf("version %q, bin %q", st.Version, st.Bin)
-	}
-	if !reflect.DeepEqual(*dialed, []string{"127.0.0.1:18789"}) {
-		t.Errorf("dialed %v, want this machine's default", *dialed)
+	if st.Version != "openclaw 1.2.3" || st.Bin != "/fake/bin/openclaw" || st.Gateway != "127.0.0.1:18789" {
+		t.Errorf("version %q, bin %q, gateway %q", st.Version, st.Bin, st.Gateway)
 	}
 
-	// the port OpenClaw is set to
+	// the port OpenClaw is set to, and a wrong token in OpenClaw's words
 	os.WriteFile(cfgFile, []byte(`{"gateway":{"port":19001}}`), 0o600)
-	*dialed = nil
-	Check(settings(nil), false)
-	if !reflect.DeepEqual(*dialed, []string{"127.0.0.1:19001"}) {
-		t.Errorf("dialed %v, want the configured port", *dialed)
+	healthy, why = false, "unauthorized: gateway token mismatch"
+	st = Check(settings(nil), false)
+	if st.Gateway != "127.0.0.1:19001" || st.Reachable || len(st.Problems) != 1 || !strings.Contains(st.Problems[0].What, "token mismatch") {
+		t.Errorf("unhealthy: %+v", st)
 	}
 
-	// the CLI's remote Gateway
+	// the CLI's remote Gateway is named
 	os.WriteFile(cfgFile, []byte(`{"gateway":{"remote":{"url":"wss://home.tail.ts.net:18789"}}}`), 0o600)
+	if st := Check(settings(nil), true); st.Gateway != "home.tail.ts.net:18789" {
+		t.Errorf("remote: %q", st.Gateway)
+	}
+
+	// an explicit URL is only dialed: the CLI would want its token on argv
+	asked = 0
 	*dialed = nil
-	st = Check(settings(nil), false)
-	if !reflect.DeepEqual(*dialed, []string{"home.tail.ts.net:18789"}) || st.Reachable {
-		t.Errorf("dialed %v (reachable %v), want the remote, down", *dialed, st.Reachable)
+	Check(settings(func(s *config.Settings) { s.AI.OpenClaw.URL = "ws://127.0.0.1:18789" }), false)
+	if asked != 0 || !reflect.DeepEqual(*dialed, []string{"127.0.0.1:18789"}) {
+		t.Errorf("with a URL: health asked %d, dialed %v", asked, *dialed)
 	}
 }
 

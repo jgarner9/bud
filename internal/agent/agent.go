@@ -144,13 +144,40 @@ func Check(s config.Settings, quick bool) Status {
 		}
 	}
 	if st.Backend == "openclaw" {
-		checkOpenClaw(&st, s.AI.OpenClaw, quick)
+		checkOpenClaw(&st, s.AI.OpenClaw, quick, st.Bin)
 	}
 	return st
 }
 
+// gatewayHealth asks the openclaw CLI about the Gateway it reaches with no
+// --url, which proves the token too: ok, or OpenClaw's reason it isn't.
+// With --url it wants the token on its command line, where any user's ps
+// would show it, so bud only asks this of the CLI's own Gateway; swappable
+var gatewayHealth = func(bin string) (bool, string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	out, _ := exec.CommandContext(ctx, bin, "gateway", "health", "--json", "--timeout", "8000").Output()
+	var h struct {
+		OK    bool `json:"ok"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(out, &h) != nil {
+		return false, "openclaw gateway health gave no answer"
+	}
+	if h.OK {
+		return true, ""
+	}
+	if h.Error != nil {
+		line, _, _ := strings.Cut(h.Error.Message, "\n")
+		return false, line
+	}
+	return false, "the Gateway isn't healthy"
+}
+
 // checkOpenClaw checks the Gateway settings (D132)
-func checkOpenClaw(st *Status, oc config.OpenClaw, quick bool) {
+func checkOpenClaw(st *Status, oc config.OpenClaw, quick bool, bin string) {
 	if f := oc.TokenFile; f != "" {
 		path := expandHome(f)
 		info, err := os.Stat(path)
@@ -195,6 +222,18 @@ func checkOpenClaw(st *Status, oc config.OpenClaw, quick bool) {
 	}
 	st.Gateway = net.JoinHostPort(u.Hostname(), port)
 	if quick {
+		return
+	}
+	if oc.URL == "" && bin != "" {
+		// the CLI's own Gateway: a real health check, token and all
+		if ok, why := gatewayHealth(bin); ok {
+			st.Reachable = true
+		} else {
+			st.Problems = append(st.Problems, Problem{
+				What: "the Gateway at " + st.Gateway + " isn't answering bud: " + why,
+				Fix:  "start it (openclaw gateway, or its service), or check its token (openclaw gateway auth-token)",
+			})
+		}
 		return
 	}
 	if err := dial(st.Gateway); err != nil {

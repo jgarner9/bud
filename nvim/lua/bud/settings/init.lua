@@ -64,6 +64,8 @@ M.sections = {
       },
       { key = "ai.agent.chat_layout", label = "Chat opens as", kind = "choice", choices = { "pane", "full" } },
       { key = "ai.agent.chat_ui", label = "Chat drawn by", kind = "choice", choices = { "tui", "bud" } },
+      { key = "ai.agent.autostart", label = "Start with a project", kind = "bool" },
+      { key = "ai.agent.idle_minutes", label = "Stop idle agents after (min)", kind = "number" },
       { key = "ai.openclaw.url", label = "OpenClaw Gateway URL", kind = "text" },
       { key = "ai.openclaw.token_file", label = "Gateway token file", kind = "text" },
       { key = "ai.openclaw.agent", label = "OpenClaw agent", kind = "text" },

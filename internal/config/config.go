@@ -113,6 +113,10 @@ type Agent struct {
 	// what draws the AI chat (D138): "tui", the backend's own TUI, or
 	// "bud", bud's own chat drawn from the agent's events
 	ChatUI string `json:"chat_ui"`
+	// start the project's agent when it opens; off, on first use
+	Autostart bool `json:"autostart"`
+	// an agent nothing has used for this long is stopped (D49); 0 never
+	IdleMinutes int `json:"idle_minutes"`
 }
 
 // OpenClaw is the Gateway the openclaw backend reaches (D132)
@@ -196,7 +200,7 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
-		AI: AI{Backend: "openclaw", Agent: Agent{ChatLayout: "pane", ChatUI: "tui"}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
+		AI: AI{Backend: "openclaw", Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
 			Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"}},
 	}

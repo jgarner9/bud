@@ -793,6 +793,12 @@ function M.share(path, first, last)
   vim.notify(("bud: shared %s with %s"):format(where, M.backend()))
 end
 
+-- autostart says whether a project's agent starts when it opens
+-- (ai.agent.autostart); off, it starts on the first use
+function M.autostart()
+  return cfg().get("ai.agent.autostart", true) ~= false
+end
+
 -- setup starts the agent for how bud was opened, like bud.ai.claude's (the
 -- 4.2 table): a project dir, or files from their root, and nothing for bare
 -- bud; it adds the status line and the idle reap
@@ -926,7 +932,7 @@ function M.setup()
   })
   local group = vim.api.nvim_create_augroup("bud.ai.agent", { clear = true })
   vim.api.nvim_create_autocmd("VimLeavePre", { group = group, desc = "Stop the AI agents", callback = M.stop_all })
-  local minutes = tonumber(cfg().get("ai.claude.idle_minutes", 30)) or 30
+  local minutes = tonumber(cfg().get("ai.agent.idle_minutes", 30)) or 30
   if minutes > 0 then
     idle_timer = idle_timer or vim.uv.new_timer()
     idle_timer:start(
@@ -937,7 +943,7 @@ function M.setup()
       end)
     )
   end
-  if vim.env.BUD_OPEN == "project" or vim.fn.argc() > 0 then
+  if M.autostart() and (vim.env.BUD_OPEN == "project" or vim.fn.argc() > 0) then
     M.session()
   end
 end

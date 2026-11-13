@@ -920,13 +920,13 @@ function M.setup()
     desc = "Stop the Claude Code sessions",
     callback = M.stop_all,
   })
-  if not cfg.autostart then
-    return
-  end
-  -- another backend (D131): its ACP session starts instead, and Claude Code
-  -- only when something asks for it
+  -- another backend (D131): its ACP session starts instead (by
+  -- ai.agent.autostart), and Claude Code only when something asks for it
   if require("bud.ai.agent").backend() ~= "claude" then
     require("bud.ai.agent").setup()
+    return
+  end
+  if not cfg.autostart then
     return
   end
   local minutes = tonumber(cfg.idle_minutes) or 30
@@ -976,8 +976,11 @@ end
 -- opened starts the session for a project opened from inside bud (the
 -- dashboard, <leader>p), unless ai.claude.autostart is off
 function M.opened(root)
-  if settings().autostart and require("bud.ai.agent").backend() ~= "claude" then
-    require("bud.ai.agent").session(root)
+  local agent = require("bud.ai.agent")
+  if agent.backend() ~= "claude" then
+    if agent.autostart() then
+      agent.session(root)
+    end
   elseif settings().autostart then
     M.session(root)
   end

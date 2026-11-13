@@ -70,6 +70,8 @@ end
 local s = agent.session(proj)
 eq(s.status, "missing", "missing")
 assert(s.why:find("isn't installed", 1, true), s.why)
+eq(agent.send("too early", { root = proj }), false, "a send fails")
+eq(#s.queue, 0, "and isn't kept for later")
 agent._reset()
 
 -- the fake agent from here on

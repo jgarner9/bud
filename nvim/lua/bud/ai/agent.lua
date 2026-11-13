@@ -650,6 +650,11 @@ function M.send(text, opts)
   if not (s.conn and s.conn:running()) and s.status ~= "starting" then
     start(s)
   end
+  -- a backend that can't start takes nothing: a queued message would go out
+  -- whenever it next starts, long after it mattered
+  if s.status == "missing" or s.status == "error" then
+    return false
+  end
   -- a selection shared since the last message goes with this one
   if s.shared and not opts.selection then
     opts = vim.tbl_extend("force", opts, { selection = s.shared })
@@ -658,7 +663,7 @@ function M.send(text, opts)
   table.insert(s.queue, { text = text, opts = opts })
   s.last_used = now()
   flush(s)
-  return s.status ~= "missing" and s.status ~= "error"
+  return true
 end
 
 -- interrupt stops the turn in progress, keeping the session; an open

@@ -120,6 +120,9 @@ type OpenClaw struct {
 	// a file holding the Gateway token, kept out of config.json and
 	// process listings; empty uses the CLI's own credentials
 	TokenFile string `json:"token_file"`
+	// the OpenClaw agent bud's sessions run as: each project gets the
+	// Gateway session agent:<this>:bud:<project>
+	Agent string `json:"agent"`
 }
 
 // Custom is an ACP agent bud doesn't know by name (ai.backend = "custom")
@@ -190,7 +193,7 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
-		AI: AI{Backend: "openclaw", Agent: Agent{ChatLayout: "pane"}, Custom: Custom{Command: []string{}},
+		AI: AI{Backend: "openclaw", Agent: Agent{ChatLayout: "pane"}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
 			Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"}},
 	}

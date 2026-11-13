@@ -26,11 +26,18 @@ Branch: `bud/upbeat-wright-g2fwv6`. Kept up to date as the work goes; the last s
 - **Chat full screen:** `<leader>aF` moves the AI chat into a tab of its own and back. `ai.agent.chat_layout = "full"` makes `<leader>ac` open it that way. Tested in `claude_term_test.lua`.
 - **Settings:** `ai.backend` (default `openclaw`), `ai.agent.chat_layout`, `ai.openclaw.url`, `ai.openclaw.token_file` and `ai.custom.command`, with validation and docs.
 - **`bud.ai.acp`**, the ACP v1 client, plus a fake ACP agent (a headless nvim script) for tests. Test: `tests/lua/acp_test.lua`. The protocol notes are in `docs/internals/acp.md`.
+- **`bud.ai.agent`**, the session layer with `bud.ai.claude`'s calls and events. It streams replies, queues sends, handles permissions with their diffs, reads and writes files through open buffers, interrupts, recovers from crashes, and runs keyed sessions and the idle reap. Nothing starts it yet. Test: `tests/lua/agent_test.lua`.
+- **`bud ai status [--json]` / `bud ai setup`**, plus the doctor's "AI backend" check (`internal/agent`). Setup installs a missing backend with npm, after asking, and asks for the Gateway URL and token file.
+- **Checked against a real OpenClaw Gateway.** I ran OpenClaw 2026.11.3 on loopback with a scripted local model (no real provider, nothing of yours) and drove the real `openclaw acp` with bud's own client. Prompts, streaming, cancel, edits, exec and approvals all work. Those streams are now test fixtures (`tests/fixtures/openclaw/`), and the tests replay them through the whole stack. What I learned:
+  - Edits run without asking, and the patch arrives afterwards. D134 holds, and bud now picks that patch up for review.
+  - Exec asks only when the Gateway's `tools.exec.mode` is `ask`. The default, `full`, never asks.
+  - `--session <key>` makes a per-project session and continues it on the next run, so I built D139: one Gateway session per project.
 
 ## Decisions waiting on you
 
-1. **One OpenClaw session per project, or one shared** (BASE.md 7.1). I recommend one per project. For now bud lets `openclaw acp` make its own isolated session each time, because I couldn't confirm against a real Gateway whether `--session-label` creates a missing label.
-2. **Where the Gateway token lives** (7.2). I recommend a mode-600 file named by `ai.openclaw.token_file`.
+1. **One OpenClaw session per project:** I decided this by default (D139) after the real-Gateway test confirmed it works. The key is `agent:main:bud:<project>-<hash>`, and `ai.openclaw.agent` changes the agent. Say if you'd rather have one shared session.
+2. **Where the Gateway token lives** (BASE.md 7.1). I recommend a mode-600 file named by `ai.openclaw.token_file`.
+5. **Should OpenClaw ask before running commands** (7.2)? It's the Gateway's `tools.exec.mode`, and the setting applies to every surface. I recommend `ask` (`openclaw config set tools.exec.mode ask` on the server), which is how bud has worked so far.
 3. **Claude subscription through OpenClaw.** Reports from April 2026 say Anthropic stopped third-party tools drawing on the Claude subscription bucket, which conflicts with OpenClaw's docs on `claude-cli` reuse. Check Anthropic's current terms before relying on it. ChatGPT Plus through Codex OAuth looks solid.
 4. **The error on a redirected buffer.** You asked for an error when something tries to change a pane. I raise the error *and* open the file in the editor window, so nothing you picked is lost. Say if you'd rather it only refused.
 

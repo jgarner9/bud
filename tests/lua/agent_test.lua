@@ -41,6 +41,14 @@ eq(
   { "openclaw", "acp", "--url", "wss://home.example.ts.net:18789", "--token-file", "/secrets/gateway-token" },
   "openclaw with a Gateway"
 )
+-- with a root, one Gateway session per project (D132)
+local with_root = agent.argv("openclaw", get, "/home/me/code/My Proj")
+eq(with_root[7], "--session", "a session flag")
+assert(with_root[8]:match("^agent:main:bud:my%-proj%-%x%x%x%x%x%x$"), with_root[8])
+eq(agent.session_key("/a/api") ~= agent.session_key("/b/api"), true, "same name, different dirs, different keys")
+settings["ai.openclaw.agent"] = "coder"
+assert(agent.argv("openclaw", get, "/x/y")[8]:find("^agent:coder:bud:y%-"), "the agent id from config")
+settings["ai.openclaw.agent"] = nil
 eq(agent.argv("claude", get), { "claude-agent-acp" }, "claude")
 eq(agent.argv("codex", get), { "codex-acp" }, "codex")
 eq(agent.argv("opencode", get), { "opencode", "acp" }, "opencode")
@@ -242,6 +250,52 @@ agent.reap(30, vim.uv.hrtime() / 1e6 + 31 * 60 * 1000)
 wait(function()
   return s.status == "stopped"
 end, "reaped")
+
+-- turns recorded from a real OpenClaw Gateway through openclaw acp
+-- (tests/fixtures/openclaw), replayed by the fake
+local fixtures = vim.fn.getcwd() .. "/tests/fixtures/openclaw/"
+events = {}
+agent.session(proj)
+wait(function()
+  return s.status == "ready"
+end, "ready for the replays")
+local function replay(name)
+  local before = #named("done")
+  agent.send("replay " .. fixtures .. name .. ".log", { root = proj })
+  wait(function()
+    return #named("done") > before
+  end, "the " .. name .. " replay")
+end
+
+replay("hello")
+eq(named("message")[#named("message")].text, "Hello from the scripted model.", "openclaw's streamed reply")
+
+-- an edit runs without asking, and its patch comes afterwards (D134)
+replay("edit")
+eq(named("tool_use")[#named("tool_use")].kind, "edit", "an edit")
+local upd = named("tool_update")[#named("tool_update")]
+eq(upd.status, "completed", "edit completed")
+assert(upd.patch and upd.patch:find("+gamma", 1, true), vim.inspect(upd.patch))
+eq(upd.output, "Successfully replaced 1 block(s) in notes.txt.", "its output text")
+
+-- exec under tools.exec.mode = "ask": a permission request with OpenClaw's options
+local options
+agent.permission = function(req, respond)
+  options = vim.tbl_map(function(o)
+    return o.kind .. "=" .. o.optionId
+  end, req.options)
+  respond("allow-once")
+end
+replay("perm-allow")
+eq(options, { "allow_once=allow-once", "reject_once=deny" }, "openclaw's options")
+eq(named("tool_update")[#named("tool_update")].status, "completed", "allowed exec ran")
+agent.permission = function(_, respond)
+  respond("deny")
+end
+replay("perm-reject")
+upd = named("tool_update")[#named("tool_update")]
+eq(upd.status, "failed", "denied exec failed")
+assert(upd.output:find("user-denied", 1, true), upd.output)
 
 -- the status line names the backend
 vim.cmd.cd(proj)

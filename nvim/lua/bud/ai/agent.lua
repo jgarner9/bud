@@ -70,9 +70,18 @@ function M.backend()
   return cfg().get("ai.backend", "openclaw")
 end
 
--- argv is the command line that starts backend as an ACP agent, or nil and
--- why it can't. get reads a setting (bud.config.get)
-function M.argv(backend, get)
+-- session_key is the OpenClaw Gateway session bud uses for root: one per
+-- project, kept across restarts, so the web UI, the apps and openclaw tui see
+-- the same thread. The name is the dir's, with a hash of its path so two
+-- projects of one name stay apart
+function M.session_key(root, agent_id)
+  local name = vim.fs.basename(root):lower():gsub("[^%w%-_.]", "-")
+  return ("agent:%s:bud:%s-%s"):format(agent_id or "main", name, vim.fn.sha256(root):sub(1, 6))
+end
+
+-- argv is the command line that starts backend as an ACP agent for root, or
+-- nil and why it can't. get reads a setting (bud.config.get)
+function M.argv(backend, get, root)
   get = get or function(key, default)
     return cfg().get(key, default)
   end
@@ -84,6 +93,9 @@ function M.argv(backend, get)
     end
     if token ~= "" then
       vim.list_extend(argv, { "--token-file", vim.fn.expand(token) })
+    end
+    if root then
+      vim.list_extend(argv, { "--session", M.session_key(root, get("ai.openclaw.agent", "main")) })
     end
     return argv
   elseif backend == "claude" then
@@ -103,8 +115,8 @@ function M.argv(backend, get)
 end
 
 -- M.command lets tests swap the backend's command line for the fake agent's
-M.command = function(_root)
-  return M.argv(M.backend())
+M.command = function(root)
+  return M.argv(M.backend(), nil, root)
 end
 
 local function root_of(root)
@@ -190,6 +202,15 @@ M.permission = function(req, respond)
   end)
 end
 
+-- patch is the unified diff a finished edit reports, when the backend says
+-- what it changed only afterwards: OpenClaw puts it in rawOutput.details
+-- (D134: review after the write)
+function M.patch(update)
+  local out = type(update.rawOutput) == "table" and update.rawOutput or {}
+  local details = type(out.details) == "table" and out.details or {}
+  return type(details.patch) == "string" and details.patch or nil
+end
+
 local function tool_name(call)
   return call.title or call.name or call.kind or "a tool"
 end
@@ -219,7 +240,16 @@ function M.handle(s, update)
       call[k] = v
     end
     s.tools[update.toolCallId] = call
-    emit("tool_update", { id = update.toolCallId, status = call.status, name = tool_name(call), raw = call }, s)
+    emit("tool_update", {
+      id = update.toolCallId,
+      status = call.status,
+      name = tool_name(call),
+      kind = call.kind,
+      output = acp.text(update.content),
+      diffs = acp.diffs(call),
+      patch = M.patch(update),
+      raw = call,
+    }, s)
   elseif kind == "plan" then
     emit("plan", { entries = update.entries or {} }, s)
   elseif kind == "available_commands_update" then

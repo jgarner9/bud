@@ -11,6 +11,9 @@
 --   slow         one chunk, then waits for session/cancel and stops: cancelled
 --   fail         answers the prompt with a JSON-RPC error
 --   crash        exits with status 3 mid-turn
+--   replay <log> plays a turn recorded from a real agent
+--                (tests/fixtures/openclaw/*.log): its updates and requests,
+--                then its stop reason
 --
 -- Everything it receives is appended to $FAKE_ACP_LOG, one JSON line each.
 -- FAKE_ACP_LOAD=1 advertises loadSession.
@@ -151,6 +154,27 @@ local function turn(msg)
     end
   elseif word == "fail" then
     return nil, { code = -32000, message = "scripted failure" }
+  elseif word == "replay" then
+    -- "<-N" lines are the agent's notifications, "<-R" its requests and
+    -- "<-A" the answers bud got; only what follows the prompt is played
+    local playing, stop = false, "end_turn"
+    for line in io.lines(rest) do
+      local dir, json = line:match("^(%S+) (.*)$")
+      local m = json and vim.json.decode(json, { luanil = { object = true, array = true } })
+      if dir == "->" and m.method == "session/prompt" then
+        playing = true
+      elseif playing and dir == "<-N" then
+        m.params.sessionId = sid
+        send({ method = m.method, params = m.params })
+      elseif playing and dir == "<-R" then
+        m.params.sessionId = sid
+        ask(m.method, m.params)
+      elseif playing and dir == "<-A" and m.r and m.r.stopReason then
+        stop = m.r.stopReason
+        break
+      end
+    end
+    return { stopReason = stop }
   elseif word == "crash" then
     say(sid, "about to crash")
     os.exit(3)

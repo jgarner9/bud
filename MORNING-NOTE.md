@@ -38,7 +38,7 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
 14. `bud install` on OpenClaw offers `bud ai setup` instead of Claude Code and clod. The doctor's Claude check no longer complains on other backends.
 15. **`:BudAgent [status|restart|stop|option]`**: the backend's session at a glance, plus its settings (OpenClaw's `thought_level`, `fast_mode` and the rest), checked against the real Gateway. Errors now carry OpenClaw's own reason instead of a bare "Internal error".
 16. **bud's chat is themeable:** `BudChatYou`, `BudChatAgent`, `BudChatTool`, `BudChatToolDone`, `BudChatToolFailed`, `BudChatThinking` and `BudChatPrompt` are highlight groups with default links. It also shows thinking as one line, plans as a checklist, and completes slash commands with `<C-x><C-o>`.
-17. **A second real backend checked:** last night's OpenCode 2.2.7 through `opencode acp`, driven by bud's chat with the same scripted model. Session, streaming and an edit in the project all work, and bud's chat now shows the standard ACP diff OpenCode sends. The protocol layer isn't tied to OpenClaw.
+17. **A second real backend checked:** last night's OpenCode 2.2.7 through `opencode acp`, driven by bud's chat with the same scripted model. Session, streaming and an edit in the project all work, and bud's chat now shows the standard ACP diff OpenCode sends. With OpenCode set to ask before edits, its permission request carried the diff, so the review-before-write path (D134) is proven on a real backend too. The protocol layer isn't tied to OpenClaw.
 18. The README and troubleshooting page mention the backend. `just check` (everything CI runs, smoke included) passed after item 14.
 
 ## Decisions waiting on you

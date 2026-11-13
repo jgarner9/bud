@@ -33,6 +33,48 @@ end
 
 local marks = { pending = "○", in_progress = "◐", completed = "✓", failed = "✗" }
 
+-- The chat's highlight groups, each a default link a colorscheme or your
+-- config can replace (:hi BudChatYou guifg=...), so it looks how you want
+M.highlights = {
+  BudChatYou = "Title",
+  BudChatAgent = "Function",
+  BudChatTool = "Comment",
+  BudChatToolDone = "DiagnosticOk",
+  BudChatToolFailed = "DiagnosticError",
+  BudChatThinking = "NonText",
+  BudChatPrompt = "Question",
+}
+
+local ns = vim.api.nvim_create_namespace("bud.ai.view")
+
+-- group is the highlight group for one line of the conversation, or nil
+function M.group(line)
+  if line == "## you" then
+    return "BudChatYou"
+  elseif line:match("^## ") then
+    return "BudChatAgent"
+  elseif line:match("^> thinking") then
+    return "BudChatThinking"
+  elseif line:match("^> ✓ ") then
+    return "BudChatToolDone"
+  elseif line:match("^> ✗ ") then
+    return "BudChatToolFailed"
+  elseif line:match("^> ") then
+    return "BudChatTool"
+  end
+end
+
+-- paint colours lines first..last (1-based) of the conversation
+local function paint(buf, first, last)
+  vim.api.nvim_buf_clear_namespace(buf, ns, first - 1, last)
+  for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, first - 1, last, false)) do
+    local group = M.group(line)
+    if group then
+      vim.api.nvim_buf_set_extmark(buf, ns, first + i - 2, 0, { line_hl_group = group, priority = 200 })
+    end
+  end
+end
+
 -- append adds lines to the conversation; text joins the last line when
 -- joining, as a streamed reply does
 local function append(v, lines, joining)
@@ -41,16 +83,20 @@ local function append(v, lines, joining)
     return
   end
   vim.bo[buf].modifiable = true
+  local first
   if joining then
     local last = vim.api.nvim_buf_line_count(buf)
     local cur = vim.api.nvim_buf_get_lines(buf, last - 1, last, false)[1] or ""
     lines = vim.deepcopy(lines)
     lines[1] = cur .. lines[1]
+    first = last
     vim.api.nvim_buf_set_lines(buf, last - 1, last, false, lines)
   else
+    first = vim.api.nvim_buf_line_count(buf) + 1
     vim.api.nvim_buf_set_lines(buf, -1, -1, false, lines)
   end
   vim.bo[buf].modifiable = false
+  paint(buf, first, vim.api.nvim_buf_line_count(buf))
   -- follow the end in every window showing it, unless the cursor is elsewhere
   for _, win in ipairs(vim.fn.win_findbuf(buf)) do
     if win ~= vim.api.nvim_get_current_win() then
@@ -66,6 +112,7 @@ local function set_line(v, n, text)
   vim.bo[v.log].modifiable = true
   vim.api.nvim_buf_set_lines(v.log, n - 1, n, false, { text })
   vim.bo[v.log].modifiable = false
+  paint(v.log, n, n)
 end
 
 local function title(v)
@@ -304,6 +351,7 @@ function M.open(opts)
       vim.api.nvim_set_option_value(opt, value, { scope = "local", win = w })
     end
   end
+  vim.wo[input_win].winhighlight = "Normal:BudChatPrompt"
   v.wins = { log_win, input_win }
   v.layout = layout
   redraw_title(v)
@@ -402,6 +450,9 @@ function M.lines(root)
 end
 
 function M.setup()
+  for group, link in pairs(M.highlights) do
+    vim.api.nvim_set_hl(0, group, { link = link, default = true })
+  end
   vim.keymap.set("n", "<leader>av", M.toggle, { desc = "Chat in bud (any backend)" })
 end
 

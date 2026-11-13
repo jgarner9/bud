@@ -93,6 +93,19 @@ eq(
   "slash commands"
 )
 
+-- each part of the conversation has its own highlight group, to restyle
+view.setup()
+eq(view.group("## you"), "BudChatYou", "your heading")
+eq(view.group("## openclaw"), "BudChatAgent", "the agent's heading")
+eq(view.group("> ✓ Edit x"), "BudChatToolDone", "a finished tool")
+eq(view.group("> thinking…"), "BudChatThinking", "thinking")
+eq(view.group("plain text"), nil, "the reply itself")
+eq(vim.api.nvim_get_hl(0, { name = "BudChatYou" }).link, "Title", "a default link")
+local painted = vim.api.nvim_buf_get_extmarks(vim.fn.bufnr("bud://chat/proj"), -1, 0, -1, { details = true })
+eq(#vim.tbl_filter(function(m)
+  return m[4].line_hl_group == "BudChatYou"
+end, painted) > 0, true, "your headings are painted")
+
 -- an error says so
 turn("fail")
 assert(text():find("> ✗ scripted failure", 1, true), text())

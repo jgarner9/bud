@@ -209,7 +209,7 @@ func TestKitCore(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	dir := filepath.Join(t.TempDir(), "claude")
 	t.Setenv("CLAUDE_CONFIG_DIR", dir)
-	fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"core": "bud-plugins/core.md"}`)}})
+	fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"marketplaces": {"bud-plugins": "x"}, "account": {"instructions": "bud-plugins/core.md"}}`)}})
 
 	if err := kitCore(nil, false); err == nil || !strings.Contains(err.Error(), "bud kit sync") {
 		t.Fatalf("no checkout: %v", err)

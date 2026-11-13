@@ -224,10 +224,10 @@ func claudeDir() string {
 // a checkout of it
 func checkCore(p *paths.Paths, dir string) (Result, bool) {
 	k, err := kit.Load(kitFS())
-	if err != nil || k.Core == "" {
+	if err != nil || k.Account.Instructions == "" {
 		return Result{}, false
 	}
-	c, err := kit.ReadCore(k.Core, dir, p.CorePasted())
+	c, err := kit.ReadCore(k.Account.Instructions, dir, p.CorePasted())
 	switch {
 	case err != nil:
 		return Result{Name: "core.md", Status: Warn, Detail: err.Error()}, true
@@ -247,7 +247,7 @@ func checkCore(p *paths.Paths, dir string) (Result, bool) {
 // instructions. A listed server only counts once it connects (JGA-180)
 func checkClaudeSetup(dir string) (Result, bool) {
 	k, err := kit.Load(kitFS())
-	if err != nil || (len(k.ExpectedMCP) == 0 && k.Core == "") {
+	if err != nil || (len(k.ExpectedServers()) == 0 && k.Account.Instructions == "") {
 		return Result{}, false
 	}
 	r := Result{Name: "claude setup"}
@@ -259,7 +259,7 @@ func checkClaudeSetup(dir string) (Result, bool) {
 	servers, multi := parseMCPList(out)
 
 	var missing, failed, auth []string
-	for _, name := range k.ExpectedMCP {
+	for _, name := range k.ExpectedServers() {
 		statuses, ok := servers[mcpKey(name)]
 		if !ok {
 			missing = append(missing, name)
@@ -280,7 +280,7 @@ func checkClaudeSetup(dir string) (Result, bool) {
 			failed = append(failed, problem)
 		}
 	}
-	if k.Core != "" && !hasCoreRule(dir, k.Core) {
+	if k.Account.Instructions != "" && !hasCoreRule(dir, k.Account.Instructions) {
 		missing = append(missing, "the core.md rule")
 	}
 	if len(missing)+len(failed)+len(auth) == 0 {

@@ -690,10 +690,10 @@ func setMarker(path string) error {
 // into claude.ai (JGA-179). A sync is when the checkout it reads moves on
 func remindCore(k *kit.Kit, env kit.Env) {
 	p, err := paths.Resolve()
-	if err != nil || k.Core == "" {
+	if err != nil || k.Account.Instructions == "" {
 		return
 	}
-	if c, err := kit.ReadCore(k.Core, env.ClaudeDir, p.CorePasted()); err == nil && c.Path != "" && !c.Pasted {
+	if c, err := kit.ReadCore(k.Account.Instructions, env.ClaudeDir, p.CorePasted()); err == nil && c.Path != "" && !c.Pasted {
 		fmt.Println(kit.CoreReminder + ".")
 	}
 }
@@ -711,12 +711,12 @@ func kitCore(args []string, pasted bool) error {
 	if err != nil {
 		return err
 	}
-	c, err := kit.ReadCore(k.Core, env.ClaudeDir, p.CorePasted())
+	c, err := kit.ReadCore(k.Account.Instructions, env.ClaudeDir, p.CorePasted())
 	if err != nil {
 		return err
 	}
 	if c.Path == "" {
-		return fmt.Errorf("Claude Code has no %s yet: run bud kit sync", k.Core)
+		return fmt.Errorf("Claude Code has no %s yet: run bud kit sync", k.Account.Instructions)
 	}
 	if !pasted {
 		fmt.Print(c.Text)

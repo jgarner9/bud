@@ -543,7 +543,7 @@ func TestCheckCore(t *testing.T) {
 	p := &paths.Paths{State: t.TempDir()}
 	orig := kitFS
 	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"core": "bud-plugins/core.md"}`)}}
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"marketplaces": {"bud-plugins": "x"}, "account": {"instructions": "bud-plugins/core.md"}}`)}}
 	}
 	t.Cleanup(func() { kitFS = orig })
 
@@ -568,7 +568,7 @@ func TestCheckCore(t *testing.T) {
 func TestCheckClaudeSetup(t *testing.T) {
 	origFS, origList := kitFS, mcpList
 	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"core": "bud-plugins/core.md", "expected_mcp": ["basic-memory", "context7", "linear"]}`)}}
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"marketplaces": {"bud-plugins": "x"}, "account": {"instructions": "bud-plugins/core.md"}, "servers": {` + fakeServers("basic-memory", "context7", "linear") + `}}`)}}
 	}
 	t.Cleanup(func() { kitFS, mcpList = origFS, origList })
 	dir := t.TempDir()
@@ -615,7 +615,7 @@ MCP config diagnostics ⚠
 func TestCheckClaudeSetupWarnsAboutServersThatDontConnect(t *testing.T) {
 	origFS, origList := kitFS, mcpList
 	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"expected_mcp": ["basic-memory", "context7", "linear", "serena"]}`)}}
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"servers": {` + fakeServers("basic-memory", "context7", "linear", "serena") + `}}`)}}
 	}
 	t.Cleanup(func() { kitFS, mcpList = origFS, origList })
 	dir := t.TempDir()
@@ -829,4 +829,14 @@ func TestNvimVersionRunsAsBud(t *testing.T) {
 	if got, _ := os.ReadFile(record); string(got) != "bud" {
 		t.Fatalf("ran with NVIM_APPNAME=%q, want bud", got)
 	}
+}
+
+// fakeServers is kit.json server entries, on by default in full mode, for names
+func fakeServers(names ...string) string {
+	entries := make([]string, len(names))
+	for i, n := range names {
+		entries[i] = `"` + n + `": {"description": "` + n + `", "mcp": {"type": "http", "url": "https://` + n + `.example/mcp"}, "modes": ["full"]}`
+	}
+
+	return strings.Join(entries, ", ")
 }

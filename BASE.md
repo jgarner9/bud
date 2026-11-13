@@ -1,6 +1,6 @@
 # Bud IDE: BASE plan
 
-> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is the plan for 1.1: D111-D122); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
+> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is the plan for 1.1: D111-D123); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
 > Date: 2026-10-24, updated 2026-11-13
 
 ## 0. The one-paragraph version
@@ -141,6 +141,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D120 | **Superpowers is out everywhere.** | 2026-11-13 | Plan, 4.3; completes D100, which dropped it from the kit while clod's `plugin` feature and the account still installed it (JGA-241). The manifest lists it under the account as not wanted, so status shows it until the guided step to turn it off is done, and the clod port carries no pinned-plugin path. Jason will write a planning schema and skills of his own in its place; that is separate work, not part of 1.1. |
 | D121 | **Everything about the Claude setup is under `bud kit`.** | 2026-11-13 | Plan, 4.3. The other option was `bud claude`, beside `status` and `setup`. `bud kit` exists and already means bud's Claude setup; `bud claude status` points at `bud kit status`, and `bud claude setup` stays as what installs Claude Code and logs in. |
 | D122 | **Claude reaches the setup through the `bud kit` commands with `--json`, not an MCP server.** | 2026-11-13 | Plan, 4.3; settles how D117's skill works. The skill runs the commands through Bash. Options were that, or a small MCP server in the binary (`bud mcp`) with a typed tool per command. The commands have to exist anyway for use by hand, so a server would be a second interface to keep in step with them, and its tool names would sit in every request of every session, which D101 and D102 worked to cut. What a server would add is Desktop chat on a machine, and a change to the setup needs a checkout and a release, which is Claude Code's ground. It can be added later over the same commands if that turns out to matter. |
+| D123 | **`kit.json` holds every section, keyed by name, and `Load` refuses what it doesn't know.** | 2026-11-13 | JGA-244; the format is in `docs/internals/kit-manifest.md`. Servers, rules and account connectors are objects keyed by name, as marketplaces are, so `bud kit add` and `rm` edit one key. A server carries what clod spread over a feature folder: its `claude mcp add-json` definition with `${VAR}` placeholders, the values those need, its default modes, the command it requires, the account connector that delivers it, and the settings that go with it. Rule text and the cloud script are files beside `kit.json`, since they are prose and shell; a rule can also point into a marketplace's checkout, which is how `core.md` stays in bud-plugins. An unknown key is an error at any depth, and so is a placeholder with no declared value, because the kit is embedded and a typo would otherwise ship. `core` and `expected_mcp` are gone: the first is `account.instructions` and the `core.md` rule, and the second is derived (servers on by default in full mode that need no command on `PATH`), which gives the same three. Left in clod on purpose: the autosync hook (changes now arrive with a release, D111), the `plugin` feature (the kit's `plugins`), the deny rule for clod's `secrets.env`, and the checklist's personal skills and scheduled task, which are one person's and not the setup's. |
 
 ---
 
@@ -447,7 +448,7 @@ Flag names and the bridge protocol details get re-checked against Claude Code's 
 
 ### 4.3 One Claude setup everywhere (plan)
 
-> Not built; this is the 1.1 release (D116). Decisions D111-D122; the build order is in section 6 and what's still open is in section 7.
+> Not built; this is the 1.1 release (D116). Decisions D111-D123; the build order is in section 6 and what's still open is in section 7.
 
 The aim is that Claude is the same on every surface, and that one screen says where it isn't. bud holds the desired state in one manifest (D111), applies it wherever a local process can be wired, and for the claude.ai account, which nothing outside claude.ai can write, it reads, compares and guides (D112). clod's work moves into bud (D113), so a machine needs one binary and there is one place to look.
 
@@ -463,7 +464,7 @@ The aim is that Claude is the same on every surface, and that one screen says wh
 | Cloud sessions (claude.ai/code) | The account's connectors, plus the environment's setup script | Not from a machine | The script's text; the person saves it in the environment's settings |
 | Remote Control sessions | The machine they run on | Same as that machine | Same as that machine |
 
-**The manifest.** `kit/kit.json` keeps `marketplaces` and `plugins` and gains the rest. `core` and `expected_mcp` fold into the new sections. A sketch of the shape, not a format to hold to:
+**The manifest.** `kit/kit.json` keeps `marketplaces` and `plugins` and gains the rest. `core` and `expected_mcp` fold into the new sections. The shape in outline (D123); the format itself, field by field, is in `docs/internals/kit-manifest.md`:
 
 ```text
 marketplaces, plugins      as now

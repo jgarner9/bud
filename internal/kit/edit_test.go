@@ -12,7 +12,7 @@ func repoKit(t *testing.T) Repo {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "kit")
 	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "kit.json"), []byte(`{"plugins": [], "other": "kept"}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "kit.json"), []byte(`{"plugins": [], "settings": {"model": "kept"}}`), 0o644)
 	return Repo{Dir: dir}
 }
 
@@ -55,7 +55,7 @@ func TestAddRemove(t *testing.T) {
 	if len(k.Plugins) != 0 || len(k.Marketplaces) != 0 {
 		t.Fatalf("after rm %+v", k)
 	}
-	if idx, _ := r.index(); idx["other"] != "kept" {
+	if idx, _ := r.index(); idx["settings"].(map[string]any)["model"] != "kept" {
 		t.Fatalf("lost a key: %v", idx)
 	}
 }

@@ -67,7 +67,8 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | `bud update`, rollback, the background check | `docs/internals/updater.md` |
 | `bud claude`, clod, the Claude Code check | `docs/internals/claude-code.md` |
 | `bud.ai.*`: the session, the TUI pane, the IDE bridge, permissions, chat, inline actions, tools, the generator, filing and working issues | `docs/internals/claude-session.md` |
-| `bud kit`, marketplaces, plugins, `kit.json` | `docs/internals/kit.md` |
+| `bud kit`, marketplaces, plugins | `docs/internals/kit.md` |
+| The format of `kit/kit.json` and what `kit.Load` checks | `docs/internals/kit-manifest.md` |
 | Anything under `nvim/`: plugins, lazy loading, languages, layouts, debugging, UI, the dashboard, the settings screen | `docs/internals/neovim.md` |
 | `bud bootstrap`, the nightly build, release signing | `docs/internals/release.md` |
 

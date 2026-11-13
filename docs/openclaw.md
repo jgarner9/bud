@@ -78,4 +78,4 @@ bud config set ai.custom.command '["claude-agent-acp"]'
 bud config set ai.agent.chat_ui bud
 ```
 
-Edits then come to bud's diff review before they're written, since Claude Code's adapter sends each one with its diff.
+Edits should then come to bud's diff review before they're written, if the adapter asks permission with each edit's diff, as it does in Zed; that isn't checked with bud yet.

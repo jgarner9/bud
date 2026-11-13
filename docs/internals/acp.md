@@ -25,7 +25,7 @@ A prompt's blocks: `text`, `resource_link` (`{ uri, name }`, a file the agent ca
 | Name | Command bud runs | Signs in with | Leaves out |
 | --- | --- | --- | --- |
 | `openclaw` | `openclaw acp [--url <ai.openclaw.url>] [--token-file <ai.openclaw.token_file>]` | The Gateway token; the models' own logins live on the Gateway host | Diffs, `fs/*`, terminals, model choice, per-session MCP servers (it errors on any), `ask_user` questions; permission requests only for exec approvals during a turn; `session/load` replays only bridge-made sessions |
-| `claude` | `claude-agent-acp` (npm `@agentclientprotocol/claude-agent-acp`) | Claude Code's own login and `~/.claude` | Nothing bud uses |
+| `claude` | `claude-agent-acp` (npm `@agentclientprotocol/claude-agent-acp`) | Claude Code's own login and `~/.claude` | Not checked yet |
 | `codex` | `codex-acp` (npm `@zed-industries/codex-acp`) | Codex's own login (ChatGPT Plus) | Not checked yet |
 | `opencode` | `opencode acp` | OpenCode's providers | Not checked yet |
 | `custom` | `ai.custom.command` | Its own | Whatever it does |

@@ -54,13 +54,14 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
 2. **Should OpenClaw ask before running commands** (7.2)? It's the Gateway's `tools.exec.mode`, and it applies to every surface. I recommend `ask` (`openclaw config set tools.exec.mode ask` on the server), which is how bud has worked so far.
 3. **Claude subscription through OpenClaw.** Reports from April 2026 say Anthropic stopped third-party tools drawing on the Claude subscription bucket, which conflicts with OpenClaw's docs on `claude-cli` reuse. Check Anthropic's current terms before relying on it. ChatGPT Plus through Codex OAuth looks solid.
 4. **The error on a redirected buffer.** You asked for an error when something tries to change a pane. I raise the error *and* open the file in the editor window, so nothing you picked is lost. Say if you'd rather it only refused.
+6. **Cloud work** (BASE.md 7.4): D129 removed it when Claude Code was leaving altogether. Now that Claude Code stays as a backend (D135), I recommend keeping it for as long as `claude` is installed, so I didn't remove it. Your call.
 5. **One OpenClaw session per project** (D139): I decided this with my recommendation, once it was verified. Say if you'd rather have one shared session.
 
 ## Left in 1.1 (BASE.md section 6)
 
 - Task 6: move the `claude` backend onto `claude-agent-acp` and remove the stream-json transport and the IDE bridge. Not started; the `claude` backend still runs on the old path.
 - Task 9's move of `ai.claude.*` to `ai.agent.*` (41 references across 17 files, mostly on the Claude path task 6 rewrites, so best done with it). The ACP backends already have `ai.agent.autostart` and `ai.agent.idle_minutes`.
-- Task 11: removing clod's setup (D130: 91 references across 17 files, including the kit, which syncs after clod) and cloud work (D129: in `issue.lua` and `work.lua`). These are decided, but large and tangled, so they deserve a focused session you can review. `bud claude` itself stays while the `claude` backend uses it (D135).
+- Task 11: removing clod's setup (D130: 91 references across 17 files, including the kit, which syncs after clod) which is decided, but large and tangled enough to deserve a focused session you can review. Cloud work (D129) is now an open question instead (decision 6). `bud claude` itself stays while the `claude` backend uses it (D135).
 - Task 13: an end-to-end run with your real home Gateway, Claude Code and ChatGPT Plus. This needs you.
 - Task 14 (the user docs beyond docs/openclaw.md) and task 15 (release 1.1.0).
 

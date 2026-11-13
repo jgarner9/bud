@@ -6,15 +6,13 @@ package agent
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -226,16 +224,33 @@ func plainOK(host string) bool {
 	return cgnat.Contains(ip)
 }
 
-// SessionKey is the OpenClaw Gateway session bud uses for the project at
-// root (D139), the same key the editor's bud.ai.agent.session_key makes:
-// agent:<agentID>:bud:<dir name>-<first 6 hex of sha256(root)>
-func SessionKey(root, agentID string) string {
+// SavedSession is the ACP session id the editor saved for the project at
+// root on backend (bud.ai.agent, D139), empty when there's none yet
+func SavedSession(stateDir, root, backend string) string {
+	data, err := os.ReadFile(filepath.Join(stateDir, "agent-sessions.json"))
+	if err != nil {
+		return ""
+	}
+	var ids map[string]struct {
+		Backend string `json:"backend"`
+		ID      string `json:"id"`
+	}
+	if json.Unmarshal(data, &ids) != nil {
+		return ""
+	}
+	if saved, ok := ids[root]; ok && saved.Backend == backend {
+		return saved.ID
+	}
+	return ""
+}
+
+// BridgeKey is the Gateway session key OpenClaw gives the session its ACP
+// bridge made with id
+func BridgeKey(id, agentID string) string {
 	if agentID == "" {
 		agentID = "main"
 	}
-	name := nonKey.ReplaceAllString(strings.ToLower(filepath.Base(root)), "-")
-	sum := sha256.Sum256([]byte(root))
-	return fmt.Sprintf("agent:%s:bud:%s-%s", agentID, name, hex.EncodeToString(sum[:])[:6])
+	return "agent:" + agentID + ":acp-bridge:" + id
 }
 
 // ChatKey is the Gateway session bud chat and the editor's chat use: one
@@ -247,8 +262,6 @@ func ChatKey(agentID string) string {
 	return "agent:" + agentID + ":bud:chat"
 }
 
-var nonKey = regexp.MustCompile(`[^a-z0-9\-_.]`)
-
 // TUI is the backend's own TUI for the session key (OpenClaw) or dir (the
 // others): its argv and the environment it adds. The claude backend's TUI
 // is Claude Code's, which the claude commands build; custom has none
@@ -259,7 +272,10 @@ func TUI(s config.Settings, key, dir string) ([]string, []string, error) {
 		if u := s.AI.OpenClaw.URL; u != "" {
 			argv = append(argv, "--url", u)
 		}
-		argv = append(argv, "--session", key)
+		// no key: OpenClaw's own main session
+		if key != "" {
+			argv = append(argv, "--session", key)
+		}
 		var env []string
 		if f := s.AI.OpenClaw.TokenFile; f != "" {
 			data, err := os.ReadFile(expandHome(f))

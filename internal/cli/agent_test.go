@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	backend "jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -177,10 +176,20 @@ func TestAgentOpenClaw(t *testing.T) {
 
 	project, _ := filepath.EvalSymlinks(t.TempDir())
 	os.Mkdir(filepath.Join(project, ".git"), 0o755)
+	// no session yet: OpenClaw's main one
 	if err := agent(&Globals{}, []string{project}); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{bin, "tui", "--url", "wss://home:18789", "--session", backend.SessionKey(project, "main")}
+	if !slices.Equal(argv, []string{bin, "tui", "--url", "wss://home:18789"}) {
+		t.Fatalf("no saved session: ran %q", argv)
+	}
+	// the session the editor saved (D139)
+	ids, _ := json.Marshal(map[string]any{project: map[string]string{"backend": "openclaw", "id": "abc"}})
+	os.WriteFile(filepath.Join(state, "bud", "agent-sessions.json"), ids, 0o644)
+	if err := agent(&Globals{}, []string{project}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{bin, "tui", "--url", "wss://home:18789", "--session", "agent:main:acp-bridge:abc"}
 	if dir != project || !slices.Equal(argv, want) {
 		t.Fatalf("ran %q in %s, want %q", argv, dir, want)
 	}

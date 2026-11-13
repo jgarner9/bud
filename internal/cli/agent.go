@@ -81,13 +81,22 @@ func agent(g *Globals, args []string) error {
 	}
 	s := machineSettings()
 	if s.AI.Backend != "claude" {
-		// the backend's own TUI (D131); OpenClaw's on the project's
-		// Gateway session, the one the editor uses (D139)
+		// the backend's own TUI (D131); OpenClaw's on the session the
+		// editor saved for the project (D139)
 		root := ws.Root
 		if real, err := filepath.EvalSymlinks(root); err == nil {
 			root = real
 		}
-		return execBackendTUI(g, s, backend.SessionKey(root, s.AI.OpenClaw.Agent), ws.Root)
+		key := ""
+		if p, err := paths.Resolve(); err == nil {
+			if id := backend.SavedSession(p.State, root, s.AI.Backend); id != "" {
+				key = backend.BridgeKey(id, s.AI.OpenClaw.Agent)
+			}
+		}
+		if key == "" && s.AI.Backend == "openclaw" {
+			fmt.Fprintln(os.Stderr, "bud: this project has no OpenClaw session yet (opening it in bud starts one), so this is OpenClaw's main session")
+		}
+		return execBackendTUI(g, s, key, ws.Root)
 	}
 	bin := claude.Find()
 	if bin == "" {

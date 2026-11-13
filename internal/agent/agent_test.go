@@ -174,18 +174,21 @@ func TestPlainOK(t *testing.T) {
 	}
 }
 
-// the key matches the editor's (bud.ai.agent.session_key), so the shell and
-// the editor share one Gateway session per project
-func TestSessionKey(t *testing.T) {
-	// the same literal is pinned in tests/lua/agent_test.lua
-	if got := SessionKey("/home/me/code/My Proj", ""); got != "agent:main:bud:my-proj-371d07" {
-		t.Errorf("key %q", got)
+// bud agent opens the session the editor saved (D139)
+func TestSavedSession(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "agent-sessions.json"), []byte(`{"/p":{"backend":"openclaw","id":"abc"}}`), 0o644)
+	if got := SavedSession(dir, "/p", "openclaw"); got != "abc" {
+		t.Errorf("saved %q", got)
 	}
-	if SessionKey("/a/api", "main") == SessionKey("/b/api", "main") {
-		t.Error("same name, different dirs, same key")
+	if got := SavedSession(dir, "/p", "codex"); got != "" {
+		t.Errorf("another backend's: %q", got)
 	}
-	if got := SessionKey("/x/y", "coder"); !strings.HasPrefix(got, "agent:coder:bud:y-") {
-		t.Errorf("agent id: %q", got)
+	if got := SavedSession(t.TempDir(), "/p", "openclaw"); got != "" {
+		t.Errorf("no file: %q", got)
+	}
+	if BridgeKey("abc", "") != "agent:main:acp-bridge:abc" || BridgeKey("abc", "coder") != "agent:coder:acp-bridge:abc" {
+		t.Error("bridge key")
 	}
 	if ChatKey("") != "agent:main:bud:chat" {
 		t.Errorf("chat key %q", ChatKey(""))
@@ -206,6 +209,9 @@ func TestTUI(t *testing.T) {
 	}
 	if argv, _, _ := TUI(settings(func(s *config.Settings) { s.AI.Backend = "opencode" }), "", "/p"); !reflect.DeepEqual(argv, []string{"opencode", "/p"}) {
 		t.Errorf("opencode: %q", argv)
+	}
+	if argv, _, _ := TUI(settings(nil), "", "/p"); !reflect.DeepEqual(argv, []string{"openclaw", "tui"}) {
+		t.Errorf("no key: %q", argv)
 	}
 	if _, _, err := TUI(settings(func(s *config.Settings) { s.AI.Backend = "custom" }), "", "/p"); err == nil {
 		t.Error("custom has no TUI")

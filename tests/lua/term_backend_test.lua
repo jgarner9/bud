@@ -43,6 +43,14 @@ vim.fn.setfperm(tmp .. "/bin/openclaw", "rwxr-xr-x")
 
 local agent = require("bud.ai.agent")
 local term = require("bud.ai.term")
+-- the project's saved ACP session (D139), which the TUI opens
+agent.ids_file = function()
+  return tmp .. "/agent-sessions.json"
+end
+vim.fn.writefile(
+  { vim.json.encode({ [proj] = { backend = "openclaw", id = "abc123" } }) },
+  tmp .. "/agent-sessions.json"
+)
 
 -- not installed: the layout's chat pane isn't available, and opening says why
 local path = vim.env.PATH
@@ -67,8 +75,8 @@ wait(function()
 end, "the TUI to start")
 eq(
   vim.fn.readfile(tmp .. "/bin/argv.log")[1],
-  "tui --url wss://home.example.ts.net:18789 --session " .. agent.session_key(proj),
-  "openclaw tui on the project's Gateway session"
+  "tui --url wss://home.example.ts.net:18789 --session agent:main:acp-bridge:abc123",
+  "openclaw tui on the project's saved session"
 )
 eq(vim.fn.readfile(tmp .. "/bin/token.log")[1], "secret-token", "the token from the file, in the environment")
 eq(require("bud.ai.claude").status(proj), "stopped", "no Claude Code session touched")

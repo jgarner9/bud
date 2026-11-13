@@ -4,6 +4,15 @@ bud talks to its AI over the Agent Client Protocol (ACP), so the backend is a se
 
 This is new in 1.1 and still being built. What works today: the AI pane, chat, `bud agent` and `bud chat` run OpenClaw's TUI on the project's Gateway session; the commit message, the generator, issues and work go through OpenClaw; permission questions come up in bud; `bud ai status` and `bud doctor` check it all. To stay on Claude Code directly in the meantime, run `bud config set ai.backend claude`.
 
+## Where the Gateway runs
+
+OpenClaw runs its tools (edits, commands) on the Gateway's machine, not where bud runs. So a Gateway on your home server alone would work on the server's files, not the project on your laptop. Two ways to set it up:
+
+- **A Gateway on the machine you code on** (loopback, `ws://127.0.0.1:18789`). bud's edits and commands act on your project; the home server's Gateway serves the apps and the web UI. This is what bud has been checked against.
+- **One Gateway at home, your laptop paired as a node that hosts sessions** (`nodeHost.workerRuns.enabled` on the laptop's node host), so tools run on the laptop and every surface shares one set of sessions. Not checked with bud yet.
+
+The steps below work for either; for the first, run them on your laptop with `gateway.bind loopback`.
+
 ## On the server (once)
 
 OpenClaw needs Node 24.16 or newer.
@@ -48,7 +57,7 @@ bud ai status                                  # installed, Gateway answering?
 
 ## How bud uses it
 
-- **One Gateway session per project,** `agent:main:bud:<project>-<hash>`, kept across restarts. The AI pane (`<leader>ac`), `bud agent` and bud's own calls all use it, so the web UI and the apps show the same thread. `ai.openclaw.agent` picks another OpenClaw agent than `main`.
+- **One session per project,** made by OpenClaw's ACP bridge with the project as its working directory, saved in `~/.local/state/bud/agent-sessions.json` and reattached on the next start, history and all. The AI pane (`<leader>ac`), `bud agent` and bud's own chat all open it (`agent:main:acp-bridge:<id>`), so the web UI and the apps show the same thread.
 - **Chat** (`<leader>ch`, `bud chat`) is one more session, `agent:main:bud:chat`, outside any project.
 - **The AI pane** runs `openclaw tui` on the project's session. `<leader>aF` makes it full screen and back, and `ai.agent.chat_layout = "full"` opens it that way.
 - **Permission questions** (with `tools.exec.mode` at `ask`) come up as bud's own prompt: `y` allows once, `a` allows that command for the rest of the session, `n` denies.

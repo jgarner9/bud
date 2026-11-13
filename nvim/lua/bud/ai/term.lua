@@ -70,8 +70,9 @@ function M.available()
   if backend() == "claude" then
     return claude.bin() ~= nil and require("bud.config").get("ai.claude.autostart", true)
   end
-  local spec = require("bud.ai.agent").tui(root_of())
-  return spec ~= nil and vim.fn.executable(spec.argv[1]) == 1
+  -- cheap: the session starts only when the pane opens
+  local bin = require("bud.ai.agent").tui_bin()
+  return bin ~= nil and vim.fn.executable(bin) == 1
 end
 
 -- launch is the TUI's command line and environment for root
@@ -80,12 +81,14 @@ local function launch(root)
     local argv, why = claude.handover(root)
     return argv, why, claude.bridge_env(root), true
   end
-  local spec, why = require("bud.ai.agent").tui(root)
+  local agent = require("bud.ai.agent")
+  local bin = agent.tui_bin()
+  if bin and vim.fn.executable(bin) ~= 1 then
+    return nil, ("%s isn't installed: run bud ai setup"):format(bin)
+  end
+  local spec, why = agent.tui(root)
   if not spec then
     return nil, why
-  end
-  if vim.fn.executable(spec.argv[1]) ~= 1 then
-    return nil, ("%s isn't installed: run bud ai setup"):format(spec.argv[1])
   end
   return spec.argv, nil, spec.env, false
 end

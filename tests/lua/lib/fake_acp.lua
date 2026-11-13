@@ -16,7 +16,7 @@
 --                then its stop reason
 --
 -- Everything it receives is appended to $FAKE_ACP_LOG, one JSON line each.
--- FAKE_ACP_LOAD=1 advertises loadSession.
+-- FAKE_ACP_LOAD=1 advertises loadSession; loading the session "gone" fails.
 
 local log = os.getenv("FAKE_ACP_LOG")
 
@@ -201,6 +201,8 @@ while true do
   elseif msg.method == "session/new" then
     sessions = sessions + 1
     send({ id = msg.id, result = { sessionId = "sess-" .. sessions } })
+  elseif msg.method == "session/load" and msg.params.sessionId == "gone" then
+    send({ id = msg.id, error = { code = -32002, message = "no such session" } })
   elseif msg.method == "session/load" then
     update(msg.params.sessionId, {
       sessionUpdate = "user_message_chunk",

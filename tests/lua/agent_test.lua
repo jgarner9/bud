@@ -25,6 +25,9 @@ local proj = vim.uv.fs_realpath(tmp .. "/proj")
 require("bud.config").file = tmp .. "/config.json"
 
 local agent = require("bud.ai.agent")
+agent.ids_file = function()
+  return tmp .. "/agent-sessions.json"
+end
 
 -- the backends' command lines
 local settings = {}
@@ -43,16 +46,10 @@ eq(
   { "openclaw", "acp", "--url", "wss://home.example.ts.net:18789", "--token-file", "/secrets/gateway-token" },
   "openclaw with a Gateway"
 )
--- with a root, one Gateway session per project (D132)
-local with_root = agent.argv("openclaw", get, "/home/me/code/My Proj")
-eq(with_root[7], "--session", "a session flag")
-assert(with_root[8]:match("^agent:main:bud:my%-proj%-%x%x%x%x%x%x$"), with_root[8])
-eq(agent.session_key("/a/api") ~= agent.session_key("/b/api"), true, "same name, different dirs, different keys")
--- pinned in internal/agent too, so bud agent opens the editor's session
-eq(agent.session_key("/home/me/code/My Proj"), "agent:main:bud:my-proj-371d07", "the key Go makes")
-settings["ai.openclaw.agent"] = "coder"
-assert(agent.argv("openclaw", get, "/x/y")[8]:find("^agent:coder:bud:y%-"), "the agent id from config")
-settings["ai.openclaw.agent"] = nil
+-- no --session: a session OpenClaw's bridge makes keeps its working dir (D139)
+eq(#agent.argv("openclaw", get), 6, "no session flag")
+eq(agent.bridge_key("abc"), "agent:main:acp-bridge:abc", "the bridge's key")
+eq(agent.bridge_key("abc", "coder"), "agent:coder:acp-bridge:abc", "with another agent")
 eq(agent.argv("claude", get), { "claude-agent-acp" }, "claude")
 eq(agent.argv("codex", get), { "codex-acp" }, "codex")
 eq(agent.argv("opencode", get), { "opencode", "acp" }, "opencode")
@@ -86,7 +83,17 @@ local function record(name)
     table.insert(events, { name = name, data = data, key = sess.key })
   end)
 end
-for _, name in ipairs({ "status", "chunk", "message", "tool_use", "tool_update", "permission_request", "done", "exit" }) do
+for _, name in ipairs({
+  "status",
+  "chunk",
+  "user_chunk",
+  "message",
+  "tool_use",
+  "tool_update",
+  "permission_request",
+  "done",
+  "exit",
+}) do
   record(name)
 end
 local function named(name)
@@ -244,6 +251,42 @@ eq(named("done")[12].ok, false, "the crashed turn isn't ok")
 agent.send("hello", { root = proj })
 turn_done(13)
 eq(named("done")[13].ok, true, "works after a restart")
+
+-- the session id is saved per project, for the next start (D139)
+eq(agent.saved_id(proj, "openclaw"), s.id, "saved")
+eq(agent.saved_id(proj, "codex"), nil, "only for its backend")
+
+-- reattached with session/load when the agent can, its history replayed
+agent.stop(proj)
+wait(function()
+  return s.status == "stopped"
+end, "stopped before the reload")
+local was = s.id
+s.env = { FAKE_ACP_LOG = log, FAKE_ACP_LOAD = "1" }
+events = {}
+agent.session(proj)
+wait(function()
+  return s.status == "ready"
+end, "reloaded")
+eq(s.id, was, "the same session")
+eq(named("user_chunk")[1], { text = "earlier question" }, "the history replayed")
+local loads = vim.tbl_filter(function(line)
+  return line:find('"session/load"', 1, true) ~= nil
+end, vim.fn.readfile(log))
+eq(#loads, 1, "one session/load")
+
+-- a session the agent no longer has: a new one, saved instead
+agent.stop(proj)
+wait(function()
+  return s.status == "stopped"
+end, "stopped again")
+s.id = "gone"
+agent.session(proj)
+wait(function()
+  return s.status == "ready"
+end, "a fresh session")
+eq(s.id ~= "gone", true, "a new id")
+eq(agent.saved_id(proj, "openclaw"), s.id, "and it's saved")
 
 -- keyed sessions sit beside the project's
 local issue = agent.session(proj, { key = "issue:JGA-1", extra = true, env = { FAKE_ACP_LOG = log } })

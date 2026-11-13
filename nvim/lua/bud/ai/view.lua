@@ -88,8 +88,19 @@ local function listen(v)
   end
   local on = agent().on
   v.unsub = {
+    on("user_chunk", function(d, s)
+      -- an earlier message of yours, as session/load replays the history
+      if mine(s) then
+        if not v.in_user then
+          v.in_user, v.replying = true, false
+          append(v, { "", "## you", "", "" })
+        end
+        append(v, vim.split(d.text, "\n", { plain = true }), true)
+      end
+    end),
     on("chunk", function(d, s)
       if mine(s) then
+        v.in_user = false
         if not v.replying then
           v.replying = true
           append(v, { "", "## " .. agent().backend(), "", "" })
@@ -145,7 +156,7 @@ local function send(v, text)
   end
   append(v, { "", "## you", "" })
   append(v, vim.split(text, "\n", { plain = true }))
-  v.replying = false
+  v.replying, v.in_user = false, false
   agent().send(text, { root = v.root })
 end
 

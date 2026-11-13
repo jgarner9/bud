@@ -157,7 +157,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D136 | **Side panes are locked: only their toggles open and close them, and files open in the editor window.** | 2026-11-13 | Jason: `:q` or a buffer change in the tree, git, chat or terminal pane breaks the layout. A pane window refuses `:q`, `:close`, `:only` from it and any buffer change other than its own with an error naming its toggle key, and a file opened while a pane is focused goes to the editor window. `:qa` and `:wqa` still quit bud, and `:q` in the last window that isn't a pane takes the panes with it. |
 | D137 | **Chat opens as a pull-out pane or full screen, and a key switches between them.** | 2026-11-13 | Jason asked for both. The pane is the existing right-hand chat (D45 kinds); full screen gives the chat the whole tab, the editor and panes hidden until it's switched back. `ai.agent.chat_layout` (`pane` or `full`) picks how it opens. |
 | D138 | **bud draws its own chat from ACP events in 1.2; until then the pane runs the backend's TUI.** | 2026-11-13 | Jason wants the TUI inside bud to look exactly how he chooses. A chat drawn in Neovim from `session/update` events can take bud's colours, layout and keys; a backend's TUI can't. 1.1 runs `openclaw tui` (or the backend's own) in the pane, as D81 did with Claude Code's, and 1.2 replaces it. |
-| D139 | **bud keeps one OpenClaw Gateway session per project: `agent:<ai.openclaw.agent>:bud:<project>-<hash>`.** | 2026-11-13 | Answers the first of section 7's questions with its recommendation, since a run against a real Gateway (OpenClaw 2026.11.3, loopback, a scripted model) settled how: `openclaw acp --session <key>` makes the key on first use and continues it on the next run, while `--session-label` fails for a label that doesn't exist yet. The hash of the project's path keeps two projects of one name apart. The same run showed edits land without asking, their patch reported afterwards in the tool update's `rawOutput.details.patch` (D134), and exec asks through `session/request_permission` (options `allow-once`, `deny`) only when the Gateway's `tools.exec.mode` is `ask`; its default, `full`, never asks. |
+| D139 | **bud keeps one OpenClaw session per project by saving the ACP session id and reattaching with `session/load`.** | 2026-11-13 | Answers the first of section 7's questions with its recommendation, settled by runs against a real Gateway (OpenClaw 2026.11.3, loopback, a scripted model). A session OpenClaw's bridge makes keeps the project as its working dir, and `session/load` replays its history; one named with `openclaw acp --session <key>` continues across runs too, but runs its tools in the agent's workspace, not the project. So bud passes no `--session`, saves each project's id in `agent-sessions.json`, and the pane, `bud agent` and bud's chat open that session (`agent:<ai.openclaw.agent>:acp-bridge:<id>`). The same runs showed edits land without asking, their patch reported afterwards in `rawOutput.details.patch` (D134), and exec asks through `session/request_permission` (`allow-once`, `deny`) only when the Gateway's `tools.exec.mode` is `ask`; its default, `full`, never asks. |
 
 ---
 
@@ -590,7 +590,7 @@ The aim is that everything in 4 and 4.2 works as it does now with any ACP agent 
 
 | Name | Command | Notes |
 | ---- | ------- | ----- |
-| `openclaw` (default) | `openclaw acp --url <ai.openclaw.url> --token-file <ai.openclaw.token_file> --session agent:<ai.openclaw.agent>:bud:<project>-<hash>` | URL and token file left out when unset, so the CLI's own remote config applies; one Gateway session per project (D139) |
+| `openclaw` (default) | `openclaw acp --url <ai.openclaw.url> --token-file <ai.openclaw.token_file>` | URL and token file left out when unset, so the CLI's own remote config applies; one session per project, saved and reattached (D139) |
 | `claude` | `claude-agent-acp` | Claude Code with its own login and `~/.claude` (D135) |
 | `codex` | `codex-acp` | ChatGPT Plus through Codex's own login |
 | `opencode` | `opencode acp` | |
@@ -862,13 +862,17 @@ One task is one commit with its own check, and `just check` passes after each. B
 
 ## 7. Open questions for you
 
-Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50; one Claude setup everywhere: D118-D122; the move to OpenCode and what 1.1 and 1.2 were: D124-D127; the names, cloud work and clod: D128-D130; the move to ACP and OpenClaw, reviewing edits, locked panes and chat full screen: D131-D138; one Gateway session per project: D139). What's left:
+Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50; one Claude setup everywhere: D118-D122; the move to OpenCode and what 1.1 and 1.2 were: D124-D127; the names, cloud work and clod: D128-D130; the move to ACP and OpenClaw, reviewing edits, locked panes and chat full screen: D131-D138; one session per project: D139). What's left:
 
-1. **Where the Gateway token lives on each machine.** OpenClaw reads it from a file or `OPENCLAW_GATEWAY_TOKEN`.
+1. **Where the Gateway runs, given that OpenClaw's tools run on the Gateway's host.** An edit or a command acts on the files of the machine the Gateway (or the node hosting the session) is on, so a Gateway on the home server alone would edit the server's copy, not the laptop's project.
+   - A Gateway on each machine you code on (loopback), with the home server's Gateway for the apps and the web UI. Works today; checked.
+   - One Gateway on the home server, with each laptop paired as an OpenClaw node that hosts sessions (`nodeHost.workerRuns.enabled`), so tools run on the laptop. One set of sessions everywhere, but whether `openclaw acp` sessions can be placed on a node isn't checked yet.
+   - Recommendation: start with a Gateway on the laptop ("mostly local"), and try the node setup once the rest works.
+2. **Where the Gateway token lives on each machine.** OpenClaw reads it from a file or `OPENCLAW_GATEWAY_TOKEN`.
    - A file, `~/.config/openclaw/gateway-token` (mode 600), named by `ai.openclaw.token_file`.
    - The macOS keychain and Linux secret service, read by `bud` at start.
    - Recommendation: the file, which works over SSH and on every OS; the keychain can come later.
-2. **Whether OpenClaw asks before running commands.** The Gateway's `tools.exec.mode` decides, for every surface, not just bud.
+3. **Whether OpenClaw asks before running commands.** The Gateway's `tools.exec.mode` decides, for every surface, not just bud.
    - `ask`: bud (and the apps) get an approval for each command not on the allowlist, as Claude Code's permission prompt did.
    - `full`, OpenClaw's default: commands run without asking; you see them in the AI pane afterwards.
    - Recommendation: `ask`, matching how bud has worked so far, and loosen it with the allowlist as it gets noisy.

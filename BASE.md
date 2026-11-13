@@ -618,6 +618,7 @@ bud chat [--resume]         # chat with Claude Code in chat mode (--resume picks
 
 bud install [--profile full|minimal] [--yes]   # system deps + nvim + plugins + language tooling
 bud doctor [--quick]        # health checks: versions, missing tools, broken specs, startup time, Claude Code
+bud ai status [--json] | setup   # the AI backend (ai.backend, OpenClaw by default, D131): installed, Gateway healthy; install it, set the Gateway
 bud claude status | setup    # is Claude Code installed and logged in; install it, hand over to its login, set up clod
 bud update [--check] [--channel stable|nightly]   # self-update the binary, then sync its embedded config + restore lockfile, migrate
 bud dev link [path] | unlink                   # point ~/.config/bud at a checkout for live editing
@@ -628,7 +629,7 @@ bud lang ls | add <name> | rm <name> | enable <name> | disable <name>
 bud tools ls | gen "<description>" | enable | disable | rm | promote <name>
 bud kit sync | status | ls | unsync | core | add | rm | enable | disable
 bud issue target | set | unset                 # where issues filed from the editor go in Linear
-bud agent [path]            # open Claude Code's own TUI in a project, outside Neovim
+bud agent [path]            # open the backend's own TUI in a project, outside Neovim (openclaw tui on the project's session, or Claude Code's)
 bud layout ls | set-default <name> | set <name> [project] | unset [project]
 bud config ls | get <key> | set <key> <value> | unset <key> | edit | path
 bud completion bash|zsh|fish                  # eval "$(bud completion zsh)" in your shell rc
@@ -752,7 +753,7 @@ These were the ideas; most are built now, each a `dashboard.*` toggle in config 
 
 ### 5.5 Chat mode
 
-A general-purpose chat that isn't tied to code, for bouncing ideas around. It's Claude Code's own TUI, run as bud-ide's `chat` agent (D81).
+A general-purpose chat that isn't tied to code, for bouncing ideas around. On the `claude` backend it's Claude Code's own TUI, run as bud-ide's `chat` agent (D81); on the others it's the backend's TUI on a chat session of its own (`agent:main:bud:chat` on OpenClaw), or bud's own chat full screen with `ai.agent.chat_ui = "bud"` (D138).
 
 - **Opening it:** `c` from the dashboard, `<leader>ch` from anywhere, `:BudChat`, or `bud chat` from the shell. It opens in its own tab, so your editor layout is left exactly as it was; `<leader>ch` goes back and forth, and quitting Claude Code closes the tab.
 - **What it is:** a conversational prompt in `~/.local/state/bud/chat/`, so no project's instructions load. It can read files you point it at, search and look things up, but it can't edit files or run commands; for that, open the project (`bud <dir>`).

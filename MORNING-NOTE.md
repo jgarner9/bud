@@ -36,6 +36,9 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
 12. **bud's own chat (1.2, D138), a first version:** `<leader>av`, or `<leader>ac` with `ai.agent.chat_ui = "bud"`. It's a markdown conversation in Neovim with streamed replies, a line per tool call with its state (`○ ◐ ✓ ✗`), OpenClaw's patch shown as a diff, a prompt line (`<CR>` sends, `<C-c>` stops), and the history replayed when you reopen. It runs as a pane or full screen and works the same on every backend. This is the "looks exactly how I want" surface: colours, layout and keys are all bud's to change.
 13. `:q` in the last file window now takes the locked panes with it, so it still quits bud.
 14. `bud install` on OpenClaw offers `bud ai setup` instead of Claude Code and clod. The doctor's Claude check no longer complains on other backends.
+15. **`:BudAgent [status|restart|stop|option]`**: the backend's session at a glance, plus its settings (OpenClaw's `thought_level`, `fast_mode` and the rest), checked against the real Gateway. Errors now carry OpenClaw's own reason instead of a bare "Internal error".
+16. **bud's chat is themeable:** `BudChatYou`, `BudChatAgent`, `BudChatTool`, `BudChatToolDone`, `BudChatToolFailed`, `BudChatThinking` and `BudChatPrompt` are highlight groups with default links. It also shows thinking as one line, plans as a checklist, and completes slash commands with `<C-x><C-o>`.
+17. The README and troubleshooting page mention the backend. `just check` (everything CI runs, smoke included) passed after item 14.
 
 ## Decisions waiting on you
 
@@ -53,7 +56,8 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
 ## Left in 1.1 (BASE.md section 6)
 
 - Task 6: move the `claude` backend onto `claude-agent-acp` and remove the stream-json transport and the IDE bridge. Not started; the `claude` backend still runs on the old path.
-- Task 9's config migration from `ai.claude.*` to `ai.agent.*`, and task 11 (remove `bud claude`, clod's setup and cloud work).
+- Task 9's config migration from `ai.claude.*` to `ai.agent.*` (41 references across 17 files, mostly on the Claude path task 6 rewrites, so it's best done with task 6), and task 11 (remove `bud claude`, clod's setup and cloud work).
+- Known small gap: interrupting a reply cancels a pending permission question, but its dialog stays on screen until dismissed (the late answer is ignored).
 - Task 13: an end-to-end run with your real home Gateway, Claude Code and ChatGPT Plus. This needs you.
 - Task 14 (the user docs beyond docs/openclaw.md) and task 15 (release 1.1.0).
 

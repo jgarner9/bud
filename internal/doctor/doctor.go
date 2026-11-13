@@ -220,11 +220,16 @@ func claudeDir() string {
 }
 
 // checkCore warns when bud-plugins' core.md changed since you last pasted it
-// into claude.ai (JGA-179), which the dashboard shows. Nothing to say without
-// a checkout of it
+// into claude.ai (JGA-179), which the dashboard shows, and when the kit's
+// manifest doesn't load at all. Nothing to say without a checkout of core.md
 func checkCore(p *paths.Paths, dir string) (Result, bool) {
 	k, err := kit.Load(kitFS())
-	if err != nil || k.Account.Instructions == "" {
+	if err != nil {
+		// the one place a manifest that doesn't load is reported: the other
+		// kit checks stay quiet about it, so it's said once
+		return Result{Name: "kit", Status: Warn, Detail: err.Error(), Fix: "fix kit/kit.json in the dev-linked checkout (docs/internals/kit-manifest.md has the format)"}, true
+	}
+	if k.Account.Instructions == "" {
 		return Result{}, false
 	}
 	c, err := kit.ReadCore(k.Account.Instructions, dir, p.CorePasted())

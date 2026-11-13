@@ -565,6 +565,19 @@ func TestCheckCore(t *testing.T) {
 	}
 }
 
+func TestAManifestThatDoesNotLoadIsAWarningNotSilence(t *testing.T) {
+	orig := kitFS
+	kitFS = func() fs.FS {
+		return fstest.MapFS{"kit.json": {Data: []byte(`{"core": "bud-plugins/core.md"}`)}}
+	}
+	t.Cleanup(func() { kitFS = orig })
+
+	r, ok := checkCore(&paths.Paths{State: t.TempDir()}, t.TempDir())
+	if !ok || r.Status != Warn || !strings.Contains(r.Detail, `unknown field "core"`) || r.Fix == "" {
+		t.Fatalf("want a warning naming the unknown field and a fix, got ok=%v %+v", ok, r)
+	}
+}
+
 func TestCheckClaudeSetup(t *testing.T) {
 	origFS, origList := kitFS, mcpList
 	kitFS = func() fs.FS {

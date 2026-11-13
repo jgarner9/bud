@@ -68,7 +68,7 @@ end
 
 -- backend is the configured backend's name
 function M.backend()
-  return cfg().get("ai.backend", "openclaw")
+  return cfg().get("ai.backend", "claude")
 end
 
 -- Each project's ACP session id is saved, so the next start reattaches

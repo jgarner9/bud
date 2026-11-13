@@ -14,7 +14,7 @@ bud is a personal tool that happens to be public: it's built around one person's
 | --- | --- | --- |
 | macOS or Linux, amd64 or arm64 | everything | Homebrew on macOS; pacman, apt or dnf on Linux. |
 | A terminal with a [Nerd Font](https://www.nerdfonts.com) | the icons | Any terminal runs `bud`. `bud launch` and the desktop app open Kitty or Ghostty. |
-| An AI backend | the AI features | Being moved to a setting in 1.1 (`ai.backend`): an [OpenClaw](openclaw.md) Gateway by default, with Claude Code and ChatGPT Plus behind it, or Claude Code directly (`bud config set ai.backend claude`, which the steps below set up). bud never stores a model key. |
+| An AI backend | the AI features | A setting since 1.1 (`ai.backend`): Claude Code directly by default, which the steps below set up, or an [OpenClaw](openclaw.md) Gateway, Codex or OpenCode. bud never stores a model key. |
 | A GitHub account and `gh` | clod (step 4) | `bud install` installs `gh` and runs `gh auth login` if you say yes. |
 | Linear, connected in Claude Code | filing issues from the editor | Optional. See [Filing issues](issues.md). |
 

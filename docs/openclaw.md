@@ -1,8 +1,8 @@
 # OpenClaw in bud
 
-bud talks to its AI over the Agent Client Protocol (ACP), so the backend is a setting (`ai.backend`). The default is [OpenClaw](https://docs.openclaw.ai): a Gateway you host yourself, on a home server say, with Claude Code and ChatGPT Plus behind it. The editor, OpenClaw's web UI, its apps and `openclaw tui` all talk to the same sessions with the same models.
+bud talks to its AI over the Agent Client Protocol (ACP), so the backend is a setting (`ai.backend`). [OpenClaw](https://docs.openclaw.ai) is one: a Gateway you host yourself, with Claude Code and ChatGPT Plus behind it. Turn it on with `bud config set ai.backend openclaw`; the default is still `claude`, Claude Code directly. The editor, OpenClaw's web UI, its apps and `openclaw tui` all talk to the same sessions with the same models.
 
-This is new in 1.1 and still being built. What works today: the AI pane, chat, `bud agent` and `bud chat` run OpenClaw's TUI on the project's Gateway session; the commit message, the generator, issues and work go through OpenClaw; permission questions come up in bud; `bud ai status` and `bud doctor` check it all. To stay on Claude Code directly in the meantime, run `bud config set ai.backend claude`.
+This is new in 1.1 and still being built. What works today: the AI pane, chat, `bud agent` and `bud chat` run OpenClaw's TUI on the project's Gateway session; the commit message, the generator, issues and work go through OpenClaw; permission questions come up in bud; `bud ai status` and `bud doctor` check it all. `bud config set ai.backend claude` goes back to Claude Code directly.
 
 ## Where the Gateway runs
 

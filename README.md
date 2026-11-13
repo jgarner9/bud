@@ -106,7 +106,7 @@ A layout names the panes that open around the editor: explorer, git, Claude Code
 
 ### The AI backend
 
-bud 1.1 makes the AI a setting: it talks to any agent that speaks the Agent Client Protocol, with a self-hosted [OpenClaw](https://docs.openclaw.ai) Gateway as the default (Claude Code and ChatGPT Plus behind it, plus OpenClaw's web UI, apps and TUI on the same sessions). Codex, OpenCode or Claude Code itself are one `bud config set ai.backend` away. bud's own chat (`<leader>av`) draws the conversation in Neovim on any of them. This is in progress on the way to 1.1: [docs/openclaw.md](docs/openclaw.md) says what works and how to set it up, and `bud config set ai.backend claude` keeps everything below working as it did.
+bud 1.1 makes the AI a setting: it talks to any agent that speaks the Agent Client Protocol, such as a self-hosted [OpenClaw](https://docs.openclaw.ai) Gateway (Claude Code and ChatGPT Plus behind it, plus OpenClaw's web UI, apps and TUI on the same sessions), Codex or OpenCode, one `bud config set ai.backend` away. The default is still Claude Code directly (`claude`). bud's own chat (`<leader>av`) draws the conversation in Neovim on any of them. This is in progress on the way to 1.1: [docs/openclaw.md](docs/openclaw.md) says what works and how to set it up, and everything below is the `claude` backend, as it was.
 
 ### Claude Code
 
@@ -156,7 +156,7 @@ bud main.go util.go # open files from the project they belong to
 | `bud layout` | List layouts and pick the default |
 | `bud projects` | List, add, remove and pin projects |
 | `bud config` | Read and write settings by key |
-| `bud ai` | Check and set up the AI backend (OpenClaw by default) |
+| `bud ai` | Check and set up the AI backend (OpenClaw, Codex, OpenCode) |
 | `bud claude` | Check and set up Claude Code |
 | `bud issue` | Say where issues filed from the editor go in Linear |
 | `bud chat` · `bud agent` | Claude Code outside the editor |

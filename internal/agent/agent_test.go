@@ -41,6 +41,7 @@ func fakeTools(t *testing.T, installed []string, up ...string) *[]string {
 
 func settings(mod func(*config.Settings)) config.Settings {
 	s := config.Defaults()
+	s.AI.Backend = "openclaw"
 	if mod != nil {
 		mod(&s)
 	}

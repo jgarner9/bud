@@ -11,6 +11,14 @@ import (
 	"jgarner.dev/bud/internal/config"
 )
 
+// openclawBackend sets ai.backend = "openclaw" in the test's config.json
+func openclawBackend(t *testing.T) {
+	t.Helper()
+	dir := filepath.Join(os.Getenv("XDG_STATE_HOME"), "bud")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"ai": {"backend": "openclaw"}}`), 0o644)
+}
+
 func withAICheck(t *testing.T, st backend.Status) *config.Settings {
 	t.Helper()
 	seen := &config.Settings{}
@@ -51,6 +59,7 @@ func TestAIStatusJSON(t *testing.T) {
 
 func TestAIStatusText(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	openclawBackend(t)
 	withAICheck(t, backend.Status{
 		Backend: "openclaw", Argv: []string{"openclaw", "acp", "--url", "wss://home:18789"},
 		Bin: "/usr/local/bin/openclaw", Version: "OpenClaw 2026.11.3", Gateway: "home:18789", Reachable: true,
@@ -71,6 +80,7 @@ func TestAIStatusText(t *testing.T) {
 func TestAISetupOpenClaw(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", state)
+	openclawBackend(t)
 	withAICheck(t, backend.Status{Backend: "openclaw", Argv: []string{"openclaw", "acp"}, Bin: "/bin/openclaw"})
 	pr := newPrompter(strings.NewReader("wss://home.tail.ts.net:18789\n\n"), &strings.Builder{})
 	captureStdout(t, func() {
@@ -97,6 +107,7 @@ func TestAISetupOpenClaw(t *testing.T) {
 // a missing backend is installed with npm once confirmed
 func TestAISetupInstalls(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	openclawBackend(t)
 	withAICheck(t, backend.Status{Backend: "openclaw", Argv: []string{"openclaw", "acp"}})
 	var installed string
 	orig := npmInstall
@@ -115,6 +126,7 @@ func TestAISetupInstalls(t *testing.T) {
 // bud install on a backend other than claude offers bud ai setup
 func TestInstallBackend(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	openclawBackend(t)
 	out := captureStdout(t, func() {
 		if err := installBackend(nil, false, "openclaw"); err != nil {
 			t.Fatal(err)

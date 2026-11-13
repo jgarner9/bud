@@ -22,6 +22,7 @@ local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp .. "/proj", "p")
 local proj = vim.uv.fs_realpath(tmp .. "/proj")
 require("bud.config").file = tmp .. "/config.json"
+vim.fn.writefile({ vim.json.encode({ ai = { backend = "openclaw" } }) }, tmp .. "/config.json")
 require("bud.lock").setup()
 
 local agent = require("bud.ai.agent")
@@ -173,7 +174,10 @@ assert(text():find("> ✗ not sent: no%-such%-acp%-agent%-bud%-test isn't instal
 agent.command = command
 
 -- ai.agent.chat_ui = "bud": <leader>ac (term.toggle) and <leader>aF use it
-vim.fn.writefile({ vim.json.encode({ ai = { agent = { chat_ui = "bud" } } }) }, tmp .. "/config.json")
+vim.fn.writefile(
+  { vim.json.encode({ ai = { backend = "openclaw", agent = { chat_ui = "bud" } } }) },
+  tmp .. "/config.json"
+)
 local term = require("bud.ai.term")
 term.toggle()
 eq(view.showing(proj), true, "<leader>ac opened bud's chat")

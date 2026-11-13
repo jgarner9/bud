@@ -61,7 +61,10 @@ eq(agent.argv("custom", get), { "gemini", "--experimental-acp" }, "custom")
 argv, why = agent.argv("gpt", get)
 eq(argv, nil, "an unknown backend")
 assert(why:find('"gpt"', 1, true), why)
-eq(agent.backend(), "openclaw", "openclaw is the default backend (D132)")
+eq(agent.backend(), "claude", "claude is the default backend for now (D140)")
+-- the rest of this file is about an ACP backend: openclaw
+vim.fn.writefile({ vim.json.encode({ ai = { backend = "openclaw" } }) }, tmp .. "/config.json")
+eq(agent.backend(), "openclaw", "set in config")
 
 -- a backend that isn't installed: missing, with why
 agent.command = function()

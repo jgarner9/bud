@@ -158,6 +158,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D137 | **Chat opens as a pull-out pane or full screen, and a key switches between them.** | 2026-11-13 | Jason asked for both. The pane is the existing right-hand chat (D45 kinds); full screen gives the chat the whole tab, the editor and panes hidden until it's switched back. `ai.agent.chat_layout` (`pane` or `full`) picks how it opens. |
 | D138 | **bud draws its own chat from ACP events in 1.2; until then the pane runs the backend's TUI.** | 2026-11-13 | Jason wants the TUI inside bud to look exactly how he chooses. A chat drawn in Neovim from `session/update` events can take bud's colours, layout and keys; a backend's TUI can't. 1.1 runs `openclaw tui` (or the backend's own) in the pane, as D81 did with Claude Code's, and 1.2 replaces it. |
 | D139 | **bud keeps one OpenClaw session per project by saving the ACP session id and reattaching with `session/load`.** | 2026-11-13 | Answers the first of section 7's questions with its recommendation, settled by runs against a real Gateway (OpenClaw 2026.11.3, loopback, a scripted model). A session OpenClaw's bridge makes keeps the project as its working dir, and `session/load` replays its history; one named with `openclaw acp --session <key>` continues across runs too, but runs its tools in the agent's workspace, not the project. So bud passes no `--session`, saves each project's id in `agent-sessions.json`, and the pane, `bud agent` and bud's chat open that session (`agent:<ai.openclaw.agent>:acp-bridge:<id>`). The same runs showed edits land without asking, their patch reported afterwards in `rawOutput.details.patch` (D134), and exec asks through `session/request_permission` (`allow-once`, `deny`) only when the Gateway's `tools.exec.mode` is `ask`; its default, `full`, never asks. |
+| D140 | **`claude` stays the default backend until the `claude` backend runs over ACP; OpenClaw is opt-in until then.** | 2026-11-13 | Jason, before cutting the first release with the ACP work. Narrows D132. With OpenClaw as the default, an update would have pointed every machine's AI pane at a Gateway that doesn't exist yet, while the Claude Code path still runs directly. `bud config set ai.backend openclaw` turns it on. |
 
 ---
 
@@ -364,7 +365,7 @@ A key-hint popup (mini.clue, D74) documents all of it, so the keymap is self-des
 
 ## 4. AI layer
 
-> 1.1 makes this layer backend-agnostic over ACP, with OpenClaw as the default backend (4.4, D131-D138). Until that is built, this section, 4.1 and 4.2 describe what is in the tree: Claude Code.
+> 1.1 makes this layer backend-agnostic over ACP, with OpenClaw as the planned default backend (4.4, D131-D139; `claude` stays the default for now, D140). Until that is built, this section, 4.1 and 4.2 describe what is in the tree: Claude Code.
 
 Every part below runs on the project's Claude Code session (4.2) and is drawn by TUIs in Neovim. Three parts:
 
@@ -590,7 +591,7 @@ The aim is that everything in 4 and 4.2 works as it does now with any ACP agent 
 
 | Name | Command | Notes |
 | ---- | ------- | ----- |
-| `openclaw` (default) | `openclaw acp --url <ai.openclaw.url> --token-file <ai.openclaw.token_file>` | URL and token file left out when unset, so the CLI's own remote config applies; one session per project, saved and reattached (D139) |
+| `openclaw` (planned default, D140) | `openclaw acp --url <ai.openclaw.url> --token-file <ai.openclaw.token_file>` | URL and token file left out when unset, so the CLI's own remote config applies; one session per project, saved and reattached (D139) |
 | `claude` | `claude-agent-acp` | Claude Code with its own login and `~/.claude` (D135) |
 | `codex` | `codex-acp` | ChatGPT Plus through Codex's own login |
 | `opencode` | `opencode acp` | |
@@ -618,7 +619,7 @@ bud chat [--resume]         # chat with Claude Code in chat mode (--resume picks
 
 bud install [--profile full|minimal] [--yes]   # system deps + nvim + plugins + language tooling
 bud doctor [--quick]        # health checks: versions, missing tools, broken specs, startup time, Claude Code
-bud ai status [--json] | setup   # the AI backend (ai.backend, OpenClaw by default, D131): installed, Gateway healthy; install it, set the Gateway
+bud ai status [--json] | setup   # the AI backend (ai.backend: claude by default, or openclaw, codex, opencode, D131, D140): installed, Gateway healthy; install it, set the Gateway
 bud claude status | setup    # is Claude Code installed and logged in; install it, hand over to its login, set up clod
 bud update [--check] [--channel stable|nightly]   # self-update the binary, then sync its embedded config + restore lockfile, migrate
 bud dev link [path] | unlink                   # point ~/.config/bud at a checkout for live editing

@@ -94,7 +94,8 @@ type UI struct {
 }
 
 type AI struct {
-	// which ACP agent bud talks to (D131): "openclaw" (the default, D132),
+	// which agent bud talks to (D131): "claude" (the default for now, D140:
+	// Claude Code directly, not yet over ACP), or over ACP "openclaw" (D132),
 	// "claude", "codex", "opencode", or "custom" for ai.custom.command
 	Backend  string   `json:"backend"`
 	Agent    Agent    `json:"agent"`
@@ -200,7 +201,7 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
-		AI: AI{Backend: "openclaw", Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
+		AI: AI{Backend: "claude", Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
 			Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"}},
 	}

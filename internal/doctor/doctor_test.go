@@ -478,10 +478,10 @@ func TestCheckClaude(t *testing.T) {
 	orig := claudeCheck
 	t.Cleanup(func() { claudeCheck = orig })
 	on := config.Defaults()
-	on.AI.Backend = "claude"
 	off := on
 	off.AI.Claude.Autostart = false
 	openclaw := config.Defaults()
+	openclaw.AI.Backend = "openclaw"
 
 	for _, c := range []struct {
 		name   string
@@ -865,7 +865,9 @@ func TestCheckAgent(t *testing.T) {
 	agentCheck = func(cfg config.Settings, quick bool) agent.Status {
 		return agent.Status{Backend: "openclaw", Version: "OpenClaw 2026.11.3", Gateway: "home:18789", Reachable: true}
 	}
-	r := checkAgent(config.Defaults(), false)
+	cfg := config.Defaults()
+	cfg.AI.Backend = "openclaw"
+	r := checkAgent(cfg, false)
 	if r.Status != OK || r.Detail != "openclaw: OpenClaw 2026.11.3, Gateway at home:18789 answering" {
 		t.Errorf("ready: %+v", r)
 	}

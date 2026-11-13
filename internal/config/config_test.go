@@ -261,7 +261,7 @@ func TestClodRepoValidate(t *testing.T) {
 // ai.backend picks a known agent, and custom needs its command (D131)
 func TestBackendValidate(t *testing.T) {
 	s := Defaults()
-	if s.AI.Backend != "openclaw" || s.AI.Agent.ChatLayout != "pane" {
+	if s.AI.Backend != "claude" || s.AI.Agent.ChatLayout != "pane" {
 		t.Fatalf("defaults: backend %q, chat_layout %q", s.AI.Backend, s.AI.Agent.ChatLayout)
 	}
 	s.AI.Backend = "gpt"

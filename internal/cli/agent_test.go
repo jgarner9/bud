@@ -165,7 +165,7 @@ func TestAgentOpenClaw(t *testing.T) {
 	token := filepath.Join(t.TempDir(), "gateway-token")
 	os.WriteFile(token, []byte("tok\n"), 0o600)
 	os.MkdirAll(filepath.Join(state, "bud"), 0o755)
-	cfg, _ := json.Marshal(map[string]any{"ai": map[string]any{"openclaw": map[string]any{"url": "wss://home:18789", "token_file": token}}})
+	cfg, _ := json.Marshal(map[string]any{"ai": map[string]any{"backend": "openclaw", "openclaw": map[string]any{"url": "wss://home:18789", "token_file": token}}})
 	os.WriteFile(filepath.Join(state, "bud", "config.json"), cfg, 0o644)
 
 	var dir string

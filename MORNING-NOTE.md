@@ -39,7 +39,9 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
 15. **`:BudAgent [status|restart|stop|option]`**: the backend's session at a glance, plus its settings (OpenClaw's `thought_level`, `fast_mode` and the rest), checked against the real Gateway. Errors now carry OpenClaw's own reason instead of a bare "Internal error".
 16. **bud's chat is themeable:** `BudChatYou`, `BudChatAgent`, `BudChatTool`, `BudChatToolDone`, `BudChatToolFailed`, `BudChatThinking` and `BudChatPrompt` are highlight groups with default links. It also shows thinking as one line, plans as a checklist, and completes slash commands with `<C-x><C-o>`.
 17. **A second real backend checked:** last night's OpenCode 2.2.7 through `opencode acp`, driven by bud's chat with the same scripted model. Session, streaming and an edit in the project all work, and bud's chat now shows the standard ACP diff OpenCode sends. With OpenCode set to ask before edits, its permission request carried the diff, so the review-before-write path (D134) is proven on a real backend too. The protocol layer isn't tied to OpenClaw.
-18. The README and troubleshooting page mention the backend. `just check` (everything CI runs, smoke included) passed after item 14.
+18. `bud ai status` checks a Gateway on the laptop too (the recommended setup): with no URL set, it reads OpenClaw's own config and dials the local Gateway. Checked against a running one.
+19. The diff review moved out of the IDE bridge into `bud.ai.review`, so it outlives the bridge if task 6 removes it.
+20. The README and troubleshooting page mention the backend. `just check` (everything CI runs, smoke included) passed after item 14.
 
 ## Decisions waiting on you
 
@@ -57,10 +59,18 @@ Branch: `bud/upbeat-wright-g2fwv6`, every commit pushed. `just lint`, `go test .
 ## Left in 1.1 (BASE.md section 6)
 
 - Task 6: move the `claude` backend onto `claude-agent-acp` and remove the stream-json transport and the IDE bridge. Not started; the `claude` backend still runs on the old path.
-- Task 9's config migration from `ai.claude.*` to `ai.agent.*` (41 references across 17 files, mostly on the Claude path task 6 rewrites, so it's best done with task 6), and task 11 (remove `bud claude`, clod's setup and cloud work).
+- Task 9's move of `ai.claude.*` to `ai.agent.*` (41 references across 17 files, mostly on the Claude path task 6 rewrites, so best done with it). The ACP backends already have `ai.agent.autostart` and `ai.agent.idle_minutes`.
+- Task 11: removing clod's setup (D130: 91 references across 17 files, including the kit, which syncs after clod) and cloud work (D129: in `issue.lua` and `work.lua`). These are decided, but large and tangled, so they deserve a focused session you can review. `bud claude` itself stays while the `claude` backend uses it (D135).
 - Task 13: an end-to-end run with your real home Gateway, Claude Code and ChatGPT Plus. This needs you.
 - Task 14 (the user docs beyond docs/openclaw.md) and task 15 (release 1.1.0).
 
 ## Where it stopped
 
-(updated as the work goes)
+At the last commit, everything on the branch is pushed and `just check` passes in full (lint, Go, the whole Lua suite, install, rotate, release-plan, site and smoke).
+
+**Recommended first steps for you:**
+
+1. Read decisions 0 to 5 above. 0 (where the Gateway runs) shapes the rest.
+2. On your laptop: `npm i -g openclaw` (needs Node 24.16+), `openclaw onboard`, then `bud ai status`.
+3. Try bud's own chat with `<leader>av` and the OpenClaw TUI pane with `<leader>ac`, and tell me how you want the chat to look.
+4. When Linear is back, re-aim or close JGA-262 to JGA-276, and file the 1.1 tasks from BASE.md section 6.

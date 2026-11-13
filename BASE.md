@@ -1,6 +1,6 @@
 # Bud IDE: BASE plan
 
-> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is the plan for 1.1: D111-D116); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
+> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is the plan for 1.1: D111-D117); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
 > Date: 2026-10-24, updated 2026-11-13
 
 ## 0. The one-paragraph version
@@ -135,6 +135,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D114 | **What the account should hold is data in the public manifest.** | 2026-11-13 | Plan, 4.3. The other option was per-machine config, which keeps the connector list out of the public repo but then has to sync some other way, against the point of D111. Connector names (Linear, Exa, Context7) are generic; the Basic Memory URL and every key stay on the machine. Replaces clod's `desktop/claude-ai.md`, a dated prose snapshot that had to be kept true by hand. |
 | D115 | **Every change to the setup follows one loop: change the manifest, sync, do the guided steps, and status comes back clean.** | 2026-11-13 | Plan, 4.3 ("Changing the setup"). Jason asked for a system to follow when adding, updating or removing a connector, a plugin or a skill, in place of remembering which of three repos and which settings page each one lives in. The manifest is always changed first and the surfaces are brought to it, never the other way round, so a change made by hand on one surface shows in `bud kit status` as drift with two ways out: adopt it into the manifest or take it back out. Builds on D58 (`bud kit add` and `rm` in a checkout, `enable` and `disable` for one machine), which covers plugins and marketplaces today and is widened to servers and account connectors. |
 | D116 | **Bud 1.1 is one Claude setup everywhere.** | 2026-11-13 | Jason set the target. 1.1 is 4.3's build order: steps 1 to 5 (the manifest and status, guided account steps and the change loop, the clod port, cloud, the Neovim screen), and step 6 (bud-plugins into this repo) only if that open question is answered yes. The steps can ship in patch releases as they land, since each is useful on its own; `VERSION` goes to 1.1.0 with the one that retires clod (D113), which is the change a person setting up a machine will notice. |
+| D117 | **The setup is configured by asking Claude, which drives deterministic commands through a skill.** | 2026-11-13 | Plan, 4.3 ("Configuring by asking"). Jason's clarification of D115: the system he follows is natural language ("add the Sentry connector, off by default", "take Resend out everywhere", "why does the work Mac differ?"), not a set of commands to remember. Claude decides nothing about how a change is made: a skill names the loop of D115 and the `bud kit` command for each step, every command it uses has `--json` and `--dry-run`, and the skill always shows the dry run and asks before the real one. So the same request gives the same change whoever asks and on whichever machine, and everything Claude can do, a person can do by hand with the same commands. The guided account steps (D112) are read out by Claude one at a time, with the page to open, and marked done when Jason says so. On a surface with no `bud` binary (claude.ai on the web or the phone) the skill can only explain the steps and say where to run them. |
 
 ---
 
@@ -441,7 +442,7 @@ Flag names and the bridge protocol details get re-checked against Claude Code's 
 
 ### 4.3 One Claude setup everywhere (plan)
 
-> Not built; this is the 1.1 release (D116). Decisions D111-D116; the build order is in section 6 and what's still open is in section 7.
+> Not built; this is the 1.1 release (D116). Decisions D111-D117; the build order is in section 6 and what's still open is in section 7.
 
 The aim is that Claude is the same on every surface, and that one screen says where it isn't. bud holds the desired state in one manifest (D111), applies it wherever a local process can be wired, and for the claude.ai account, which nothing outside claude.ai can write, it reads, compares and guides (D112). clod's work moves into bud (D113), so a machine needs one binary and there is one place to look.
 
@@ -521,6 +522,19 @@ What that means for each kind of thing:
 | Whether one machine has an entry | `bud kit enable` | n/a | `bud kit disable` |
 
 Three rules keep this honest. **Drift is shown, not fixed silently:** something on a machine or the account that the manifest doesn't list appears in status as "not in the manifest", with `bud kit adopt` to write it into a checkout's manifest or the step to remove it; bud never removes what it didn't add (D56). **A removal is finished only when status says so**, since the account half can lag behind the machine half. **What bud can't see, it records:** the pasted instructions are compared by hash, and that record is kept per machine, so a second machine asks once more until it's marked there too.
+
+**Configuring by asking (D117).** The loop above is what happens; asking Claude is how it's started. A skill (in the `bud` plugin, so every surface has it) turns a request into the loop's commands and never edits the manifest, `~/.claude` or `config.json` by hand:
+
+| Asked | The skill runs |
+| ----- | -------------- |
+| "What's out of step?" | `bud kit status --json`, then says it in words, guided steps first |
+| "Add the X connector, off by default" | `bud kit add connector ... --dry-run`, shows it, asks, runs it, then `bud kit sync --dry-run` and the same again |
+| "Remove X everywhere" | `bud kit rm X`, the sync, then walks through the account step and marks it done on a yes |
+| "I added X by hand on claude.ai, keep it" | `bud kit adopt X` |
+| "Not on this machine" | `bud kit disable X` |
+| "Ship it" | Hands over to `bud:release` for a manifest change; a push for a skill |
+
+Three things make it deterministic rather than merely convenient. The commands do the work and validate their own input, so a wrong guess by Claude is a usage error, not a half-written file. Every write has a dry run that the skill must show first. And status is the only source of what's true: the skill reads it again after each step instead of remembering what it did.
 
 **What goes away:** the clod repo and its `clod` command, `clod.repo`, `jgarner9/clod-template`, `setupClod` and the `clod` record (`internal/cli/clod.go`), clod's `autosync` hook, and the account checklist as prose. `docs/setup.md` loses its clod step.
 
@@ -748,7 +762,7 @@ All eight steps are built; this is the order they were planned in. Step 7's chat
 Each step ships and is useful on its own, and the first two move no repo.
 
 1. **The manifest and a read-only status.** `kit.json` gains `servers`, `settings`, `rules`, `account` and `cloud`, filled from what clod and its checklist say today. `bud kit status` reports every surface it can see against it, and changes nothing. This is the consistency check, before anything is ported.
-2. **Guided account steps.** The `core --pasted` idea made general: each account item that differs names its step, opens its page and can be marked done. Doctor's `core.md` and `claude setup` checks read the same data. `bud kit add` and `rm` are widened to servers and connectors, `bud kit adopt` writes drift into the manifest, and `docs/` gets a how-to with the table from "Changing the setup" (D115).
+2. **Guided account steps.** The `core --pasted` idea made general: each account item that differs names its step, opens its page and can be marked done. Doctor's `core.md` and `claude setup` checks read the same data. `bud kit add` and `rm` are widened to servers and connectors, `bud kit adopt` writes drift into the manifest, and `docs/` gets a how-to with the table from "Changing the setup" (D115). Every `bud kit` command gains `--json`, and the skill that drives them is written in bud-plugins (D117).
 3. **Port clod, a piece at a time:** MCP servers with their values and secrets; then base settings and rules, with merge mode; then Desktop's import file; then taking over a machine clod set up, after which `setupClod` and `clod.repo` are removed and the clod repo is archived (D113).
 4. **Cloud:** the environment's setup script installs bud and runs the sync.
 5. **The Neovim screen** over `bud kit status --json`.
@@ -765,4 +779,5 @@ For one Claude setup everywhere (4.3):
 1. **Does bud-plugins move into this repo too?** It would make one repo of three, with the marketplace in a subdirectory here. It hinges on something not yet tested: whether claude.ai's marketplace sync accepts a marketplace that is a subdirectory of a larger repo (Claude Code can, with `--sparse`). It also turns over the rule that a skill is changed in bud-plugins and never here, and every surface that names `jgarner9/bud-plugins` has to be pointed at the new place by hand (the account's marketplace, the cloud script). Options: move it once the test passes (recommended, as the last step, since nothing else waits on it); or keep it apart as the one public, work-safe repo every surface reads.
 2. **Should the pasted instructions stop changing?** Today `core.md` is pasted into claude.ai's personal preferences and pasted again when it changes, the one step nothing can automate (D112). Options: keep it as it is (it changes rarely, and bud says when it has); or paste a short fixed pointer once ("you are Bud; load `bud:core` first") and move the content into a skill that updates on a push. The second removes the manual step, at the price of a skill load in every conversation and of relying on the pointer being followed. Recommended: keep it as it is until the paste has actually been a nuisance.
 3. **Superpowers: in or out, everywhere?** D100 dropped it from the kit on 2026-11-08, but clod's `plugin` feature still installs it on a third-party provider and the account checklist still lists it, so sessions differ by surface today. The manifest has to say one thing. Recommended: out everywhere, as D100 reasoned, with the account step guided.
+5. **How Claude reaches the commands (D117).** Options: the `bud kit` commands with `--json`, run through Bash by the skill (recommended: nothing new to build or keep running, and no tool names added to every session, which D101 and D102 worked to cut); or a small MCP server in the bud binary (`bud mcp`) with one typed tool per command, which also works in Desktop chat on a machine, at the price of those tool names in every request and a second interface to keep in step with the CLI.
 4. **The command's name.** Everything above sits under `bud kit` (`sync`, `status`, `enable`, `disable`), which exists and already means "bud's Claude setup". The other option is to move it under `bud claude`, beside `status` and `setup`. Recommended: keep `bud kit`, and have `bud claude status` point at it.

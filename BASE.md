@@ -1,6 +1,6 @@
 # Bud IDE: BASE plan
 
-> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is the plan for 1.1: D111-D121); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
+> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is the plan for 1.1: D111-D122); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
 > Date: 2026-10-24, updated 2026-11-13
 
 ## 0. The one-paragraph version
@@ -140,6 +140,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D119 | **claude.ai's personal preferences hold a fixed pointer, pasted once; the instructions themselves become a skill.** | 2026-11-13 | Plan, 4.3. The paste was the one step nothing can automate (D112), repeated whenever `core.md` changed. Now the pasted text is a few fixed lines naming the persona and telling Claude to load `bud:core` first, and what `core.md` said lives in that skill, which updates on a push like any other. Jason took the known risk: a skill load in every conversation, and reliance on the pointer being followed. Machines don't rely on it: the sync still writes the full instructions as a rule under `~/.claude/rules/`, taken from the skill's file, since a rule always loads. `bud kit core --pasted` stays for the one paste; the changed-since-pasted warning (JGA-179) only fires if the pointer itself ever changes. |
 | D120 | **Superpowers is out everywhere.** | 2026-11-13 | Plan, 4.3; completes D100, which dropped it from the kit while clod's `plugin` feature and the account still installed it (JGA-241). The manifest lists it under the account as not wanted, so status shows it until the guided step to turn it off is done, and the clod port carries no pinned-plugin path. Jason will write a planning schema and skills of his own in its place; that is separate work, not part of 1.1. |
 | D121 | **Everything about the Claude setup is under `bud kit`.** | 2026-11-13 | Plan, 4.3. The other option was `bud claude`, beside `status` and `setup`. `bud kit` exists and already means bud's Claude setup; `bud claude status` points at `bud kit status`, and `bud claude setup` stays as what installs Claude Code and logs in. |
+| D122 | **Claude reaches the setup through the `bud kit` commands with `--json`, not an MCP server.** | 2026-11-13 | Plan, 4.3; settles how D117's skill works. The skill runs the commands through Bash. Options were that, or a small MCP server in the binary (`bud mcp`) with a typed tool per command. The commands have to exist anyway for use by hand, so a server would be a second interface to keep in step with them, and its tool names would sit in every request of every session, which D101 and D102 worked to cut. What a server would add is Desktop chat on a machine, and a change to the setup needs a checkout and a release, which is Claude Code's ground. It can be added later over the same commands if that turns out to matter. |
 
 ---
 
@@ -446,7 +447,7 @@ Flag names and the bridge protocol details get re-checked against Claude Code's 
 
 ### 4.3 One Claude setup everywhere (plan)
 
-> Not built; this is the 1.1 release (D116). Decisions D111-D121; the build order is in section 6 and what's still open is in section 7.
+> Not built; this is the 1.1 release (D116). Decisions D111-D122; the build order is in section 6 and what's still open is in section 7.
 
 The aim is that Claude is the same on every surface, and that one screen says where it isn't. bud holds the desired state in one manifest (D111), applies it wherever a local process can be wired, and for the claude.ai account, which nothing outside claude.ai can write, it reads, compares and guides (D112). clod's work moves into bud (D113), so a machine needs one binary and there is one place to look.
 
@@ -763,14 +764,30 @@ All eight steps are built; this is the order they were planned in. Step 7's chat
 
 ### 1.1: one Claude setup everywhere (4.3, D116): not built
 
-Each step ships and is useful on its own, and the first two move no repo.
+Each step ships and is useful on its own, and the first two move no repo. The issues are in Linear's Bud IDE project, milestone 1.1; an issue's blockers are in brackets.
 
-1. **The manifest and a read-only status.** `kit.json` gains `servers`, `settings`, `rules`, `account` and `cloud`, filled from what clod and its checklist say today. `bud kit status` reports every surface it can see against it, and changes nothing. This is the consistency check, before anything is ported.
-2. **Guided account steps.** The `core --pasted` idea made general: each account item that differs names its step, opens its page and can be marked done. Doctor's `core.md` and `claude setup` checks read the same data. The fixed pointer and the `bud:core` skill (D119) and Superpowers' removal from the account (D120) are the first two steps guided this way. `bud kit add` and `rm` are widened to servers and connectors, `bud kit adopt` writes drift into the manifest, and `docs/` gets a how-to with the table from "Changing the setup" (D115). Every `bud kit` command gains `--json`, and the skill that drives them is written in bud-plugins (D117).
-3. **Port clod, a piece at a time:** MCP servers with their values and secrets; then base settings and rules, with merge mode; then Desktop's import file; then taking over a machine clod set up, after which `setupClod` and `clod.repo` are removed and the clod repo is archived (D113).
-4. **Cloud:** the environment's setup script installs bud and runs the sync.
-5. **The Neovim screen** over `bud kit status --json`.
-6. **bud-plugins into this repo** (D118): first the check, by hand, that claude.ai syncs a marketplace from a subdirectory; then the move and the repointing.
+1. **The manifest and a read-only status.**
+   - Kit manifest: add servers, settings, rules, account and cloud sections (JGA-244)
+   - `bud kit status`: report every surface against the manifest, with `--json` (JGA-247) [JGA-244]
+2. **Guided account steps and the change loop.**
+   - Guided account steps: name the step, open the page, mark it done (JGA-251) [JGA-247]
+   - `bud kit add` and `rm` for servers and connectors, and `bud kit adopt` for drift (JGA-248) [JGA-244]
+   - Fixed pointer: move `core.md` into a `bud:core` skill and paste the pointer once (JGA-254) [JGA-251]
+   - Superpowers out everywhere (JGA-241) [JGA-251]
+   - Kit skill: configure the Claude setup by asking Claude (JGA-255) [JGA-247, JGA-248]
+   - How-to page: changing the Claude setup (JGA-256) [JGA-248]
+3. **Port clod, a piece at a time.**
+   - MCP servers, with values from config and secrets from the keychain (JGA-249) [JGA-244]
+   - Base settings and rules, with full and merge modes (JGA-250) [JGA-244]
+   - Desktop's import file on a third-party provider (JGA-252) [JGA-250]
+   - Take over a clod machine, remove `setupClod` and `clod.repo`, and release 1.1.0 (JGA-257) [JGA-249, JGA-250, JGA-252]
+4. **Cloud:** the environment's setup script installs bud and runs the sync (JGA-253) [JGA-249, JGA-250]
+5. **The Neovim screen** over `bud kit status --json` (JGA-258) [JGA-247, JGA-251]
+6. **bud-plugins into this repo** (D118).
+   - Check that claude.ai syncs a marketplace from a subdirectory, by hand (JGA-245)
+   - Move bud-plugins into this repo and repoint every surface (JGA-259) [JGA-257, JGA-245]
+
+Outside 1.1: a planning schema and skills of Jason's own, in place of Superpowers (JGA-246, D120).
 
 ---
 
@@ -778,6 +795,4 @@ Each step ships and is useful on its own, and the first two move no repo.
 
 Answered questions are now decisions in the table above (dashboard extras: D37; release key: D41; nightly: D42; first chat UI, sessions across projects and windows: D48-D50). What's left:
 
-For one Claude setup everywhere (4.3). Answered on 2026-11-13: bud-plugins moves in (D118), the pasted instructions become a fixed pointer (D119), Superpowers is out everywhere (D120), and it all sits under `bud kit` (D121). What's left:
-
-1. **How Claude reaches the commands (D117).** Options: the `bud kit` commands with `--json`, run through Bash by the skill (recommended: nothing new to build or keep running, and no tool names added to every session, which D101 and D102 worked to cut); or a small MCP server in the bud binary (`bud mcp`) with one typed tool per command, which also works in Desktop chat on a machine, at the price of those tool names in every request and a second interface to keep in step with the CLI.
+None right now. For one Claude setup everywhere (4.3), all five were answered on 2026-11-13: bud-plugins moves in (D118), the pasted instructions become a fixed pointer (D119), Superpowers is out everywhere (D120), it all sits under `bud kit` (D121), and Claude reaches it through the commands, not an MCP server (D122).

@@ -1,6 +1,6 @@
 # Bud IDE: BASE plan
 
-> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is a plan: D111-D115); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
+> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later (4.3, one Claude setup everywhere, is the plan for 1.1: D111-D116); the decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
 > Date: 2026-10-24, updated 2026-11-13
 
 ## 0. The one-paragraph version
@@ -134,6 +134,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D113 | **clod's job moves into bud, and the clod repo is retired.** | 2026-11-13 | Plan, 4.3. Supersedes D89 and D90. bud becomes the one tool on every machine, the work Mac included (binary only, `install.sh --no-install` then `bud claude setup`, which D89 already allowed for). What clod's `install.sh` does is ported to Go under `internal/kit`: full and merge modes (merge leaves a third-party provider's settings alone), features as kit entries a machine turns on or off, MCP servers through `claude mcp` with values from `config.json` and secrets from the keychain under service `bud` (unchanged), the `core.md` rule copied into `~/.claude/rules/`, and Desktop's import file on a third-party provider. clod was audited on 2026-11-13 and holds nothing private: every key is a `${VAR}` placeholder, the tailnet host is written `<tailnet>`, there is no account id, region or employer host, and its 10 commits carry no personal email. So its content can be public. It is ported fresh, without clod's git history, and with the wording made generic on the way ("a self-hosted notes connector", "a machine on a third-party provider"). `clod.repo`, `jgarner9/clod-template` and `setupClod` go once a machine has been taken over. |
 | D114 | **What the account should hold is data in the public manifest.** | 2026-11-13 | Plan, 4.3. The other option was per-machine config, which keeps the connector list out of the public repo but then has to sync some other way, against the point of D111. Connector names (Linear, Exa, Context7) are generic; the Basic Memory URL and every key stay on the machine. Replaces clod's `desktop/claude-ai.md`, a dated prose snapshot that had to be kept true by hand. |
 | D115 | **Every change to the setup follows one loop: change the manifest, sync, do the guided steps, and status comes back clean.** | 2026-11-13 | Plan, 4.3 ("Changing the setup"). Jason asked for a system to follow when adding, updating or removing a connector, a plugin or a skill, in place of remembering which of three repos and which settings page each one lives in. The manifest is always changed first and the surfaces are brought to it, never the other way round, so a change made by hand on one surface shows in `bud kit status` as drift with two ways out: adopt it into the manifest or take it back out. Builds on D58 (`bud kit add` and `rm` in a checkout, `enable` and `disable` for one machine), which covers plugins and marketplaces today and is widened to servers and account connectors. |
+| D116 | **Bud 1.1 is one Claude setup everywhere.** | 2026-11-13 | Jason set the target. 1.1 is 4.3's build order: steps 1 to 5 (the manifest and status, guided account steps and the change loop, the clod port, cloud, the Neovim screen), and step 6 (bud-plugins into this repo) only if that open question is answered yes. The steps can ship in patch releases as they land, since each is useful on its own; `VERSION` goes to 1.1.0 with the one that retires clod (D113), which is the change a person setting up a machine will notice. |
 
 ---
 
@@ -440,7 +441,7 @@ Flag names and the bridge protocol details get re-checked against Claude Code's 
 
 ### 4.3 One Claude setup everywhere (plan)
 
-> Not built. Decisions D111-D115; the build order is in section 6 and what's still open is in section 7.
+> Not built; this is the 1.1 release (D116). Decisions D111-D116; the build order is in section 6 and what's still open is in section 7.
 
 The aim is that Claude is the same on every surface, and that one screen says where it isn't. bud holds the desired state in one manifest (D111), applies it wherever a local process can be wired, and for the claude.ai account, which nothing outside claude.ai can write, it reads, compares and guides (D112). clod's work moves into bud (D113), so a machine needs one binary and there is one place to look.
 
@@ -742,7 +743,7 @@ All eight steps are built; this is the order they were planned in. Step 7's chat
 7. **The per-project Claude Code session and `bud.ai.claude` (4.2)**, then **`bud kit sync`**, then **chat mode** (Claude Code's TUI, D81) and the TUI pane, then the **tool generator** with lifecycle commands.
 8. Polish: settings UI, more languages, docs.
 
-### One Claude setup everywhere (4.3): not built
+### 1.1: one Claude setup everywhere (4.3, D116): not built
 
 Each step ships and is useful on its own, and the first two move no repo.
 

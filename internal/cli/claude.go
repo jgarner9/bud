@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"jgarner.dev/bud/internal/claude"
-	"jgarner.dev/bud/internal/paths"
 )
 
 func init() {
@@ -27,7 +26,7 @@ func Claude() *Command {
 			{Name: "status", Usage: "show whether Claude Code is installed and logged in", Run: func(_ *Globals, args []string) error { return claudeStatus(args) }},
 			{
 				Name:  "setup",
-				Usage: "install Claude Code if it's missing, log in with its own login, then set up clod",
+				Usage: "install Claude Code if it's missing, then log in with its own login",
 				Flags: func(fs *flag.FlagSet) {
 					fs.BoolVar(&yes, "yes", false, "install without asking (logging in still needs a terminal)")
 					fs.BoolVar(&yes, "y", false, "short for -yes")
@@ -36,15 +35,7 @@ func Claude() *Command {
 					if len(args) > 0 {
 						return usageErrorf("claude setup takes no arguments")
 					}
-					pr := terminalPrompter(yes)
-					if err := claudeSetup(pr, yes); err != nil {
-						return err
-					}
-					p, err := paths.Resolve()
-					if err != nil {
-						return err
-					}
-					return clodSetup(p, pr, yes)
+					return claudeSetup(terminalPrompter(yes), yes)
 				},
 			},
 		},
@@ -89,18 +80,6 @@ func claudeStatus(args []string) error {
 		dir = "~/.claude"
 	}
 	fmt.Printf("Config: %s\n", paint(out, ansiDim, dir))
-	if p, err := paths.Resolve(); err == nil {
-		if clodInstalled(p) {
-			state := "set up"
-			if r, ok := readClodRecord(p); ok && r.Repo != "" {
-				state += " from " + r.Repo
-			}
-			fmt.Printf("clod: %s\n", paint(out, ansiGreen, state))
-		} else {
-			fmt.Printf("clod: %s: run bud claude setup\n", paint(out, ansiYellow, "not set up"))
-		}
-	}
-
 	return nil
 }
 

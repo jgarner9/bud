@@ -130,7 +130,6 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 		return err
 	}
 	pr := updatePrompt()
-	offerClod(p, pr)
 	resyncKit(g, p, pr)
 	// --no-doctor is for scripts (the smoke test, lang-check), which sync into
 	// throwaway dirs and must never rebuild this machine's app
@@ -184,7 +183,6 @@ func finishUpdate(g *Globals, p *paths.Paths, from string, failingBefore []strin
 		}
 		if len(broke) == 0 {
 			editState(g, p, func(st *updater.State) { st.Available, st.Installed = "", "" })
-			offerClod(p, pr)
 			resyncKit(g, p, pr)
 			return nil
 		}

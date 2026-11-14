@@ -198,9 +198,6 @@ func TestInstallClaude(t *testing.T) {
 }
 
 func TestClaudeStatus(t *testing.T) {
-	// the clod line reads HOME and PATH
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("PATH", t.TempDir())
 	for s, want := range map[claude.Status]string{
 		claudeMissing:   "isn't installed",
 		claudeLoggedOut: "not logged in",

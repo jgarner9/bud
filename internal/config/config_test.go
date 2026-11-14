@@ -238,23 +238,34 @@ func TestDocsCoverEveryKey(t *testing.T) {
 	walk(tree, "")
 }
 
-// clod.repo has to be a GitHub owner/name, which gh can't read as a flag
-func TestClodRepoValidate(t *testing.T) {
-	for repo, ok := range map[string]bool{
-		"jgarner9/clod":     true,
-		"me/claude.setup_1": true,
-		"--web/x":           false,
-		"-me/clod":          false,
-		"me":                false,
-		"me/clod/extra":     false,
-		"me/cl od":          false,
-		"me/\tclod":         false,
-	} {
-		s := Defaults()
-		s.Clod.Repo = repo
-		if err := s.Validate(); (err == nil) != ok {
-			t.Errorf("%q: err %v, want ok %v", repo, err, ok)
-		}
+// a config.json from before clod was removed (D143) still loads, validates and
+// saves with its clod key untouched
+func TestOldClodKeyStillLoadsAndSaves(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	in := `{"profile": "minimal", "clod": {"repo": "me/claude-setup"}}`
+	if err := os.WriteFile(path, []byte(in), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := f.Settings()
+	if err != nil || s.Profile != "minimal" {
+		t.Fatalf("settings %+v, err %v", s, err)
+	}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Set("terminal", "ghostty"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Save(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), `"clod"`) || !strings.Contains(string(data), "me/claude-setup") {
+		t.Fatalf("clod key lost on save: %s", data)
 	}
 }
 

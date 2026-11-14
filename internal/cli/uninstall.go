@@ -118,12 +118,6 @@ func planUninstall(p *paths.Paths, keepConfig bool, exe string) (removals []remo
 		removals = append(removals, r)
 	}
 
-	// your clod is your own repo: bud cloned it, but it's yours to keep, and
-	// its own installer takes out what it set up
-	if exists(p.Clod()) {
-		kept = append(kept, p.Clod()+"  (your clod: '"+filepath.Join(p.Clod(), "install.sh")+" uninstall' takes its setup out of Claude Code, then delete the folder)")
-	}
-
 	if r, ok, err := configRemoval(p.Config); err != nil {
 		return nil, nil, err
 	} else if ok {

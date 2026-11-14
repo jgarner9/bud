@@ -11,7 +11,6 @@ import (
 	"io/fs"
 	"os"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -35,13 +34,6 @@ type Settings struct {
 	AI           AI        `json:"ai"`
 	Tools        Disabled  `json:"tools"` // bud tools enable/disable (D54)
 	Kit          Kit       `json:"kit"`
-	Clod         Clod      `json:"clod"`
-}
-
-// Clod is your private Claude Code setup repo (D89, D90)
-type Clod struct {
-	// owner/name; empty means <gh login>/clod
-	Repo string `json:"repo"`
 }
 
 // Kit is the kit's settings on this machine
@@ -181,10 +173,6 @@ type Claude struct {
 	Config string `json:"config"`
 }
 
-// githubRepo is a GitHub owner/name: an owner can't start with a hyphen, so
-// neither can be read as a flag by gh
-var githubRepo = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
-
 // Profiles are the install profiles
 var (
 	Profiles  = []string{"full", "minimal"}
@@ -231,9 +219,6 @@ func (s Settings) Validate() error {
 	}
 	if s.AI.Backend == "custom" && len(s.AI.Custom.Command) == 0 {
 		return fmt.Errorf("ai.backend: custom needs ai.custom.command, the agent's command line")
-	}
-	if r := s.Clod.Repo; r != "" && !githubRepo.MatchString(r) {
-		return fmt.Errorf("clod.repo: %q is not a GitHub owner/name", r)
 	}
 
 	return nil

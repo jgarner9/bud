@@ -19,7 +19,7 @@ type Paths struct {
 	State  string // ~/.local/state/bud: machine config, project registry, kit ledger
 	Cache  string // ~/.cache/bud: Neovim's stdpath("cache"), logs and bytecode
 	BinDir string // ~/.local/bin: where install.sh puts bud unless told otherwise
-	Home   string // $HOME, for what lives outside bud's own dirs (clod's checkout)
+	Home   string // $HOME, for what lives outside bud's own dirs
 }
 
 // Resolve reads XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME and XDG_CACHE_HOME, falling back
@@ -107,19 +107,6 @@ func (p *Paths) Layouts() string { return filepath.Join(p.Config, "layouts") }
 // UserLanguageSpecs holds the user's own specs (bud lang add), kept out of the
 // synced config since that's bud's (D21, D34)
 func (p *Paths) UserLanguageSpecs() string { return filepath.Join(p.UserTools(), "languages") }
-
-// Clod is where bud clones your clod, a private Claude Code setup repo (D89)
-func (p *Paths) Clod() string { return filepath.Join(p.Home, "clod") }
-
-// ClodBin is the clod command Jason's clod links in once its installer has run
-func (p *Paths) ClodBin() string { return filepath.Join(p.BinDir, "clod") }
-
-// ClodRecord is bud's record of the clod whose installer ran here (D90)
-func (p *Paths) ClodRecord() string { return filepath.Join(p.State, "clod.json") }
-
-// ClodDeclined marks that you said no to setting clod up, so bud update stops
-// asking; bud install and bud claude setup ask again
-func (p *Paths) ClodDeclined() string { return filepath.Join(p.State, "clod-declined") }
 
 // PrevBinary is the binary a self-update replaced, kept for rollback
 func (p *Paths) PrevBinary() string { return filepath.Join(p.Data, "bud.prev") }

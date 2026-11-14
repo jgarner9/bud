@@ -671,7 +671,7 @@ func declineKit(p *paths.Paths) {
 func markKitDeclined(p *paths.Paths) error { return setMarker(p.KitDeclined()) }
 
 // hasMarker says whether the empty marker file at path exists (a no that
-// bud remembers, like KitDeclined and ClodDeclined)
+// bud remembers, like KitDeclined)
 func hasMarker(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

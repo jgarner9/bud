@@ -160,7 +160,6 @@ bud main.go util.go # open files from the project they belong to
 | `bud claude` | Check and set up Claude Code |
 | `bud issue` | Say where issues filed from the editor go in Linear |
 | `bud chat` · `bud agent` | Claude Code outside the editor |
-| `bud kit` | Sync bud's Claude Code plugins |
 | `bud tools` | Manage editor tools |
 | `bud launch` · `bud bundle` | Open bud in a new terminal window · install the desktop app |
 | `bud bootstrap` | Install bud on another machine over SSH |
@@ -207,7 +206,7 @@ just lang-check go   # check one language's tooling on a sample project
 
 The Go side is standard library only, and flags go before positional arguments. [`CLAUDE.md`](CLAUDE.md) has the architecture tour. `bud dev link` points your editor at a checkout.
 
-Releases come from `VERSION`: run Claude Code's `/bud:release` (from [bud-plugins](https://github.com/jgarner9/bud-plugins)), which reviews everything since the last tag and bumps it on `main`; CI tags the release and GoReleaser builds it.
+Releases come from `VERSION`: run the release skill in Claude Code, which reviews everything since the last tag and bumps it on `main`; CI tags the release and GoReleaser builds it.
 
 ## License
 

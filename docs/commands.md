@@ -15,7 +15,7 @@ bud [global flags] <command> [command flags] [args]
 | `--layout <name>` | The pane layout to open the editor with, just this once. |
 | `--no-update` | Skip the background update check at launch. |
 
-`-y` is short for `--yes` on `install`, `uninstall`, `claude setup`, `lang enable`, `lang rm` and `kit unsync`.
+`-y` is short for `--yes` on `install`, `uninstall`, `claude setup`, `lang enable` and `lang rm`.
 
 ## Opening things
 
@@ -31,7 +31,7 @@ bud [global flags] <command> [command flags] [args]
 | Command | What it does |
 | --- | --- |
 | `bud install [--yes]` | Asks for the profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree (on Linux it downloads a checksum-verified Neovim or tree-sitter-cli itself when the package manager's is missing or too old), syncs the config, restores plugins, then runs `bud doctor`. `--yes` takes every default. |
-| `bud update` | Installs a newer release (only for a binary `install.sh` installed), syncs the config, restores plugins, parsers and language tools, syncs the Claude Code kit, rebuilds the desktop app if you've run `bud bundle` and it's out of date (another bud built it, kitty updated, or it moved; not while it's open), then runs the full `bud doctor` and exits 1 on a failure. Rolls back by itself if a check that passed before now fails. |
+| `bud update` | Installs a newer release (only for a binary `install.sh` installed), syncs the config, restores plugins, parsers and language tools, rebuilds the desktop app if you've run `bud bundle` and it's out of date (another bud built it, kitty updated, or it moved; not while it's open), then runs the full `bud doctor` and exits 1 on a failure. Rolls back by itself if a check that passed before now fails. |
 | `bud update --check [--channel stable\|nightly]` | Only says whether a newer release is out. |
 | `bud update --no-doctor` | Skips the app rebuild and the doctor at the end, for scripts. |
 | `bud update --background` | What bud starts by itself at launch, detached and at most once a day, so launching never waits on the network. It installs a newer stable release when `update.auto` is on, else only notes it for the dashboard. `--no-update` skips it. You don't normally run it. |
@@ -87,11 +87,6 @@ bud is moving to talk to its AI over the Agent Client Protocol (ACP), with the b
 | `bud agent [path]` | Claude Code's own TUI in a project, from the shell. |
 | `bud chat [--resume]` | Claude Code in chat mode, outside any project. `--resume` picks an earlier chat. |
 | `bud plugin path` | Unpacks the `bud-ide` plugin bud ships (if needed) and prints its dir; the editor passes it to Claude Code with `--plugin-dir`. |
-| `bud kit sync [--dry-run]` | Installs bud's Claude Code plugins and their marketplace into Claude Code. |
-| `bud kit status` / `ls` | Per item: synced, not synced, changed or skipped and why; or what the kit holds. |
-| `bud kit unsync [--dry-run] [--yes]` | Takes out everything the kit added, leaving what's yours. |
-| `bud kit enable` / `disable <name>` | Keeps one kit entry in or out on this machine. |
-| `bud kit core [--pasted]` | Prints bud-plugins' `core.md` to paste into claude.ai's preferences; `--pasted` records that you did. |
 | `bud tools ls` | Your tools and bud's, and whether each is on. |
 | `bud tools gen "<description>"` | Has Claude write a tool or language spec, in the editor. See [tools](tools.md). |
 | `bud tools enable` / `disable [--reason] <name>` | Turns a tool on or off. |
@@ -109,5 +104,3 @@ How the pieces fit together is in [Claude Code in bud](claude-code.md).
 | --- | --- |
 | `bud dev link [path]` | Points `~/.config/bud` at a checkout with symlinks, so edits show up on the next start. |
 | `bud dev unlink` | Goes back to the config this bud ships. |
-| `bud kit add [--repo dir] plugin <name@marketplace>` | Lists a plugin in a checkout's kit (`add marketplace <name> <source>` for a marketplace). |
-| `bud kit rm [--repo dir] <name>` | Takes an entry out of the kit; the next sync removes it from Claude Code. |

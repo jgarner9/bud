@@ -7,12 +7,11 @@ This page is the `claude` backend, the default (`ai.backend = "claude"`). From 1
 ```sh
 bud claude status    # installed? logged in?
 bud claude setup     # install it with Anthropic's installer, then log in
-bud kit sync         # bud's Claude Code plugin (bud); the editor's bud-ide comes inside bud
 ```
 
-`bud install` does all three. By default bud shares `~/.claude` with the `claude` you run yourself, so its sessions get your MCP servers, settings, rules and login; `ai.claude.config = "bud"` gives bud a config dir of its own instead. A cloud provider (Bedrock, Vertex, Foundry) set up in `~/.claude/settings.json` works when the dir is shared. [Troubleshooting](troubleshooting.md) covers the details.
+`bud install` does both. By default bud shares `~/.claude` with the `claude` you run yourself, so its sessions get your MCP servers, skills, settings, rules and login; `ai.claude.config = "bud"` gives bud a config dir of its own instead. A cloud provider (Bedrock, Vertex, Foundry) set up in `~/.claude/settings.json` works when the dir is shared. [Troubleshooting](troubleshooting.md) covers the details.
 
-bud doesn't set up your MCP servers, settings or rules: they're yours to keep in `~/.claude` (or wherever your own tooling puts them), and bud's sessions use them while the config dir is shared.
+bud doesn't set up your MCP servers, skills, settings or rules: they're yours to keep in `~/.claude` (or wherever your own tooling puts them), and bud's sessions use them while the config dir is shared. The only plugin bud adds is its own `bud-ide`, which comes inside the binary and reaches just the sessions the editor starts.
 
 ## The project session
 

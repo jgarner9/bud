@@ -76,7 +76,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `ai.claude.idle_minutes` | `30` | Stop a session nothing has used for this long; the next use starts it again on the same conversation. `0` never stops one. |
 | `ai.claude.args` | `[]` | Extra flags for every session, e.g. `["--model", "opus"]`. |
 | `ai.claude.command` | unset | What runs Claude Code when it isn't `claude` itself: a wrapper that passes the rest on, e.g. `["headroom", "wrap", "claude", "--code-memory", "none", "--"]`. `bud install` offers exactly that when Headroom is installed, and `bud doctor` warns if the wrapper isn't on PATH. |
-| `ai.claude.config` | `"home"` | Whose Claude Code config bud uses. `"home"` shares `~/.claude` with the `claude` you run yourself, so bud's sessions get its MCP servers, settings, rules and login. `"bud"` is its own, in `~/.local/share/bud/claude` (set as `CLAUDE_CONFIG_DIR` for everything bud starts): the kit, plugins, settings, history and login stay apart, so it needs its own login (`bud claude setup`), and it can't see a cloud provider set up in `~/.claude/settings.json` (then `bud claude setup` and `bud install` offer to share). When this changes, `bud kit sync` offers to take what the kit added out of the old one. The first kit sync into `~/.claude` lists what it adds and asks first, and `bud kit unsync` takes the kit back out. A `CLAUDE_CONFIG_DIR` you set yourself wins. |
+| `ai.claude.config` | `"home"` | Whose Claude Code config bud uses. `"home"` shares `~/.claude` with the `claude` you run yourself, so bud's sessions get its MCP servers, skills, settings, rules and login. `"bud"` is its own, in `~/.local/share/bud/claude` (set as `CLAUDE_CONFIG_DIR` for everything bud starts): plugins, settings, history and login stay apart, so it needs its own login (`bud claude setup`), and it can't see a cloud provider set up in `~/.claude/settings.json` (then `bud claude setup` and `bud install` offer to share). A `CLAUDE_CONFIG_DIR` you set yourself wins. |
 | `ai.issues.team` | unset | The Linear team issues filed with `<leader>ai` go to, for projects without their own (`bud issue set --team T [--project P] [project]`). `bud issue set --global` sets it. |
 | `ai.issues.project` | unset | The Linear project in that team, if any. |
 | `ai.issues.bud.team` | `"JGA"` | Where issues about bud itself (`<leader>aB`) go: bud's own tracker. |
@@ -84,12 +84,11 @@ bud config edit                           # open it in bud's editor, then check 
 | `ai.issues.bud.checkout` | unset | The bud checkout Claude reads and works in for issues about bud. `<leader>aB` asks for it once and saves it with `bud issue checkout <path>`; it is checked each time, and asked for again if the dir was moved or removed. A `bud dev link` checkout takes precedence. |
 | `ai.work.where` | `"local"` | Where `<leader>aw` has Claude fix an issue: `local` is a git worktree beside the repo; `cloud` starts a Claude Code cloud session that clones the repo from GitHub, works the issue and pushes a branch (the repo needs a GitHub `origin` with the base branch pushed). `:BudIssue work ID cloud` or `local` picks per issue. See [filing issues](issues.md#in-the-cloud). |
 
-## Tools and the kit
+## Tools
 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `tools.disabled` | unset | Tools turned off on this machine. `bud tools enable/disable` edits it; a tool that fails to load is added here with the reason (`bud tools ls` shows it). |
-| `kit.disabled` | unset | Kit entries turned off on this machine, by name (`bud@bud-plugins`, `bud-plugins`); a plugin's entry also covers the same plugin from another marketplace, so one stays off when the kit moves it. `bud kit sync` removes what bud added of them from Claude Code. `bud kit enable/disable` edits it, and enable clears an entry under an old marketplace too. |
 
 ## Environment
 
@@ -97,4 +96,4 @@ bud config edit                           # open it in bud's editor, then check 
 | --- | --- |
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` | Where bud's dirs go, on macOS too. |
 | `NO_COLOR` | Plain output, no colour. |
-| `CLAUDE_CONFIG_DIR` | Where Claude Code's own config is (default `~/.claude`). bud's kit and IDE bridge follow it. |
+| `CLAUDE_CONFIG_DIR` | Where Claude Code's own config is (default `~/.claude`). bud's IDE bridge follows it. |

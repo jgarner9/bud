@@ -20,7 +20,7 @@ bud is a personal tool that happens to be public: it's built around one person's
 
 Everything else (Neovim 0.12+, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, each language's toolchain) is installed for you in step 2, after you've seen the command.
 
-The editor works without Claude: say no at step 3 and steps 3 to 5 are skipped. `bud claude setup` picks them up later.
+The editor works without Claude: say no at step 3 and step 3 is skipped. `bud claude setup` picks them up later.
 
 ## 1. Install the binary
 
@@ -42,7 +42,7 @@ It asks a few questions, then does the work in this order. `--yes` takes every d
 4. **System packages:** it prints the package manager command for whatever is missing and runs it once you agree. On Linux, when the distro's Neovim or tree-sitter-cli is missing or too old, bud downloads a pinned, checksum-verified build into its own data dir instead, and touches nothing under `/usr`.
 5. **The config:** the Neovim config inside the binary is synced to `~/.config/bud` and the pinned plugins are restored. This is its own Neovim (`NVIM_APPNAME=bud`); `~/.config/nvim` is never touched.
 6. **The desktop app** (full profile): `Bud.app` on macOS, `bud.desktop` on Linux. `bud bundle` builds it again.
-7. **Claude Code and the kit:** steps 3 and 4 below.
+7. **Claude Code:** step 3 below.
 8. **`bud doctor`:** the health check, with the fix for anything that's wrong.
 
 ## 3. Claude Code
@@ -54,46 +54,19 @@ bud claude setup     # install it, then log in
 bud claude status    # installed? logged in?
 ```
 
-bud shares `~/.claude` with the `claude` you run yourself, so one login and one set of settings covers both. Its MCP servers, settings and rules are yours to keep in `~/.claude` however you like (bud doesn't set them up); `bud doctor` warns when a server the kit expects is missing. On Bedrock, Vertex or Foundry there is nothing to log in to: bud sees the provider settings already in `~/.claude/settings.json`.
+bud shares `~/.claude` with the `claude` you run yourself, so one login and one set of settings covers both. Its MCP servers, settings and rules are yours to keep in `~/.claude` however you like (bud doesn't set them up), so bringing your own Claude Code setup is putting it there. On Bedrock, Vertex or Foundry there is nothing to log in to: bud sees the provider settings already in `~/.claude/settings.json`.
 
 On the full profile, `bud install` also offers to run Claude Code through Headroom when it's installed, which trims tool output to save tokens. It's optional; `bud config set ai.claude.command` changes it later.
 
-## 4. The kit: bud's Claude Code plugins
-
-```sh
-bud kit sync         # what bud install runs
-bud kit status       # what's installed, and why anything was skipped
-```
-
-The kit installs one plugin into Claude Code from the public [`bud-plugins`](https://github.com/jgarner9/bud-plugins) marketplace: **`bud`**, how Jason wants Claude to work (code style, planning, tool use, debugging, releases). It's opinionated on purpose. If it isn't for you, `bud kit disable bud@bud-plugins` keeps it out.
-
-The editor's own plugin, **`bud-ide`** (the skill that files issues, the agent bud's chat starts, and notes that tell Claude it's inside bud), comes inside the bud binary and needs no setup. bud passes it to the Claude Code sessions it starts with `--plugin-dir`, so a `claude` you run yourself never loads it. If an earlier bud installed `bud-ide@bud-plugins`, `bud kit sync` uninstalls it; a copy you installed yourself stays until you run `claude plugin uninstall bud-ide@bud-plugins`.
-
-`bud install` syncs the kit only once Claude Code is logged in; logged out, it tells you to run `bud kit sync` later. Sync never overwrites something you set up yourself, and `bud kit unsync` takes out everything it added.
-
-## 5. claude.ai (optional)
-
-Only if you want claude.ai, the phone app and Claude Desktop to behave like Claude Code in bud. None of bud needs it.
-
-1. On claude.ai: Customize, Plugins, Add marketplace, `jgarner9/bud-plugins`, and turn on **Sync automatically**. Add `bud` from it (`bud-ide` comes with bud itself).
-2. Paste `core.md`, the short always-on instructions, into Settings, Profile, personal preferences:
-
-   ```sh
-   bud kit core | pbcopy      # macOS; on Linux pipe to wl-copy or xclip
-   bud kit core --pasted      # record that you did, so bud can say when it changes
-   ```
-
-When `core.md` changes upstream, `bud kit sync` and `bud doctor` tell you to paste it again.
-
-## 6. Check it
+## 4. Check it
 
 ```sh
 bud doctor
 ```
 
-Every line should be OK. A warning or failure comes with the command that fixes it; [Troubleshooting](troubleshooting.md) covers the ones that need more than a command. The full run also checks that Claude Code has the MCP servers bud's sessions expect and that your plugins are the current ones.
+Every line should be OK. A warning or failure comes with the command that fixes it; [Troubleshooting](troubleshooting.md) covers the ones that need more than a command.
 
-## 7. First run
+## 5. First run
 
 ```sh
 bud                 # the dashboard
@@ -117,25 +90,14 @@ For a second desktop, run step 1 there, then set up Claude Code's own config (`~
 
 ## Keeping it current, and taking it out
 
-- **Updates** install themselves in the background when a stable release is out (`update.auto`). `bud update` does it by hand: the new binary, the config, plugins, language tools and the kit, then `bud doctor`. If a check that passed before fails afterwards, it rolls back.
+- **Updates** install themselves in the background when a stable release is out (`update.auto`). `bud update` does it by hand: the new binary, the config, plugins, language tools, then `bud doctor`. If a check that passed before fails afterwards, it rolls back.
 - **`bud uninstall`** lists everything bud put on the machine and removes it after asking. Claude Code itself stays, since it's yours; [Troubleshooting](troubleshooting.md#starting-over) says how to remove those too.
-
-## How the pieces fit
-
-| Piece | Where it lives | What it is | Who changes it |
-| --- | --- | --- | --- |
-| **bud** | [`jgarner9/bud`](https://github.com/jgarner9/bud), public | The CLI and the whole Neovim config, shipped as one signed binary. | Releases; `bud update` brings them. |
-| **bud-plugins** | [`jgarner9/bud-plugins`](https://github.com/jgarner9/bud-plugins), public | A Claude Code plugin marketplace: `bud` for how Claude works. | Jason; `bud kit sync` and claude.ai pick up changes. |
-
-bud itself holds no Claude content and no secrets: how Claude behaves comes from the plugins, and how your machine is wired is Claude Code's own config, which you keep however you like.
 
 ## Making it yours
 
 The places where bud is Jason's, and what to do about each:
 
-- **The `bud` plugin** (code style, planning, tools): `bud kit disable bud@bud-plugins`, or fork `bud-plugins` and add your fork with `bud kit add marketplace` in a checkout.
 - **Where issues go:** issues filed about bud itself default to Linear team `JGA`, project `Bud IDE`. `bud config set ai.issues.bud.team <yours>` (and `ai.issues.bud.project`) points them at a tracker of your own. Issues about your projects go wherever `bud issue set` says; [Filing issues](issues.md) has the detail.
-- **The MCP servers bud expects** (Basic Memory, Context7, Exa): `bud doctor` warns when Claude Code lacks one. They're what the `bud` plugin's skills reach for; add them to Claude Code yourself (`claude mcp add`), or ignore the warning if you turned that plugin off.
 - **Editor settings:** `<leader>,` or `bud config`. Every key and its default is in [Config](config.md).
 - **Languages and tools of your own:** [Languages](languages.md) and [Tools](tools.md). Yours live in `~/.local/share/bud/user-tools/` and survive updates. Each project can pick its own [layout](layouts.md).
 

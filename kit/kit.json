@@ -3,8 +3,7 @@
     "bud-plugins": "https://github.com/jgarner9/bud-plugins.git"
   },
   "plugins": [
-    "bud@bud-plugins",
-    "bud-ide@bud-plugins"
+    "bud@bud-plugins"
   ],
   "servers": {
     "basic-memory": {

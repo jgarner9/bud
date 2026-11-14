@@ -21,9 +21,14 @@ func TestShippedKit(t *testing.T) {
 	if k.Marketplaces["bud-plugins"] != "https://github.com/jgarner9/bud-plugins.git" {
 		t.Errorf("marketplaces %v", k.Marketplaces)
 	}
-	for _, id := range []string{"bud@bud-plugins", "bud-ide@bud-plugins"} {
-		if !slices.Contains(k.Plugins, id) {
-			t.Errorf("no %s in %v", id, k.Plugins)
+	if !slices.Contains(k.Plugins, "bud@bud-plugins") {
+		t.Errorf("no bud@bud-plugins in %v", k.Plugins)
+	}
+	// bud-ide is embedded in the binary and loaded only by the editor's sessions
+	// (D142), so a synced copy would be a second one
+	for _, id := range k.Plugins {
+		if strings.HasPrefix(id, "bud-ide@") {
+			t.Errorf("%s is in the kit; bud ships bud-ide itself", id)
 		}
 	}
 	if slices.Contains(k.Plugins, "superpowers@bud-plugins") {

@@ -27,3 +27,5 @@ The Go side of bud, one paragraph per area. CLAUDE.md keeps the registry, prompt
 **Migrations.** `migrations/NNNN_name.lua` (embedded, `bud.Migrations()`) run once each from `nvim.Apply`, after the sync and before the plugin restore: `internal/migrate.Run` records each in `~/.local/state/bud/migrations.json` as it succeeds and stops at the first failure, so it reruns next time. A fresh install (no sync manifest yet) marks them all done instead (`MarkAll`). Each runs in `nvim --clean --headless -l` with `BUD_CONFIG_DIR`/`BUD_DATA_DIR`/`BUD_STATE_DIR`/`BUD_CACHE_DIR`; `migrations/0001_example.lua` documents the contract. Never edit or renumber a shipped one.
 
 **Version.** `internal/version.Version` is set by GoReleaser via `-ldflags -X`. Without it, `String()` falls back to the module version Go stamps into the build.
+
+**Plugin** (D142): `bud plugin path` (`internal/cli/plugin.go`) calls `plugin.Dir` and prints the dir the embedded `bud-ide` plugin was extracted to; the editor runs it once to build `--plugin-dir`. `bud agent` and `bud chat` call `plugin.Args` directly. See kit.md for the extraction.

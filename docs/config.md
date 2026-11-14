@@ -90,7 +90,7 @@ bud config edit                           # open it in bud's editor, then check 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `tools.disabled` | unset | Tools turned off on this machine. `bud tools enable/disable` edits it; a tool that fails to load is added here with the reason (`bud tools ls` shows it). |
-| `kit.disabled` | unset | Kit entries turned off on this machine, by name (`bud-ide@bud-plugins`, `bud-plugins`); a plugin's entry also covers the same plugin from another marketplace, so one stays off when the kit moves it. `bud kit sync` removes what bud added of them from Claude Code. `bud kit enable/disable` edits it, and enable clears an entry under an old marketplace too. |
+| `kit.disabled` | unset | Kit entries turned off on this machine, by name (`bud@bud-plugins`, `bud-plugins`); a plugin's entry also covers the same plugin from another marketplace, so one stays off when the kit moves it. `bud kit sync` removes what bud added of them from Claude Code. `bud kit enable/disable` edits it, and enable clears an entry under an old marketplace too. |
 
 ## Environment
 

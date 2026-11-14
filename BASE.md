@@ -166,6 +166,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D145 | **The `bud-plugins` repository is absorbed elsewhere and archived by its owner.** | 2026-11-14 | A skill, agent or command for bud's own sessions is changed in bud, inside the embedded plugin (D142). The rule in CLAUDE.md that says such changes belong in `bud-plugins` is corrected when the plugin move lands, not before. Amends that rule only once task 41 ships. |
 | D146 | **User docs treat backends as the user's choice, with OpenClaw as one worked example, including its server setup.** Planned. | 2026-11-14 | Follows from D141. Replaces the plan in 1.1 task 14 that made OpenClaw's setup the main path (2.0, task 44). |
 | D147 | **v2.0.0 is the release that carries D142-D144.** | 2026-11-14 | Breaking: `bud kit sync`, `bud claude` setup and `clod.repo` go. The owner cuts it with the release skill after a code review and a security review (task 46). Nothing in D141-D146 changes `VERSION` or ships on its own. |
+| D148 | **The embedded `bud-ide` plugin reaches a session as `--plugin-dir <data>/plugins/bud-ide-<content hash>`, nothing is installed into Claude Code.** | 2026-11-14 | How D142 is built. `bud plugin path` extracts atomically (temp dir, rename) and prints the dir; the editor asks it once and `bud agent`/`bud chat` call the same code. A content hash, not the bud version, names the dir, so a release that doesn't touch the plugin keeps it. `bud-ide@bud-plugins` left the kit; `bud kit sync` uninstalls bud's earlier copy (the ledger), and CLAUDE.md's "changed in bud-plugins" rule now covers only the `bud` plugin (D145). |
 
 ---
 
@@ -867,11 +868,11 @@ One task is one commit with its own check, and `just check` passes after each. B
 - A planning schema and skills of Jason's own, in place of Superpowers (JGA-246, D120).
 - Docs: map each page to the code it describes, and fail a test when that code changes (JGA-261).
 
-### 2.0: generic bud (D141-D147): planned
+### 2.0: generic bud (D141-D147): in progress
 
-Nothing here is built. Task 40 (these decisions) is the only one done. Each later task is one commit with its own check.
+Tasks 40 (these decisions) and 41 are built; the rest are not. Each later task is one commit with its own check.
 
-- **41. Move the plugin in.** Embed `bud-ide` in the binary and hand it only to sessions the IDE starts (D142, D145).
+- **41. Move the plugin in. Built.** `bud-ide` is embedded (`plugins/bud-ide/`, `bud.Plugin()`) and handed with `--plugin-dir` only to sessions the IDE starts (D142, D145, D148); it is out of `kit/kit.json`.
 - **42. Remove clod.** `setupClod`, `clod.repo` and `bud claude`'s clod setup (D143).
 - **43. Remove `bud kit sync`** and the kit manifest, after 41 (D144).
 - **44. Docs.** Backends as the user's choice, OpenClaw as one worked example (D146).

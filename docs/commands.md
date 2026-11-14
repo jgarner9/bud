@@ -86,6 +86,7 @@ bud is moving to talk to its AI over the Agent Client Protocol (ACP), with the b
 | `bud claude setup [--yes]` | Installs Claude Code with Anthropic's installer if it's missing, runs its login, then sets up clod if it's missing (gh login, your repo made from the template if it doesn't exist, a clone into `~/clod`, its installer). See [Claude Code in bud](claude-code.md#setting-it-up). |
 | `bud agent [path]` | Claude Code's own TUI in a project, from the shell. |
 | `bud chat [--resume]` | Claude Code in chat mode, outside any project. `--resume` picks an earlier chat. |
+| `bud plugin path` | Unpacks the `bud-ide` plugin bud ships (if needed) and prints its dir; the editor passes it to Claude Code with `--plugin-dir`. |
 | `bud kit sync [--dry-run]` | Installs bud's Claude Code plugins and their marketplace into Claude Code. |
 | `bud kit status` / `ls` | Per item: synced, not synced, changed or skipped and why; or what the kit holds. |
 | `bud kit unsync [--dry-run] [--yes]` | Takes out everything the kit added, leaving what's yours. |

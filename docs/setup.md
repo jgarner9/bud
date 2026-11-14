@@ -77,10 +77,9 @@ bud kit sync         # what bud install runs
 bud kit status       # what's installed, and why anything was skipped
 ```
 
-The kit installs two plugins into Claude Code from the public [`bud-plugins`](https://github.com/jgarner9/bud-plugins) marketplace:
+The kit installs one plugin into Claude Code from the public [`bud-plugins`](https://github.com/jgarner9/bud-plugins) marketplace: **`bud`**, how Jason wants Claude to work (code style, planning, tool use, debugging, releases). It's opinionated on purpose. If it isn't for you, `bud kit disable bud@bud-plugins` keeps it out.
 
-- **`bud-ide`** is what the editor's features run on: the skill that files issues, the agent bud's chat starts, and notes that tell Claude it's inside bud. Keep this one.
-- **`bud`** is how Jason wants Claude to work: code style, planning, tool use, debugging, releases. It's opinionated on purpose. If it isn't for you, `bud kit disable bud@bud-plugins` keeps it out.
+The editor's own plugin, **`bud-ide`** (the skill that files issues, the agent bud's chat starts, and notes that tell Claude it's inside bud), comes inside the bud binary and needs no setup. bud passes it to the Claude Code sessions it starts with `--plugin-dir`, so a `claude` you run yourself never loads it. If an earlier bud installed `bud-ide@bud-plugins`, `bud kit sync` uninstalls it; a copy you installed yourself stays until you run `claude plugin uninstall bud-ide@bud-plugins`.
 
 `bud install` syncs the kit only once Claude Code is logged in; logged out, it tells you to run `bud kit sync` later. Sync never overwrites something you set up yourself, and `bud kit unsync` takes out everything it added.
 
@@ -88,7 +87,7 @@ The kit installs two plugins into Claude Code from the public [`bud-plugins`](ht
 
 Only if you want claude.ai, the phone app and Claude Desktop to behave like Claude Code in bud. None of bud needs it.
 
-1. On claude.ai: Customize, Plugins, Add marketplace, `jgarner9/bud-plugins`, and turn on **Sync automatically**. Add `bud` from it (not `bud-ide`).
+1. On claude.ai: Customize, Plugins, Add marketplace, `jgarner9/bud-plugins`, and turn on **Sync automatically**. Add `bud` from it (`bud-ide` comes with bud itself).
 2. Paste `core.md`, the short always-on instructions, into Settings, Profile, personal preferences:
 
    ```sh
@@ -138,7 +137,7 @@ For a second desktop, run step 1 there. Either way your clod repo is found by na
 | Piece | Where it lives | What it is | Who changes it |
 | --- | --- | --- | --- |
 | **bud** | [`jgarner9/bud`](https://github.com/jgarner9/bud), public | The CLI and the whole Neovim config, shipped as one signed binary. | Releases; `bud update` brings them. |
-| **bud-plugins** | [`jgarner9/bud-plugins`](https://github.com/jgarner9/bud-plugins), public | A Claude Code plugin marketplace: `bud-ide` for the editor, `bud` for how Claude works. | Jason; `bud kit sync` and claude.ai pick up changes. |
+| **bud-plugins** | [`jgarner9/bud-plugins`](https://github.com/jgarner9/bud-plugins), public | A Claude Code plugin marketplace: `bud` for how Claude works. | Jason; `bud kit sync` and claude.ai pick up changes. |
 | **clod** | `<you>/clod`, private | Your Claude Code setup: MCP servers, settings, rules, skills. | You. |
 | **clod-template** | [`jgarner9/clod-template`](https://github.com/jgarner9/clod-template), public | The starter your clod is made from, once. | Nobody, after that. |
 

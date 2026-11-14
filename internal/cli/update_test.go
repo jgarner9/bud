@@ -236,11 +236,11 @@ func TestCheckHealth(t *testing.T) {
 	doctorChecks = func(doctor.Options) []doctor.Result {
 		return []doctor.Result{
 			{Name: "nvim", Status: doctor.OK, Detail: "0.12.6"},
-			{Name: "tools", Status: doctor.Warn, Detail: "changed since you pasted it", Fix: "bud update"},
+			{Name: "tools", Status: doctor.Warn, Detail: "optional tool ruff is missing", Fix: "bud tools enable ruff"},
 		}
 	}
 	out = captureStdout(t, func() { err = checkHealth("") })
-	if err != nil || strings.Contains(out, "0.12.6") || !strings.Contains(out, "changed since you pasted it") || !strings.Contains(out, "fix: bud update") {
+	if err != nil || strings.Contains(out, "0.12.6") || !strings.Contains(out, "optional tool ruff is missing") || !strings.Contains(out, "fix: bud tools enable ruff") {
 		t.Fatalf("out %q", out)
 	}
 

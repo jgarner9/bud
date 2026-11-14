@@ -45,4 +45,4 @@ claude plugin marketplace list
 claude plugin marketplace remove MARKETPLACE        # once none of its plugins are in use
 ```
 
-Nothing there is needed for bud to work, and the `bud-ide` plugin that the editor uses now comes inside bud. If an old `bud-ide@...` copy is installed, uninstall it so Claude Code doesn't load it twice. An old `kit` entry in `config.json` is ignored and can stay or go.
+`bud uninstall` no longer removes any of this. The old bud also left three files in `~/.local/state/bud/`: `kit-ledger.json`, `kit-declined` and `core-pasted.json`. Nothing reads them, so they are safe to delete. Nothing there is needed for bud to work, and the `bud-ide` plugin that the editor uses now comes inside bud. If an old `bud-ide@...` copy is installed, uninstall it so Claude Code doesn't load it twice. An old `kit` entry in `config.json` is ignored and can stay or go.

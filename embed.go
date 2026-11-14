@@ -11,7 +11,9 @@ import (
 // languages/*.lua names the files, so _template.lua comes along: a directory
 // pattern would leave out names starting with _
 //
-//go:embed nvim languages/*.lua layouts/*.lua migrations/*.lua bundles tools kit
+// all:plugins keeps .claude-plugin/, which a plain directory pattern would drop
+//
+//go:embed nvim languages/*.lua layouts/*.lua migrations/*.lua bundles tools kit all:plugins
 var repoFS embed.FS
 
 // Config returns what bud syncs into ~/.config/bud: the repo's nvim/ directory
@@ -37,6 +39,13 @@ func Kit() fs.FS {
 // Bundles returns the app bundle templates bud bundle builds from (BASE.md 5.6)
 func Bundles() fs.FS {
 	return sub("bundles")
+}
+
+// Plugin returns the bud-ide Claude Code plugin (D142), whose root has
+// .claude-plugin/plugin.json; internal/plugin extracts it for the sessions the
+// IDE starts
+func Plugin() fs.FS {
+	return sub("plugins/bud-ide")
 }
 
 func sub(dir string) fs.FS {

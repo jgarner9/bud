@@ -394,3 +394,26 @@ func TestPrompterHelpers(t *testing.T) {
 		t.Errorf("no terminal: %v", err)
 	}
 }
+
+func TestPluginPathExtractsAndPrints(t *testing.T) {
+	r, w, _ := os.Pipe()
+	orig := os.Stdout
+	os.Stdout = w
+	err := pluginPath(&Globals{}, nil)
+	w.Close()
+	os.Stdout = orig
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := io.ReadAll(r)
+	want := wantPlugin(t)[1]
+	if strings.TrimSpace(string(out)) != want {
+		t.Fatalf("printed %q, want %q", out, want)
+	}
+	if _, err := os.Stat(filepath.Join(want, ".claude-plugin", "plugin.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := pluginPath(&Globals{}, []string{"x"}); err == nil {
+		t.Fatal("args accepted")
+	}
+}

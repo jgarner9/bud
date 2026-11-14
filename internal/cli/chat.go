@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	backend "jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/plugin"
 )
 
 func init() {
@@ -64,16 +64,12 @@ func chat(g *Globals, args []string, resume bool) error {
 		return errors.New("Claude Code isn't installed: run bud claude setup")
 	}
 
-	var flags []string
-	if claude.PluginFile("bud-ide", "agents/chat.md") != "" {
-		flags = append(flags, "--agent", chatAgent)
-	} else {
-		w := g.stderr
-		if w == nil {
-			w = os.Stderr
-		}
-		fmt.Fprintln(w, paint(w, ansiYellow, "bud: Claude Code doesn't have bud-ide's chat agent yet, so this is plain Claude Code: run bud kit sync"))
+	// the plugin comes with bud and loads in this session only (D142)
+	flags, err := plugin.Args()
+	if err != nil {
+		return err
 	}
+	flags = append(flags, "--agent", chatAgent)
 	if resume {
 		flags = append(flags, "--resume")
 	}

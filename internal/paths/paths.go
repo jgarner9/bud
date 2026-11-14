@@ -85,6 +85,10 @@ func (p *Paths) InstallReceipt() string { return filepath.Join(p.State, "install
 // CLAUDE_CONFIG_DIR unless ai.claude.config is "home"
 func (p *Paths) ClaudeConfig() string { return filepath.Join(p.Data, "claude") }
 
+// Plugins is where bud extracts its embedded Claude Code plugin (D142), one
+// dir per version
+func (p *Paths) Plugins() string { return filepath.Join(p.Data, "plugins") }
+
 // UserTools holds generated tools that haven't been promoted into the repo
 func (p *Paths) UserTools() string { return filepath.Join(p.Data, "user-tools") }
 

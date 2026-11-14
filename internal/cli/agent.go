@@ -16,6 +16,7 @@ import (
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/plugin"
 )
 
 func init() {
@@ -103,7 +104,12 @@ func agent(g *Globals, args []string) error {
 		return errors.New("Claude Code isn't installed: run bud claude setup")
 	}
 
-	argv, err := tuiArgv(s, bin, resumeFlags(s, ws.Root))
+	// bud agent is a session the IDE's own (D142), so it gets the plugin
+	flags, err := plugin.Args()
+	if err != nil {
+		return err
+	}
+	argv, err := tuiArgv(s, bin, append(flags, resumeFlags(s, ws.Root)...))
 	if err != nil {
 		return err
 	}

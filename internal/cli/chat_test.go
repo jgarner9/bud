@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,17 +27,18 @@ func TestChatRunsClaudeCodeAsTheChatAgentOutsideAnyProject(t *testing.T) {
 	execClaude = func(d string, a, e []string) error { dir, argv, env = d, a, e; return nil }
 	t.Cleanup(func() { execClaude = orig })
 
-	// without bud-ide's chat agent: plain Claude Code, saying how to get it
+	// the embedded plugin's chat agent, for this session only (D142)
 	var stderr bytes.Buffer
 	if err := chat(&Globals{stderr: &stderr}, nil, false); err != nil {
 		t.Fatal(err)
 	}
 	want := filepath.Join(state, "bud", "chat")
-	if dir != want || !slices.Equal(argv, []string{bin}) {
-		t.Fatalf("ran %q in %s, want plain claude in %s", argv, dir, want)
+	withPlugin := append([]string{bin}, wantPlugin(t)...)
+	if dir != want || !slices.Equal(argv, append(slices.Clone(withPlugin), "--agent", "bud-ide:chat")) {
+		t.Fatalf("ran %q in %s, want the chat agent in %s", argv, dir, want)
 	}
-	if !strings.Contains(stderr.String(), "bud kit sync") {
-		t.Fatalf("no hint to sync the kit: %q", stderr.String())
+	if stderr.Len() > 0 {
+		t.Fatalf("stderr: %q", stderr.String())
 	}
 	if _, err := os.Stat(want); err != nil {
 		t.Fatalf("chat dir not made: %v", err)
@@ -48,21 +48,12 @@ func TestChatRunsClaudeCodeAsTheChatAgentOutsideAnyProject(t *testing.T) {
 		t.Fatal("BUD_BIN passed on")
 	}
 
-	// with it installed, from any marketplace: the agent, and --resume picks
-	plugin := filepath.Join(t.TempDir(), "bud-ide")
-	os.MkdirAll(filepath.Join(plugin, "agents"), 0o755)
-	os.WriteFile(filepath.Join(plugin, "agents", "chat.md"), []byte("---\nname: chat\n---\n"), 0o644)
-	installed, _ := json.Marshal(map[string]any{"version": 2, "plugins": map[string]any{
-		"bud-ide@clod": []map[string]string{{"scope": "user", "installPath": plugin}},
-	}})
-	os.MkdirAll(filepath.Join(cc, "plugins"), 0o755)
-	os.WriteFile(filepath.Join(cc, "plugins", "installed_plugins.json"), installed, 0o644)
-	stderr.Reset()
+	// --resume picks an earlier chat
 	if err := chat(&Globals{stderr: &stderr}, nil, true); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(argv, []string{bin, "--agent", "bud-ide:chat", "--resume"}) || stderr.Len() > 0 {
-		t.Fatalf("ran %q (stderr %q)", argv, stderr.String())
+	if !slices.Equal(argv, append(slices.Clone(withPlugin), "--agent", "bud-ide:chat", "--resume")) {
+		t.Fatalf("ran %q", argv)
 	}
 
 	if err := chat(&Globals{}, []string{"x"}, false); err == nil {

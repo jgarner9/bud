@@ -36,7 +36,7 @@ func TestAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	// a fresh conversation unless ai.claude.resume says continue (D106)
-	if dir != project || !slices.Equal(argv, []string{bin}) {
+	if dir != project || !slices.Equal(argv, append([]string{bin}, wantPlugin(t)...)) {
 		t.Fatalf("ran %q in %s", argv, dir)
 	}
 	// bud-ide's hook knows it's bud's session by BUD_BIN, which is this bud
@@ -54,7 +54,7 @@ func TestAgent(t *testing.T) {
 	if err := agent(&Globals{}, []string{project}); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(argv, []string{bin}) {
+	if !slices.Equal(argv, append([]string{bin}, wantPlugin(t)...)) {
 		t.Fatalf("resume continue in a shared dir: argv %q", argv)
 	}
 
@@ -65,7 +65,7 @@ func TestAgent(t *testing.T) {
 	if err := agent(&Globals{}, []string{project}); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(argv, []string{wrapper, "wrap", "claude", "--"}) {
+	if !slices.Equal(argv, append([]string{wrapper, "wrap", "claude", "--"}, wantPlugin(t)...)) {
 		t.Fatalf("wrapped argv %q", argv)
 	}
 	os.WriteFile(cfgFile, []byte(`{"ai": {"backend": "claude"}}`), 0o644)

@@ -1,6 +1,6 @@
 # Bud IDE: BASE plan
 
-> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later. The AI layer is changing harness: 1.1 moves bud from Claude Code to OpenCode (4.4, D124-D126), which is a plan and not built, so 4, 4.1 and 4.2 still describe what is in the tree. 4.3 (one Claude setup everywhere, D111-D123) was the plan for 1.1 and is re-aimed by D126. The decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6). 2.0 (generic bud, D141-D147: the plugin moves in, clod and the kit's sync go) is decided and in progress: the plugin move (task 41) and clod's removal (task 42) are built, the kit's sync going (task 43) is not; see 6.
+> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later. The AI layer is changing harness: 1.1 moves bud from Claude Code to OpenCode (4.4, D124-D126), which is a plan and not built, so 4, 4.1 and 4.2 still describe what is in the tree. 4.3 (one Claude setup everywhere, D111-D123) was the plan for 1.1 and is re-aimed by D126. The decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6). 2.0 (generic bud, D141-D147: the plugin moves in, clod and the kit's sync go) is decided and in progress: the plugin move (task 41) and clod's removal (task 42) are built, the kit's sync (task 43) is gone too; see 6.
 > Date: 2026-10-24, updated 2026-11-14
 
 ## 0. The one-paragraph version
@@ -167,6 +167,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D146 | **User docs treat backends as the user's choice, with OpenClaw as one worked example, including its server setup.** Planned. | 2026-11-14 | Follows from D141. Replaces the plan in 1.1 task 14 that made OpenClaw's setup the main path (2.0, task 44). |
 | D147 | **v2.0.0 is the release that carries D142-D144.** | 2026-11-14 | Breaking: `bud kit sync`, `bud claude` setup and `clod.repo` go. The owner cuts it with the release skill after a code review and a security review (task 46). Nothing in D141-D146 changes `VERSION` or ships on its own. |
 | D148 | **The embedded `bud-ide` plugin reaches a session as `--plugin-dir <data>/plugins/bud-ide-<content hash>`, nothing is installed into Claude Code.** | 2026-11-14 | How D142 is built. `bud plugin path` extracts atomically (temp dir, rename) and prints the dir; the editor asks it once and `bud agent`/`bud chat` call the same code. A content hash, not the bud version, names the dir, so a release that doesn't touch the plugin keeps it. `bud-ide@bud-plugins` left the kit; `bud kit sync` uninstalls bud's earlier copy (the ledger), and CLAUDE.md's "changed in bud-plugins" rule now covers only the `bud` plugin (D145). |
+| D149 | **Nothing cleans up after an older `bud kit sync`.** | 2026-11-14 | Removing the kit (D144) also removes the code that knew what it had written (the ledger, `removeLegacy`, the output-style clean-up), so bud 2.0 neither unsyncs on update nor lists those things in `bud uninstall`. What an older sync added is ordinary Claude Code plugins and a marketplace, so docs/troubleshooting.md shows `claude plugin list`, `claude plugin uninstall` and `claude plugin marketplace remove` instead, without naming any marketplace. Keeping the ledger code for a one-time clean-up was the alternative; it would have kept a kit-sized package for something the user can do in two commands. Supersedes the "`bud kit sync` uninstalls bud's earlier copy" sentence of D148. |
 
 ---
 
@@ -384,6 +385,8 @@ Every part below runs on the project's Claude Code session (4.2) and is drawn by
 Guardrails: generated code runs through a headless nvim load test before it's activated, a broken tool is auto-disabled with a notification, and nothing is promoted to the repo without your explicit accept.
 
 ### 4.1 Claude Code setup (`bud kit`)
+
+> Removed in 2.0 (task 43, D144, D149): there is no `bud kit`, `kit/` or `internal/kit` any more. What follows is the history of what it did.
 
 How Claude works (the Bud persona, code style, planning, which tool to use when, the bud-specific skills) lives in one place, the public [`jgarner9/bud-plugins`](https://github.com/jgarner9/bud-plugins), which every Claude surface loads (D77). bud shares `~/.claude` by default, where the user keeps their own MCP servers, settings and `core.md` rule (bud sets none of them up; clod, the author's private setup repo that bud once cloned, was removed in 2.0, D143), so the kit only makes sure Claude Code has bud's plugins.
 
@@ -870,11 +873,11 @@ One task is one commit with its own check, and `just check` passes after each. B
 
 ### 2.0: generic bud (D141-D147): in progress
 
-Tasks 40 (these decisions) and 41 are built; the rest are not. Each later task is one commit with its own check.
+Tasks 40 (these decisions), 41, 42 and 43 are built; the rest are not. Each later task is one commit with its own check.
 
 - **41. Move the plugin in. Built.** `bud-ide` is embedded (`plugins/bud-ide/`, `bud.Plugin()`) and handed with `--plugin-dir` only to sessions the IDE starts (D142, D145, D148); it is out of `kit/kit.json`.
 - **42. Remove clod. Built.** `setupClod`, its offers in `bud install`, `bud update` and `bud claude setup`, the clod line in `bud claude status`, `clod.repo` (setting, validation, docs row), the clod paths and the kept-`~/clod` note in `bud uninstall` are gone (D143). An old `clod` key in `config.json` is kept untouched on load and save (`TestOldClodKeyStillLoadsAndSaves`); no migration removes it, since a Lua migration would have to rewrite the JSON. Where a message sent the user to clod, it now says to add servers to `~/.claude` themselves.
-- **43. Remove `bud kit sync`** and the kit manifest, after 41 (D144).
+- **43. Remove `bud kit sync`. Built.** `bud kit` (sync, status, ls, unsync, core, add, rm, enable, disable), `internal/kit`, the embedded `kit/` and `bud.Kit()`, the `kit.disabled` key, the sync offered by `bud install` and `bud update`, the ledger-based removal in `bud uninstall` and in a config-dir change, and the doctor's `core.md`, `claude setup` and `synced plugins` checks are gone (D144, D149). `bud kit ...` is now the standard unknown-command error. An old `kit` key in `config.json` is kept untouched on load and save (`TestOldKitKeyStillLoadsAndSaves`). docs/troubleshooting.md says how to list and remove what an older sync installed.
 - **44. Docs.** Backends as the user's choice, OpenClaw as one worked example (D146).
 - **46. Cut v2.0.0** with the release skill after a code review and a security review (D147).
 

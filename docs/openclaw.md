@@ -1,93 +1,88 @@
 # OpenClaw in bud
 
-bud talks to its AI over the Agent Client Protocol (ACP), so the backend is a setting (`ai.backend`). [OpenClaw](https://docs.openclaw.ai) is one: a Gateway you host yourself, with Claude Code and ChatGPT Plus behind it. Turn it on with `bud config set ai.backend openclaw`; the default is still `claude`, Claude Code directly. The editor, OpenClaw's web UI, its apps and `openclaw tui` all talk to the same sessions with the same models.
-
-This is new in 1.1 and still being built. What works today: the AI pane, chat, `bud agent` and `bud chat` run OpenClaw's TUI on the project's Gateway session; the commit message, the generator, issues and work go through OpenClaw; permission questions come up in bud; `bud ai status` and `bud doctor` check it all. `bud config set ai.backend claude` goes back to Claude Code directly.
+[OpenClaw](https://docs.openclaw.ai) is one of bud's [backends](backends.md), and this page is the worked example of setting one up. It is a Gateway you host yourself, with its own models behind it, reached through `openclaw acp`. The editor, OpenClaw's web UI, its apps and `openclaw tui` can all show the same sessions. Turn it on with `bud config set ai.backend openclaw`; the default is still `claude`.
 
 ## Where the Gateway runs
 
-OpenClaw runs its tools (edits, commands) on the Gateway's machine, not where bud runs. So a Gateway on your home server alone would work on the server's files, not the project on your laptop. Two ways to set it up:
+OpenClaw runs its tools (edits and commands) on the Gateway's machine, not on the machine bud runs on. A Gateway on another computer therefore edits that computer's files, not the project you have open. This decides how to set it up:
 
-- **A Gateway on the machine you code on** (loopback, `ws://127.0.0.1:18789`). bud's edits and commands act on your project; the home server's Gateway serves the apps and the web UI. This is what bud has been checked against.
-- **One Gateway at home, your laptop paired as a node that hosts sessions** (`nodeHost.workerRuns.enabled`). Tools would run on the laptop, but in a session-owned managed workspace (an empty folder or a fresh checkout), not the project you have open, and `openclaw acp` can't ask for a node. So this doesn't suit editing in bud.
+- **A Gateway on the machine you code on** (loopback, `ws://127.0.0.1:18789`). bud's edits and commands act on your project. This is the recommended setup, and the one bud has been checked against.
+- **A shared Gateway on a server.** Fine for a phone app or the web UI, but a bud session pointed at it works on the server's files. OpenClaw can pair your machine as a node that hosts sessions, but those run in a managed workspace rather than your open project, and `openclaw acp` cannot ask for a node, so that does not suit editing in bud.
 
-So for coding, run a Gateway on the laptop (`gateway.bind loopback`) and point bud at it; keep the home server's for the phone and the web UI. The steps below are the same on either machine.
+So for coding, run a Gateway on your own machine and point bud at it. Keep a server's Gateway for the apps and the web UI if you want one.
 
-## On the server (once)
-
-OpenClaw needs Node 24.16 or newer.
+## Install and sign in
 
 ```sh
-npm install -g openclaw
-openclaw onboard
+npm install -g openclaw      # Node 24.16 or newer; bud ai setup offers this too
+openclaw onboard             # sets up the Gateway, its token and the models
 ```
 
-The onboarding wizard sets up the Gateway, its token and the models. For the two subscriptions:
+Models sign in on the Gateway's machine, with `openclaw onboard` or OpenClaw's own configuration; bud never sees those logins.
 
-- **ChatGPT Plus:** pick OpenAI Codex sign-in (`openclaw onboard --auth-choice openai-codex`). It uses your ChatGPT subscription, not API billing.
-- **Claude Code:** sign in to `claude` on the server, then set the Claude model's runtime to Claude Code's CLI (`agentRuntime: { id: "claude-cli" }` on that model in `~/.openclaw/openclaw.json`). Anthropic has changed its terms for third-party tools using a Claude subscription before, so check them first; an API key works either way.
+## The Gateway token
 
-Run the Gateway as a service, reachable over Tailscale:
+bud reaches a Gateway with its token. Keep it in a file readable only by you, and name the file in `ai.openclaw.token_file`:
 
 ```sh
-openclaw gateway install
-openclaw config set gateway.bind tailnet
+mkdir -p ~/.config/openclaw
+install -m 600 /dev/null ~/.config/openclaw/gateway-token
+$EDITOR ~/.config/openclaw/gateway-token     # paste the token; `openclaw gateway auth-token` prints it
+bud config set ai.openclaw.token_file ~/.config/openclaw/gateway-token
 ```
 
-Should OpenClaw ask before running a command? That's the Gateway's `tools.exec.mode`, and it applies to every surface. The default, `full`, never asks. `ask` makes every command not on the allowlist come up as a question in bud (and in the apps), the way Claude Code's permission prompt did:
+bud passes the file to `openclaw acp` as `--token-file`, so the token stays out of `config.json` and process listings. For the AI pane, which runs `openclaw tui`, bud reads the file and hands the token over in `OPENCLAW_GATEWAY_TOKEN`, because the TUI takes no token file. `bud ai status` warns when the file can be read by others (fix: `chmod 600`).
+
+## Pointing bud at it
+
+With a Gateway on the same machine, bud needs no URL. With none set, `openclaw acp` uses the CLI's own `gateway.remote.url`, else a Gateway on this machine. For a Gateway somewhere else:
+
+```sh
+bud config set ai.openclaw.url wss://gateway.example.ts.net:18789
+```
+
+OpenClaw accepts plain `ws://` only to loopback, private and Tailscale addresses (and `localhost`, `.local` and `.ts.net` names), so use `wss://` anywhere else. `bud ai setup` asks for the URL and the token file and saves them.
+
+## Checking it
+
+```sh
+bud ai status
+```
+
+For a Gateway that is up, it looks like this:
+
+```text
+Backend: openclaw, ready
+Runs: openclaw acp --url wss://gateway.example.ts.net:18789 --token-file /home/you/.config/openclaw/gateway-token
+Command: <openclaw's version> (/usr/local/bin/openclaw)
+Gateway: gateway.example.ts.net:18789, answering
+```
+
+With no `ai.openclaw.url`, `bud ai status` asks the CLI's own Gateway to report its health, which also proves the token. With a URL it can only open a connection, since a health check would put the token on a command line; a wrong token shows up when a session starts instead (see below). Each problem is printed with a `fix:` line. `bud doctor` shows the same under "ai backend".
+
+## Asking before commands
+
+Whether OpenClaw asks before running a command is the Gateway's `tools.exec.mode`, and it applies to every surface, not only bud. The default, `full`, never asks. With `ask`, each command not on the allowlist comes up in bud as a question (`y` allow once, `a` allow that command for the session, `n` deny):
 
 ```sh
 openclaw config set tools.exec.mode ask
 ```
 
-File edits never ask on OpenClaw: they're written, and bud shows what changed afterwards.
-
-## On each machine
-
-```sh
-npm install -g openclaw                        # or bud ai setup, which offers to
-install -m 600 /dev/null ~/.config/openclaw/gateway-token
-$EDITOR ~/.config/openclaw/gateway-token       # paste the Gateway token (openclaw gateway auth-token on the server prints it)
-bud config set ai.openclaw.url wss://HOME.YOUR-TAILNET.ts.net:18789
-bud config set ai.openclaw.token_file ~/.config/openclaw/gateway-token
-bud ai status                                  # installed, Gateway answering?
-```
-
-`bud ai setup` does the install and asks for the URL and the token file. OpenClaw only accepts plain `ws://` to loopback, private and Tailscale addresses, so use `wss://` anywhere else. With no URL set, bud uses the `openclaw` CLI's own (`gateway.remote.url`), or a Gateway on the same machine.
+File edits do not ask on OpenClaw: they are written, and bud shows what changed afterwards. Its ACP bridge sends no diff to review first.
 
 ## How bud uses it
 
-- **One session per project,** made by OpenClaw's ACP bridge with the project as its working directory, saved in `~/.local/state/bud/agent-sessions.json` and reattached on the next start, history and all. The AI pane (`<leader>ac`), `bud agent` and bud's own chat all open it (`agent:main:acp-bridge:<id>`), so the web UI and the apps show the same thread.
-- **Chat** (`<leader>ch`, `bud chat`) is one more session, `agent:main:bud:chat`, outside any project.
-- **The AI pane** runs `openclaw tui` on the project's session. `<leader>aF` makes it full screen and back, and `ai.agent.chat_layout = "full"` opens it that way.
-- **Permission questions** (with `tools.exec.mode` at `ask`) come up as bud's own prompt: `y` allows once, `a` allows that command for the rest of the session, `n` denies.
-- **bud's own chat** (`<leader>av`, or `<leader>ac` with `ai.agent.chat_ui = "bud"`) draws the conversation in Neovim instead of a TUI. Its colours are highlight groups you can restyle in your colorscheme or config: `BudChatYou`, `BudChatAgent`, `BudChatTool`, `BudChatToolDone`, `BudChatToolFailed`, `BudChatThinking` and `BudChatPrompt` (for example `:hi BudChatAgent guifg=#89b4fa gui=bold`).
-- **`:BudAgent`** shows the project's session (backend, status, session id); `:BudAgent restart` and `:BudAgent stop` do what they say. `:BudAgent option` picks one of the session's settings OpenClaw offers (`thought_level`, `fast_mode`, `reasoning_level`, `verbose_level` and others) and a value; `:BudAgent option fast_mode on` sets one directly. A model that doesn't take a value says why. `<leader>av` is bud's own chat on the same session.
-- **The token** goes to `openclaw acp` as `--token-file` and to `openclaw tui` in its environment, never on a command line.
+- One session per project, made with the project as its working directory, saved in `~/.local/state/bud/agent-sessions.json` and reattached on the next start with its history.
+- The AI pane (`<leader>ac`), `bud agent` and bud's own chat open that session. Chat mode (`<leader>ch`, `bud chat`) is a separate session outside any project.
+- `ai.agent.chat_ui = "bud"` swaps the pane's `openclaw tui` for bud's own chat; `<leader>av` opens it either way.
+- `:BudAgent` shows the session and why it stopped; `:BudAgent restart` starts it again, and `:BudAgent option` sets the session options OpenClaw offers.
 
 ## When it doesn't connect
 
-`:BudAgent` (or the status line) shows why, in OpenClaw's own words, a few seconds after a project opens:
+`:BudAgent` shows OpenClaw's own words a few seconds after a project opens.
 
 | It says | Fix |
 | --- | --- |
-| `openclaw isn't installed` | `bud ai setup`, or `npm install -g openclaw` (Node 24.16+). |
-| `ACP bridge failed: connect ECONNREFUSED ...` | No Gateway at that address: start it (`openclaw gateway`, or its service), check Tailscale, or fix `ai.openclaw.url`. |
-| `ACP bridge failed: unauthorized: gateway token mismatch` | The token file doesn't hold that Gateway's token: `openclaw gateway auth-token` on the Gateway's machine prints it. |
-
-`bud ai status` checks the same things from the shell, without starting a session. `:BudAgent restart` tries again once it's fixed.
-
-## Other backends
-
-`ai.backend` can also be `claude` (Claude Code directly, as before 1.1), `codex` (`codex-acp`, ChatGPT Plus through Codex's own login), `opencode` (`opencode acp`), or `custom` with `ai.custom.command` for any other ACP agent. `bud ai setup` installs the command for the first three. See [config](config.md).
-
-To try Claude Code over ACP before bud moves its `claude` backend there, run it as a custom backend with bud's own chat:
-
-```sh
-npm install -g @agentclientprotocol/claude-agent-acp
-bud config set ai.backend custom
-bud config set ai.custom.command '["claude-agent-acp"]'
-bud config set ai.agent.chat_ui bud
-```
-
-Edits should then come to bud's diff review before they're written, if the adapter asks permission with each edit's diff, as it does in Zed; that isn't checked with bud yet.
+| `openclaw isn't installed` | `bud ai setup`, or `npm install -g openclaw`. |
+| `ACP bridge failed: connect ECONNREFUSED ...` | No Gateway at that address: start it (`openclaw gateway`, or its service) and check `ai.openclaw.url`. |
+| `ACP bridge failed: unauthorized: gateway token mismatch` | The token file does not hold that Gateway's token: `openclaw gateway auth-token` on its machine prints it. |

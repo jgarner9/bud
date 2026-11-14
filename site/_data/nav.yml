@@ -3,6 +3,7 @@
 - title: Start
   pages:
     - { file: setup, title: Setting up }
+    - { file: backends, title: AI backends }
     - { file: openclaw, title: OpenClaw in bud }
     - { file: claude-code, title: Claude Code in bud }
     - { file: troubleshooting, title: Troubleshooting }

@@ -12,7 +12,7 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 **Pasting is slow over SSH.** It shouldn't be: over SSH (`SSH_CONNECTION` set) bud doesn't tie `p` and `y` to the system clipboard, since there that clipboard goes through your terminal (OSC 52), and many terminals never answer a paste request. `"+y` copies to your own machine's clipboard through the terminal; `"+p` pastes only where the terminal allows it.
 
-**The AI backend isn't answering** (OpenClaw, Codex, OpenCode). `bud ai status` says whether its command is installed and, for OpenClaw, whether the Gateway answers, with the fix for each problem. In the editor, `:BudAgent` shows the project's session and why it stopped; `:BudAgent restart` starts it again. [OpenClaw in bud](openclaw.md) covers the setup.
+**The AI backend isn't answering** (OpenClaw, Codex, OpenCode, a custom agent). `bud ai status` prints the backend, the command it runs and each problem with a `fix:` line: the command not installed, a bad `ai.custom.command`, and for OpenClaw a missing or world-readable token file, a bad `ai.openclaw.url`, or a Gateway that "didn't answer" or "isn't answering bud". `bud doctor` warns about the same under "ai backend". In the editor, `:BudAgent` shows the project's session and why it stopped; `:BudAgent restart` starts it again once fixed. [AI backends](backends.md) and [OpenClaw in bud](openclaw.md) cover the setup.
 
 **Claude Code isn't there in the editor.** `bud claude status` says whether it's installed and logged in; `bud claude setup` fixes either. In the editor, `:BudClaude status` shows the session and the IDE bridge, and `<leader>ar` restarts a session that crashed.
 

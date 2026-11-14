@@ -70,7 +70,7 @@ Every key and its default is in the [config reference](config.md).
 
 ## The AI backend
 
-bud is moving to talk to its AI over the Agent Client Protocol (ACP), with the backend a setting (`ai.backend`). The default, `claude`, still runs Claude Code directly (below); `openclaw`, `codex`, `opencode` and `custom` go over ACP.
+The AI backend is a setting (`ai.backend`); [AI backends](backends.md) says how to choose one. The default, `claude`, runs Claude Code directly (below); `openclaw`, `codex`, `opencode` and `custom` go over the Agent Client Protocol (ACP).
 
 | Command | What it does |
 | --- | --- |

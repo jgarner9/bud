@@ -14,7 +14,7 @@ bud is a personal tool that happens to be public: it's built around one person's
 | --- | --- | --- |
 | macOS or Linux, amd64 or arm64 | everything | Homebrew on macOS; pacman, apt or dnf on Linux. |
 | A terminal with a [Nerd Font](https://www.nerdfonts.com) | the icons | Any terminal runs `bud`. `bud launch` and the desktop app open Kitty or Ghostty. |
-| An AI backend | the AI features | A setting since 1.1 (`ai.backend`): Claude Code directly by default, which the steps below set up, or an [OpenClaw](openclaw.md) Gateway, Codex or OpenCode. bud never stores a model key. |
+| An AI backend | the AI features | Your choice (`ai.backend`, see [AI backends](backends.md)): Claude Code by default, which the steps below set up, or OpenClaw, Codex, OpenCode or another ACP agent. bud never stores a model key. |
 | `gh`, the GitHub CLI | the dashboard's open pull requests | Optional. On the full profile `bud install` installs it and offers `gh auth login`. |
 | Linear, connected in Claude Code | filing issues from the editor | Optional. See [Filing issues](issues.md). |
 
@@ -45,9 +45,9 @@ It asks a few questions, then does the work in this order. `--yes` takes every d
 7. **Claude Code:** step 3 below.
 8. **`bud doctor`:** the health check, with the fix for anything that's wrong.
 
-## 3. Claude Code
+## 3. The AI backend
 
-bud's AI is [Claude Code](claude-code.md), installed with Anthropic's own installer and logged in with Claude Code's own login. `bud install` offers both; by hand it's:
+bud's AI is a choice of [backend](backends.md); `bud ai setup` checks the one you have set and installs its command, and `bud config set ai.backend <name>` picks another (OpenClaw, Codex, OpenCode or your own). The default is [Claude Code](claude-code.md), installed with Anthropic's own installer and logged in with Claude Code's own login. `bud install` offers both; by hand it's:
 
 ```sh
 bud claude setup     # install it, then log in

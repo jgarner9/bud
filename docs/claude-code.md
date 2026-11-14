@@ -1,6 +1,6 @@
 # Claude Code in bud
 
-This page is the `claude` backend, the default (`ai.backend = "claude"`). From 1.1 the AI backend is a setting, and an OpenClaw Gateway, Codex or OpenCode can take its place: see [OpenClaw in bud](openclaw.md). On the `claude` backend, Neovim starts and owns one Claude Code session per project, and every AI feature in the editor goes through it, so they all share one conversation. bud stores no keys: Claude Code's own login is the only one.
+This page covers the `claude` backend, the default; the backend is a choice, and [AI backends](backends.md) lists the others (OpenClaw, Codex, OpenCode, or any ACP agent). On the `claude` backend, Neovim starts and owns one Claude Code session per project, and every AI feature in the editor goes through it, so they all share one conversation. bud stores no keys: Claude Code's own login is the only one.
 
 ## Setting it up
 

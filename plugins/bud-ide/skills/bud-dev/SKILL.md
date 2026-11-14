@@ -5,7 +5,7 @@ description: How the bud repo (a Neovim IDE driven by a small Go CLI) is built a
 
 # Working on bud
 
-bud is a Go CLI (`cmd/bud`, `internal/`) that installs, launches, updates and syncs an isolated Neovim config (`NVIM_APPNAME=bud`, the repo's `nvim/`). The binary is the release: `nvim/`, `languages/`, `layouts/`, `tools/`, `migrations/` and `bundles/` are embedded (`embed.go`) and synced into `~/.config/bud`; `kit/kit.json` (also embedded) only lists the plugin marketplace and plugins `bud kit sync` installs into Claude Code, where `core.md` comes from, and the MCP servers `bud doctor` expects (D77, D78).
+bud is a Go CLI (`cmd/bud`, `internal/`) that installs, launches, updates and syncs an isolated Neovim config (`NVIM_APPNAME=bud`, the repo's `nvim/`). The binary is the release: `nvim/`, `languages/`, `layouts/`, `tools/`, `migrations/` and `bundles/` are embedded (`embed.go`) and synced into `~/.config/bud`; `kit/kit.json` (also embedded) lists what `bud kit sync` sets up in Claude Code and the MCP servers `bud doctor` expects. This plugin, `bud-ide`, is embedded too (`plugins/bud-ide/`) and handed only to sessions the IDE starts (D142).
 
 Read `CLAUDE.md` at the repo root first: it holds the rules and points to `docs/internals/` for how each area works; read the file for the area you are changing. `BASE.md` is the plan plus a numbered decision log (D1, D2, ...); when a decision changes, update it there too.
 
@@ -23,7 +23,7 @@ Read `CLAUDE.md` at the repo root first: it holds the rules and points to `docs/
 - **A language:** copy `languages/_template.lua` (unknown fields are errors), then add a case to `scripts/lang_check.lua` and run `just lang-check <name>`.
 - **A tool:** `tools/<name>/manifest.json` + `init.lua` returning `{ setup = function(manifest) end }` (D54). Personal ones go in `~/.local/share/bud/user-tools/<name>/`; `:BudGen` drafts one.
 - **A layout:** `layouts/<name>.lua` listing panes by kind (`tree`, `git`, `chat`), side and size (D45).
-- **A kit entry:** `bud kit add plugin <name@marketplace>` or `bud kit add marketplace <name> <source>` in a checkout (D58, D77). Skills, agents, commands and output styles go in jgarner9/bud-plugins, MCP servers in clod; bud carries no Claude content or secrets of its own.
+- **A kit entry:** `bud kit add plugin <name@marketplace>` or `bud kit add marketplace <name> <source>` in a checkout (D58, D77). This plugin's own skills, agent and notes are changed here, in `plugins/bud-ide/`; personal skills and servers live outside bud, and bud carries no secrets of its own.
 - **A command:** one file in `internal/cli/` calling `RegisterCommand` from `init()`.
 
 ## Checking

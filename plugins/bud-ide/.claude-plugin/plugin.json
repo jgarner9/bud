@@ -5,7 +5,7 @@
     "name": "jgarner9",
     "url": "https://github.com/jgarner9"
   },
-  "repository": "https://github.com/jgarner9/bud-plugins",
+  "repository": "https://github.com/jgarner9/bud",
   "license": "MIT",
   "keywords": ["bud", "neovim", "linear"]
 }

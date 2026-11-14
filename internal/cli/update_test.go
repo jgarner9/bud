@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"testing/fstest"
 	"time"
 
 	"jgarner.dev/bud/internal/doctor"
@@ -198,7 +197,7 @@ func TestFinishUpdate(t *testing.T) {
 			}
 
 			var err error
-			captureStdout(t, func() { err = finishUpdate(&Globals{}, p, "0.5.1", strings.Split(tt.before, ","), nil) })
+			captureStdout(t, func() { err = finishUpdate(&Globals{}, p, "0.5.1", strings.Split(tt.before, ",")) })
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -237,11 +236,11 @@ func TestCheckHealth(t *testing.T) {
 	doctorChecks = func(doctor.Options) []doctor.Result {
 		return []doctor.Result{
 			{Name: "nvim", Status: doctor.OK, Detail: "0.12.6"},
-			{Name: "core.md", Status: doctor.Warn, Detail: "changed since you pasted it", Fix: "bud kit core"},
+			{Name: "tools", Status: doctor.Warn, Detail: "changed since you pasted it", Fix: "bud update"},
 		}
 	}
 	out = captureStdout(t, func() { err = checkHealth("") })
-	if err != nil || strings.Contains(out, "0.12.6") || !strings.Contains(out, "changed since you pasted it") || !strings.Contains(out, "fix: bud kit core") {
+	if err != nil || strings.Contains(out, "0.12.6") || !strings.Contains(out, "changed since you pasted it") || !strings.Contains(out, "fix: bud update") {
 		t.Fatalf("out %q", out)
 	}
 
@@ -255,15 +254,15 @@ func TestCheckHealth(t *testing.T) {
 	}
 }
 
-// a plain bud update syncs the config, then the kit, then checks everything
+// a plain bud update syncs the config, then checks everything
 func TestUpdateSyncsAndChecks(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	origApply, origCheck, origDoctor, origPrompt := applyConfig, checkRelease, doctorChecks, updatePrompt
+	origApply, origCheck, origDoctor := applyConfig, checkRelease, doctorChecks
 	t.Cleanup(func() {
-		applyConfig, checkRelease, doctorChecks, updatePrompt = origApply, origCheck, origDoctor, origPrompt
+		applyConfig, checkRelease, doctorChecks = origApply, origCheck, origDoctor
 	})
 	var steps []string
 	applyConfig = func() error { steps = append(steps, "config"); return nil }
@@ -271,19 +270,16 @@ func TestUpdateSyncsAndChecks(t *testing.T) {
 		return nil, updater.ErrNoRelease
 	}
 	doctorChecks = func(doctor.Options) []doctor.Result { steps = append(steps, "doctor"); return nil }
-	updatePrompt = func() *prompter { return yesPrompter("y\n") }
-	f := fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["docs@market"]}`)}})
-	fakeClaude(t, claudeReady)
 
 	var err error
 	out := captureStdout(t, func() { err = update(&Globals{}, nil, false, false, false, "") })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(steps, []string{"config", "doctor"}) || !slices.Equal(f.ran, []string{"plugin install --scope user docs@market"}) {
-		t.Fatalf("steps %q, kit ran %q", steps, f.ran)
+	if !slices.Equal(steps, []string{"config", "doctor"}) {
+		t.Fatalf("steps %q", steps)
 	}
-	if !strings.Contains(out, "Synced the kit") || !strings.Contains(out, "All checks pass.") {
+	if !strings.Contains(out, "All checks pass.") {
 		t.Fatalf("out %q", out)
 	}
 }

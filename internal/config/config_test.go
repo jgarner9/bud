@@ -269,6 +269,37 @@ func TestOldClodKeyStillLoadsAndSaves(t *testing.T) {
 	}
 }
 
+// a config.json from before the kit was removed (D144) still loads and saves
+// with its kit key untouched
+func TestOldKitKeyStillLoadsAndSaves(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	in := `{"profile": "minimal", "kit": {"disabled": ["docs@market"]}}`
+	if err := os.WriteFile(path, []byte(in), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := f.Settings()
+	if err != nil || s.Profile != "minimal" {
+		t.Fatalf("settings %+v, err %v", s, err)
+	}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Set("terminal", "ghostty"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Save(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), `"kit"`) || !strings.Contains(string(data), "docs@market") {
+		t.Fatalf("kit key lost on save: %s", data)
+	}
+}
+
 // ai.backend picks a known agent, and custom needs its command (D131)
 func TestBackendValidate(t *testing.T) {
 	s := Defaults()

@@ -16,7 +16,7 @@ const AppName = "bud"
 type Paths struct {
 	Config string // ~/.config/bud: synced copy of the embedded nvim/ (bud-owned, D21)
 	Data   string // ~/.local/share/bud: plugins, Mason, bud-managed binaries, user tools
-	State  string // ~/.local/state/bud: machine config, project registry, kit ledger
+	State  string // ~/.local/state/bud: machine config, project registry
 	Cache  string // ~/.cache/bud: Neovim's stdpath("cache"), logs and bytecode
 	BinDir string // ~/.local/bin: where install.sh puts bud unless told otherwise
 	Home   string // $HOME, for what lives outside bud's own dirs
@@ -54,16 +54,6 @@ func (p *Paths) MachineConfig() string { return filepath.Join(p.State, "config.j
 
 // Projects is the project registry the dashboard reads
 func (p *Paths) Projects() string { return filepath.Join(p.State, "projects.json") }
-
-// CorePasted records which core.md you last pasted into claude.ai (JGA-179)
-func (p *Paths) CorePasted() string { return filepath.Join(p.State, "core-pasted.json") }
-
-// KitLedger records everything `bud kit sync` wrote into Claude Code's config
-func (p *Paths) KitLedger() string { return filepath.Join(p.State, "kit-ledger.json") }
-
-// KitDeclined marks a kit you turned down or took out, so bud update stops
-// offering it until bud kit sync is run (D87)
-func (p *Paths) KitDeclined() string { return filepath.Join(p.State, "kit-declined") }
 
 // UpdateState records the last background update check (D9)
 func (p *Paths) UpdateState() string { return filepath.Join(p.State, "update.json") }

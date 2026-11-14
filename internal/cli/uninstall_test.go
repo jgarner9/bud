@@ -193,54 +193,6 @@ func TestPlanUninstallBundle(t *testing.T) {
 	}
 }
 
-// with a shared ~/.claude (D76) uninstall takes out what the kit added there,
-// and nothing of yours; in bud's own dir it goes with the data dir
-func TestPlanUninstallKit(t *testing.T) {
-	p, bin := fakeInstall(t)
-	home := os.Getenv("HOME")
-	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	f := fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["a@market", "b@market"]}`)}})
-	mine := filepath.Join(home, ".claude", "skills", "mine", "SKILL.md")
-	os.MkdirAll(filepath.Dir(mine), 0o755)
-	os.WriteFile(mine, []byte("mine"), 0o644)
-	captureStdout(t, func() {
-		if err := syncKitWith(&Globals{}, yesPrompter("y\n"), false); err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	removals, _, err := planUninstall(p, false, bin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	claudeDir := filepath.Join(home, ".claude")
-	if removals[0].path != claudeDir || !strings.Contains(removals[0].what, "the 2 things bud's kit added") {
-		t.Fatalf("first removal %+v", removals[0])
-	}
-	runRemovals(t, removals)
-	if len(f.ran) != 4 || f.ran[2] != "plugin uninstall --scope user a@market" || len(f.installed[claudeDir]) != 0 {
-		t.Errorf("ran %q", f.ran)
-	}
-	if !exists(mine) {
-		t.Error("removed your own skill")
-	}
-
-	// bud's own Claude Code dir is in the data dir, which goes whole
-	t.Setenv("CLAUDE_CONFIG_DIR", p.ClaudeConfig())
-	captureStdout(t, func() {
-		if err := syncKitWith(&Globals{}, yesPrompter("y\n"), false); err != nil {
-			t.Fatal(err)
-		}
-	})
-	removals, _, err = planUninstall(p, false, bin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if slices.Contains(targets(removals), p.ClaudeConfig()) {
-		t.Errorf("bud's own dir listed on its own: %q", targets(removals))
-	}
-}
-
 // ~/clod and its command, left by a bud before 2.0, are listed as left alone
 // and never removed
 func TestPlanUninstallLeavesOldClodAlone(t *testing.T) {

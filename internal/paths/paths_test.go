@@ -26,7 +26,6 @@ func TestResolveDefaults(t *testing.T) {
 		{"bin dir", p.BinDir, "/home/me/.local/bin"},
 		{"machine config", p.MachineConfig(), "/home/me/.local/state/bud/config.json"},
 		{"projects", p.Projects(), "/home/me/.local/state/bud/projects.json"},
-		{"kit ledger", p.KitLedger(), "/home/me/.local/state/bud/kit-ledger.json"},
 		{"user tools", p.UserTools(), "/home/me/.local/share/bud/user-tools"},
 		{"language specs", p.LanguageSpecs(), "/home/me/.config/bud/languages"},
 		{"user language specs", p.UserLanguageSpecs(), "/home/me/.local/share/bud/user-tools/languages"},

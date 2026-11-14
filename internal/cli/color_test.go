@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"testing/fstest"
 
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/updater"
@@ -126,15 +125,6 @@ func TestListsColourLikePlain(t *testing.T) {
 		})
 		os.Remove(filepath.Join(root, "a"))
 		colourMatchesPlain(t, "projects", func() error { return projectsLs(nil) })
-	})
-	t.Run("kit", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
-		t.Setenv("CLAUDE_CONFIG_DIR", "")
-		t.Setenv("XDG_STATE_HOME", t.TempDir())
-		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-		fakeKit(t, fstest.MapFS{"kit.json": {Data: []byte(`{"marketplaces": {"m": "https://example.com/m.git"}, "plugins": ["docs@m"]}`)}})
-		colourMatchesPlain(t, "kit ls", func() error { return kitLs(nil) })
-		colourMatchesPlain(t, "kit status", func() error { return kitStatus(nil) })
 	})
 	t.Run("config", func(t *testing.T) {
 		t.Setenv("XDG_STATE_HOME", t.TempDir())

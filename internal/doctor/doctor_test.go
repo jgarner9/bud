@@ -3,10 +3,8 @@ package doctor
 import (
 	"errors"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -17,7 +15,6 @@ import (
 	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
-	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/lang"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
@@ -543,223 +540,6 @@ func TestCheckClaudeCommand(t *testing.T) {
 	}
 }
 
-func TestCheckCore(t *testing.T) {
-	p := &paths.Paths{State: t.TempDir()}
-	orig := kitFS
-	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"marketplaces": {"bud-plugins": "x"}, "account": {"instructions": "bud-plugins/core.md"}}`)}}
-	}
-	t.Cleanup(func() { kitFS = orig })
-
-	if _, ok := checkCore(p, t.TempDir()); ok {
-		t.Fatal("a result without a checkout")
-	}
-	dir, checkout := t.TempDir(), t.TempDir()
-	os.MkdirAll(filepath.Join(dir, "plugins"), 0o755)
-	os.WriteFile(filepath.Join(dir, "plugins", "known_marketplaces.json"), []byte(`{"bud-plugins": {"installLocation": "`+checkout+`"}}`), 0o644)
-	os.WriteFile(filepath.Join(checkout, "core.md"), []byte("You are Bud.\n"), 0o644)
-	r, ok := checkCore(p, dir)
-	if !ok || r.Status != Warn || !strings.Contains(r.Fix, "bud kit core --pasted") {
-		t.Fatalf("not pasted: %+v", r)
-	}
-	c, _ := kit.ReadCore("bud-plugins/core.md", dir, p.CorePasted())
-	kit.MarkCorePasted(p.CorePasted(), c)
-	if r, _ := checkCore(p, dir); r.Status != OK {
-		t.Fatalf("pasted: %+v", r)
-	}
-}
-
-func TestAManifestThatDoesNotLoadIsAWarningNotSilence(t *testing.T) {
-	orig := kitFS
-	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"core": "bud-plugins/core.md"}`)}}
-	}
-	t.Cleanup(func() { kitFS = orig })
-
-	r, ok := checkCore(&paths.Paths{State: t.TempDir()}, t.TempDir())
-	if !ok || r.Status != Warn || !strings.Contains(r.Detail, `unknown field "core"`) || r.Fix == "" {
-		t.Fatalf("want a warning naming the unknown field and a fix, got ok=%v %+v", ok, r)
-	}
-}
-
-func TestCheckClaudeSetup(t *testing.T) {
-	origFS, origList := kitFS, mcpList
-	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"marketplaces": {"bud-plugins": "x"}, "account": {"instructions": "bud-plugins/core.md"}, "servers": {` + fakeServers("basic-memory", "context7", "linear") + `}}`)}}
-	}
-	t.Cleanup(func() { kitFS, mcpList = origFS, origList })
-	dir := t.TempDir()
-
-	// a claude.ai connector counts, whatever its spelling
-	mcpList = func() (string, error) {
-		return "Checking MCP server health...\n\nbasic-memory: https://bm.example/mcp (HTTP) - ✔ Connected\nclaude.ai Context7: https://mcp.context7.com/mcp - ✔ Connected\n", nil
-	}
-	r, ok := checkClaudeSetup(dir)
-	if !ok || r.Status != Warn || !strings.Contains(r.Detail, "linear, the core.md rule") || strings.Contains(r.Detail, "context7") {
-		t.Fatalf("missing linear and the rule: %+v", r)
-	}
-
-	mcpList = func() (string, error) {
-		return "basic-memory: x - ✔\nclaude.ai Context7: y - ✔\nclaude.ai Linear: z - ✔\n", nil
-	}
-	os.MkdirAll(filepath.Join(dir, "rules", "mine"), 0o755)
-	os.WriteFile(filepath.Join(dir, "rules", "mine", "persona.md"), []byte("You are Bud. Be a bud.\n"), 0o644)
-	if r, _ := checkClaudeSetup(dir); r.Status != OK {
-		t.Fatalf("all there: %+v", r)
-	}
-
-	mcpList = func() (string, error) { return "", errors.New("boom") }
-	if r, _ := checkClaudeSetup(dir); r.Status != Warn || !strings.Contains(r.Detail, "boom") {
-		t.Fatalf("list failed: %+v", r)
-	}
-}
-
-// claude mcp list as Claude Code 2.1 prints it, diagnostics block included
-const mcpListOutput = `Checking MCP server health…
-
-claude.ai Context7: https://mcp.context7.com/mcp - ✔ Connected
-claude.ai Basic Memory: https://memory.example/mcp - ✔ Connected
-linear: https://mcp.linear.app/mcp (HTTP) - ! Needs authentication
-serena: uvx --from serena-agent serena start-mcp-server - ✘ Failed to connect
-
-MCP config diagnostics ⚠
-
-[Conflicting scopes]
-├ Server "serena" is defined in multiple scopes with different endpoints: user (serena start-mcp-server), local (uvx serena). OAuth tokens are stored per endpoint.
-└ Keep the correct endpoint and remove the others: ` + "`claude mcp remove serena -s user`" + `
-`
-
-func TestCheckClaudeSetupWarnsAboutServersThatDontConnect(t *testing.T) {
-	origFS, origList := kitFS, mcpList
-	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"servers": {` + fakeServers("basic-memory", "context7", "linear", "serena") + `}}`)}}
-	}
-	t.Cleanup(func() { kitFS, mcpList = origFS, origList })
-	dir := t.TempDir()
-
-	mcpList = func() (string, error) { return mcpListOutput, nil }
-	r, _ := checkClaudeSetup(dir)
-	if r.Status != Warn {
-		t.Fatalf("want a warning, got %+v", r)
-	}
-	for _, want := range []string{
-		"can't connect to serena (Failed to connect), defined in more than one scope",
-		"not logged in to linear (Needs authentication)",
-	} {
-		if !strings.Contains(r.Detail, want) {
-			t.Errorf("detail lacks %q: %s", want, r.Detail)
-		}
-	}
-	if strings.Contains(r.Detail, "Context7") || strings.Contains(r.Detail, "basic-memory") || strings.Contains(r.Detail, "has no") {
-		t.Errorf("connected servers named: %s", r.Detail)
-	}
-	for _, want := range []string{"claude mcp get NAME", "/mcp in bud agent"} {
-		if !strings.Contains(r.Fix, want) {
-			t.Errorf("fix lacks %q: %s", want, r.Fix)
-		}
-	}
-
-	// a connected server defined twice is fine: its tools are there
-	mcpList = func() (string, error) {
-		return strings.NewReplacer("! Needs authentication", "✔ Connected", "✘ Failed to connect", "✔ Connected").Replace(mcpListOutput), nil
-	}
-	if r, _ := checkClaudeSetup(dir); r.Status != OK {
-		t.Fatalf("all connected: %+v", r)
-	}
-
-	// a connector that connects covers a server of the same name that doesn't
-	mcpList = func() (string, error) {
-		return strings.Replace(mcpListOutput, "linear:", "claude.ai Linear: https://mcp.linear.app/mcp - ✔ Connected\nlinear:", 1), nil
-	}
-	if r, _ := checkClaudeSetup(dir); strings.Contains(r.Detail, "linear") {
-		t.Fatalf("linear's connector connects: %+v", r)
-	}
-}
-
-func TestParseMCPListSkipsTheDiagnostics(t *testing.T) {
-	servers, multi := parseMCPList(mcpListOutput)
-	want := map[string][]string{
-		"context7":    {"Connected"},
-		"basicmemory": {"Connected"},
-		"linear":      {"Needs authentication"},
-		"serena":      {"Failed to connect"},
-	}
-	if !maps.EqualFunc(servers, want, slices.Equal) {
-		t.Errorf("servers = %v, want %v", servers, want)
-	}
-	if !maps.Equal(multi, map[string]bool{"serena": true}) {
-		t.Errorf("multi = %v, want serena", multi)
-	}
-}
-
-func TestCheckSyncedPluginsWarnsWhenAnotherCopyLoads(t *testing.T) {
-	origFS, origList := kitFS, pluginList
-	kitFS = func() fs.FS {
-		return fstest.MapFS{"kit.json": {Data: []byte(`{"plugins": ["bud@bud-plugins", "bud-ide@bud-plugins", "superpowers@bud-plugins"]}`)}}
-	}
-	t.Cleanup(func() { kitFS, pluginList = origFS, origList })
-	p, dir := &paths.Paths{State: t.TempDir()}, t.TempDir()
-	cfg := config.Defaults()
-	list := func(ps ...kit.Plugin) func() ([]kit.Plugin, error) {
-		return func() ([]kit.Plugin, error) { return ps, nil }
-	}
-	synced := func(name string) kit.Plugin { return kit.Plugin{ID: name + "@synced", Scope: "synced"} }
-	ledger := func(d string) {
-		os.WriteFile(p.KitLedger(), []byte(`{"plugins": {"bud@bud-plugins": "installed"}, "dir": "`+d+`"}`), 0o644)
-	}
-
-	// yours, in its own scope
-	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@clod", Scope: "local", Project: "/w"}, synced("bud-ide"))
-	r, ok := checkSyncedPlugins(p, cfg, dir)
-	if !ok || r.Status != Warn || !strings.Contains(r.Detail, "bud@clod (local, /w) loads instead") || !strings.Contains(r.Fix, "cd /w && claude plugin uninstall --scope local bud@clod") {
-		t.Fatalf("hidden synced copy: %+v", r)
-	}
-
-	// bud's own copy, still there: bud kit sync takes it out
-	ledger(dir)
-	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@bud-plugins", Scope: "user"})
-	if r, _ := checkSyncedPlugins(p, cfg, dir); r.Status != Warn || !strings.Contains(r.Detail, "bud's own bud@bud-plugins is still installed") || !strings.HasPrefix(r.Fix, "bud kit sync") {
-		t.Fatalf("bud's own copy: %+v", r)
-	}
-
-	// the same id at another scope isn't bud's: bud installs at user scope only
-	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@bud-plugins", Scope: "local", Project: "/w"})
-	if r, _ := checkSyncedPlugins(p, cfg, dir); !strings.Contains(r.Fix, "cd /w && claude plugin uninstall --scope local bud@bud-plugins") {
-		t.Fatalf("local copy of bud's id: %+v", r)
-	}
-
-	// a ledger for another config dir owns nothing here
-	ledger(t.TempDir())
-	pluginList = list(synced("bud"), kit.Plugin{ID: "bud@bud-plugins", Scope: "user"})
-	if r, _ := checkSyncedPlugins(p, cfg, dir); !strings.Contains(r.Fix, "claude plugin uninstall --scope user bud@bud-plugins") {
-		t.Fatalf("ledger for another dir: %+v", r)
-	}
-
-	// only synced copies: all good
-	pluginList = list(synced("bud"), synced("bud-ide"))
-	if r, ok := checkSyncedPlugins(p, cfg, dir); !ok || r.Status != OK {
-		t.Fatalf("only synced copies: %+v", r)
-	}
-
-	// one you turned off in bud and installed yourself is your choice
-	off := cfg
-	off.Kit.Disabled = []string{"superpowers@bud-plugins"}
-	pluginList = list(synced("superpowers"), kit.Plugin{ID: "superpowers@claude-plugins-official", Scope: "user"})
-	if _, ok := checkSyncedPlugins(p, off, dir); ok {
-		t.Fatal("warned about a plugin turned off with kit.disabled")
-	}
-
-	// nothing synced, or no list: nothing to say
-	pluginList = list(kit.Plugin{ID: "bud@bud-plugins", Scope: "user"})
-	if _, ok := checkSyncedPlugins(p, cfg, dir); ok {
-		t.Fatal("reported with nothing synced")
-	}
-	pluginList = func() ([]kit.Plugin, error) { return nil, errors.New("boom") }
-	if _, ok := checkSyncedPlugins(p, cfg, dir); ok {
-		t.Fatal("reported a failed list")
-	}
-}
-
 func TestCheckBudAppWarnsWhenItsOutOfDate(t *testing.T) {
 	origFind, origRead, origKitty, origGOOS, origVersion := findBundles, readMac, bundle.KittyVersion, doctorGOOS, version.Version
 	t.Cleanup(func() {
@@ -848,7 +628,7 @@ func TestNvimVersionRunsAsBud(t *testing.T) {
 	}
 }
 
-// fakeServers is kit.json server entries, on by default in full mode, for names
+// fakeServers is MCP server entries, on by default in full mode, for names
 func fakeServers(names ...string) string {
 	entries := make([]string, len(names))
 	for i, n := range names {

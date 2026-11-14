@@ -29,7 +29,7 @@ func has(list []string, want ...string) bool {
 
 func TestComplete(t *testing.T) {
 	layoutHome(t)
-	if got := completions(t, ""); !has(got, "open", "launch", "config", "kit") || has(got, "__complete") {
+	if got := completions(t, ""); !has(got, "open", "launch", "config") || has(got, "kit") || has(got, "__complete") {
 		t.Errorf("commands: %v", got)
 	}
 	if got := completions(t, "la"); !has(got, "lang", "launch", "layout") || has(got, "open") {
@@ -44,10 +44,7 @@ func TestComplete(t *testing.T) {
 	if got := completions(t, "--layout", "focus", "lau"); !has(got, "launch") {
 		t.Errorf("past a global flag's value: %v", got)
 	}
-	if got := completions(t, "kit", ""); !has(got, "sync", "status", "unsync", "ls") {
-		t.Errorf("kit subs: %v", got)
-	}
-	if got := completions(t, "kit", "sync", "--"); !has(got, "--dry-run") {
+	if got := completions(t, "update", "--"); !has(got, "--check") {
 		t.Errorf("sub flags: %v", got)
 	}
 	if got := completions(t, "launch", "--terminal", ""); !has(got, "kitty", "ghostty") {
@@ -58,9 +55,6 @@ func TestComplete(t *testing.T) {
 	}
 	if got := completions(t, "layout", "set-default", ""); !has(got, "default", "focus") {
 		t.Errorf("layout names: %v", got)
-	}
-	if got := completions(t, "kit", "rm", ""); !has(got, "bud@bud-plugins") {
-		t.Errorf("kit names: %v", got)
 	}
 	// a path: nothing, so the shell completes file names
 	if got := completions(t, "./src", ""); len(got) != 0 {

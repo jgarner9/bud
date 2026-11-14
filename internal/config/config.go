@@ -33,12 +33,6 @@ type Settings struct {
 	UI           UI        `json:"ui"`
 	AI           AI        `json:"ai"`
 	Tools        Disabled  `json:"tools"` // bud tools enable/disable (D54)
-	Kit          Kit       `json:"kit"`
-}
-
-// Kit is the kit's settings on this machine
-type Kit struct {
-	Disabled []string `json:"disabled"` // bud kit enable/disable (D58)
 }
 
 // Disabled lists what's turned off on this machine

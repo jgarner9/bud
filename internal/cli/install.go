@@ -132,9 +132,6 @@ func install(g *Globals, args []string, yes bool) error {
 				fmt.Printf("Headroom: %v; 'bud config set ai.claude.command' sets it.\n", err)
 			}
 		}
-		if err := installKit(g, pr); err != nil {
-			kitWarn(err)
-		}
 	}
 
 	fmt.Println()
@@ -201,32 +198,11 @@ var installClaude = func(pr *prompter, yes bool) error {
 	return claudeSetup(pr, true)
 }
 
-// syncKit is syncKitWith; swappable in tests
-var syncKit = syncKitWith
-
-// installKit syncs the Claude Code kit once Claude Code is set up (JGA-132).
-// It waits for a login: plugins claude.ai syncs (bud's own among them) only
-// show up for a logged-in account, so syncing before that could install a
-// second copy. Installing is setting the kit up, so it syncs even one you
-// turned down before (into ~/.claude, after asking), and a no is remembered,
-// so bud update doesn't offer it again (D87)
-func installKit(g *Globals, pr *prompter) error {
-	p, err := paths.Resolve()
-	if err != nil {
-		return err
-	}
-	if ready, err := claudeLoggedIn(); err != nil || !ready {
-		return err
-	}
-
-	return syncOffered(g, p, pr)
-}
-
 // lookPath finds a binary on PATH; swappable in tests
 var lookPath = exec.LookPath
 
-// headroomCommand runs Claude Code through Headroom (D60). Serena comes from
-// the kit, so Headroom's own (--code-memory) stays off
+// headroomCommand runs Claude Code through Headroom (D60). Headroom's own
+// code memory (--code-memory) stays off
 var headroomCommand = []string{"headroom", "wrap", "claude", "--code-memory", "none", "--"}
 
 // offerHeadroom offers to run bud's Claude Code sessions through Headroom when

@@ -7,13 +7,12 @@ import (
 
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
-	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/paths"
 )
 
 // claudeConfigDir is the Claude Code config dir bud uses: "" for Claude
 // Code's usual ~/.claude, which bud shares by default (D77), or with
-// ai.claude.config "bud" its own (JGA-135, D73), so its kit, plugins,
+// ai.claude.config "bud" its own (JGA-135, D73), so its plugins,
 // settings and login stay apart from the claude you run yourself
 func claudeConfigDir(p *paths.Paths, s config.Settings) string {
 	if s.AI.Claude.Config == "bud" {
@@ -23,7 +22,7 @@ func claudeConfigDir(p *paths.Paths, s config.Settings) string {
 }
 
 // UseClaudeConfig points everything this bud runs at its Claude Code config
-// dir by setting CLAUDE_CONFIG_DIR: claude itself, the kit sync, and nvim,
+// dir by setting CLAUDE_CONFIG_DIR: claude itself and nvim,
 // whose sessions, chat history and IDE bridge read it too. A
 // CLAUDE_CONFIG_DIR you set yourself wins. main calls it, so tests never do
 func UseClaudeConfig() {
@@ -64,8 +63,7 @@ func budClaudeDir() bool {
 }
 
 // shareClaudeDir offers to switch bud to ~/.claude when that runs Claude Code
-// on a cloud provider bud's own dir doesn't see (JGA-146): the kit's ledger
-// keeps bud's things apart from yours there. On a yes it unsets
+// on a cloud provider bud's own dir doesn't see (JGA-146). On a yes it unsets
 // ai.claude.config, whose default is "home", and points this process at
 // ~/.claude, so the rest of the command sees it. A CLAUDE_CONFIG_DIR you set
 // yourself is left alone
@@ -75,7 +73,7 @@ var shareClaudeDir = func(pr *prompter, yes bool, provider string) (bool, error)
 		return false, nil
 	}
 	fmt.Printf("~/.claude/settings.json runs Claude Code on %s, which bud's own config dir doesn't see.\n", provider)
-	fmt.Println("bud can share ~/.claude instead: the kit only adds what you don't already have, and 'bud kit unsync' takes out just bud's.")
+	fmt.Println("bud can share ~/.claude instead, with the Claude Code setup you already have there.")
 	if !yes {
 		ok, err := pr.confirmYes("Share ~/.claude with bud?")
 		if err != nil || !ok {
@@ -111,115 +109,4 @@ func homeClaudeDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".claude"), nil
-}
-
-// withClaudeDir runs fn with CLAUDE_CONFIG_DIR pointing at dir, or unset for
-// ~/.claude, so the claude it runs works on that config
-func withClaudeDir(dir string, fn func() error) error {
-	home, err := homeClaudeDir()
-	if err != nil {
-		return err
-	}
-	orig, had := os.LookupEnv("CLAUDE_CONFIG_DIR")
-	defer func() {
-		if had {
-			os.Setenv("CLAUDE_CONFIG_DIR", orig)
-		} else {
-			os.Unsetenv("CLAUDE_CONFIG_DIR")
-		}
-	}()
-	if dir == home {
-		os.Unsetenv("CLAUDE_CONFIG_DIR")
-	} else {
-		os.Setenv("CLAUDE_CONFIG_DIR", dir)
-	}
-
-	return fn()
-}
-
-// moveKit takes what the kit put into another Claude Code config dir back out
-// before the kit syncs into this one (JGA-135): the ledger says where it last
-// synced. It waits for a login there, lists what it removes and asks first. A no leaves those in place
-// and forgets them; with nobody to ask it returns false and nothing changes,
-// so a sync on a terminal does it later. A dry run only lists them
-func moveKit(pr *prompter, env kit.Env, dryRun bool) (bool, error) {
-	ledger, ok, err := kit.ReadLedger(env.Ledger)
-	if err != nil || !ok {
-		return err == nil, err
-	}
-	old := ledger.Dir
-	if old == "" {
-		if old, err = homeClaudeDir(); err != nil {
-			return false, err
-		}
-	}
-	if old == env.ClaudeDir {
-		return true, nil
-	}
-	// plugins claude.ai syncs show up only once this config is logged in;
-	// without them the sync could install second copies
-	if s, err := checkClaude(); err != nil || s.Bin == "" || !s.LoggedIn {
-		fmt.Printf("bud now uses the Claude Code config in %s: log in there with 'bud claude setup', then run 'bud kit sync'.\n", env.ClaudeDir)
-		return false, err
-	}
-	oldEnv := env
-	oldEnv.ClaudeDir, oldEnv.ClaudeJSON = old, claudeJSONFor(old)
-	var actions []kit.Action
-	err = withClaudeDir(old, func() (err error) {
-		actions, err = kit.Unsync(oldEnv, true)
-		return err
-	})
-	if err != nil {
-		return false, err
-	}
-	var gone []kit.Action
-	for _, a := range actions {
-		if a.Do == "remove" {
-			gone = append(gone, a)
-		}
-	}
-	if len(gone) == 0 {
-		if !dryRun {
-			os.Remove(env.Ledger)
-		}
-		return true, nil
-	}
-	fmt.Printf("bud now uses the Claude Code config in %s. The kit synced these into %s:\n", env.ClaudeDir, old)
-	for _, a := range gone {
-		fmt.Printf("  %s %s\n", a.Kind, a.Name)
-	}
-	if dryRun {
-		fmt.Println("bud kit sync removes them from there.")
-		return true, nil
-	}
-	if pr == nil {
-		fmt.Println("Run 'bud kit sync' on a terminal to remove them there and sync the kit here.")
-		return false, nil
-	}
-	yes, err := pr.confirm(fmt.Sprintf("Remove them from %s?", old))
-	if err != nil {
-		return false, err
-	}
-	if !yes {
-		fmt.Printf("Left in %s; they're yours now.\n", old)
-		return true, os.Remove(env.Ledger)
-	}
-	err = withClaudeDir(old, func() error {
-		_, err := kit.Unsync(oldEnv, false)
-		return err
-	})
-	if err != nil {
-		return false, fmt.Errorf("removing the kit from %s: %w", old, err)
-	}
-
-	return true, nil
-}
-
-// claudeJSONFor is where Claude Code keeps user-scope MCP servers for a
-// config dir: ~/.claude.json for ~/.claude, else inside the dir
-func claudeJSONFor(dir string) string {
-	if home, err := homeClaudeDir(); err == nil && dir == home {
-		return filepath.Join(filepath.Dir(home), ".claude.json")
-	}
-	return filepath.Join(dir, ".claude.json")
 }

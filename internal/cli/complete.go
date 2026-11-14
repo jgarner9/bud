@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"jgarner.dev/bud/internal/config"
-	"jgarner.dev/bud/internal/kit"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/projects"
 	"jgarner.dev/bud/internal/updater"
@@ -184,12 +183,6 @@ func argValues(cmd string, before []string) []string {
 		}
 	case "tools enable", "tools disable", "tools rm", "tools promote":
 		return toolNames()
-	case "kit rm", "kit enable", "kit disable":
-		return kitNames()
-	case "kit add":
-		if len(before) == 0 {
-			return kit.Kinds
-		}
 	case "config get", "config set", "config unset":
 		if len(before) == 0 {
 			return configKeys()
@@ -258,19 +251,6 @@ func toolNames() []string {
 	var out []string
 	for _, t := range tools {
 		out = append(out, t.Name)
-	}
-
-	return out
-}
-
-func kitNames() []string {
-	k, err := kit.Load(kitFS())
-	if err != nil {
-		return nil
-	}
-	var out []string
-	for _, e := range k.Entries() {
-		out = append(out, e[1])
 	}
 
 	return out

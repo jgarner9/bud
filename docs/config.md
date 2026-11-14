@@ -62,7 +62,7 @@ bud config edit                           # open it in bud's editor, then check 
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `ai.backend` | `"claude"` | Which agent bud talks to: `claude` (Claude Code directly, as through 1.0; moving onto ACP through `claude-agent-acp` later), or over the Agent Client Protocol (ACP) `openclaw` (an OpenClaw Gateway, through `openclaw acp`), `codex` (Codex, through `codex-acp`), `opencode` (`opencode acp`), or `custom` (`ai.custom.command`). See [AI backends](backends.md). |
+| `ai.backend` | `"claude"` | Which agent bud talks to: `claude` (Claude Code directly, as through 1.0; moving onto ACP through `claude-agent-acp` later), or over the Agent Client Protocol (ACP) `openclaw` (an OpenClaw Gateway, through `openclaw acp`), `codex` (Codex, through `codex-acp`), `opencode` (`opencode acp`), or `custom` (`ai.custom.command`; it has no TUI bud knows, so set `ai.agent.chat_ui` to `bud`). See [AI backends](backends.md). |
 | `ai.agent.chat_layout` | `"pane"` | How `<leader>ac` opens the AI chat: `pane`, the pull-out on the right, or `full`, a tab of its own. `<leader>aF` switches between them either way. |
 | `ai.agent.autostart` | `true` | On any backend but `claude`, start the project's agent when it opens (it costs a process and a Gateway session, no tokens). Off, it starts on the first use. The `claude` backend keeps `ai.claude.autostart`. |
 | `ai.agent.idle_minutes` | `30` | On any backend but `claude`, stop a project's agent nothing has used for this long; the next use starts it again on the same session. `0` never stops it. |

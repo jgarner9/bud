@@ -26,12 +26,11 @@ bud reaches a Gateway with its token. Keep it in a file readable only by you, an
 
 ```sh
 mkdir -p ~/.config/openclaw
-install -m 600 /dev/null ~/.config/openclaw/gateway-token
-$EDITOR ~/.config/openclaw/gateway-token     # paste the token; `openclaw gateway auth-token` prints it
+umask 077 && printf '%s\n' "$TOKEN" > ~/.config/openclaw/gateway-token   # the token your Gateway is configured with
 bud config set ai.openclaw.token_file ~/.config/openclaw/gateway-token
 ```
 
-bud passes the file to `openclaw acp` as `--token-file`, so the token stays out of `config.json` and process listings. For the AI pane, which runs `openclaw tui`, bud reads the file and hands the token over in `OPENCLAW_GATEWAY_TOKEN`, because the TUI takes no token file. `bud ai status` warns when the file can be read by others (fix: `chmod 600`).
+The file must hold the token alone on one line, since the TUI reads only the first line. bud passes the file to `openclaw acp` as `--token-file`, so the token stays out of `config.json` and process listings. For the AI pane, which runs `openclaw tui`, bud reads the file and hands the token over in `OPENCLAW_GATEWAY_TOKEN`, because the TUI takes no token file. If the file is missing, `bud ai status` reports the backend as not ready with a fix line; if other users can read it, that is only a warning (fix: `chmod 600`).
 
 ## Pointing bud at it
 
@@ -58,7 +57,7 @@ Command: <openclaw's version> (/usr/local/bin/openclaw)
 Gateway: gateway.example.ts.net:18789, answering
 ```
 
-With no `ai.openclaw.url`, `bud ai status` asks the CLI's own Gateway to report its health, which also proves the token. With a URL it can only open a connection, since a health check would put the token on a command line; a wrong token shows up when a session starts instead (see below). Each problem is printed with a `fix:` line. `bud doctor` shows the same under "ai backend".
+With no `ai.openclaw.url`, `bud ai status` asks the CLI's own Gateway to report its health, which also proves the token. With a URL set, "answering" only means the port accepted a connection: the token and the WebSocket are not tested, since a health check would put the token on a command line. A wrong token shows up when a session starts instead (see below). Each problem is printed with a `fix:` line. `bud doctor` shows the same under "ai backend".
 
 ## Asking before commands
 
@@ -85,4 +84,4 @@ File edits do not ask on OpenClaw: they are written, and bud shows what changed 
 | --- | --- |
 | `openclaw isn't installed` | `bud ai setup`, or `npm install -g openclaw`. |
 | `ACP bridge failed: connect ECONNREFUSED ...` | No Gateway at that address: start it (`openclaw gateway`, or its service) and check `ai.openclaw.url`. |
-| `ACP bridge failed: unauthorized: gateway token mismatch` | The token file does not hold that Gateway's token: `openclaw gateway auth-token` on its machine prints it. |
+| `ACP bridge failed: unauthorized: gateway token mismatch` | The token file does not hold that Gateway's token: use the token your Gateway is configured with. |

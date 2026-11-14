@@ -12,7 +12,7 @@ bud ai setup                        # install its command if missing; for OpenCl
 bud config set ai.backend codex     # claude, openclaw, codex, opencode or custom
 ```
 
-`ai.backend` takes effect for the next project you open; in the editor, `:BudAgent restart` starts the current project's session again. `bud ai setup` asks before installing anything, and it never signs you in: that is the backend's own step. `bud doctor` has an "ai backend" check that reports the same problems as `bud ai status`, as warnings only, since bud works without an AI.
+After changing `ai.backend`, restart the project's agent (`:BudAgent restart`) or reopen the project, and check `bud ai status`. `bud ai setup` asks before installing anything, and it never signs you in: that is the backend's own step. `bud doctor` has an "ai backend" check that reports the same problems as `bud ai status`, as warnings only, since bud works without an AI.
 
 ## The backends
 
@@ -20,9 +20,9 @@ bud config set ai.backend codex     # claude, openclaw, codex, opencode or custo
 | --- | --- | --- | --- |
 | `claude` (default) | `claude` | Claude Code (`bud claude setup`) | Claude Code's own login and `~/.claude` |
 | `openclaw` | `openclaw acp`, with `--url` and `--token-file` from `ai.openclaw.*` when set | The `openclaw` CLI (`npm install -g openclaw`, Node 24.16+) and a Gateway to reach: [OpenClaw](openclaw.md) | The Gateway token; the models' logins live on the Gateway's machine |
-| `codex` | `codex-acp` | `npm install -g @zed-industries/codex-acp` | Codex's own login (ChatGPT Plus) |
-| `opencode` | `opencode acp` | OpenCode | OpenCode's own providers |
-| `custom` | `ai.custom.command`, e.g. `["gemini", "--experimental-acp"]` | Any ACP agent on your `PATH` | Whatever it does |
+| `codex` | `codex-acp` | `npm install -g @zed-industries/codex-acp`, and the `codex` CLI too: the AI pane, `bud agent` and `bud chat` run it, while `bud ai status` checks only `codex-acp` | Codex's own login (ChatGPT Plus) |
+| `opencode` | `opencode acp` | OpenCode; `bud ai setup` installs it with npm, and if that fails, install it yourself | OpenCode's own providers |
+| `custom` | `ai.custom.command`, e.g. `["gemini", "--experimental-acp"]` | Any ACP agent on your `PATH`, and `ai.agent.chat_ui = "bud"`, since bud knows no TUI for it | Whatever it does |
 
 `bud ai setup` installs the command for `openclaw`, `codex` and `opencode` with npm. For `claude` it points you at `bud claude setup`, and for `custom` the command is yours to install.
 

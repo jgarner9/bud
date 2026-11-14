@@ -240,3 +240,31 @@ func TestPlanUninstallKit(t *testing.T) {
 		t.Errorf("bud's own dir listed on its own: %q", targets(removals))
 	}
 }
+
+// ~/clod and its command, left by a bud before 2.0, are listed as left alone
+// and never removed
+func TestPlanUninstallLeavesOldClodAlone(t *testing.T) {
+	p, bin := fakeInstall(t)
+	clodLink := filepath.Join(p.BinDir, "clod")
+	os.MkdirAll(p.BinDir, 0o755)
+	if err := os.MkdirAll(filepath.Join(p.Home, "clod"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(p.Home, "clod", "install.sh"), clodLink); err != nil {
+		t.Fatal(err)
+	}
+	removals, kept, err := planUninstall(p, false, bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{filepath.Join(p.Home, "clod"), clodLink} {
+		if slices.Contains(targets(removals), path) {
+			t.Errorf("uninstall removes %s", path)
+		}
+		if !slices.ContainsFunc(kept, func(k string) bool {
+			return strings.HasPrefix(k, path+"  ") && strings.Contains(k, "left alone")
+		}) {
+			t.Errorf("%s not listed as left alone: %q", path, kept)
+		}
+	}
+}

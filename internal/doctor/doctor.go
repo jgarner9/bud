@@ -254,8 +254,10 @@ func checkCore(p *paths.Paths, dir string) (Result, bool) {
 
 // checkClaudeSetup warns when Claude Code's config lacks what bud's sessions
 // rely on it for since D77 (JGA-175): the MCP servers kit.json expects, from
-// its config or a claude.ai connector, and the core.md rule. Without them bud
-// still works, with fewer tools and none of the always-on instructions. A listed server only counts once it connects (JGA-180)
+// its config or a claude.ai connector, and the core.md rule. All of it comes
+// from the user's own ~/.claude (or a claude.ai connector); bud sets none of it
+// up. Without them bud still works, with fewer tools and none of the always-on
+// instructions. A listed server only counts once it connects (JGA-180)
 func checkClaudeSetup(dir string) (Result, bool) {
 	k, err := kit.Load(kitFS())
 	if err != nil || (len(k.ExpectedServers()) == 0 && k.Account.Instructions == "") {
@@ -303,7 +305,7 @@ func checkClaudeSetup(dir string) (Result, bool) {
 	var details, fixes []string
 	if len(missing) > 0 {
 		details = append(details, "Claude Code's config has no "+strings.Join(missing, ", ")+", so bud's sessions go without")
-		fixes = append(fixes, "add them to Claude Code's config (~/.claude) yourself, or connect them in claude.ai")
+		fixes = append(fixes, "add the servers with claude mcp add or connect them in claude.ai; put the core.md rule in a .md file under ~/.claude/rules/ or in ~/.claude/CLAUDE.md (bud kit core prints it)")
 	}
 	if len(failed) > 0 {
 		details = append(details, "can't connect to "+strings.Join(failed, "; "))

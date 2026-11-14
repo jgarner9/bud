@@ -15,6 +15,7 @@ bud is a personal tool that happens to be public: it's built around one person's
 | macOS or Linux, amd64 or arm64 | everything | Homebrew on macOS; pacman, apt or dnf on Linux. |
 | A terminal with a [Nerd Font](https://www.nerdfonts.com) | the icons | Any terminal runs `bud`. `bud launch` and the desktop app open Kitty or Ghostty. |
 | An AI backend | the AI features | A setting since 1.1 (`ai.backend`): Claude Code directly by default, which the steps below set up, or an [OpenClaw](openclaw.md) Gateway, Codex or OpenCode. bud never stores a model key. |
+| `gh`, the GitHub CLI | the dashboard's open pull requests | Optional. On the full profile `bud install` installs it and offers `gh auth login`. |
 | Linear, connected in Claude Code | filing issues from the editor | Optional. See [Filing issues](issues.md). |
 
 Everything else (Neovim 0.12+, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, each language's toolchain) is installed for you in step 2, after you've seen the command.
@@ -112,7 +113,7 @@ bud bootstrap user@host            # this version of bud, minimal profile
 bud bootstrap --config user@host   # and copy your config.json across first
 ```
 
-For a second desktop, run step 1 there. set Claude Code's own config (`~/.claude`) up there the same way; your projects and editor settings (`config.json`) are per machine.
+For a second desktop, run step 1 there, then set up Claude Code's own config (`~/.claude`: MCP servers, settings and rules) the same way you did here, by copying it across or with whatever tool you keep it in. Your projects and editor settings (`config.json`) are per machine.
 
 ## Keeping it current, and taking it out
 

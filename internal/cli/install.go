@@ -108,6 +108,11 @@ func install(g *Globals, args []string, yes bool) error {
 		}
 	}
 
+	// gh is optional (the dashboard's open-PRs panel), so a failure only warns
+	if err := githubSetup(pr, yes, s.Profile); err != nil {
+		fmt.Printf("\nGitHub CLI isn't set up (%v); 'gh auth login' and your package manager do it by hand.\n", err)
+	}
+
 	if s.AI.Backend != "claude" {
 		// another backend (D131): its command and, for OpenClaw, the Gateway;
 		// never Claude Code's setup, whatever ai.claude.autostart says

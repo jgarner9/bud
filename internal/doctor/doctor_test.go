@@ -602,8 +602,8 @@ func TestCheckClaudeSetup(t *testing.T) {
 	mcpList = func() (string, error) {
 		return "basic-memory: x - ✔\nclaude.ai Context7: y - ✔\nclaude.ai Linear: z - ✔\n", nil
 	}
-	os.MkdirAll(filepath.Join(dir, "rules", "clod"), 0o755)
-	os.WriteFile(filepath.Join(dir, "rules", "clod", "core.md"), []byte("You are Bud. Be a bud.\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "rules", "mine"), 0o755)
+	os.WriteFile(filepath.Join(dir, "rules", "mine", "persona.md"), []byte("You are Bud. Be a bud.\n"), 0o644)
 	if r, _ := checkClaudeSetup(dir); r.Status != OK {
 		t.Fatalf("all there: %+v", r)
 	}

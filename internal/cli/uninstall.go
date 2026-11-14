@@ -118,6 +118,16 @@ func planUninstall(p *paths.Paths, keepConfig bool, exe string) (removals []remo
 		removals = append(removals, r)
 	}
 
+	// what a bud before 2.0 set up for clod (D143) is no longer bud's to remove,
+	// and may be yours: left alone. clod.json and clod-declined sat in the state
+	// dir, which goes below
+	for _, old := range []string{filepath.Join(p.Home, "clod"), filepath.Join(p.BinDir, "clod")} {
+		// Lstat, so a link left dangling still shows
+		if _, err := os.Lstat(old); err == nil {
+			kept = append(kept, old+"  (left by a bud before 2.0, which no longer uses it; left alone, delete it if you no longer use clod)")
+		}
+	}
+
 	if r, ok, err := configRemoval(p.Config); err != nil {
 		return nil, nil, err
 	} else if ok {

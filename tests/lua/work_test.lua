@@ -62,6 +62,10 @@ local function sent()
 end
 
 local claude = require("bud.ai.claude")
+-- bud's embedded plugin (D142) is unpacked by the bud binary, which these tests don't run
+claude.plugin_dir = function()
+  return nil
+end
 claude.bin = function()
   return fake
 end

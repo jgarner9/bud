@@ -59,6 +59,10 @@ vim.fn.writefile({
 vim.fn.setfperm(fake, "rwxr-xr-x")
 
 local claude = require("bud.ai.claude")
+-- bud's embedded plugin (D142) is unpacked by the bud binary, which these tests don't run
+claude.plugin_dir = function()
+  return nil
+end
 claude.bin = function()
   return fake
 end

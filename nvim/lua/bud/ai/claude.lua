@@ -158,6 +158,7 @@ function M.argv(bin, s, cfg)
     M.prefix(bin, cfg),
     { "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose" }
   )
+  vim.list_extend(argv, M.plugin_args())
   if cfg.output_style then
     vim.list_extend(argv, { "--settings", vim.json.encode({ outputStyle = cfg.output_style }) })
   end
@@ -228,29 +229,29 @@ function M.project_dir(dir)
   return M.claude_dir() .. "/projects/" .. dir:gsub("[^%w]", "-")
 end
 
--- plugin_file is rel inside the installed plugin named name (from any
--- marketplace), nil when Claude Code doesn't have it or the plugin has no
--- such file (an older copy)
-function M.plugin_file(name, rel)
-  local plugins = M.claude_dir() .. "/plugins"
-  local f = io.open(plugins .. "/installed_plugins.json")
-  if f then
-    local ok, data = pcall(vim.json.decode, f:read("*a"))
-    f:close()
-    if ok and type(data) == "table" and type(data.plugins) == "table" then
-      for id, installs in pairs(data.plugins) do
-        if type(id) == "string" and id:match("^(.-)@") == name and type(installs) == "table" then
-          for _, install in ipairs(installs) do
-            local path = type(install) == "table" and install.installPath
-            if type(path) == "string" and vim.uv.fs_stat(path .. "/" .. rel) then
-              return path .. "/" .. rel
-            end
-          end
-        end
-      end
+-- plugin_dir is where bud extracted its embedded bud-ide plugin (D142), asked
+-- of `bud plugin path` once and kept; nil when bud can't be run. Swappable in
+-- tests
+local plugin_cache
+M.plugin_dir = function()
+  if plugin_cache == nil then
+    local bin = require("bud.cli").bin()
+    local res = bin and vim.system({ bin, "plugin", "path" }, { text = true, timeout = 10000 }):wait()
+    local dir = res and res.code == 0 and vim.trim(res.stdout or "") or ""
+    if dir == "" then
+      vim.notify("bud: couldn't unpack the bud-ide plugin, so this session runs without it", vim.log.levels.WARN)
     end
+    plugin_cache = dir ~= "" and dir or false
   end
-  return nil
+  return plugin_cache or nil
+end
+
+-- plugin_args loads the plugin into one session the IDE starts: its project
+-- session, chat, issue work and the generator. Nothing is installed into Claude
+-- Code, so a claude run outside bud never has it
+function M.plugin_args()
+  local dir = M.plugin_dir()
+  return dir and { "--plugin-dir", dir } or {}
 end
 
 -- project says whether s is a project's own session, not a keyed one
@@ -662,7 +663,8 @@ end
 -- (ai.claude.command), flags, then ai.claude.args
 function M.tui_argv(bin, flags)
   local cfg = settings()
-  return vim.list_extend(vim.list_extend(M.prefix(bin, cfg), flags or {}), cfg.args or {})
+  local argv = vim.list_extend(M.prefix(bin, cfg), M.plugin_args())
+  return vim.list_extend(vim.list_extend(argv, flags or {}), cfg.args or {})
 end
 
 -- tui_conversation is the conversation the TUI wrote to since it took root's

@@ -62,6 +62,10 @@ local function sent()
 end
 
 local claude = require("bud.ai.claude")
+-- bud's embedded plugin (D142) is unpacked by the bud binary, which these tests don't run
+claude.plugin_dir = function()
+  return nil
+end
 claude.bin = function()
   return fake
 end
@@ -274,25 +278,16 @@ issue.start = real_start
 
 claude.stop_all()
 vim.fn.delete(tmp, "rf")
--- the skill comes from the bud-ide plugin, from whichever marketplace (D77)
-local cc = vim.env.CLAUDE_CONFIG_DIR
-vim.fn.delete(cc .. "/plugins", "rf")
-eq(issue.skill_installed(), false, "no plugins")
-vim.fn.mkdir(cc .. "/plugins", "p")
-vim.fn.writefile(
-  { vim.json.encode({ version = 2, plugins = { ["bud@bud-plugins"] = {} } }) },
-  cc .. "/plugins/installed_plugins.json"
-)
-eq(issue.skill_installed(), false, "only the bud plugin")
-vim.fn.writefile(
-  { vim.json.encode({ version = 2, plugins = { ["bud-ide@local-checkout"] = {} } }) },
-  cc .. "/plugins/installed_plugins.json"
-)
-eq(issue.skill_installed(), true, "bud-ide from another marketplace")
-vim.fn.delete(cc .. "/plugins/installed_plugins.json")
-local synced = cc .. "/plugins/synced/bud-ide/skills/file-issue"
-vim.fn.mkdir(synced, "p")
-vim.fn.writefile({ "---" }, synced .. "/SKILL.md")
-eq(issue.skill_installed(), true, "a synced copy")
+-- the skill comes from the plugin bud ships (D142): there when bud can unpack it
+local real_dir = claude.plugin_dir
+claude.plugin_dir = function()
+  return nil
+end
+eq(issue.skill_installed(), false, "bud can't unpack the plugin")
+claude.plugin_dir = function()
+  return "/some/plugin"
+end
+eq(issue.skill_installed(), true, "the plugin is there")
+claude.plugin_dir = real_dir
 
 print("issue_test: ok")

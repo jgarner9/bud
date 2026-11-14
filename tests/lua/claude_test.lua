@@ -57,6 +57,10 @@ local function lines(name)
 end
 
 local claude = require("bud.ai.claude")
+-- bud's embedded plugin (D142) is unpacked by the bud binary, which these tests don't run
+claude.plugin_dir = function()
+  return nil
+end
 claude.ids_file = function()
   return tmp .. "/claude-sessions.json"
 end
@@ -82,6 +86,27 @@ for _, ev in ipairs({ "message", "tool_use", "done", "exit" }) do
     table.insert(events, { ev, data.text or data.name or data.code, s.root })
   end)
 end
+
+-- the plugin bud ships goes to the sessions the IDE starts, never anywhere else (D142)
+claude.plugin_dir = function()
+  return "/data/plugins/bud-ide-x"
+end
+local with = claude.argv("claude", { root = project("plug") }, { resume = "new" })
+local at = vim.fn.index(with, "--plugin-dir")
+eq(at >= 0 and with[at + 2], "/data/plugins/bud-ide-x", "headless session gets the plugin")
+eq(
+  claude.tui_argv("claude", { "--agent", "x" }),
+  { "claude", "--plugin-dir", "/data/plugins/bud-ide-x", "--agent", "x" },
+  "so does the TUI"
+)
+claude.plugin_dir = function()
+  return nil
+end
+eq(
+  vim.tbl_contains(claude.argv("claude", { root = project("plug") }, { resume = "new" }), "--plugin-dir"),
+  false,
+  "none when bud can't unpack it"
+)
 
 -- argv: --continue the first time, the session's own id after, once Claude
 -- Code has them; the TUI exits on a conversation it can't find

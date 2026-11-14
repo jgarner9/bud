@@ -1,7 +1,7 @@
 -- Filing an issue from the editor (JGA-125): <leader>ai for this project,
 -- <leader>aB for bud itself. A float takes the report, bud attaches where you
 -- were (the file and lines, diagnostics there, recent messages, versions), and
--- a session of its own runs bud-ide's file-issue skill (JGA-124, D77) in two
+-- a session of its own runs bud-ide's file-issue skill (JGA-124, D77, D142) in two
 -- rounds: it proposes issues as a bud-issues block, you review them, and only
 -- on y does it file them in Linear and answer with a bud-filed block. Where
 -- they go comes from bud issue target (JGA-123).
@@ -38,27 +38,10 @@ function M.bud(args)
   return res.stdout
 end
 
--- skill_installed says whether Claude Code has the bud-ide plugin, whose
--- file-issue skill this runs (D77), from any marketplace: it's in Claude
--- Code's installed_plugins.json, or a synced copy has the skill
+-- skill_installed says whether the bud-ide plugin, whose file-issue skill this
+-- runs, can be handed to the session: it ships inside bud (D142)
 function M.skill_installed()
-  local dir = vim.env.CLAUDE_CONFIG_DIR
-  if not dir or dir == "" then
-    dir = vim.env.HOME .. "/.claude"
-  end
-  local f = io.open(dir .. "/plugins/installed_plugins.json")
-  if f then
-    local ok, data = pcall(vim.json.decode, f:read("*a"))
-    f:close()
-    if ok and type(data) == "table" and type(data.plugins) == "table" then
-      for id in pairs(data.plugins) do
-        if type(id) == "string" and id:match("^bud%-ide@") then
-          return true
-        end
-      end
-    end
-  end
-  return #vim.fn.globpath(dir .. "/plugins", "**/bud-ide/**/skills/file-issue/SKILL.md", false, true) > 0
+  return require("bud.ai.claude").plugin_dir() ~= nil
 end
 
 -- linear_tool splits a Linear MCP tool's name into whether it only reads
@@ -555,7 +538,7 @@ function M.open(kind)
   kind = kind or "project"
   if not M.skill_installed() then
     vim.notify(
-      "bud: Claude Code doesn't have the bud-ide plugin (its file-issue skill) yet: run bud kit sync",
+      "bud: couldn't unpack the bud-ide plugin (its file-issue skill): is the bud binary on PATH?",
       vim.log.levels.WARN
     )
     return

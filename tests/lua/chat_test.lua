@@ -48,20 +48,31 @@ chat.dir = function()
   return tmp .. "/chat"
 end
 
+-- bud hands its embedded plugin over with --plugin-dir (D142); the fake dir
+-- stands in for `bud plugin path`
+local plugin = tmp .. "/plugin/bud-ide"
+claude.plugin_dir = function()
+  return plugin
+end
+
 local notes = {}
 local notify = vim.notify
 vim.notify = function(msg)
   table.insert(notes, msg)
 end
 
--- without bud-ide's chat agent it's plain Claude Code, saying how to get it
+-- chat runs as bud-ide's chat agent, with the plugin loaded for this session only (D142)
 local home = vim.api.nvim_get_current_tabpage()
 chat.open()
 wait(function()
   return #runs() == 1
 end, "the TUI")
-eq(runs()[1], "|" .. tmp .. "/chat|none", "no agent, in the chat dir, without BUD_BIN")
-eq(notes[1]:find("bud kit sync", 1, true) ~= nil, true, "says to sync the kit")
+eq(
+  runs()[1],
+  "--plugin-dir " .. plugin .. " --agent bud-ide:chat|" .. tmp .. "/chat|none",
+  "the agent, in the chat dir, without BUD_BIN"
+)
+eq(notes, {}, "no warning")
 eq(vim.api.nvim_get_current_tabpage() ~= home, true, "in its own tab")
 local chat_tab = vim.api.nvim_get_current_tabpage()
 eq(vim.fn.maparg("k", "t", false, true).buffer, 1, "jk to Normal mode in chat")
@@ -81,22 +92,17 @@ wait(function()
 end, "the TUI to quit")
 eq(vim.api.nvim_list_tabpages(), { home }, "its tab is gone")
 
--- with the agent installed (from any marketplace) it runs as the agent
-local plugin = tmp .. "/plugins-src/bud-ide"
-vim.fn.mkdir(plugin .. "/agents", "p")
-vim.fn.writefile({ "---", "name: chat", "---" }, plugin .. "/agents/chat.md")
-vim.fn.mkdir(tmp .. "/cc/plugins", "p")
-vim.fn.writefile({
-  vim.json.encode({ version = 2, plugins = { ["bud-ide@bud-plugins"] = { { scope = "user", installPath = plugin } } } }),
-}, tmp .. "/cc/plugins/installed_plugins.json")
-eq(claude.plugin_file("bud-ide", "agents/chat.md"), plugin .. "/agents/chat.md", "finds the agent")
-eq(claude.plugin_file("bud-ide", "agents/nope.md"), nil, "an older copy without it")
+-- --resume opens the picker of earlier chats
 notes = {}
 chat.open({ resume = true })
 wait(function()
   return #runs() == 2
-end, "the TUI as the agent")
-eq(runs()[2], "--agent bud-ide:chat --resume|" .. tmp .. "/chat|none", "the agent, with the picker")
+end, "the TUI with the picker")
+eq(
+  runs()[2],
+  "--plugin-dir " .. plugin .. " --agent bud-ide:chat --resume|" .. tmp .. "/chat|none",
+  "the agent, with the picker"
+)
 eq(notes, {}, "no warning")
 
 vim.notify = notify

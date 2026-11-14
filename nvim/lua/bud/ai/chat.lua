@@ -11,7 +11,7 @@ local claude = require("bud.ai.claude")
 
 local M = {}
 
--- the agent chat runs as, from the bud-ide plugin (D77)
+-- the agent chat runs as, from the bud-ide plugin bud ships (D142)
 M.agent = "bud-ide:chat"
 
 local state = {} -- tab, buf, job
@@ -40,18 +40,10 @@ local function env()
   return e
 end
 
--- argv is the TUI's command line: as the chat agent when Claude Code has it,
--- else plain Claude Code, saying how to get it
+-- argv is the TUI's command line: as the chat agent, from the plugin bud
+-- ships and tui_argv loads (D142)
 function M.argv(bin, opts)
-  local flags = {}
-  if claude.plugin_file("bud-ide", "agents/chat.md") then
-    vim.list_extend(flags, { "--agent", M.agent })
-  else
-    vim.notify(
-      "bud: Claude Code doesn't have bud-ide's chat agent yet, so this is plain Claude Code: run bud kit sync",
-      vim.log.levels.WARN
-    )
-  end
+  local flags = { "--agent", M.agent }
   if opts.resume then
     table.insert(flags, "--resume")
   end

@@ -1,7 +1,7 @@
 # Bud IDE: BASE plan
 
-> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later. The AI layer is changing harness: 1.1 moves bud from Claude Code to OpenCode (4.4, D124-D126), which is a plan and not built, so 4, 4.1 and 4.2 still describe what is in the tree. 4.3 (one Claude setup everywhere, D111-D123) was the plan for 1.1 and is re-aimed by D126. The decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6).
-> Date: 2026-10-24, updated 2026-11-13
+> Status: built and released (`VERSION` has the current one). Everything in sections 1–5 exists unless it's marked as later. The AI layer is changing harness: 1.1 moves bud from Claude Code to OpenCode (4.4, D124-D126), which is a plan and not built, so 4, 4.1 and 4.2 still describe what is in the tree. 4.3 (one Claude setup everywhere, D111-D123) was the plan for 1.1 and is re-aimed by D126. The decision log below records why each part is the way it is, and the user docs are in `docs/`. The name `bud` is settled (D6). 2.0 (generic bud, D141-D147: the plugin moves in, clod and the kit's sync go) is decided and planned, not built; see 6.
+> Date: 2026-10-24, updated 2026-11-14
 
 ## 0. The one-paragraph version
 
@@ -159,6 +159,13 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D138 | **bud draws its own chat from ACP events in 1.2; until then the pane runs the backend's TUI.** | 2026-11-13 | Jason wants the TUI inside bud to look exactly how he chooses. A chat drawn in Neovim from `session/update` events can take bud's colours, layout and keys; a backend's TUI can't. 1.1 runs `openclaw tui` (or the backend's own) in the pane, as D81 did with Claude Code's, and 1.2 replaces it. |
 | D139 | **bud keeps one OpenClaw session per project by saving the ACP session id and reattaching with `session/load`.** | 2026-11-13 | Answers the first of section 7's questions with its recommendation, settled by runs against a real Gateway (OpenClaw 2026.11.3, loopback, a scripted model). A session OpenClaw's bridge makes keeps the project as its working dir, and `session/load` replays its history; one named with `openclaw acp --session <key>` continues across runs too, but runs its tools in the agent's workspace, not the project. So bud passes no `--session`, saves each project's id in `agent-sessions.json`, and the pane, `bud agent` and bud's chat open that session (`agent:<ai.openclaw.agent>:acp-bridge:<id>`). The same runs showed edits land without asking, their patch reported afterwards in `rawOutput.details.patch` (D134), and exec asks through `session/request_permission` (`allow-once`, `deny`) only when the Gateway's `tools.exec.mode` is `ask`; its default, `full`, never asks. |
 | D140 | **`claude` stays the default backend until the `claude` backend runs over ACP; OpenClaw is opt-in until then.** | 2026-11-13 | Jason, before cutting the first release with the ACP work. Narrows D132. With OpenClaw as the default, an update would have pointed every machine's AI pane at a Gateway that doesn't exist yet, while the Claude Code path still runs directly. `bud config set ai.backend openclaw` turns it on. |
+| D141 | **bud is generic: a Neovim IDE, CLI, TUI, install and update.** | 2026-11-14 | The user picks the agent backend (ACP); OpenClaw is one worked example, not special. bud names no private repository, host or service of its author. Amends D132 and D140 only in that the default is a user choice; D140's wording and behaviour stand. |
+| D142 | **The `bud-ide` plugin moves into bud as an embedded plugin that applies only locally.** Planned. | 2026-11-14 | It holds the bud-dev and file-issue skills, the chat agent, the session-start hook and the notes for working inside bud. It applies only in sessions the IDE itself starts, so bud's own instructions never leak into a user's other Claude Code sessions. Built by a later task (2.0, task 41). |
+| D143 | **clod is removed from bud.** Planned. | 2026-11-14 | `setupClod`, `clod.repo` and `bud claude`'s clod-related setup go; the `clod` repository is archived by its owner once nothing reads it. clod's merge mode and work-safe rule are dropped with it. Supersedes the clod parts of D129 and D130 (2.0, task 42). |
+| D144 | **`bud kit sync` and the kit's manifest of one person's sources are removed.** Planned; breaking. | 2026-11-14 | Personal skills, agents, instructions and server lists are the user's own setup, rendered into the backend by their own tooling outside bud. bud hands only its embedded plugin (D142) to the sessions it starts. Supersedes the kit parts of 4.1 and D111-D123 (2.0, task 43, after 41). |
+| D145 | **The `bud-plugins` repository is absorbed elsewhere and archived by its owner.** | 2026-11-14 | A skill, agent or command for bud's own sessions is changed in bud, inside the embedded plugin (D142). The rule in CLAUDE.md that says such changes belong in `bud-plugins` is corrected when the plugin move lands, not before. Amends that rule only once task 41 ships. |
+| D146 | **User docs treat backends as the user's choice, with OpenClaw as one worked example, including its server setup.** Planned. | 2026-11-14 | Follows from D141. Replaces the plan in 1.1 task 14 that made OpenClaw's setup the main path (2.0, task 44). |
+| D147 | **v2.0.0 is the release that carries D142-D144.** | 2026-11-14 | Breaking: `bud kit sync`, `bud claude` setup and `clod.repo` go. The owner cuts it with the release skill after a code review and a security review (task 46). Nothing in D141-D146 changes `VERSION` or ships on its own. |
 
 ---
 
@@ -859,6 +866,16 @@ One task is one commit with its own check, and `just check` passes after each. B
 - Delegation (JGA-260): on OpenClaw, a coder is an agent with its own model.
 - A planning schema and skills of Jason's own, in place of Superpowers (JGA-246, D120).
 - Docs: map each page to the code it describes, and fail a test when that code changes (JGA-261).
+
+### 2.0: generic bud (D141-D147): planned
+
+Nothing here is built. Task 40 (these decisions) is the only one done. Each later task is one commit with its own check.
+
+- **41. Move the plugin in.** Embed `bud-ide` in the binary and hand it only to sessions the IDE starts (D142, D145).
+- **42. Remove clod.** `setupClod`, `clod.repo` and `bud claude`'s clod setup (D143).
+- **43. Remove `bud kit sync`** and the kit manifest, after 41 (D144).
+- **44. Docs.** Backends as the user's choice, OpenClaw as one worked example (D146).
+- **46. Cut v2.0.0** with the release skill after a code review and a security review (D147).
 
 ---
 

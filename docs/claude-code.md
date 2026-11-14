@@ -5,20 +5,14 @@ This page is the `claude` backend, the default (`ai.backend = "claude"`). From 1
 ## Setting it up
 
 ```sh
-bud claude status    # installed? logged in? clod set up?
-bud claude setup     # install it with Anthropic's installer, log in, then set up clod
+bud claude status    # installed? logged in?
+bud claude setup     # install it with Anthropic's installer, then log in
 bud kit sync         # bud's Claude Code plugin (bud); the editor's bud-ide comes inside bud
 ```
 
 `bud install` does all three. By default bud shares `~/.claude` with the `claude` you run yourself, so its sessions get your MCP servers, settings, rules and login; `ai.claude.config = "bud"` gives bud a config dir of its own instead. A cloud provider (Bedrock, Vertex, Foundry) set up in `~/.claude/settings.json` works when the dir is shared. [Troubleshooting](troubleshooting.md) covers the details.
 
-**clod** is your Claude Code setup, kept in a private GitHub repo of your own: the MCP servers, settings and rules bud's sessions use. It's `<your gh login>/clod` unless `clod.repo` names another. When it isn't set up here, `bud install`, `bud update` and `bud claude setup` offer to (Enter is yes):
-
-1. install `gh`, `jq` and `bash` if they're missing, and log in to GitHub with `gh auth login`;
-2. if your repo doesn't exist yet, create it, private, from the [`jgarner9/clod-template`](https://github.com/jgarner9/clod-template) starter (asked separately, and only a typed `y` makes it: Enter, `--yes` and `bud bootstrap` never create a repo);
-3. clone it into `~/clod` and run its `install.sh`, which asks its own questions.
-
-`--yes` answers bud's other questions and passes `--yes` to `install.sh`. A no is remembered, so `bud update` stops asking (it also leaves clod alone while `ai.claude.autostart` is off, as `bud install` does); `bud install` and `bud claude setup` ask again. `bud uninstall` keeps `~/clod`, since it's your repo: `~/clod/install.sh uninstall` takes its setup out of Claude Code. Any repo works as long as it has an `install.sh` at its root that takes `--yes`; start from the template to see the shape.
+bud doesn't set up your MCP servers, settings or rules: they're yours to keep in `~/.claude` (or wherever your own tooling puts them), and bud's sessions use them while the config dir is shared.
 
 ## The project session
 
@@ -29,7 +23,7 @@ Opening a project (`bud ~/code/thing`) starts its session in the background on a
 
 ## Which model it runs
 
-Opus sessions cost the most, and changing model or effort partway through a conversation makes Claude Code process all of it again at full price (the prompt cache is keyed on both), which `opusplan` does every time you enter or leave plan mode. So clod's settings default to Sonnet at medium effort, bud's sessions follow them while they share `~/.claude` (`ai.claude.config = "home"`, the default), and bud's agents (`code-reviewer`, `chat`) name Sonnet themselves. A resumed conversation keeps the model it was last on, and that outranks these settings, so with `ai.claude.resume = "continue"` reopening a project lands on Opus if its last conversation ran there; the default, `"new"`, starts every open on the model your settings choose. Use Opus in a separate planning session you start on purpose (`bud agent`, then `/model opus`), not by switching in a long one. With `ai.claude.config = "bud"` its own dir has none of clod's settings, so sessions use Claude Code's default model. To set one for bud's sessions in either case, without touching `~/.claude`, put flags in `ai.claude.args`, e.g. `["--model", "sonnet", "--effort", "medium"]`. On a provider such as Bedrock, clod leaves your model alone.
+Opus sessions cost the most, and changing model or effort partway through a conversation makes Claude Code process all of it again at full price (the prompt cache is keyed on both), which `opusplan` does every time you enter or leave plan mode. Set Sonnet at medium effort in your own `~/.claude/settings.json` and bud's sessions follow it while they share `~/.claude` (`ai.claude.config = "home"`, the default), and bud's agents (`code-reviewer`, `chat`) name Sonnet themselves. A resumed conversation keeps the model it was last on, and that outranks these settings, so with `ai.claude.resume = "continue"` reopening a project lands on Opus if its last conversation ran there; the default, `"new"`, starts every open on the model your settings choose. Use Opus in a separate planning session you start on purpose (`bud agent`, then `/model opus`), not by switching in a long one. With `ai.claude.config = "bud"` its own dir has none of your `~/.claude` settings, so sessions use Claude Code's default model. To set one for bud's sessions in either case, without touching `~/.claude`, put flags in `ai.claude.args`, e.g. `["--model", "sonnet", "--effort", "medium"]`. On a provider such as Bedrock, the model comes from your provider settings.
 
 ## Ways to talk to it
 

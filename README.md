@@ -29,7 +29,7 @@ Linux or macOS, amd64 or arm64:
 curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh
 ```
 
-The script downloads the release for your platform, checks its signature and checksum, puts `bud` in `~/.local/bin`, and offers to run `bud install`. That asks for a profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree (on Linux, a Neovim or tree-sitter-cli that is missing or too old is downloaded and checksum-verified instead), then sets up the config, plugins and language tools, Claude Code and clod. [docs/setup.md](docs/setup.md) walks through every step, including the parts that link to your Claude and GitHub accounts.
+The script downloads the release for your platform, checks its signature and checksum, puts `bud` in `~/.local/bin`, and offers to run `bud install`. That asks for a profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree (on Linux, a Neovim or tree-sitter-cli that is missing or too old is downloaded and checksum-verified instead), then sets up the config, plugins and language tools, Claude Code. [docs/setup.md](docs/setup.md) walks through every step, including the parts that link to your Claude and GitHub accounts.
 
 **Requirements:** macOS or Linux on amd64 or arm64, and a terminal using a [Nerd Font](https://www.nerdfonts.com) for the icons. `bud install` takes care of the rest (Neovim 0.12+, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, and each enabled language's toolchain), showing every command before it runs. `bud launch` and the desktop app open bud in Kitty or Ghostty; plain `bud` runs in any terminal.
 

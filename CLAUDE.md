@@ -10,7 +10,7 @@ AI is **backend-agnostic over ACP** (D131, superseding D124/D26), with OpenClaw 
 
 ## Docs
 
-`docs/` holds the user docs: `setup.md` (the whole setup in order, including Claude Code, clod and the plugins), `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), references for every command (`commands.md`) and key (`keys.md`), an overview of Claude Code in bud (`claude-code.md`), and how-tos for languages, tools, layouts, filing issues, building a Claude TUI and troubleshooting. The README keeps short descriptions and links to these. Keep them in step when behaviour changes. The same files are the docs site, https://bud.jgarner.dev (D110): `site/` holds only the landing page, layout and styles, `scripts/site.sh` copies `docs/*.md` in beside them, and `.github/workflows/pages.yml` builds it with GitHub Pages' Jekyll on a push to main. A new page in `docs/` needs a line in `site/_data/nav.yml`, and a link out of `docs/` (to the README, say) has to be a full URL, since only `docs/*.md` is on the site. `docs/internals/` is the other kind: how each part of the code works, for working on bud (see "Where the detail is"). Move detail there when a paragraph here grows, and keep this file short, since it loads in every session.
+`docs/` holds the user docs: `setup.md` (the whole setup in order, including Claude Code and the plugins), `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), references for every command (`commands.md`) and key (`keys.md`), an overview of Claude Code in bud (`claude-code.md`), and how-tos for languages, tools, layouts, filing issues, building a Claude TUI and troubleshooting. The README keeps short descriptions and links to these. Keep them in step when behaviour changes. The same files are the docs site, https://bud.jgarner.dev (D110): `site/` holds only the landing page, layout and styles, `scripts/site.sh` copies `docs/*.md` in beside them, and `.github/workflows/pages.yml` builds it with GitHub Pages' Jekyll on a push to main. A new page in `docs/` needs a line in `site/_data/nav.yml`, and a link out of `docs/` (to the README, say) has to be a full URL, since only `docs/*.md` is on the site. `docs/internals/` is the other kind: how each part of the code works, for working on bud (see "Where the detail is"). Move detail there when a paragraph here grows, and keep this file short, since it loads in every session.
 
 ## Commands
 
@@ -65,7 +65,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | A command in `internal/cli/` other than the above: colour, completion, `bud config`, uninstall, launch and open, install, `bud lang`, projects, dev link, migrations, version | `docs/internals/cli.md` |
 | `bud bundle` and the desktop apps | `docs/internals/bundles.md` |
 | `bud update`, rollback, the background check | `docs/internals/updater.md` |
-| `bud claude`, clod, the Claude Code check | `docs/internals/claude-code.md` |
+| `bud claude`, the Claude Code check | `docs/internals/claude-code.md` |
 | `bud.ai.acp`, the backends (OpenClaw, Claude Code, Codex, OpenCode) and the fake ACP agent | `docs/internals/acp.md` |
 | `bud.ai.*`: the session, the TUI pane, the IDE bridge, permissions, chat, inline actions, tools, the generator, filing and working issues | `docs/internals/claude-session.md` |
 | `bud kit`, marketplaces, plugins | `docs/internals/kit.md` |
@@ -89,7 +89,7 @@ Releases come from `VERSION` (D80): a push to main that changes it runs `.github
 
 ## Tests
 
-Tests swap package-level vars and restore them with `t.Cleanup` (`internal/cli`'s `TestMain` also turns off `clodSetup`, `refreshBundles` and `findBundles` for every test there, so none reaches GitHub or rebuilds this machine's Bud.app): `CommandRegistry`, `installer.Deps`, `installer.goos`, `version.Version`. Tests that need binaries on PATH use the `fakePath` helper in `internal/installer`. `App` tests build an `App` with a custom `Cmds` map and recorder commands instead of using the global registry.
+Tests swap package-level vars and restore them with `t.Cleanup` (`internal/cli`'s `TestMain` also turns off `refreshBundles` and `findBundles` for every test there, so none reaches GitHub or rebuilds this machine's Bud.app): `CommandRegistry`, `installer.Deps`, `installer.goos`, `version.Version`. Tests that need binaries on PATH use the `fakePath` helper in `internal/installer`. `App` tests build an `App` with a custom `Cmds` map and recorder commands instead of using the global registry.
 
 ## Commits
 

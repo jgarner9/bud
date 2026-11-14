@@ -312,7 +312,7 @@ Linux and macOS use the same XDG paths (D13), which is also where Neovim looks o
 | Project registry (recent files come from Neovim's oldfiles) | `~/.local/state/bud/projects.json`                       |
 | Pinned files (`bud.marks`, per project)                | `~/.local/state/bud/marks.json`                          |
 | Chat history                                           | Claude Code's own session store (D23)                    |
-| Secrets (MCP keys)                                     | none in bud: Claude Code's config (clod) reads them from the environment or the keychain (D77) |
+| Secrets (MCP keys)                                     | none in bud: Claude Code's config (the user's own) reads them from the environment or the keychain (D77) |
 
 `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` override the defaults when set.
 
@@ -628,7 +628,7 @@ bud chat [--resume]         # chat with Claude Code in chat mode (--resume picks
 bud install [--profile full|minimal] [--yes]   # system deps + nvim + plugins + language tooling
 bud doctor [--quick]        # health checks: versions, missing tools, broken specs, startup time, Claude Code
 bud ai status [--json] | setup   # the AI backend (ai.backend: claude by default, or openclaw, codex, opencode, D131, D140): installed, Gateway healthy; install it, set the Gateway
-bud claude status | setup    # is Claude Code installed and logged in; install it, hand over to its login, set up clod
+bud claude status | setup    # is Claude Code installed and logged in; install it, hand over to its login
 bud update [--check] [--channel stable|nightly]   # self-update the binary, then sync its embedded config + restore lockfile, migrate
 bud dev link [path] | unlink                   # point ~/.config/bud at a checkout for live editing
 bud uninstall [--keep-config] [--yes]
@@ -661,7 +661,7 @@ Global flags: `--no-update` (skip boot check), `--verbose`, `--profile`, and `--
    - profile: **full** (desktop: every language, the app bundle) or **minimal** (SSH/server: no bundle, Python and Bash)
    - terminal emulator (auto-detects what's installed)
    - which languages to enable (defaults from a preset)
-   - Claude Code: installs it if missing and checks you're logged in (`claude` runs its own login; skippable, and bud works without it). Then it sets up clod if it's missing (D89, D90: gh's GitHub login, your `<login>/clod` made from `jgarner9/clod-template` if it doesn't exist, a clone into `~/clod`, its installer), and syncs the kit (D77: bud's plugins), once Claude Code is logged in.
+   - Claude Code: installs it if missing and checks you're logged in (`claude` runs its own login; skippable, and bud works without it). Then it syncs the kit (clod's setup went in 2.0, D143) (D77: bud's plugins), once Claude Code is logged in.
 4. It installs system deps via the OS package manager (on Linux, a Neovim or tree-sitter-cli that is missing or too old is downloaded and checksum-verified instead, D107), syncs the embedded `nvim/` into `~/.config/bud`, then runs a headless `nvim` to install plugins from the lockfile and Mason packages for enabled languages. No clone. `git` is only there for `vim.pack`.
 5. On a desktop profile, it installs the app bundle (`/Applications/Bud.app` or `~/.local/share/applications/bud.desktop`).
 6. Ends with `bud doctor` output and "run `bud` to start".
@@ -792,7 +792,7 @@ bud update  /  :BudUpdate [args]  /  Settings → Update  /  [u] on dashboard
   2. sync the embedded nvim/ into ~/.config/bud (overwrite managed files, drop removed ones)
   3. run new migrations/ (each once, recorded in state; a fresh install marks them all done)
   4. nvim headless: `bud.pack.restore()` (lockfile) + Mason install for new language specs
-  5. set up clod if it's missing, on a terminal, unless you said no (D89); then bud kit sync
+  5. bud kit sync (clod's setup went in 2.0, D143)
      (bring Claude Code's config in line with the kit; a kit never synced is offered on a
      terminal, D87)
   6. bud doctor; on failure → swap bud.prev back, re-exec it to sync its config, report
@@ -873,7 +873,7 @@ One task is one commit with its own check, and `just check` passes after each. B
 Tasks 40 (these decisions) and 41 are built; the rest are not. Each later task is one commit with its own check.
 
 - **41. Move the plugin in. Built.** `bud-ide` is embedded (`plugins/bud-ide/`, `bud.Plugin()`) and handed with `--plugin-dir` only to sessions the IDE starts (D142, D145, D148); it is out of `kit/kit.json`.
-- **42. Remove clod.** `setupClod`, `clod.repo` and `bud claude`'s clod setup (D143).
+- **42. Remove clod. Built.** `setupClod`, its offers in `bud install`, `bud update` and `bud claude setup`, the clod line in `bud claude status`, `clod.repo` (setting, validation, docs row), the clod paths and the kept-`~/clod` note in `bud uninstall` are gone (D143). An old `clod` key in `config.json` is kept untouched on load and save (`TestOldClodKeyStillLoadsAndSaves`); no migration removes it, since a Lua migration would have to rewrite the JSON. Where a message sent the user to clod, it now says to add servers to `~/.claude` themselves.
 - **43. Remove `bud kit sync`** and the kit manifest, after 41 (D144).
 - **44. Docs.** Backends as the user's choice, OpenClaw as one worked example (D146).
 - **46. Cut v2.0.0** with the release skill after a code review and a security review (D147).

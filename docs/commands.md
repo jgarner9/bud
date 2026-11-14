@@ -36,7 +36,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud update --no-doctor` | Skips the app rebuild and the doctor at the end, for scripts. |
 | `bud update --background` | What bud starts by itself at launch, detached and at most once a day, so launching never waits on the network. It installs a newer stable release when `update.auto` is on, else only notes it for the dashboard. `--no-update` skips it. You don't normally run it. |
 | `bud doctor [--quick] [--json]` | Health checks with the fix for each problem; exits 1 when something is broken. `--quick` skips the slow ones: the startup timing, and Claude Code's MCP servers and synced plugins (`claude setup`, `synced plugins`), which the dashboard leaves out. |
-| `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. Claude Code and your clod checkout stay (see Troubleshooting). |
+| `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. Claude Code stays (see Troubleshooting). |
 | `bud bootstrap [--config] user@host` | Installs this version of bud on another machine over SSH, minimal profile by default. `--config` copies your `config.json` across first. |
 | `bud version` | Prints the version. |
 | `bud completion bash\|zsh\|fish` | Prints shell completion. Add `eval "$(bud completion zsh)"` to your shell rc. |
@@ -82,8 +82,8 @@ bud is moving to talk to its AI over the Agent Client Protocol (ACP), with the b
 
 | Command | What it does |
 | --- | --- |
-| `bud claude status` | Whether Claude Code is installed and logged in, and whether clod is set up. |
-| `bud claude setup [--yes]` | Installs Claude Code with Anthropic's installer if it's missing, runs its login, then sets up clod if it's missing (gh login, your repo made from the template if it doesn't exist, a clone into `~/clod`, its installer). See [Claude Code in bud](claude-code.md#setting-it-up). |
+| `bud claude status` | Whether Claude Code is installed and logged in. |
+| `bud claude setup [--yes]` | Installs Claude Code with Anthropic's installer if it's missing, then runs its login. See [Claude Code in bud](claude-code.md#setting-it-up). |
 | `bud agent [path]` | Claude Code's own TUI in a project, from the shell. |
 | `bud chat [--resume]` | Claude Code in chat mode, outside any project. `--resume` picks an earlier chat. |
 | `bud plugin path` | Unpacks the `bud-ide` plugin bud ships (if needed) and prints its dir; the editor passes it to Claude Code with `--plugin-dir`. |

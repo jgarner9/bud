@@ -31,6 +31,7 @@ type Globals struct {
 	Layout   string // pane layout for open
 
 	stderr io.Writer // where Logf writes; nil means os.Stderr
+	stdout io.Writer // where a command prints its result; nil means os.Stdout
 }
 
 type App struct {

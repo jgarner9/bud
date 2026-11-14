@@ -230,20 +230,88 @@ function M.project_dir(dir)
 end
 
 -- plugin_dir is where bud extracted its embedded bud-ide plugin (D142), asked
--- of `bud plugin path` once and kept; nil when bud can't be run. Swappable in
--- tests
-local plugin_cache
-M.plugin_dir = function()
-  if plugin_cache == nil then
-    local bin = require("bud.cli").bin()
-    local res = bin and vim.system({ bin, "plugin", "path" }, { text = true, timeout = 10000 }):wait()
-    local dir = res and res.code == 0 and vim.trim(res.stdout or "") or ""
-    if dir == "" then
-      vim.notify("bud: couldn't unpack the bud-ide plugin, so this session runs without it", vim.log.levels.WARN)
+-- of `bud plugin path`; nil when bud can't be run. A success is kept for the
+-- session, a failure is tried again after plugin_retry_ms. setup() prefetches
+-- it a moment after the first screen, so the blocking call here (3 s at most)
+-- is only the fallback. Swappable in tests
+local plugin_cache, plugin_failed_at
+M.plugin_retry_ms = 30000
+
+-- plugin_cmd is what asks bud for the dir; --no-update keeps the background
+-- update check out of it
+local function plugin_cmd()
+  local bin = require("bud.cli").bin()
+  return bin and { bin, "--no-update", "plugin", "path" }
+end
+
+-- plugin_result keeps what `bud plugin path` printed: the last non-empty line
+-- is the dir. It returns the dir, or nil after noting the failure
+local function plugin_result(res)
+  local dir
+  if res and res.code == 0 then
+    for line in (res.stdout or ""):gmatch("[^\r\n]+") do
+      if vim.trim(line) ~= "" then
+        dir = vim.trim(line)
+      end
     end
-    plugin_cache = dir ~= "" and dir or false
   end
-  return plugin_cache or nil
+  if dir then
+    plugin_cache, plugin_failed_at = dir, nil
+    return dir
+  end
+  plugin_failed_at = vim.uv.hrtime() / 1e6
+  return nil
+end
+
+M.plugin_dir = function()
+  if plugin_cache then
+    return plugin_cache
+  end
+  if plugin_failed_at and vim.uv.hrtime() / 1e6 - plugin_failed_at < M.plugin_retry_ms then
+    return nil
+  end
+  local cmd = plugin_cmd()
+  local ok, res = false, nil
+  if cmd then
+    ok, res = pcall(function()
+      return vim.system(cmd, { text = true, timeout = 3000 }):wait()
+    end)
+  end
+  local dir = ok and plugin_result(res) or plugin_result(nil)
+  if not dir then
+    vim.notify(
+      "bud: couldn't unpack the bud-ide plugin, so this session runs without it (tried again in "
+        .. math.floor(M.plugin_retry_ms / 1000)
+        .. " s)",
+      vim.log.levels.WARN
+    )
+  end
+  return dir
+end
+
+-- prefetch_plugin asks for the dir in the background, without blocking and
+-- without any warning: a failure is left for plugin_dir to retry
+function M.prefetch_plugin()
+  if plugin_cache then
+    return
+  end
+  local cmd = plugin_cmd()
+  if not cmd then
+    return
+  end
+  local ok = pcall(vim.system, cmd, { text = true, timeout = 10000 }, function(res)
+    vim.schedule(function()
+      plugin_result(res)
+    end)
+  end)
+  if not ok then
+    plugin_failed_at = vim.uv.hrtime() / 1e6
+  end
+end
+
+-- plugin_reset forgets what plugin_dir learned (tests)
+function M._plugin_reset()
+  plugin_cache, plugin_failed_at = nil, nil
 end
 
 -- plugin_args loads the plugin into one session the IDE starts: its project
@@ -855,6 +923,8 @@ end
 -- nothing for bare bud; then opening a project from inside starts its own
 function M.setup()
   local cfg = settings()
+  -- a moment after the first screen (D35); never touches vim.lsp
+  vim.defer_fn(M.prefetch_plugin, 300)
   vim.api.nvim_create_user_command("BudClaude", function(o)
     local sub = o.fargs[1] or "status"
     if sub == "term" then

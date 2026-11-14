@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/plugin"
@@ -23,7 +24,7 @@ func Plugin() *Command {
 	}
 }
 
-func pluginPath(_ *Globals, args []string) error {
+func pluginPath(g *Globals, args []string) error {
 	if len(args) > 0 {
 		return usageErrorf("plugin path takes no arguments")
 	}
@@ -35,7 +36,11 @@ func pluginPath(_ *Globals, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(dir)
+	w := g.stdout
+	if w == nil {
+		w = os.Stdout
+	}
+	fmt.Fprintln(w, dir)
 
 	return nil
 }

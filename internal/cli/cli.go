@@ -35,7 +35,7 @@ func (a *App) Run() error {
 	// app args reference
 	args := &a.Args
 
-	g := &Globals{stderr: a.stderr()}
+	g := &Globals{stderr: a.stderr(), stdout: a.stdout()}
 	global := flag.NewFlagSet("bud", flag.ContinueOnError)
 	g.flags(global)
 	global.Usage = func() { a.globalUsage(global) }

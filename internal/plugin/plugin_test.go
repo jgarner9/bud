@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"jgarner.dev/bud/internal/paths"
 )
@@ -50,10 +52,67 @@ func TestChangedPluginReplacesTheOldVersion(t *testing.T) {
 	if err != nil || cur == old {
 		t.Fatalf("new version = %q, %v; old %q", cur, err, old)
 	}
-	if _, err := os.Stat(old); !os.IsNotExist(err) {
-		t.Fatal("old version kept")
+	// a version in use recently stays: a running session or another bud may read it
+	if _, err := os.Stat(old); err != nil {
+		t.Fatal("recently used old version removed")
 	}
-	// nothing else is left: no temp dirs
+	// one idle for more than staleAfter goes the next time a dir is handed out
+	long := time.Now().Add(-staleAfter - time.Hour)
+	os.Chtimes(old, long, long)
+	if again, _ := extract(fake("two"), root); again != cur {
+		t.Fatalf("second extract = %q", again)
+	}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatal("stale version kept")
+	}
+	entries, _ := os.ReadDir(root)
+	if len(entries) != 1 {
+		t.Fatalf("root holds %d entries, want 1 (no temp dirs)", len(entries))
+	}
+}
+
+func TestIncompleteDirIsRebuiltByFile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "plugins")
+	dir, _ := extract(fake("one"), root)
+	// plugin.json is there but another file is missing, or has the wrong size
+	os.WriteFile(filepath.Join(dir, "agents", "chat.md"), []byte("cut off"), 0o644)
+	got, err := extract(fake("one"), root)
+	if err != nil || got != dir {
+		t.Fatal(got, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "agents", "chat.md")); string(b) != "one" {
+		t.Fatalf("chat.md = %q", b)
+	}
+	os.Remove(filepath.Join(dir, "agents", "chat.md"))
+	if _, err := extract(fake("one"), root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "agents", "chat.md")); err != nil {
+		t.Fatal("missing file not restored")
+	}
+}
+
+func TestConcurrentExtractsAllGetACompleteDir(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "plugins")
+	var wg sync.WaitGroup
+	dirs := make([]string, 8)
+	for i := range dirs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			d, err := extract(fake("one"), root)
+			if err != nil {
+				t.Error(err)
+			}
+			dirs[i] = d
+		}()
+	}
+	wg.Wait()
+	for _, d := range dirs {
+		if d != dirs[0] || !complete(fake("one"), d) {
+			t.Fatalf("dirs = %v", dirs)
+		}
+	}
 	entries, _ := os.ReadDir(root)
 	if len(entries) != 1 {
 		t.Fatalf("root holds %d entries, want 1", len(entries))

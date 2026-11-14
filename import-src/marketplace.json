@@ -1,0 +1,20 @@
+{
+  "name": "bud-plugins",
+  "description": "Jason's Claude setup, shared by claude.ai, Claude Desktop, Cowork and Claude Code",
+  "owner": {
+    "name": "jgarner9",
+    "url": "https://github.com/jgarner9"
+  },
+  "plugins": [
+    {
+      "name": "bud",
+      "source": "./plugins/bud",
+      "description": "Code style, planning, tool use and project setup, the same on every device"
+    },
+    {
+      "name": "bud-ide",
+      "source": "./plugins/bud-ide",
+      "description": "For Claude Code inside the bud Neovim IDE (bud installs it; skip it on claude.ai)"
+    }
+  ]
+}

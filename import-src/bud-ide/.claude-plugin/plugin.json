@@ -1,0 +1,11 @@
+{
+  "name": "bud-ide",
+  "description": "For Claude Code inside the bud Neovim IDE: working-in-bud notes, the bud-dev and file-issue skills, and the chat agent",
+  "author": {
+    "name": "jgarner9",
+    "url": "https://github.com/jgarner9"
+  },
+  "repository": "https://github.com/jgarner9/bud-plugins",
+  "license": "MIT",
+  "keywords": ["bud", "neovim", "linear"]
+}

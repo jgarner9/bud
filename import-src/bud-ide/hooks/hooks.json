@@ -1,0 +1,15 @@
+{
+  "description": "Gives sessions that bud starts (BUD_BIN is set) the notes on working inside bud; prints nothing anywhere else",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -z \"$BUD_BIN\" ] || cat \"${CLAUDE_PLUGIN_ROOT}/inside-bud.md\""
+          }
+        ]
+      }
+    ]
+  }
+}

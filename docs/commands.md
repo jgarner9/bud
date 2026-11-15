@@ -92,7 +92,7 @@ The AI backend is a setting (`ai.backend`); [AI backends](backends.md) says how 
 | `bud tools gen "<description>"` | Has Claude write a tool or language spec, in the editor. See [tools](tools.md). |
 | `bud tools enable` / `disable [--reason] <name>` | Turns a tool on or off. |
 | `bud tools rm [--yes] <name>` | Deletes one of your tools, after asking. |
-| `bud tools promote [--repo dir] [--yes] <name>` | Moves one of yours into a bud checkout's `tools/`, commits and pushes it, after asking. `--repo` defaults to the `bud dev link` checkout. |
+| `bud tools promote [--repo dir] [--yes] <name>` | Moves one of yours into a bud checkout's `ide/tools/`, commits and pushes it, after asking. `--repo` defaults to the `bud dev link` checkout. |
 | `bud issue target [--bud] [--json] [dir]` | Where an issue filed from the editor goes in Linear. `--json` prints it for the editor. |
 | `bud issue set --team T [--project P] [--global] [project]` / `unset [project]` | Sets or clears it. See [filing issues](issues.md). |
 | `bud issue checkout [path]` / `--unset` | Saves the bud checkout `<leader>aB` works in (checked to still be a bud git checkout), forgets it, or with neither says what is saved. See [filing issues](issues.md). |

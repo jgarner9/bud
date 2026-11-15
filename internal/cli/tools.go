@@ -55,7 +55,7 @@ func Tools() *Command {
 			},
 			{
 				Name:  "promote",
-				Usage: "move one of your tools into a bud checkout's tools/, commit and push it: promote <name>",
+				Usage: "move one of your tools into a bud checkout's ide/tools/, commit and push it: promote <name>",
 				Flags: func(fs *flag.FlagSet) {
 					fs.StringVar(&repo, "repo", "", "the bud checkout (default: the one bud dev link points at)")
 					fs.BoolVar(&yes, "yes", false, "commit and push without asking")
@@ -341,7 +341,7 @@ var runGit = func(dir string, args ...string) error {
 	return cmd.Run()
 }
 
-// toolsPromote moves one of your tools into a bud checkout's tools/ and
+// toolsPromote moves one of your tools into a bud checkout's ide/tools/ and
 // commits and pushes it, so it ships in the next release. Only after showing
 // what it will do and you saying yes (BASE.md 4: nothing is promoted without
 // an explicit accept)
@@ -371,7 +371,7 @@ func toolsPromote(args []string, repo string, yes bool) error {
 	if !isFile(filepath.Join(repo, "embed.go")) {
 		return fmt.Errorf("%s isn't a bud checkout (no embed.go)", repo)
 	}
-	dest := filepath.Join(repo, "tools", name)
+	dest := filepath.Join(nvim.IDESource(repo), "tools", name)
 	if _, err := os.Stat(dest); err == nil {
 		return fmt.Errorf("%s already exists", dest)
 	}
@@ -392,7 +392,7 @@ func toolsPromote(args []string, repo string, yes bool) error {
 	if err := os.Rename(t.Dir, dest); err != nil {
 		return err
 	}
-	for _, git := range [][]string{{"add", "tools/" + name}, {"commit", "-m", msg, "--", "tools/" + name}, {"push"}} {
+	for _, git := range [][]string{{"add", "ide/tools/" + name}, {"commit", "-m", msg, "--", "ide/tools/" + name}, {"push"}} {
 		if err := runGit(repo, git...); err != nil {
 			return fmt.Errorf("git %s: %w (the tool is in %s now)", strings.Join(git, " "), err, dest)
 		}

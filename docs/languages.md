@@ -14,7 +14,7 @@ Or ask Claude: `:BudGen "add Zig support"` drafts the spec and shows it to you a
 
 ## The spec
 
-Every field but `filetypes` is optional, and a field bud doesn't know is an error, so a typo can't slip by. The template, `languages/_template.lua`, explains each one:
+Every field but `filetypes` is optional, and a field bud doesn't know is an error, so a typo can't slip by. The template, `ide/languages/_template.lua`, explains each one:
 
 - `filetypes`: the Neovim filetypes it covers.
 - `treesitter`: parsers to build.
@@ -31,4 +31,4 @@ Every field but `filetypes` is optional, and a field bud doesn't know is an erro
 
 ## Shipping it with bud
 
-Your specs stay on your machine. To ship one with bud, put it in a checkout's `languages/`, add a case for it to `scripts/lang_check.lua`, and run `just lang-check zig`, which installs its tooling in a throwaway dir and checks it on a sample project.
+Your specs stay on your machine. To ship one with bud, put it in a checkout's `ide/languages/`, add a case for it to `scripts/lang_check.lua`, and run `just lang-check zig`, which installs its tooling in a throwaway dir and checks it on a sample project.

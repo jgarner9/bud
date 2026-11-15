@@ -31,19 +31,19 @@ fmt-check:
 
 # format Lua in place
 lua-fmt: (_need "stylua")
-  stylua nvim scripts tests languages layouts migrations tools
+  stylua ide/nvim scripts ide/tests ide/languages ide/layouts ide/migrations ide/tools
 
 # stylua check and selene lint over the Lua config
 lua-lint: (_need "stylua") (_need "selene")
-  stylua --check nvim scripts tests languages layouts migrations tools
-  selene nvim scripts tests languages layouts migrations tools
+  stylua --check ide/nvim scripts ide/tests ide/languages ide/layouts ide/migrations ide/tools
+  selene ide/nvim scripts ide/tests ide/languages ide/layouts ide/migrations ide/tools
 
 # go vet, gofmt check, Lua lint and shellcheck
 lint: fmt-check lua-lint
   go vet ./...
   shellcheck install.sh scripts/*.sh
 
-# run the headless Lua tests in tests/lua (or the files given), 60 s each
+# run the headless Lua tests in ide/tests/lua (or the files given), 60 s each
 lua-test *tests:
   sh scripts/lua-test.sh "$@"
 

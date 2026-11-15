@@ -35,11 +35,15 @@ func DevLink(dir string) (string, bool) {
 	return l.Checkout, true
 }
 
+// IDESource is where a bud checkout keeps the IDE's source (D56): nvim/,
+// languages/, layouts/ and tools/, the dirs bud.Config() serves
+func IDESource(checkout string) string { return filepath.Join(checkout, "ide") }
+
 // checkCheckout says whether dir has bud's source in it
 func checkCheckout(dir string) error {
 	for _, need := range []string{"nvim/init.lua", "languages"} {
-		if _, err := os.Stat(filepath.Join(dir, need)); err != nil {
-			return fmt.Errorf("%s isn't a bud checkout (no %s)", dir, need)
+		if _, err := os.Stat(filepath.Join(IDESource(dir), need)); err != nil {
+			return fmt.Errorf("%s isn't a bud checkout (no ide/%s)", dir, need)
 		}
 	}
 
@@ -92,14 +96,15 @@ func Link(checkout, dir string) error {
 		return err
 	}
 
+	src := IDESource(checkout)
 	targets := map[string]string{}
 	// the dirs bud.Config() mounts next to nvim/'s files
 	for _, mount := range []string{"languages", "layouts", "tools"} {
-		if _, err := os.Stat(filepath.Join(checkout, mount)); err == nil {
-			targets[mount] = filepath.Join(checkout, mount)
+		if _, err := os.Stat(filepath.Join(src, mount)); err == nil {
+			targets[mount] = filepath.Join(src, mount)
 		}
 	}
-	entries, err := os.ReadDir(filepath.Join(checkout, "nvim"))
+	entries, err := os.ReadDir(filepath.Join(src, "nvim"))
 	if err != nil {
 		return err
 	}
@@ -109,7 +114,7 @@ func Link(checkout, dir string) error {
 		if strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		targets[e.Name()] = filepath.Join(checkout, "nvim", e.Name())
+		targets[e.Name()] = filepath.Join(src, "nvim", e.Name())
 	}
 	for name := range targets {
 		if _, err := os.Lstat(filepath.Join(dir, name)); err == nil {

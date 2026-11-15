@@ -46,8 +46,8 @@ jobs:
           unzip -o "$RUNNER_TEMP/selene.zip" -d "$RUNNER_TEMP/bin"
           chmod +x "$RUNNER_TEMP/bin/stylua" "$RUNNER_TEMP/bin/selene"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - run: stylua --check nvim scripts tests languages
-      - run: selene nvim scripts tests languages
+      - run: stylua --check ide/nvim scripts ide/tests ide/languages ide/layouts ide/migrations ide/tools
+      - run: selene ide/nvim scripts ide/tests ide/languages ide/layouts ide/migrations ide/tools
 
   smoke:
     runs-on: ubuntu-latest

@@ -268,7 +268,8 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	links := linkSet{}
 	skills := 0
 	var wants []want
-	in := opencode.Input{Registry: reg}
+	// skills and instructions resolve into the content versions and the overlay
+	in := opencode.Input{Registry: reg, Reachable: []string{p.Content(), p.Overlay()}}
 	for _, it := range items {
 		if it.Kind == "env" && it.ID == "registry" {
 			continue // merged above, never a fragment

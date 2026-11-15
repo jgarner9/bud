@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -39,6 +40,12 @@ type Input struct {
 	Skills       []string // dirs OpenCode searches for skills
 	Instructions []string // instruction files, public AGENTS.md before the overlay's
 	Plugins      []string // plugin dirs
+	// Reachable are dirs outside any project the agent may always reach,
+	// where the synced content lives: rules allowing them come after every
+	// fragment's, so a fragment that asks before leaving the project still
+	// lets skills and instructions load. Canonical paths, since OpenCode
+	// matches external_directory against those
+	Reachable []string
 	// Env holds the env fragments' JSONC, in the order they apply
 	Env []Fragment
 }
@@ -152,6 +159,13 @@ func Render(in Input) (*Output, error) {
 			return nil, fmt.Errorf("env fragment %s sets update, which bud owns so only bud update moves OpenCode's pin; drop it", f.Name)
 		}
 		merge(cfg, frag)
+	}
+	if len(in.Reachable) > 0 {
+		rules, _ := cfg["permissions"].([]any)
+		for _, dir := range in.Reachable {
+			rules = append(rules, map[string]any{"action": "external_directory", "resource": filepath.Join(dir, "*"), "effect": "allow"})
+		}
+		cfg["permissions"] = rules
 	}
 
 	var buf bytes.Buffer

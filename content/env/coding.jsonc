@@ -1,0 +1,12 @@
+// For devices where code is written (the dev-machine profile): OpenCode
+// formats the files its edit tools change with the built-in formatter for
+// each language it finds installed, and asks before reading or editing
+// anything outside the open project. bud sync adds rules after this one that
+// allow its own synced content, wherever its data dir is, so skills and
+// instructions still load. Applies after base.jsonc.
+{
+  "formatter": true,
+  "permissions": [
+    { "action": "external_directory", "resource": "*", "effect": "ask" },
+  ],
+}

@@ -42,6 +42,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud version` | Prints the version. |
 | `bud completion bash\|zsh\|fish` | Prints shell completion. Add `eval "$(bud completion zsh)"` to your shell rc. |
 | `bud registry check <registry.jsonc> [overlay.jsonc]` | Validates the model registry, with an overlay's merged on top when given, and lists every problem with its fix. See [the model registry](registry.md). |
+| `bud content pack --version YYYY.MM.DD.N [--out dir] <content dir>` | Packs a content dir into `content-<version>.tar.gz` and `content.json`, the bundle CI signs and publishes. You don't normally run it. |
 
 ## Languages, layouts and projects
 

@@ -89,6 +89,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | Anything under `ide/nvim/`: plugins, lazy loading, languages, layouts, debugging, UI, the dashboard, the settings screen | `docs/internals/neovim.md` |
 | `bud bootstrap`, the nightly build, release signing | `docs/internals/release.md` |
 | `internal/content`: content bundles, `content.json`, `channel.json` and their signatures | `docs/internals/content.md` |
+| `bud sync` (`internal/syncer`): fetching, layering, rendering, the ledger and rollback | `docs/internals/sync.md` |
 
 Rules that apply wherever you are:
 

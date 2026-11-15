@@ -91,10 +91,18 @@ bud config edit                           # open it in bud's editor, then check 
 | --- | --- | --- |
 | `tools.disabled` | unset | Tools turned off on this machine. `bud tools enable/disable` edits it; a tool that fails to load is added here with the reason (`bud tools ls` shows it). |
 
+## Sync
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `overlay.repo` | unset | The git URL of your private overlay, such as `git@github.com:you/bud-overlay.git` (see [The private overlay](overlay.md)). `bud sync` clones or fast-forwards it and layers it over the public content. Unset means public content only. `BUD_OVERLAY` wins when set. |
+| `content.mirror` | unset | Where `bud sync` gets content releases: a base URL laid out like GitHub's `releases/download`, such as the home server's mirror. Unset means jgarner9/bud's GitHub releases. Either way the bundle has to be signed by the release key. |
+
 ## Environment
 
 | Variable | What it does |
 | --- | --- |
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` | Where bud's dirs go, on macOS too. |
 | `NO_COLOR` | Plain output, no colour. |
+| `BUD_OVERLAY` | The overlay's git URL for `bud sync`, used instead of `overlay.repo`. |
 | `CLAUDE_CONFIG_DIR` | Where Claude Code's own config is (default `~/.claude`). bud's IDE bridge follows it. |

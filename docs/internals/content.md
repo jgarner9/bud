@@ -34,4 +34,4 @@ Content versions are `YYYY.MM.DD.N`: the day CI cut it, and which cut of that da
 bud content pack --version 2026.11.15.1 --out dist content
 ```
 
-This writes `dist/content-2026.11.15.1.tar.gz` and `dist/content.json`. Signing them is CI's job (task 1.10).
+This writes `dist/content-2026.11.15.1.tar.gz` and `dist/content.json`. Signing them is CI's job (task 1.10). Where the release assets have to live for `bud sync` to find them is in [sync.md](sync.md).

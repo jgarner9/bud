@@ -4,12 +4,12 @@ What syncs to every device that runs OpenCode (Suite D17, D57): generic instruct
 
 | Path | What goes there | Lands in |
 | --- | --- | --- |
-| `AGENTS.md` | Global instructions, generic only; the persona lives in the overlay | build plan task 1.11 |
-| `skills/<id>/SKILL.md` | Skills, one directory each | task 1.11 |
-| `agents/*.md` | Agents as Markdown with front matter | task 1.11 |
+| `AGENTS.md` | Global instructions, generic only; the persona lives in the overlay | built (task 1.11) |
+| `skills/<id>/SKILL.md` | Skills, one directory each: `bud-dev`, `file-issue` | built (task 1.11) |
+| `agents/*.md` | Agents as Markdown with front matter: `chat` | built (task 1.11) |
 | `commands/*.md` | Commands, with fixed, trusted command lines only | phase 4 |
 | `plugins/<name>/` | OpenCode TypeScript plugins | phase 7 |
 | `env/registry.jsonc` | Providers, models and the nine roles (Suite D46, D58) | task 1.2 |
-| `env/*.jsonc` | Config fragments: MCP servers, permissions, routes | tasks 1.7, 1.11 |
+| `env/*.jsonc` | Config fragments: `base` (the action tiers as permission rules, every device) and `coding` (formatters, asking outside the project; dev machines). MCP servers and routes come later | built (tasks 1.7, 1.11) |
 
 Nothing personal goes here: no hostnames, tailnet names, home paths or real `op://` paths.

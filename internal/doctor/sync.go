@@ -16,6 +16,7 @@ import (
 
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/content"
+	"jgarner.dev/bud/internal/overlay"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/profile"
 	"jgarner.dev/bud/internal/registry"
@@ -66,6 +67,9 @@ func checkSync(p *paths.Paths, cfg config.Settings, net bool) []Result {
 
 	reg, regResult := checkRegistry(filepath.Join(p.Content(), led.Content), overlayDir)
 	results = append(results, regResult)
+	if prof != nil {
+		results = append(results, checkLayers(filepath.Join(p.Content(), led.Content), repo, overlayDir, prof, led))
+	}
 	if prof != nil && reg != nil {
 		results = append(results, checkRender(p, cfg, repo, led))
 	}
@@ -192,6 +196,88 @@ func checkRegistry(dir, overlayDir string) (*registry.Registry, Result) {
 	}
 
 	return reg, r
+}
+
+// checkLayers names every piece of content the device takes and the layer
+// it comes from, the way the last sync layered them: the overlay's items
+// (and which of them replace a public one), the public ones, and the files
+// rendered from them. Items are read from the overlay as it is on disk,
+// and a device that runs no OpenCode takes only skills and plugins, as the
+// sync does. It only reports, so it never fails; an overlay that
+// is set but not on disk warns, since the device runs on public content
+// alone until a sync clones it
+func checkLayers(dir, repo, overlayDir string, prof *profile.Profile, led *syncer.Ledger) Result {
+	r := Result{Name: "content layers"}
+	items, err := overlay.Layer(dir, overlayDir)
+	if err != nil {
+		r.Status = Warn
+		r.Detail = "couldn't layer the content: " + err.Error()
+		r.Fix = "bud sync"
+		return r
+	}
+
+	opencode := prof.Has("harness") || prof.Has("server")
+	byLayer := map[string][]string{}
+	for _, it := range items {
+		if it.Kind == "env" && it.ID == "registry" {
+			continue // merged into the registry, never a fragment
+		}
+		if it.Kind != "instructions" && !prof.Selects(it.Kind, it.ID) {
+			continue
+		}
+		if !opencode && it.Kind != "skills" && it.Kind != "plugins" {
+			continue // only OpenCode reads the rest, and the sync drops it
+		}
+		name := it.Kind + "/" + it.ID
+		if it.Overrides {
+			name += " (replaces public)"
+		}
+		byLayer[it.Layer] = append(byLayer[it.Layer], name)
+	}
+	for _, f := range led.Files {
+		if f.Layer == "rendered" {
+			byLayer["rendered"] = append(byLayer["rendered"], filepath.Base(f.Path))
+		}
+	}
+
+	var parts []string
+	switch {
+	case repo == "":
+		parts = append(parts, "no overlay set, so public content only")
+	case overlayDir == "":
+		r.Status = Warn
+		parts = append(parts, "the overlay "+repo+" isn't cloned yet, so public content only")
+		r.Fix = "bud sync (it clones the overlay)"
+	default:
+		label := "overlay on disk"
+		if led.Overlay != nil && led.Overlay.Commit != "" {
+			label += " (last sync layered " + shortCommit(led.Overlay.Commit) + ")"
+		}
+		parts = append(parts, label+": "+listOrNone(byLayer[overlay.Private]))
+	}
+	parts = append(parts, "public: "+listOrNone(byLayer[overlay.Public]))
+	if len(byLayer["rendered"]) > 0 {
+		parts = append(parts, "rendered: "+strings.Join(byLayer["rendered"], ", "))
+	}
+	r.Detail = strings.Join(parts, "; ")
+
+	return r
+}
+
+func listOrNone(names []string) string {
+	if len(names) == 0 {
+		return "nothing"
+	}
+
+	return strings.Join(names, ", ")
+}
+
+func shortCommit(c string) string {
+	if len(c) > 7 {
+		return c[:7]
+	}
+
+	return c
 }
 
 // checkRender re-renders the version in use, offline, and compares it with

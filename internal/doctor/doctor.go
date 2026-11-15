@@ -92,6 +92,11 @@ type Options struct {
 	// Quick skips the slow ones (startup timing runs nvim several times), for
 	// the dashboard, which runs doctor in the background every time it opens
 	Quick bool
+	// Net adds the sync checks that use the network: whether the device's
+	// channel offers newer content, and whether the registry's model
+	// endpoints answer. The ai backend check's gateway probe follows Quick,
+	// as it did before
+	Net bool
 }
 
 // Run runs every check, in the order they're worth reading
@@ -136,6 +141,8 @@ func Run(opts Options) []Result {
 	if r, ok := checkBudApp(p); ok {
 		results = append(results, r)
 	}
+
+	results = append(results, checkSync(p, cfg, opts.Net)...)
 
 	return append(results, cfgResult, checkProjects(p))
 }

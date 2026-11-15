@@ -650,10 +650,10 @@ func TestASecondSyncWaitsForTheFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer unlock()
-	if _, err := Run(context.Background(), o); err == nil || !strings.Contains(err.Error(), "another bud sync is running") {
+	if _, err := Run(context.Background(), o); err == nil || !strings.Contains(err.Error(), "is running on this device") {
 		t.Fatalf("a sync ran while another held the lock: %v", err)
 	}
-	if _, err := Rollback(context.Background(), o); err == nil || !strings.Contains(err.Error(), "another bud sync is running") {
+	if _, err := Rollback(context.Background(), o); err == nil || !strings.Contains(err.Error(), "is running on this device") {
 		t.Fatalf("a rollback ran while a sync held the lock: %v", err)
 	}
 }

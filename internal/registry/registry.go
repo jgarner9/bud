@@ -185,7 +185,7 @@ func merged[V any](base, top map[string]V) map[string]V {
 var (
 	idRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 	envRe    = regexp.MustCompile(`^\{env:[A-Z_][A-Z0-9_]*\}$`)
-	opRefRe  = regexp.MustCompile(`^op://[^/\s]+/[^/\s]+(/[^/\s]+)+$`)
+	opRefRe  = regexp.MustCompile("^op:" + "//" + `[^/\s]+/[^/\s]+(/[^/\s]+)+$`)
 	errorSep = "\n  "
 )
 

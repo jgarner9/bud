@@ -44,6 +44,8 @@ just install-test    # install.sh's checks against fake releases signed with a t
 just rotate-test     # rotate-release-key.sh against a throwaway repo, with fake op and gh
 just release-plan-test # release-plan.sh's decisions against throwaway repos with a fake gh
 just site-test       # assemble the docs site from site/ and docs/*.md; fails when a page isn't in the sidebar
+just leak-check      # fail on personal details in tracked files (tailnet hosts, real op:// vaults, home dirs, BUD_LEAK_PATTERNS)
+just leak-test       # leak-check.sh's own tests
 just smoke           # sync the config into temp XDG dirs, restore plugins, start nvim headless (needs network)
 just lang-check [go] # install every language's tooling in temp XDG dirs, check each on a sample project (slow, needs network)
 just snapshot        # local GoReleaser build into dist/, needs goreleaser installed
@@ -86,6 +88,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | `bud.ai.*`: the session, the TUI pane, the IDE bridge, permissions, chat, inline actions, tools, the generator, filing and working issues | `docs/internals/claude-session.md` |
 | Anything under `ide/nvim/`: plugins, lazy loading, languages, layouts, debugging, UI, the dashboard, the settings screen | `docs/internals/neovim.md` |
 | `bud bootstrap`, the nightly build, release signing | `docs/internals/release.md` |
+| `internal/content`: content bundles, `content.json`, `channel.json` and their signatures | `docs/internals/content.md` |
 
 Rules that apply wherever you are:
 

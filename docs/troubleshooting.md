@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled language, the synced config, the startup time, Claude Code and the project registry, and each problem comes with the command that fixes it.
+Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled language, the synced config, the startup time, Claude Code and the project registry, plus what `bud sync` left on a device with a profile set, and each problem comes with the command that fixes it. `bud doctor --net` also asks whether newer content is out and whether the model endpoints answer.
 
 ## Common problems
 
@@ -29,6 +29,8 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 **The app doesn't open.** `bud bundle` builds it again with your current `PATH` and bud; `bud launch` from a shell shows any error.
 
 **Bud.app is out of date with kitty.** On macOS with Kitty, Bud.app is a copy of kitty.app, so it doesn't follow kitty's updates. `bud update` copies it again by itself; between updates, `bud doctor` warns (`Bud app`) when kitty has moved on, and `bud bundle` copies it again.
+
+**`bud doctor` says a synced file changed by hand.** `bud sync` never overwrites a file you edited, so the edit stays and doctor keeps naming it. To keep the change, put it in your overlay (an env fragment, or your own skill or agent), then delete the file and run `bud sync` to get bud's version back. When "synced config" warns that a sync would write something, the content, the overlay or bud itself changed since the last sync, and `bud sync` brings the files up to date.
 
 ## Starting over
 

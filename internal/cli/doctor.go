@@ -16,24 +16,27 @@ func init() {
 }
 
 func Doctor() *Command {
-	var quick, asJSON bool
+	var quick, asJSON, net bool
 	return &Command{
 		Name:  "doctor",
 		Usage: "Checks that bud's dependencies and config are healthy",
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&quick, "quick", false, "skip the checks that take a while (startup timing)")
 			fs.BoolVar(&asJSON, "json", false, "print the results as JSON, for the dashboard")
+			fs.BoolVar(&net, "net", false, "also check the network: newer content on the channel, and that the model endpoints answer")
 		},
-		Run: func(g *Globals, args []string) error { return runDoctor(args, quick, asJSON) },
+		Run: func(g *Globals, args []string) error {
+			return runDoctor(args, doctor.Options{Quick: quick, Net: net}, asJSON)
+		},
 	}
 }
 
-func runDoctor(args []string, quick, asJSON bool) error {
+func runDoctor(args []string, opts doctor.Options, asJSON bool) error {
 	if len(args) > 0 {
 		return usageErrorf("doctor takes no arguments")
 	}
 
-	results := doctor.Run(doctor.Options{Quick: quick})
+	results := doctor.Run(opts)
 	if asJSON {
 		return reportJSON(results)
 	}

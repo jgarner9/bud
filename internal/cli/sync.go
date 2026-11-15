@@ -51,14 +51,10 @@ func runSync(g *Globals, args []string, dryRun, rollback bool) error {
 	if err != nil {
 		return fmt.Errorf("%w\nfix or remove %s, then run 'bud sync' again", err, p.MachineConfig())
 	}
-	repo := s.Overlay.Repo
-	if env := os.Getenv("BUD_OVERLAY"); env != "" {
-		repo = env
-	}
 	o := syncer.Options{
 		Paths:    p,
 		Device:   s.Device,
-		Overlay:  repo,
+		Overlay:  syncer.OverlayRepo(s.Overlay.Repo),
 		Mirror:   s.Content.Mirror,
 		Profiles: func() []profile.Dir { return profileDirs(p) },
 		DryRun:   dryRun,

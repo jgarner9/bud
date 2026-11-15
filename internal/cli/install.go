@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 
-	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/doctor"
 	"jgarner.dev/bud/internal/installer"
@@ -18,6 +16,7 @@ import (
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/profile"
+	"jgarner.dev/bud/internal/syncer"
 )
 
 func init() {
@@ -68,12 +67,7 @@ func notBuilt(what string, phase int) func(*Globals, bool) error {
 
 // profileDirs are where device profiles are read from, the overlay's first
 // so it replaces an example of the same name; swappable in tests
-var profileDirs = func(p *paths.Paths) []profile.Dir {
-	return []profile.Dir{
-		profile.OS(filepath.Join(p.Overlay(), "profiles")),
-		{Name: "bud's examples", FS: bud.Profiles()},
-	}
-}
+var profileDirs = syncer.ProfileDirs
 
 // install sets up the components of the device profile named by --device or,
 // without it, the device setting. With neither, it's the IDE alone, as it

@@ -191,12 +191,7 @@ func Rollback(ctx context.Context, o Options) (*Report, error) {
 	}
 
 	rep := &Report{From: led.Content}
-	overlayDir := ""
-	if o.Overlay != "" {
-		if _, err := os.Stat(o.Paths.Overlay()); err == nil {
-			overlayDir = o.Paths.Overlay()
-		}
-	}
+	overlayDir := OverlayOnDisk(o.Paths, o.Overlay)
 	prof, _, err := profile.Find(o.Device, o.Profiles()...)
 	if err != nil {
 		return nil, err

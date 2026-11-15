@@ -61,7 +61,24 @@ A file the ledger has that the sync no longer wants is deleted when it's still w
 
 `--dry-run` does steps 1 to 8 without changing anything: the overlay isn't fetched (the clone on disk is used, or none), and a new bundle is downloaded, verified and unpacked into a temp dir that's thrown away. It reports the same changes a real sync would make.
 
+## What bud doctor checks
+
+`internal/doctor/sync.go` (build plan task 1.9, Suite D46) adds these checks once config `device` is set; a device with none gets none of them. They only read, and only `--net` goes online.
+
+| Check | OK | Warn | Fail |
+| --- | --- | --- | --- |
+| device profile | found and valid (overlay's `profiles/` first, `syncer.ProfileDirs`) | | not found or invalid |
+| sync ledger | `current` points at the ledger's version, its dir is there, every file matches its hash (`Ledger.Drift`) | never synced; a file missing or changed by hand | unreadable ledger; `current` gone or pointing elsewhere; the version dir gone |
+| registry | the content's, with the overlay's over it, validates (`syncer.LoadRegistry`) | | doesn't validate |
+| synced config | `syncer.Check` finds nothing to change | a sync would write or delete something; a file bud would write isn't bud's | rendering fails |
+| content channel (`--net`) | the newest on the channel, or held there by a rollback | newer content is out; nothing offered; the channel offers an older version; the host can't be reached | |
+| model endpoints (`--net`) | every provider a role uses answers `GET <endpoint>/models` | one doesn't answer, or its model list lacks a name the registry uses | |
+
+The ledger check stops there when it fails or the device hasn't synced, and the render check needs a profile and registry that validate. `syncer.Check` is a dry run of steps 6 to 8 on the version in use with the overlay as it is on disk, so it catches what a hand edit can't: an overlay pull that changed what's rendered, or a `bud update` whose adapter renders differently. It leaves out files the ledger check already named. Drift only warns, since `bud update` rolls back on a check that newly fails, and a hand edit is never the new release's fault; a broken render does fail, since a new release can cause that.
+
+Endpoints get a key only when theirs is an `{env:VAR}` that's set; an `op://` key is never read (Suite D7), so those providers show only that they answer (any HTTP status counts), and a model list is checked only when one comes back. Down only warns, since the Qwen box sleeps when idle (Suite D26). Tests swap `syncCheck`, `fetchChannel` and `netClient`.
+
 ## Not done yet
 
 - Whether OpenCode reloads its config when `current` moves is unchecked; if not, a sync will have to restart the harness.
-- `bud doctor`'s drift checks against the ledger are task 1.9.
+- Doctor doesn't check OpenCode's version yet: the pinned OpenCode install (the rest of task 1.7) isn't built, so there's no pin to check against.

@@ -128,8 +128,8 @@ func scan(dir, envDir, layer string) ([]Item, error) {
 				continue
 			}
 			if kind == "skills" {
-				if _, err := os.Stat(filepath.Join(dir, kind, e.Name(), "SKILL.md")); err != nil {
-					return nil, fmt.Errorf("%s: a skill dir needs a SKILL.md", filepath.Join(dir, kind, e.Name()))
+				if fi, err := os.Lstat(filepath.Join(dir, kind, e.Name(), "SKILL.md")); err != nil || !fi.Mode().IsRegular() {
+					return nil, fmt.Errorf("%s: a skill dir needs a SKILL.md file", filepath.Join(dir, kind, e.Name()))
 				}
 			}
 			add(kind, e.Name(), filepath.Join(dir, kind, e.Name()))

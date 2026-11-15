@@ -297,11 +297,26 @@ func TestNoOverlayMeansThePublicContentAlone(t *testing.T) {
 }
 
 func TestASkillDirWithoutSkillMDIsAnError(t *testing.T) {
-	pub := t.TempDir()
-	tree(t, pub, map[string]string{"skills/broken/notes.md": "x"})
-	if _, err := Layer(pub, ""); err == nil || !strings.Contains(err.Error(), "needs a SKILL.md") {
-		t.Fatalf("got %v", err)
+	for name, files := range map[string]map[string]string{
+		"no SKILL.md":       {"skills/broken/notes.md": "x"},
+		"SKILL.md is a dir": {"skills/broken/SKILL.md/notes.md": "x"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			pub := t.TempDir()
+			tree(t, pub, files)
+			if _, err := Layer(pub, ""); err == nil || !strings.Contains(err.Error(), "needs a SKILL.md") {
+				t.Fatalf("got %v", err)
+			}
+		})
 	}
+	t.Run("in the overlay", func(t *testing.T) {
+		pub, ov := t.TempDir(), t.TempDir()
+		tree(t, pub, map[string]string{"skills/learn/SKILL.md": "public learn"})
+		tree(t, ov, map[string]string{"content/skills/learn/SKILL.md/notes.md": "x"})
+		if _, err := Layer(pub, ov); err == nil || !strings.Contains(err.Error(), "needs a SKILL.md") {
+			t.Fatalf("a dir called SKILL.md replaced the public learn: %v", err)
+		}
+	})
 }
 
 func TestLayerRefusesAnOverlayOfAnotherFormat(t *testing.T) {

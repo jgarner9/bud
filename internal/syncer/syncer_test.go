@@ -679,3 +679,35 @@ func TestCurrentIsPutBackWhenActiveCantFollow(t *testing.T) {
 		t.Fatalf("current is %s after a failed switch, want it put back to 2026.11.15.1", got)
 	}
 }
+
+func TestCurrentIsRemovedWhenTheFirstActiveSwitchFails(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", tree(t))
+	o := options(t, s)
+	if err := os.MkdirAll(o.Paths.Active(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Run(context.Background(), o); err == nil {
+		t.Fatal("the sync should fail when active isn't a link")
+	}
+	if got := readLink(o.Paths.ContentCurrent()); got != "" {
+		t.Fatalf("current points to %s after a failed first switch", got)
+	}
+	if _, err := os.Lstat(o.Paths.ContentCurrent()); !os.IsNotExist(err) {
+		t.Fatalf("current still exists after the failed first switch: %v", err)
+	}
+}
+
+func TestLinkSetBuildRejectsMissingTargets(t *testing.T) {
+	root := t.TempDir()
+	active := filepath.Join(root, "active")
+	target := filepath.Join(root, "missing")
+
+	if err := (linkSet{"skills/learn": target}).build(active); err == nil {
+		t.Fatal("a link set with a missing target was built")
+	}
+	if _, err := os.Lstat(filepath.Join(root, activeDirs)); !os.IsNotExist(err) {
+		t.Fatalf("active links were created for an invalid target: %v", err)
+	}
+}

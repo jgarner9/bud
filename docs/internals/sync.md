@@ -34,6 +34,8 @@ The content release workflow (task 1.10) must publish exactly these. Content rel
 8. If the profile runs OpenCode (`harness` or `server`), renders `opencode.jsonc` with `adapter/opencode`: skills from `active/skills`, instructions from `content/current/AGENTS.md` then the overlay's, plugins from `active/plugins/<id>`, env fragments public first and the overlay's last. Agents and commands are copied to `~/.config/opencode/{agents,commands}/<id>.md`. Provider keys that are `op://` references go in `~/.local/state/bud/opencode.env` (mode 0600, references only) for `op run --env-file`.
 9. Plans each file against the disk and the ledger, builds the link set, then switches `content/current` and `active` (each a new link renamed over the old, so readers see one or the other; if `active` can't follow, `current` is put back), writes and deletes the files, saves the ledger, and removes unused `active.d` dirs.
 
+Before switching, bud verifies that the content directory and every active link target exist and that the built link set is intact. If either link switch fails, it restores the prior links, or removes a newly created `current` link.
+
 ## The manifest rule
 
 | On disk | Ledger | What happens |

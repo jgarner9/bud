@@ -40,7 +40,18 @@ func (s linkSet) build(active string) error {
 	dirs := filepath.Join(filepath.Dir(active), activeDirs)
 	dst := filepath.Join(dirs, s.name())
 	if _, err := os.Lstat(dst); err == nil {
-		return nil
+		return s.validate(dst)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	for _, target := range s {
+		fi, err := os.Stat(target)
+		if err != nil {
+			return fmt.Errorf("active link target %s: %w", target, err)
+		}
+		if !fi.IsDir() {
+			return fmt.Errorf("active link target %s is not a directory", target)
+		}
 	}
 	if err := os.MkdirAll(dirs, 0o755); err != nil {
 		return err
@@ -61,11 +72,53 @@ func (s linkSet) build(active string) error {
 			return err
 		}
 	}
+	if err := s.validate(tmp); err != nil {
+		os.RemoveAll(tmp)
+		return err
+	}
 	if err := os.Rename(tmp, dst); err != nil {
 		os.RemoveAll(tmp)
 		return err
 	}
 
+	return nil
+}
+
+func (s linkSet) validate(dir string) error {
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("%s is not a directory", dir)
+	}
+	for _, kind := range []string{"skills", "plugins"} {
+		path := filepath.Join(dir, kind)
+		fi, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+		if !fi.IsDir() {
+			return fmt.Errorf("%s is not a directory", path)
+		}
+	}
+	for rel, target := range s {
+		fi, err := os.Stat(target)
+		if err != nil {
+			return fmt.Errorf("active link target %s: %w", target, err)
+		}
+		if !fi.IsDir() {
+			return fmt.Errorf("active link target %s is not a directory", target)
+		}
+		path := filepath.Join(dir, rel)
+		got, err := os.Readlink(path)
+		if err != nil {
+			return err
+		}
+		if got != target {
+			return fmt.Errorf("active link %s points to %s, want %s", path, got, target)
+		}
+	}
 	return nil
 }
 
@@ -127,4 +180,14 @@ func readLink(link string) string {
 	}
 
 	return t
+}
+
+func restoreLink(link, previous, attempted string) error {
+	if readLink(link) != attempted {
+		return nil
+	}
+	if previous == "" {
+		return os.Remove(link)
+	}
+	return switchLink(link, previous)
 }

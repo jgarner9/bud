@@ -352,20 +352,26 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	next.Files = keep
 	// build the link set before switching anything, and put current back if
 	// active can't follow it, so the two never point at different versions
+	contentDir := filepath.Join(p.Content(), next.Content)
+	if fi, err := os.Stat(contentDir); err != nil {
+		return err
+	} else if !fi.IsDir() {
+		return fmt.Errorf("%s is not a content directory", contentDir)
+	}
 	if err := links.build(p.Active()); err != nil {
 		return err
 	}
-	oldCurrent := readLink(p.ContentCurrent())
-	if err := switchLink(p.ContentCurrent(), next.Content); err != nil {
+	currentLink, activeLink := p.ContentCurrent(), p.Active()
+	oldCurrent, oldActive := readLink(currentLink), readLink(activeLink)
+	if err := switchLink(currentLink, next.Content); err != nil {
 		return err
 	}
-	if err := switchLink(p.Active(), activeTarget); err != nil {
-		if oldCurrent != "" {
-			if back := switchLink(p.ContentCurrent(), oldCurrent); back != nil {
-				return fmt.Errorf("%w; and current couldn't be put back to %s: %v", err, oldCurrent, back)
-			}
-		}
-		return err
+	if err := switchLink(activeLink, activeTarget); err != nil {
+		restoreErr := errors.Join(
+			restoreLink(activeLink, oldActive, activeTarget),
+			restoreLink(currentLink, oldCurrent, next.Content),
+		)
+		return errors.Join(err, restoreErr)
 	}
 	var errs []error
 	for _, s := range steps {

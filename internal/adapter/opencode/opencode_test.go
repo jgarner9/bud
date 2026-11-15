@@ -169,3 +169,19 @@ func TestABrokenFragmentIsNamed(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestAnOutputLimitNeedsNoContext(t *testing.T) {
+	in := shipped(t)
+	m := in.Registry.Models["glm-5.3"]
+	m.Context = 0
+	in.Registry.Models["glm-5.3"] = m
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	glm := decode(t, out.Config)["providers"].(map[string]any)["go"].(map[string]any)["models"].(map[string]any)["glm-5.3"].(map[string]any)
+	limit, _ := glm["limit"].(map[string]any)
+	if _, ok := limit["context"]; ok || limit["output"] != float64(131072) {
+		t.Fatalf("want only the output limit, got %v", glm["limit"])
+	}
+}

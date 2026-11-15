@@ -25,11 +25,15 @@ type Listing struct {
 // Facts are the capability fields a provider can tell bud, so bud registry
 // refresh keeps them true and hand-kept fields alone (Suite D64, D69)
 type Facts struct {
-	Inputs  []string
-	Caps    []string
-	Context int
-	Output  int
-	Price   *Price
+	Inputs []string
+	Caps   []string
+	// HasInputs and HasCaps say the list reported them, so an empty Inputs
+	// or Caps means none rather than unknown
+	HasInputs bool
+	HasCaps   bool
+	Context   int
+	Output    int
+	Price     *Price
 }
 
 // listedCaps are the caps a model list reports. fim and embed are declared
@@ -93,6 +97,7 @@ func (m catalogModel) facts() *Facts {
 	}
 	f := &Facts{}
 	if m.Modalities != nil {
+		f.HasInputs = true
 		for _, in := range m.Modalities.Input {
 			kind := in
 			switch {
@@ -112,6 +117,7 @@ func (m catalogModel) facts() *Facts {
 		f.Inputs = inOrder(f.Inputs, Inputs)
 	}
 	if c := m.Capabilities; c != nil {
+		f.HasCaps = true
 		if c.Tools != nil && c.Tools.Supported {
 			f.Caps = append(f.Caps, "tools")
 		}
@@ -225,17 +231,22 @@ func Compare(r *Registry, provider string, list []Listing) Report {
 	return rep
 }
 
-// ApplyFacts returns m with the provider's facts in place. Caps the list
-// can't report (fim, embed) are kept; a zero fact leaves the field alone
+// ApplyFacts returns m with the provider's facts in place. A fact the list
+// didn't report leaves the field alone, and caps a list can't report (fim,
+// embed) are always kept
 func ApplyFacts(m Model, f Facts) Model {
-	m.Inputs = slices.Clone(f.Inputs)
-	caps := slices.Clone(f.Caps)
-	for _, c := range m.Caps {
-		if !slices.Contains(listedCaps, c) && !slices.Contains(caps, c) {
-			caps = append(caps, c)
-		}
+	if f.HasInputs {
+		m.Inputs = slices.Clone(f.Inputs)
 	}
-	m.Caps = inOrder(caps, Caps)
+	if f.HasCaps {
+		caps := slices.Clone(f.Caps)
+		for _, c := range m.Caps {
+			if !slices.Contains(listedCaps, c) && !slices.Contains(caps, c) {
+				caps = append(caps, c)
+			}
+		}
+		m.Caps = inOrder(caps, Caps)
+	}
 	if f.Context > 0 {
 		m.Context = f.Context
 	}

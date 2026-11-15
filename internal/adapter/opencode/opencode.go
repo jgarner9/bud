@@ -82,11 +82,14 @@ func Render(in Input) (*Output, error) {
 				continue
 			}
 			entry := map[string]any{"modelID": m.Name}
+			limit := map[string]any{}
 			if m.Context > 0 {
-				limit := map[string]any{"context": m.Context}
-				if m.Output > 0 {
-					limit["output"] = m.Output
-				}
+				limit["context"] = m.Context
+			}
+			if m.Output > 0 {
+				limit["output"] = m.Output
+			}
+			if len(limit) > 0 {
 				entry["limit"] = limit
 			}
 			models[mid] = entry

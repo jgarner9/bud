@@ -9,7 +9,8 @@ import (
 // of the given models inside a JSONC registry file, in place. Everything
 // else in the file stays byte for byte, comments and layout included, so a
 // refresh's diff shows only the facts that changed (Suite D69). A field the
-// model entry lacks is added after its last field
+// model entry lacks is added after its last field, and an inputs or caps
+// list the provider now reports empty is written as []
 func PatchFacts(src []byte, models map[string]Model) ([]byte, error) {
 	// StripJSONC keeps every byte offset, so spans found in the plain JSON
 	// point into src as well
@@ -47,10 +48,14 @@ func PatchFacts(src []byte, models map[string]Model) ([]byte, error) {
 		var added string
 		for _, field := range factFields {
 			text := factText(models[id], field)
+			v, present := obj.fields[field]
+			if text == "" && present && (field == "inputs" || field == "caps") {
+				text = "[]" // the provider now reports none
+			}
 			if text == "" {
 				continue
 			}
-			if v, ok := obj.fields[field]; ok {
+			if present {
 				if string(src[v.start:v.end]) != text {
 					edits = append(edits, edit{v.start, v.end, text})
 				}

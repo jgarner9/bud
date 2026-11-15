@@ -162,3 +162,34 @@ func TestPatchFactsKeepsEverythingElse(t *testing.T) {
 		t.Fatal("want an error for a model that isn't in the file")
 	}
 }
+
+func TestAFactTheListLeavesOutIsKept(t *testing.T) {
+	r := catalogRegistry()
+	list, err := ParseCatalog(strings.NewReader(`{"data": [{"id": "glm-5.3", "limit": {"context": 2000000}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, d := range Compare(r, "go", list).Drift {
+		got = append(got, d.Model+"."+d.Field)
+	}
+	if strings.Join(got, ",") != "glm-5.3.context" {
+		t.Fatalf("only the reported context may drift; got %v", got)
+	}
+}
+
+func TestCapsTheListNowDeniesAreWrittenEmpty(t *testing.T) {
+	src := `{"models": {"m": {"provider": "go", "caps": ["tools", "json"], "inputs": ["text"]}}}`
+	list, err := ParseCatalog(strings.NewReader(`{"data": [{"id": "x", "capabilities": {}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := ApplyFacts(Model{Caps: []string{"tools", "json"}, Inputs: []string{"text"}}, *list[0].Facts)
+	out, err := PatchFacts([]byte(src), map[string]Model{"m": m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"models": {"m": {"provider": "go", "caps": [], "inputs": ["text"]}}}`; string(out) != want {
+		t.Fatalf("got  %s\nwant %s", out, want)
+	}
+}

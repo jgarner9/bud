@@ -2,8 +2,9 @@ name: Content
 
 # Suite D60, D61 (build plan task 1.10): a push to main that changes content/
 # cuts a content release, content-YYYY.MM.DD.N, and moves the edge channel to
-# it. Promoting a release to stable is a manual run naming its version. Both
-# go through scripts/content-release.sh, which publishes the layout bud sync
+# it. A manual run promotes the version edge offers to stable, or resigns
+# (rebuilds and re-signs what the channel offers, for a key rotation or to
+# repair the channel). All of it goes through scripts/content-release.sh, which publishes the layout bud sync
 # reads (docs/internals/sync.md). Every release here is a prerelease, so
 # install.sh's releases/latest/download keeps finding the code archives.
 # Nothing is published until the BUD_RELEASE_KEY secret is set, since an
@@ -14,8 +15,13 @@ on:
     paths: ["content/**"]
   workflow_dispatch:
     inputs:
-      promote:
-        description: "A content version to promote to stable (YYYY.MM.DD.N); leave empty to cut an edge release from main"
+      mode:
+        description: "edge cuts a release from main; promote moves stable to the version below, which must be what edge offers now; resign re-signs what the channel offers"
+        type: choice
+        options: [edge, promote, resign]
+        default: edge
+      version:
+        description: "For promote: the content version (YYYY.MM.DD.N)"
         required: false
         default: ""
 
@@ -32,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0 # every content-* tag, to number the day's cuts
+          fetch-depth: 0 # every content-* tag: they're the record the channel is built from
       - name: Only from main
         run: |
           if [ "$GITHUB_REF" != refs/heads/main ]; then
@@ -44,7 +50,7 @@ jobs:
           go-version-file: go.mod
       # the checks a content change can break, before anything is published
       - name: Check
-        if: inputs.promote == ''
+        if: github.event_name == 'push' || inputs.mode == 'edge'
         run: |
           go test ./...
           sh scripts/leak-check.sh
@@ -67,10 +73,11 @@ jobs:
           BUD: ${{ runner.temp }}/bud
           BUD_RELEASE_KEY: ${{ secrets.BUD_RELEASE_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PROMOTE: ${{ inputs.promote }}
+          MODE: ${{ inputs.mode || 'edge' }}
+          VERSION: ${{ inputs.version }}
         run: |
-          if [ -n "$PROMOTE" ]; then
-            sh scripts/content-release.sh promote "$PROMOTE"
-          else
-            sh scripts/content-release.sh edge
-          fi
+          case "$MODE" in
+          promote) sh scripts/content-release.sh promote "$VERSION" ;;
+          resign) sh scripts/content-release.sh resign ;;
+          *) sh scripts/content-release.sh edge ;;
+          esac

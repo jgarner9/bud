@@ -34,4 +34,4 @@ Content versions are `YYYY.MM.DD.N`: the day CI cut it, and which cut of that da
 bud content pack --version 2026.11.15.1 --out dist content
 ```
 
-This writes `dist/content-2026.11.15.1.tar.gz` and `dist/content.json`. Signing and publishing them is the content workflow's job, through `scripts/content-release.sh` (see [release.md](release.md)), which also uses `bud content channel` to move a channel in `channel.json`: it verifies the published file first, and a channel only moves forward, with stable taking only a version edge has had (`content.SetContent`). Where the release assets have to live for `bud sync` to find them is in [sync.md](sync.md).
+This writes `dist/content-2026.11.15.1.tar.gz` and `dist/content.json`. Signing and publishing them is the content workflow's job, through `scripts/content-release.sh` (see [release.md](release.md)), which also uses `bud content channel` to write `channel.json` from the release tags (`content.NewChannel`; stable is never ahead of edge) and `bud content offered` to read what a published one offers once its signature verifies. Where the release assets have to live for `bud sync` to find them is in [sync.md](sync.md).

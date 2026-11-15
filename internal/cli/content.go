@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"jgarner.dev/bud/internal/atomicfile"
 	"jgarner.dev/bud/internal/content"
@@ -19,8 +18,7 @@ func init() {
 // Content builds content bundles (Suite D60). CI runs it on a push to main
 // that changes content/; a device never needs it
 func Content() *Command {
-	var version, out, from, set string
-	var fresh bool
+	var version, out, edge, stable, channel string
 	return &Command{
 		Name:  "content",
 		Usage: "Builds the signed content bundle CI publishes",
@@ -36,14 +34,21 @@ func Content() *Command {
 			},
 			{
 				Name:  "channel",
-				Usage: "move one channel's content version in channel.json: channel (--from channel.json | --new) --set <channel>=<version> [--out dir]",
+				Usage: "write channel.json with each channel's content version: channel --edge V [--stable V] [--out dir]",
 				Flags: func(fs *flag.FlagSet) {
-					fs.StringVar(&from, "from", "", "the published channel.json to start from; its signature, <file>.sig, must verify")
-					fs.BoolVar(&fresh, "new", false, "start from an empty channel.json (the first content release only)")
-					fs.StringVar(&set, "set", "", "the channel and version to move it to, e.g. edge=2026.11.15.1")
+					fs.StringVar(&edge, "edge", "", "the content version edge offers, YYYY.MM.DD.N")
+					fs.StringVar(&stable, "stable", "", "the content version stable offers; leave out until one is promoted")
 					fs.StringVar(&out, "out", ".", "where to write channel.json")
 				},
-				Run: func(_ *Globals, args []string) error { return contentChannel(args, from, fresh, set, out) },
+				Run: func(_ *Globals, args []string) error { return contentChannel(args, edge, stable, out) },
+			},
+			{
+				Name:  "offered",
+				Usage: "print the content version a published channel.json offers on one channel, once its signature verifies: offered --channel edge <channel.json>",
+				Flags: func(fs *flag.FlagSet) {
+					fs.StringVar(&channel, "channel", "edge", "the channel to read")
+				},
+				Run: func(_ *Globals, args []string) error { return contentOffered(args, channel) },
 			},
 		},
 	}
@@ -80,39 +85,16 @@ func contentPack(args []string, version, out string) error {
 	return nil
 }
 
-// contentChannel is what the content release workflow runs to move edge to
-// a new release, or stable to one edge has had. It starts from the
-// published channel.json only once its signature verifies, so a tampered
-// file is never re-signed, and needs --new to start from nothing, so a
-// download that failed can't quietly wipe the other channel
-func contentChannel(args []string, from string, fresh bool, set, out string) error {
+// contentChannel writes channel.json for the content release workflow,
+// which works out both versions from the release tags on every run
+func contentChannel(args []string, edge, stable, out string) error {
 	if len(args) != 0 {
-		return usageErrorf("content channel takes no arguments, e.g. bud content channel --from channel.json --set edge=2026.11.15.1")
+		return usageErrorf("content channel takes no arguments, e.g. bud content channel --edge 2026.11.15.2 --stable 2026.11.15.1")
 	}
-	name, version, ok := strings.Cut(set, "=")
-	if !ok || name == "" || version == "" {
-		return usageErrorf("content channel needs --set <channel>=<version>, e.g. --set edge=2026.11.15.1")
+	if edge == "" {
+		return usageErrorf("content channel needs --edge YYYY.MM.DD.N")
 	}
-	if (from == "") == !fresh {
-		return usageErrorf("content channel needs one of --from channel.json (to update the published one) or --new (the first release)")
-	}
-
-	c := &content.Channel{}
-	if from != "" {
-		b, err := os.ReadFile(from)
-		if err != nil {
-			return err
-		}
-		sig, err := os.ReadFile(from + ".sig")
-		if err != nil {
-			return fmt.Errorf("read the published channel.json's signature: %w", err)
-		}
-		if c, err = content.VerifyChannel(b, sig); err != nil {
-			return err
-		}
-	}
-	before := c.Channels[name].Content
-	changed, err := content.SetContent(c, name, version)
+	c, err := content.NewChannel(edge, stable)
 	if err != nil {
 		return err
 	}
@@ -128,13 +110,37 @@ func contentChannel(args []string, from string, fresh bool, set, out string) err
 		return err
 	}
 
-	if !changed {
-		fmt.Printf("%s is already at %s; wrote %s unchanged\n", name, version, path)
-		return nil
+	if stable == "" {
+		stable = "nothing yet"
 	}
-	if before == "" {
-		before = "nothing"
+	fmt.Printf("wrote %s: edge %s, stable %s; sign it next\n", path, edge, stable)
+	return nil
+}
+
+// contentOffered prints what a published channel.json offers on one
+// channel, refusing it unless <file>.sig verifies. Promoting reads it, so
+// stable only ever takes the version edge devices were offered
+func contentOffered(args []string, channel string) error {
+	if len(args) != 1 {
+		return usageErrorf("content offered takes the channel.json, e.g. bud content offered --channel edge channel.json")
 	}
-	fmt.Printf("%s: %s -> %s in %s; sign it next\n", name, before, version, path)
+	b, err := os.ReadFile(args[0])
+	if err != nil {
+		return err
+	}
+	sig, err := os.ReadFile(args[0] + ".sig")
+	if err != nil {
+		return fmt.Errorf("read the channel.json's signature: %w", err)
+	}
+	c, err := content.VerifyChannel(b, sig)
+	if err != nil {
+		return err
+	}
+	v, ok := c.Channels[channel]
+	if !ok || v.Content == "" {
+		return fmt.Errorf("channel.json offers no content on %s", channel)
+	}
+
+	fmt.Println(v.Content)
 	return nil
 }

@@ -10,8 +10,8 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/bud-content-release-test.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 mkdir -p "$tmp/bin"
 
-# fake gh: a release is a dir under $tmp/releases; creating one tags HEAD in
-# the repo as GitHub would. Every call is logged to $tmp/gh.log
+# fake gh: a release is a dir under $tmp/releases; creating one tags the
+# target in the repo, as GitHub would. Every call is logged to $tmp/gh.log
 cat >"$tmp/bin/gh" <<FAKE
 #!/bin/sh
 echo "gh \$*" >>"$tmp/gh.log"
@@ -21,7 +21,12 @@ shift 3
 case "\$cmd" in
 create)
 	[ -e "$tmp/gh-create-fails" ] && exit 1
-	git tag "\$tag" HEAD
+	target=HEAD
+	for a in "\$@"; do
+		[ "\$prev" = --target ] && target="\$a"
+		prev="\$a"
+	done
+	git tag "\$tag" "\$target"
 	mkdir -p "$tmp/releases/\$tag"
 	for a in "\$@"; do [ -f "\$a" ] && cp "\$a" "$tmp/releases/\$tag/"; done
 	true
@@ -44,8 +49,9 @@ download)
 esac
 FAKE
 
-# fake bud: pack writes the two files; channel writes its arguments as
-# channel.json. Both are logged to $tmp/bud.log
+# fake bud: pack writes the two files; channel writes its flags as
+# channel.json; offered prints $tmp/offered, failing without it. Every call
+# is logged to $tmp/bud.log
 cat >"$tmp/bin/bud" <<FAKE
 #!/bin/sh
 echo "bud \$*" >>"$tmp/bud.log"
@@ -65,7 +71,8 @@ pack)
 	echo bundle >"\$out/content-\$version.tar.gz"
 	echo "\$version" >"\$out/content.json"
 	;;
-channel) echo "channel" >"\$out/channel.json" ;;
+channel) tail -n1 "$tmp/bud.log" >"\$out/channel.json" ;;
+offered) cat "$tmp/offered" ;;
 esac
 FAKE
 
@@ -82,33 +89,41 @@ fail() {
 	failed=1
 }
 
-# repo TAG...: a fresh repo at $tmp/repo with two commits; each TAG names a
-# tag on the first commit (an earlier release), and a release dir for it
-repo() {
-	rm -rf "$tmp/repo" "$tmp/releases" "$tmp/gh.log" "$tmp/bud.log" "$tmp"/gh-*-fails
+commit() {
+	echo "$1" >"$tmp/repo/content/AGENTS.md"
+	git -C "$tmp/repo" add content
+	git -C "$tmp/repo" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q -m "$1"
+}
+
+# repo TAG...: a fresh repo at $tmp/repo, with a bare origin, and two
+# commits; each TAG is an earlier release on the first commit, with a dir
+reset() {
+	rm -rf "$tmp/repo" "$tmp/origin" "$tmp/releases" "$tmp/offered" "$tmp"/gh-*-fails
 	mkdir -p "$tmp/repo/content" "$tmp/releases"
+	git init -q --bare "$tmp/origin"
 	git -C "$tmp/repo" init -q
-	for i in 1 2; do
-		echo "$i" >"$tmp/repo/content/AGENTS.md"
-		git -C "$tmp/repo" add content
-		git -C "$tmp/repo" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q -m "c$i"
-		[ "$i" = 1 ] && for t in "$@"; do
-			git -C "$tmp/repo" tag "$t"
-			mkdir -p "$tmp/releases/$t"
-			[ "$t" = content-channel ] && echo old >"$tmp/releases/$t/channel.json" && echo old >"$tmp/releases/$t/channel.json.sig"
-		done
+	git -C "$tmp/repo" remote add origin "$tmp/origin"
+	commit c1
+	for t in "$@"; do
+		git -C "$tmp/repo" tag "$t"
+		mkdir -p "$tmp/releases/$t"
+		if [ "$t" = content-channel ]; then
+			echo published >"$tmp/releases/$t/channel.json"
+			echo published >"$tmp/releases/$t/channel.json.sig"
+		fi
 	done
+	commit c2
 	: >"$tmp/gh.log"
 	: >"$tmp/bud.log"
 }
 
-# release NAME WANT ARGS...: runs content-release.sh ARGS in the repo; WANT
-# is ok or fail
+# release NAME WANT ARGS...: runs content-release.sh ARGS in the repo at
+# $sha (HEAD by default); WANT is ok or fail
 release() {
 	name="$1" want="$2"
 	shift 2
 	if (cd "$tmp/repo" && PATH="$tmp/bin:$PATH" BUD=bud SIGN="$tmp/bin/sign" BUD_CONTENT_DATE=2026.11.15 \
-		GITHUB_SHA="$(git rev-parse HEAD)" OUT="$tmp/repo/dist" sh "$here/content-release.sh" "$@" >"$tmp/log" 2>&1); then
+		GITHUB_SHA="${sha:-$(git rev-parse HEAD)}" OUT="$tmp/repo/dist" sh "$here/content-release.sh" "$@" >"$tmp/log" 2>&1); then
 		got=ok
 	else
 		got=fail
@@ -116,7 +131,7 @@ release() {
 	[ "$got" = "$want" ] || fail "$name: got $got, want $want ($(cat "$tmp/log"))"
 }
 
-# has NAME FILE LINE: FILE holds a line matching the regex LINE
+# has NAME FILE REGEX: FILE holds a line matching REGEX; hasnt the opposite
 has() { grep -Eq -- "$3" "$2" || fail "$1: no line matching '$3' in $(basename "$2"): $(cat "$2")"; }
 hasnt() { ! grep -Eq -- "$3" "$2" || fail "$1: a line matches '$3' in $(basename "$2"): $(cat "$2")"; }
 
@@ -127,59 +142,95 @@ prerelease_only() {
 	fi
 }
 
-repo
+reset
 release "the first release" ok edge
 has "the first release" "$tmp/bud.log" '^bud content pack --version 2026\.11\.15\.1 '
-has "the first release" "$tmp/bud.log" '^bud content channel --new --set edge=2026\.11\.15\.1 '
+has "the first release" "$tmp/bud.log" '^bud content channel --edge 2026\.11\.15\.1 --out'
 has "the first release" "$tmp/gh.log" '^gh release create content-2026\.11\.15\.1 .*content-2026\.11\.15\.1\.tar\.gz .*content\.json .*content\.json\.sig$'
 has "the first release" "$tmp/gh.log" '^gh release create content-channel .*channel\.json .*channel\.json\.sig$'
 has "the first release" "$tmp/releases/content-2026.11.15.1/content.json.sig" '^bud-content$'
 has "the first release" "$tmp/releases/content-channel/channel.json.sig" '^bud-channel$'
 prerelease_only "the first release"
 
-repo content-2026.11.15.1 content-channel
+reset content-2026.11.15.1 content-stable-2026.11.15.1 content-channel
 release "a second cut that day" ok edge
 has "a second cut that day" "$tmp/bud.log" '^bud content pack --version 2026\.11\.15\.2 '
-has "a second cut that day" "$tmp/bud.log" '^bud content channel --from .*/channel\.json --set edge=2026\.11\.15\.2 '
+has "a second cut that day" "$tmp/bud.log" '^bud content channel --edge 2026\.11\.15\.2 --stable 2026\.11\.15\.1 '
 has "a second cut that day" "$tmp/gh.log" '^gh release upload content-channel .*channel\.json .*channel\.json\.sig --clobber$'
 hasnt "a second cut that day" "$tmp/gh.log" '^gh release create content-channel'
 prerelease_only "a second cut that day"
 
-repo content-2026.11.15.9 content-2026.11.14.12 content-channel
+reset content-2026.11.15.9 content-2026.11.14.12 content-channel
 release "10 comes after 9" ok edge
 has "10 comes after 9" "$tmp/bud.log" '^bud content pack --version 2026\.11\.15\.10 '
 
-repo content-2026.11.15.1 content-channel
+reset content-2026.11.15.1 content-channel
 release "a re-run, first time" ok edge
 : >"$tmp/gh.log"
 : >"$tmp/bud.log"
 release "a re-run on a released commit" ok edge
 hasnt "a re-run on a released commit" "$tmp/bud.log" '^bud content pack'
 hasnt "a re-run on a released commit" "$tmp/gh.log" '^gh release create'
-has "a re-run on a released commit" "$tmp/bud.log" '^bud content channel --from .* --set edge=2026\.11\.15\.2 '
+has "a re-run on a released commit" "$tmp/bud.log" '^bud content channel --edge 2026\.11\.15\.2 '
 
-repo content-2026.11.15.1 content-channel
-touch "$tmp/gh-download-fails"
-release "a channel.json that won't download" fail edge
-hasnt "a channel.json that won't download" "$tmp/bud.log" '--new'
-hasnt "a channel.json that won't download" "$tmp/gh.log" '^gh release (upload|create) content-channel'
+# a newer commit is released, then a retried run of an older one comes in
+reset content-channel
+old="$(git -C "$tmp/repo" rev-parse HEAD~1)"
+release "the newer commit" ok edge
+: >"$tmp/gh.log"
+: >"$tmp/bud.log"
+sha="$old" release "a stale retry" ok edge
+sha=
+hasnt "a stale retry" "$tmp/bud.log" '^bud content pack'
+hasnt "a stale retry" "$tmp/gh.log" '^gh release create'
+has "a stale retry" "$tmp/bud.log" '^bud content channel --edge 2026\.11\.15\.1 '
 
-repo content-2026.11.15.1 content-channel
-release "promoting a release" ok promote 2026.11.15.1
-has "promoting a release" "$tmp/bud.log" '^bud content channel --from .* --set stable=2026\.11\.15\.1 '
-hasnt "promoting a release" "$tmp/bud.log" '^bud content pack'
-has "promoting a release" "$tmp/gh.log" '^gh release upload content-channel '
+# an earlier run stopped after one channel file: the next run rebuilds both
+# without reading either
+reset content-2026.11.15.1 content-channel
+echo half-written >"$tmp/releases/content-channel/channel.json"
+release "a channel left half uploaded" ok edge
+hasnt "a channel left half uploaded" "$tmp/gh.log" '^gh release download'
+has "a channel left half uploaded" "$tmp/releases/content-channel/channel.json" 'channel --edge 2026\.11\.15\.2'
 
-repo content-2026.11.15.1 content-channel
+reset content-2026.11.15.1 content-channel
+echo 2026.11.15.1 >"$tmp/offered"
+release "promoting what edge offers" ok promote 2026.11.15.1
+has "promoting what edge offers" "$tmp/bud.log" '^bud content offered --channel edge .*/channel\.json$'
+has "promoting what edge offers" "$tmp/bud.log" '^bud content channel --edge 2026\.11\.15\.1 --stable 2026\.11\.15\.1 '
+hasnt "promoting what edge offers" "$tmp/bud.log" '^bud content pack'
+git -C "$tmp/origin" rev-parse -q --verify refs/tags/content-stable-2026.11.15.1 >/dev/null ||
+	fail "promoting what edge offers: content-stable-2026.11.15.1 wasn't pushed"
+
+reset content-2026.11.15.1 content-2026.11.15.2 content-channel
+echo 2026.11.15.2 >"$tmp/offered"
+release "promoting a version edge no longer offers" fail promote 2026.11.15.1
+hasnt "promoting a version edge no longer offers" "$tmp/gh.log" 'upload'
+
+reset content-2026.11.15.1 content-channel
+release "promoting when the channel doesn't verify" fail promote 2026.11.15.1
+hasnt "promoting when the channel doesn't verify" "$tmp/gh.log" 'upload'
+
+reset content-2026.11.15.1 content-channel
+echo 2026.11.15.2 >"$tmp/offered"
 release "promoting a version never released" fail promote 2026.11.15.2
 hasnt "promoting a version never released" "$tmp/gh.log" 'upload'
 
-repo
+reset content-2026.11.15.1 content-2026.11.15.2 content-stable-2026.11.15.1 content-channel
+release "resigning" ok resign
+has "resigning" "$tmp/bud.log" '^bud content pack --version 2026\.11\.15\.1 '
+has "resigning" "$tmp/bud.log" '^bud content pack --version 2026\.11\.15\.2 '
+has "resigning" "$tmp/gh.log" '^gh release upload content-2026\.11\.15\.1 .*content\.json\.sig --clobber$'
+has "resigning" "$tmp/gh.log" '^gh release upload content-2026\.11\.15\.2 .*content\.json\.sig --clobber$'
+has "resigning" "$tmp/bud.log" '^bud content channel --edge 2026\.11\.15\.2 --stable 2026\.11\.15\.1 '
+hasnt "resigning" "$tmp/gh.log" '^gh release create'
+
+reset
 touch "$tmp/gh-create-fails"
 release "a release that won't create" fail edge
 hasnt "a release that won't create" "$tmp/bud.log" 'channel'
 
-repo
+reset
 release "no mode" fail
 release "an unknown mode" fail stable
 release "promote with no version" fail promote

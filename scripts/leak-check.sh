@@ -29,11 +29,22 @@ cd "$root"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/bud-leak.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-# every tracked text file; -- keeps a file named like an option (-q) a file
-git ls-files -z | xargs -0 grep -IlE -- '.' 2>/dev/null >"$tmp/all" || true
+# the lists below hold one name per line, so a name with a newline in it
+# would go unchecked: refuse it instead (git prints it quoted, "a\nb")
+newlines="$(git ls-files -z | tr -cd '\n' | wc -c | tr -d ' ')"
+if [ "$newlines" -gt 0 ]; then
+	echo "leak-check: a tracked file's name has a newline in it, so it can't be checked; rename it:" >&2
+	git ls-files | grep -F '\n' >&2 || true
+	exit 2
+fi
+
+# every tracked text file, as ./path: -- keeps a name like an option (-q) a
+# file, and ./ keeps a file named - from being read as stdin
+git ls-files -z | tr '\0' '\n' | sed 's|^|./|' | tr '\n' '\0' |
+	xargs -0 grep -IlE -- '.' 2>/dev/null >"$tmp/all" || true
 # the shape scans skip this script and its test, which name the shapes; the
 # personal patterns still cover them
-grep -vxE 'scripts/leak-check\.sh|scripts/leak_check_test\.sh' "$tmp/all" >"$tmp/files" || true
+grep -vxE '\./scripts/leak-check\.sh|\./scripts/leak_check_test\.sh' "$tmp/all" >"$tmp/files" || true
 
 # with personal patterns set (CI), no match is printed: a shape match can
 # overlap a personal one, and the log is public
@@ -55,7 +66,7 @@ scan() {
 				continue
 			fi
 			if [ -n "$hide" ]; then match='(not shown)'; fi
-			printf '%s:%s: %s: %s\n' "$f" "$line" "$what" "$match"
+			printf '%s:%s: %s: %s\n' "${f#./}" "$line" "$what" "$match"
 		done
 	done <"$list"
 }

@@ -72,5 +72,23 @@ echo 'x' >"$tmp/repo/-q"
 git -C "$tmp/repo" add -- -q
 (cd "$tmp/repo" && sh scripts/leak-check.sh) >/dev/null 2>&1 && fail "a tracked file named -q hid a real tailnet"
 
+check "a file named -" pass 'nothing here'
+echo 'reach it at home.tail4a2b9.ts.net' >"$tmp/repo/-"
+git -C "$tmp/repo" add -- -
+(cd "$tmp/repo" && sh scripts/leak-check.sh) >/dev/null 2>&1 && fail "a real tailnet in a file named - passed"
+
+check "a file with a newline in its name" pass 'nothing here'
+echo 'reach it at home.tail4a2b9.ts.net' >"$tmp/repo/notes
+private.md"
+git -C "$tmp/repo" add -A
+status=0
+(cd "$tmp/repo" && sh scripts/leak-check.sh) >"$tmp/out" 2>&1 || status=$?
+if [ "$status" -ne 2 ] || ! grep -q 'newline' "$tmp/out"; then
+	fail "a name with a newline in it should be refused, got $status: $(cat "$tmp/out")"
+fi
+
+check "the report names the file without ./" fail 'reach it at home.tail4a2b9.ts.net'
+grep -q '^notes\.md:1: ' "$tmp/out" || fail "the report should name notes.md, got: $(cat "$tmp/out")"
+
 if [ "$failed" -ne 0 ]; then exit 1; fi
 echo "leak_check_test: ok"

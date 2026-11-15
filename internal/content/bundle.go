@@ -29,6 +29,9 @@ func Pack(src fs.FS, version string, w io.Writer) (*Manifest, error) {
 		return nil, err
 	}
 	m := &Manifest{Version: version}
+	if Format > 1 {
+		m.Format = Format
+	}
 	var files [][]byte
 	err := fs.WalkDir(src, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || p == "." {

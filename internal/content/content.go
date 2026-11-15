@@ -50,8 +50,17 @@ var Kinds = map[string]string{
 // skipped are top-level entries of content/ that never ship
 var skipped = []string{"README.md"}
 
+// Format is the newest content format this bud reads. Bump it when content
+// starts using something an older bud can't read, such as a new registry
+// field, so an older bud refuses the bundle with a message to update rather
+// than failing on the file it can't parse. Format 1 is written as no field
+// at all, which keeps manifests readable by every bud that predates it
+const Format = 1
+
 // Manifest is content.json
 type Manifest struct {
+	// Format is the content format the bundle needs; 0 means 1
+	Format  int    `json:"format,omitempty"`
 	Version string `json:"version"`
 	Files   []File `json:"files"`
 }
@@ -88,6 +97,9 @@ func VerifyManifest(manifest, sig []byte) (*Manifest, error) {
 	}
 	if _, err := ParseVersion(m.Version); err != nil {
 		return nil, fmt.Errorf("content.json: %w", err)
+	}
+	if m.Format > Format {
+		return nil, fmt.Errorf("content %s needs content format %d, but this bud reads up to %d: run bud update (on edge, the next nightly has it), then bud sync; nothing changed", m.Version, m.Format, Format)
 	}
 
 	return &m, nil

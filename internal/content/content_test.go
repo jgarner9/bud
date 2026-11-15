@@ -317,3 +317,27 @@ func TestOnlyANewerVersionIsTaken(t *testing.T) {
 		}
 	}
 }
+
+func TestANewerContentFormatIsRefused(t *testing.T) {
+	s := newSigner(t)
+	trust(t, s)
+	m, _ := pack(t)
+	if mb, _ := MarshalManifest(m); bytes.Contains(mb, []byte(`"format"`)) {
+		t.Fatalf("format 1 should leave the field out, so older buds read it: %s", mb)
+	}
+
+	for _, tc := range []struct {
+		format int
+		ok     bool
+	}{{0, true}, {Format, true}, {Format + 1, false}} {
+		m.Format = tc.format
+		mb, _ := MarshalManifest(m)
+		_, err := VerifyManifest(mb, s.sign(mb, ManifestNamespace))
+		if tc.ok && err != nil {
+			t.Errorf("format %d: %v", tc.format, err)
+		}
+		if !tc.ok && (err == nil || !strings.Contains(err.Error(), "run bud update")) {
+			t.Errorf("format %d: %v, want a refusal naming bud update", tc.format, err)
+		}
+	}
+}

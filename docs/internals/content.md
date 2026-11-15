@@ -22,8 +22,15 @@ One key signs everything Bud ships: the release key, `updater.ReleaseKeys`. The 
 ## How a device checks a bundle
 
 1. `VerifyManifest` checks `content.json`'s signature against the trusted keys first, then parses it strictly. Unknown fields fail, and so does a version that isn't in the canonical `YYYY.MM.DD.N` form.
+   The manifest also carries the content format the bundle needs, and a bud refuses one newer than its own `content.Format`, saying to run `bud update` first, before anything is fetched or unpacked. See "The content format" below.
 2. `CheckNewer` refuses a version that isn't newer than the installed one, so an old signed bundle can't be replayed to roll a device back. Going back is `bud sync --rollback`, which uses a version still on disk.
 3. `Unpack` extracts into a temp dir beside the target, then renames it into place, so the version dir is either complete and verified or absent. It refuses anything that isn't a regular file, any path that isn't plain and relative (`..`, absolute or backslashed), any entry the manifest doesn't list, a duplicate, a size or sha256 mismatch, and any listed file the bundle is missing. It never unpacks over an existing version dir. The manifest is written into the dir as the record of what it holds.
+
+## The content format
+
+`content.Format` is the newest content format this bud reads, and `Pack` writes it into `content.json` as `format`. Bump it in the same PR as content that needs new code to read it, such as a new field in `env/registry.jsonc` that an older bud's strict decoder would reject. A device whose bud is older then stops at the manifest with "run bud update" and keeps the content it has, instead of failing partway through on the file it can't parse.
+
+Format 1 is written as no field at all (`omitempty`, and `Pack` sets it only above 1), so manifests stay byte-identical, and readable by buds built before the field existed, until the first bump. Those older buds parse strictly, so once the format is 2 they refuse the manifest too, with an unknown-field error rather than the update message. Either way nothing changes on the device.
 
 ## Versions
 

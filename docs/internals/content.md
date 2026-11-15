@@ -11,6 +11,7 @@ Three release assets plus two signatures:
 | `content-<version>.tar.gz` | The files of `content/`, at their paths under it. `README.md` is left out. Anything at the top level other than `AGENTS.md`, `skills/`, `agents/`, `commands/`, `plugins/` or `env/` fails the pack, so a stray file gets noticed instead of shipped. |
 | `content.json` and `content.json.sig` | The manifest: the version, and each file's path, kind, size and sha256, sorted by path. It's signed under the `bud-content` namespace. |
 | `channel.json` and `channel.json.sig` | The newest content and code version on each channel (`stable`, `edge`). It's signed under `bud-channel`. |
+| `channel-recovery.tar.gz` | The exact signed channel pair, kept as one release asset so a retry can restore either conventional channel asset after an interrupted upload. |
 
 One key signs everything Bud ships: the release key, `updater.ReleaseKeys`. The SSH signature namespace keeps the uses apart. A signature made for a code release (`bud-release`), a manifest or a channel file verifies only as that kind, so a valid signature on one can never be replayed as another.
 
@@ -34,4 +35,4 @@ Content versions are `YYYY.MM.DD.N`: the day CI cut it, and which cut of that da
 bud content pack --version 2026.11.15.1 --out dist content
 ```
 
-This writes `dist/content-2026.11.15.1.tar.gz` and `dist/content.json`. Signing and publishing them is the content workflow's job, through `scripts/content-release.sh` (see [release.md](release.md)), which also uses `bud content channel` to write `channel.json` from the release tags (`content.NewChannel`; stable is never ahead of edge) and `bud content offered` to read what a published one offers once its signature verifies. Where the release assets have to live for `bud sync` to find them is in [sync.md](sync.md).
+This writes `dist/content-2026.11.15.1.tar.gz` and `dist/content.json`. Signing and publishing them is the content workflow's job, through `scripts/content-release.sh` (see [release.md](release.md)), which also uses `bud content channel` to write `channel.json` from the release tags (`content.NewChannel`; stable is never ahead of edge) and `bud content offered` to read what a published one offers once its signature verifies. Stable promotion is restricted to what the current signed edge channel offers. Where the release assets have to live for `bud sync` to find them is in [sync.md](sync.md).

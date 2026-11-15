@@ -15,12 +15,13 @@
 #
 # The tags are the record. content-<v> is a release, content-stable-<v> a
 # promotion, and channel.json is rebuilt from them on every run (edge at the
-# newest release, stable at the newest promotion) and signed afresh. Nothing
-# is carried forward from the published channel.json, so a run that stopped
-# between uploading the two channel files, or a rotated release key, is put
-# right by the next run. resign does only that, and also rebuilds and
-# re-signs the bundles the channel names, from their tagged commits, which is
-# the step a key rotation needs before the old key is dropped.
+# newest release, stable at the newest promotion) and signed afresh. Before
+# either channel asset is uploaded, a single-asset recovery archive containing
+# the exact signed pair is persisted in the channel release. A retry verifies
+# and reuses that pair when it matches the tags, never trusting a mismatched
+# channel.json or signature downloaded separately. resign also rebuilds and
+# re-signs the bundles the channel names, from their tagged commits, before an
+# old release key is dropped.
 #
 # Versions are YYYY.MM.DD.N, N counting the day's cuts from 1. A run on a
 # commit that already has a content tag cuts nothing new, and neither does a
@@ -57,26 +58,61 @@ newest() {
 		sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -n1 || true
 }
 
-# publish_channel: rebuilds channel.json from the tags, signs it and uploads
-# it, creating the channel release on the first run
+# recover_channel EDGE STABLE DIR: extracts the persisted signed pair only
+# when it verifies and matches the versions recorded by the release tags.
+recover_channel() {
+	[ -n "$1" ] || return 1
+	git rev-parse -q --verify "refs/tags/$channel_tag" >/dev/null || return 1
+	gh release download "$channel_tag" -p channel-recovery.tar.gz -D "$tmp/recovery" >/dev/null 2>&1 || return 1
+	recovery="$tmp/recovery/channel-recovery.tar.gz"
+	entries="$(tar -tzf "$recovery" | LC_ALL=C sort)" || return 1
+	[ "$entries" = "$(printf 'channel.json\nchannel.json.sig')" ] || return 1
+	mkdir -p "$3"
+	tar -xOzf "$recovery" channel.json >"$3/channel.json" || return 1
+	tar -xOzf "$recovery" channel.json.sig >"$3/channel.json.sig" || return 1
+	recovered_edge="$("$bud" content offered --channel edge "$3/channel.json" 2>/dev/null)" || return 1
+	recovered_stable="$("$bud" content offered --channel stable "$3/channel.json" 2>/dev/null)" || recovered_stable=
+	[ "$recovered_edge" = "$1" ] && [ "$recovered_stable" = "$2" ]
+}
+
+# publish_channel [force]: rebuilds channel.json from the tags, signs it,
+# persists the signed pair in one recovery archive, then uploads both assets.
 publish_channel() {
 	edge="$(newest content-)"
 	stable="$(newest content-stable-)"
 	[ -n "$edge" ] || fail "there's no content release yet, so there's no channel to publish"
-	if [ -n "$stable" ]; then
-		"$bud" content channel --edge "$edge" --stable "$stable" --out "$out"
-	else
-		"$bud" content channel --edge "$edge" --out "$out"
+
+	reused=0
+	if [ "${1:-}" != force ] && recover_channel "$edge" "$stable" "$tmp/recovered"; then
+		cp "$tmp/recovered/channel.json" "$out/channel.json"
+		cp "$tmp/recovered/channel.json.sig" "$out/channel.json.sig"
+		reused=1
 	fi
-	sh "$sign" "$out/channel.json" bud-channel
+
+	if [ "$reused" = 0 ]; then
+		if [ -n "$stable" ]; then
+			"$bud" content channel --edge "$edge" --stable "$stable" --out "$out"
+		else
+			"$bud" content channel --edge "$edge" --out "$out"
+		fi
+		sh "$sign" "$out/channel.json" bud-channel
+		"$bud" content offered --channel edge "$out/channel.json" >/dev/null
+		if [ -n "$stable" ]; then
+			"$bud" content offered --channel stable "$out/channel.json" >/dev/null
+		fi
+	fi
+	tar -czf "$tmp/channel-recovery.tar.gz" -C "$out" channel.json channel.json.sig
 
 	if git rev-parse -q --verify "refs/tags/$channel_tag" >/dev/null; then
-		gh release upload "$channel_tag" "$out/channel.json" "$out/channel.json.sig" --clobber
+		gh release upload "$channel_tag" "$tmp/channel-recovery.tar.gz" --clobber
 	else
 		gh release create "$channel_tag" --prerelease --target "$GITHUB_SHA" --title "Content channel" \
 			--notes "The newest content version on each channel, for bud sync. Rebuilt by every content run; never install from here." \
-			"$out/channel.json" "$out/channel.json.sig"
+			"$tmp/channel-recovery.tar.gz"
+		# gh made the tag on GitHub; keep the local tag in sync for this run.
+		git rev-parse -q --verify "refs/tags/$channel_tag" >/dev/null || git tag "$channel_tag" "$GITHUB_SHA"
 	fi
+	gh release upload "$channel_tag" "$out/channel.json" "$out/channel.json.sig" --clobber
 	echo "channel: edge $edge, stable ${stable:-nothing yet}"
 }
 
@@ -116,8 +152,14 @@ promote)
 	git rev-parse -q --verify "refs/tags/content-$version" >/dev/null ||
 		fail "there's no content-$version release to promote; pick one from the content-* releases"
 	# only what edge devices were actually offered, read from the signed channel
-	gh release download "$channel_tag" -p channel.json -p channel.json.sig -D "$tmp/published" ||
+	edge="$(newest content-)"
+	stable="$(newest content-stable-)"
+	if recover_channel "$edge" "$stable" "$tmp/published"; then
+		gh release upload "$channel_tag" "$tmp/recovery/channel-recovery.tar.gz" --clobber
+		gh release upload "$channel_tag" "$tmp/published/channel.json" "$tmp/published/channel.json.sig" --clobber
+	elif ! gh release download "$channel_tag" -p channel.json -p channel.json.sig -D "$tmp/published"; then
 		fail "can't download the published channel.json; run the workflow with resign first, then promote"
+	fi
 	offered="$("$bud" content offered --channel edge "$tmp/published/channel.json")" ||
 		fail "the published channel.json doesn't verify; run the workflow with resign first, then promote"
 	[ "$offered" = "$version" ] ||
@@ -137,7 +179,7 @@ resign)
 			"$out/$version/content.json" "$out/$version/content.json.sig" --clobber
 		echo "re-signed content-$version"
 	done
-	publish_channel
+	publish_channel force
 	;;
 *)
 	fail "usage: content-release.sh edge | promote <version> | resign"

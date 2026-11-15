@@ -1,0 +1,8 @@
+{
+  "name": "server",
+  "components": ["server", "harness"],
+  "channel": "stable",
+  "content": {
+    "env": ["base", "server"]
+  }
+}

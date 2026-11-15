@@ -1,0 +1,8 @@
+{
+  "name": "dev-machine",
+  "components": ["ide", "harness"],
+  "channel": "edge",
+  "content": {
+    "env": ["base", "coding"]
+  }
+}

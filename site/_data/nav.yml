@@ -13,6 +13,7 @@
     - { file: keys, title: Keys }
     - { file: config, title: Config }
     - { file: registry, title: Model registry }
+    - { file: profiles, title: Device profiles }
 - title: How-to
   pages:
     - { file: languages, title: Adding a language }

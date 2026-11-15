@@ -91,3 +91,7 @@ bud registry refresh --write content/env/registry.jsonc go  # and rewrite the dr
 ## The overlay
 
 Your overlay's `env/registry.jsonc` uses the same format, and every part of it is optional. An entry replaces the public entry with the same ID in full, so it restates every field, including `local`. An entry with a new ID is added. A provider that loses `local: true` this way also loses its P0 models, so the check fails safe. The merged registry has to pass the same check as the public one.
+
+## Adding a provider
+
+The `add-provider` skill in `content/skills/` walks through it: the facts to settle first (key, privacy, billing), the registry edit for a provider whose API bud already speaks, and the code for one it doesn't (Suite D71).

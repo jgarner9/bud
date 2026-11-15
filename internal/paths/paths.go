@@ -126,3 +126,25 @@ func SameDir(a, b string) bool {
 
 // Overlay is the clone of the private overlay repo (Suite D21, D59)
 func (p *Paths) Overlay() string { return filepath.Join(p.Data, "overlay") }
+
+// Content holds one dir per content version bud sync unpacked (Suite D60)
+func (p *Paths) Content() string { return filepath.Join(p.Data, "content") }
+
+// ContentCurrent is the link to the content version in use; switching it
+// is the update, switching it back the rollback
+func (p *Paths) ContentCurrent() string { return filepath.Join(p.Content(), "current") }
+
+// Active is the link to the set of skill and plugin dirs a device takes,
+// each a link into a content version or the overlay
+func (p *Paths) Active() string { return filepath.Join(p.Data, "active") }
+
+// SyncLedger records what bud sync wrote: versions, the overlay commit and
+// each file's hash and layer, for bud doctor and the next sync
+func (p *Paths) SyncLedger() string { return filepath.Join(p.State, "sync.json") }
+
+// OpenCodeConfig is OpenCode's own config dir, ~/.config/opencode
+func (p *Paths) OpenCodeConfig() string { return filepath.Join(filepath.Dir(p.Config), "opencode") }
+
+// OpenCodeEnv is the env file op run fills OpenCode's keys from: variable
+// names and op:// references, never the values (Suite D7)
+func (p *Paths) OpenCodeEnv() string { return filepath.Join(p.State, "opencode.env") }

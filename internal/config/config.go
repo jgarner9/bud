@@ -36,6 +36,23 @@ type Settings struct {
 	UI           UI        `json:"ui"`
 	AI           AI        `json:"ai"`
 	Tools        Disabled  `json:"tools"` // bud tools enable/disable (D54)
+	Overlay      Overlay   `json:"overlay"`
+	Content      Content   `json:"content"`
+}
+
+// Overlay is the private overlay repo bud sync layers over public content
+// (Suite D21, D59)
+type Overlay struct {
+	// its git URL, such as git@github.com:you/bud-overlay.git; empty means
+	// no overlay. BUD_OVERLAY, when set, is used instead
+	Repo string `json:"repo"`
+}
+
+// Content is where bud sync gets content releases (Suite D60)
+type Content struct {
+	// a mirror's base URL, laid out like GitHub's releases/download (phase
+	// 6); empty fetches from jgarner9/bud's GitHub releases
+	Mirror string `json:"mirror"`
 }
 
 // Disabled lists what's turned off on this machine

@@ -2,6 +2,7 @@ package content
 
 import (
 	"archive/tar"
+	"bufio"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -46,6 +47,10 @@ func Pack(src fs.FS, version string, w io.Writer) (*Manifest, error) {
 		}
 		if !d.Type().IsRegular() {
 			return fmt.Errorf("content/%s: only regular files ship, not links or devices", p)
+		}
+		if !safePath(p) {
+			// Unpack refuses it, so a bundle with it could be signed but never installed
+			return fmt.Errorf("content/%s: devices can't install this path (no backslashes); rename it", p)
 		}
 		b, err := fs.ReadFile(src, p)
 		if err != nil {
@@ -133,13 +138,21 @@ func Unpack(r io.Reader, m *Manifest, dst string) (err error) {
 		if !safePath(f.Path) {
 			return fmt.Errorf("content.json lists %q, which isn't a plain relative path", f.Path)
 		}
+		if _, dup := want[f.Path]; dup {
+			return fmt.Errorf("content.json lists %q twice", f.Path)
+		}
 		want[f.Path] = f
 	}
 
-	gz, err := gzip.NewReader(r)
+	// gzip reads a ByteReader without buffering past its member, so br shows
+	// whether anything follows it
+	br := bufio.NewReader(r)
+	gz, err := gzip.NewReader(br)
 	if err != nil {
 		return fmt.Errorf("read the bundle: %w", err)
 	}
+	// one gzip member only; anything after it is refused below
+	gz.Multistream(false)
 	tr := tar.NewReader(gz)
 	got := map[string]bool{}
 	for {
@@ -168,6 +181,18 @@ func Unpack(r io.Reader, m *Manifest, dst string) (err error) {
 			return err
 		}
 	}
+	// tar stops at its end blocks, before gzip checks its trailer (CRC and
+	// length), so read what's left; a little zero padding is normal, more is not
+	rest, err := io.Copy(io.Discard, io.LimitReader(gz, maxTrailing+1))
+	if err != nil {
+		return fmt.Errorf("read the bundle: %w", err)
+	}
+	if rest > maxTrailing {
+		return errors.New("read the bundle: data after the archive's end")
+	}
+	if _, err := br.ReadByte(); !errors.Is(err, io.EOF) {
+		return errors.New("read the bundle: data after the archive's end")
+	}
 	for _, f := range m.Files {
 		if !got[f.Path] {
 			return fmt.Errorf("%s: listed in content.json but missing from the bundle", f.Path)
@@ -184,6 +209,10 @@ func Unpack(r io.Reader, m *Manifest, dst string) (err error) {
 
 	return os.Rename(tmp, dst)
 }
+
+// maxTrailing is how much padding may follow tar's end blocks inside the
+// gzip stream; tar pads to its 10 KiB record size at most
+const maxTrailing = 10 << 10
 
 func writeChecked(root string, f File, r io.Reader) error {
 	full := filepath.Join(root, filepath.FromSlash(f.Path))

@@ -111,6 +111,10 @@ func TestPackRefusesWhatContentDoesntHold(t *testing.T) {
 	if _, err := Pack(link, "2026.11.15.1", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "regular files") {
 		t.Fatalf("got %v", err)
 	}
+	slash := fstest.MapFS{`skills/learn/notes\draft.md`: {Data: []byte("x")}}
+	if _, err := Pack(slash, "2026.11.15.1", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "backslashes") {
+		t.Fatalf("a path Unpack refuses should fail at pack time, got %v", err)
+	}
 	if _, err := Pack(tree, "1.2.3", &bytes.Buffer{}); err == nil {
 		t.Fatal("want an error for a code-style version")
 	}
@@ -219,6 +223,11 @@ func rawBundle(t *testing.T, entries ...*tar.Header) []byte {
 	return buf.Bytes()
 }
 
+// corrupt changes a copy of b, leaving b as it is
+func corrupt(b []byte, change func([]byte) []byte) []byte {
+	return change(append([]byte(nil), b...))
+}
+
 func TestUnpackRefusesAnythingTheManifestDoesntVouchFor(t *testing.T) {
 	m, bundle := pack(t)
 	// "x" hashed, so a one-byte "x" entry matches its manifest line
@@ -240,6 +249,10 @@ func TestUnpackRefusesAnythingTheManifestDoesntVouchFor(t *testing.T) {
 		"a duplicate":        {one, rawBundle(t, &tar.Header{Name: "skills/a.md", Size: 1}, &tar.Header{Name: "skills/a.md", Size: 1}), "twice"},
 		"a manifest escape":  {&Manifest{Version: "2026.11.15.1", Files: []File{{Path: "../../x"}}}, rawBundle(t), "isn't a plain relative path"},
 		"the manifest's own": {&Manifest{Version: "2026.11.15.1", Files: []File{{Path: ManifestName}}}, rawBundle(t), "isn't a plain relative path"},
+		"a listed twice":     {&Manifest{Version: "2026.11.15.1", Files: []File{xFile, {Path: xFile.Path, Size: 2, SHA256: xFile.SHA256}}}, rawBundle(t, &tar.Header{Name: "skills/a.md", Size: 1}), "twice"},
+		"a corrupt trailer":  {m, corrupt(bundle, func(b []byte) []byte { b[len(b)-8] ^= 0xff; return b }), "read the bundle"},
+		"a cut-off trailer":  {m, corrupt(bundle, func(b []byte) []byte { return b[:len(b)-4] }), "read the bundle"},
+		"a second member":    {m, append(append([]byte(nil), bundle...), bundle...), "data after"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if name == "a changed file" {

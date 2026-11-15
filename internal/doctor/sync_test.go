@@ -132,13 +132,16 @@ func TestSyncChecksPassRightAfterASync(t *testing.T) {
 	t.Cleanup(func() { netClient = orig })
 
 	results := checkSync(p, device("dev-machine"), false)
-	if got := strings.Join(names(results), ","); got != "device profile,sync ledger,registry,synced config" {
+	if got := strings.Join(names(results), ","); got != "device profile,sync ledger,registry,content layers,synced config" {
 		t.Fatalf("offline checks = %s", got)
 	}
 	for _, r := range results {
 		if r.Status != OK {
 			t.Errorf("%s = %v: %s", r.Name, r.Status, r.Detail)
 		}
+	}
+	if r := byName(t, results, "content layers"); r.Detail != "no overlay set, so public content only; public: nothing; rendered from both: opencode.jsonc" {
+		t.Errorf("layers detail = %q", r.Detail)
 	}
 	if r := byName(t, results, "sync ledger"); r.Detail != "content "+synced+", 1 file as bud sync wrote them" {
 		t.Errorf("ledger detail = %q", r.Detail)
@@ -156,6 +159,40 @@ func TestSyncChecksPassRightAfterASync(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestContentLayersNameEachItemsLayer(t *testing.T) {
+	p, _ := syncedDevice(t)
+	dir := filepath.Join(p.Content(), synced)
+	writeFile(t, filepath.Join(dir, "AGENTS.md"), []byte("public\n"))
+	writeFile(t, filepath.Join(dir, "skills", "learn", "SKILL.md"), []byte("public\n"))
+	writeFile(t, filepath.Join(dir, "skills", "plan", "SKILL.md"), []byte("public\n"))
+	writeFile(t, filepath.Join(dir, "env", "base.jsonc"), []byte("{}\n"))
+	writeFile(t, filepath.Join(dir, "env", "server.jsonc"), []byte("{}\n")) // not selected by dev-machine
+	writeFile(t, filepath.Join(p.Overlay(), "overlay.json"), []byte(`{"format": 1}`))
+	writeFile(t, filepath.Join(p.Overlay(), "content", "AGENTS.md"), []byte("persona\n"))
+	writeFile(t, filepath.Join(p.Overlay(), "content", "skills", "learn", "SKILL.md"), []byte("mine\n"))
+	writeFile(t, filepath.Join(p.Overlay(), "env", "registry.jsonc"), []byte(`{"version": 1}`))
+	writeFile(t, filepath.Join(p.Overlay(), "env", "coding.jsonc"), []byte("{}\n"))
+	led, err := syncer.LoadLedger(p.SyncLedger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	led.Overlay = &syncer.OverlayRef{Repo: "git@example.invalid:me/overlay.git", Commit: "0123456789abcdef"}
+	prof := &profile.Profile{Name: "dev-machine", Components: []string{"harness"}, Channel: "edge", Content: profile.Content{Env: []string{"base", "coding"}}}
+
+	r := checkLayers(dir, led.Overlay.Repo, p.Overlay(), prof, led)
+	want := "overlay 0123456: env/coding, instructions/AGENTS, skills/learn (replaces public); " +
+		"public: env/base, instructions/AGENTS, skills/plan; rendered from both: opencode.jsonc"
+	if r.Status != OK || r.Detail != want {
+		t.Errorf("layers = %v: %q\nwant %q", r.Status, r.Detail, want)
+	}
+
+	// set but never cloned: public content only, and a sync fixes it
+	r = checkLayers(dir, led.Overlay.Repo, "", prof, led)
+	if r.Status != Warn || !strings.HasPrefix(r.Detail, "the overlay git@example.invalid:me/overlay.git isn't cloned yet") || r.Fix == "" {
+		t.Errorf("uncloned = %v: %q fix %q", r.Status, r.Detail, r.Fix)
+	}
+}
 
 func TestDeviceProfileFailsWhenItCantBeFound(t *testing.T) {
 	p, _ := syncedDevice(t)

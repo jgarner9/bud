@@ -21,7 +21,7 @@ content/plugins/<name>/  personal plugins
 - **Skills, plugins, agents and commands** are replaced by ID. An overlay skill called `learn` replaces the public `learn` in full, so none of the public skill's files are left beside yours.
 - **Env fragments and `AGENTS.md`** come from both layers, public first and the overlay last. They're merged when a runtime's config is rendered, so the overlay's settings win there. `env/registry.jsonc` merges by ID, as [the model registry](registry.md) describes.
 - **Profiles** in the overlay's `profiles/` replace the public examples with the same name.
-- **Every item remembers which layer it came from**, so `bud doctor` can tell you a skill is your override.
+- **Every item remembers which layer it came from**, so `bud doctor` lists what you take from each layer, marks each overlay skill, agent, command or plugin that replaces a public one, and names the files rendered from both.
 
 ## How it's fetched
 

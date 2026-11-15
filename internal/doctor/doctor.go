@@ -92,9 +92,10 @@ type Options struct {
 	// Quick skips the slow ones (startup timing runs nvim several times), for
 	// the dashboard, which runs doctor in the background every time it opens
 	Quick bool
-	// Net adds the checks that use the network: whether the device's
+	// Net adds the sync checks that use the network: whether the device's
 	// channel offers newer content, and whether the registry's model
-	// endpoints answer. Without it doctor stays offline
+	// endpoints answer. The ai backend check's gateway probe follows Quick,
+	// as it did before
 	Net bool
 }
 

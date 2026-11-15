@@ -133,3 +133,35 @@ func TestOverlayRepoPrefersTheEnvironment(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestCheckFailsOnADamagedLinkSet(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", tree(t))
+	o := options(t, s)
+	run(t, o)
+	link := filepath.Join(o.Paths.Active(), "skills", "learn")
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Check(o); err == nil || !strings.Contains(err.Error(), "are damaged") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestTryLockIsBusyWhileASyncHoldsTheLock(t *testing.T) {
+	s := newServer(t)
+	o := options(t, s)
+	unlock, err := lock(o.Paths.SyncLedger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TryLock(o.Paths); err != ErrBusy {
+		t.Fatalf("err = %v, want ErrBusy", err)
+	}
+	unlock()
+	unlock, err = TryLock(o.Paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+}

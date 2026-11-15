@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,7 +25,7 @@ import (
 // The drift checks (build plan task 1.9, Suite D46): what bud sync left on
 // this device against its ledger, what this bud would render now, and with
 // --net whether the channel has moved on and the registry's endpoints
-// answer. A device with no profile set has never been synced, so it gets
+// answer (--net gates only these; the ai backend check has its own rules). A device with no profile set has never been synced, so it gets
 // none of them
 
 // swappable in tests
@@ -41,6 +42,17 @@ func checkSync(p *paths.Paths, cfg config.Settings, net bool) []Result {
 	if cfg.Device == "" {
 		return nil
 	}
+	// a sync switches the links before saving the ledger, so read only
+	// while none runs, or a healthy sync could look broken and roll back
+	// a bud update
+	unlock, err := syncer.TryLock(p)
+	if errors.Is(err, syncer.ErrBusy) {
+		return []Result{{Name: "sync", Status: Warn, Detail: "a bud sync is running, so its checks were skipped", Fix: "bud doctor again once it's done"}}
+	}
+	if err != nil {
+		return []Result{{Name: "sync", Status: Warn, Detail: "couldn't take the sync lock, so its checks were skipped: " + err.Error()}}
+	}
+	defer unlock()
 	repo := syncer.OverlayRepo(cfg.Overlay.Repo)
 	overlayDir := syncer.OverlayOnDisk(p, repo)
 
@@ -312,12 +324,13 @@ func checkEndpoints(ctx context.Context, reg *registry.Registry) Result {
 
 // probe GETs the provider's /models and returns what's wrong, or empty
 func probe(ctx context.Context, id string, prov registry.Provider, models []string) string {
-	u := strings.TrimSuffix(prov.Endpoint, "/") + "/models"
-	host := prov.Endpoint
-	if pu, err := url.Parse(prov.Endpoint); err == nil && pu.Host != "" {
-		host = pu.Host
+	base, err := url.Parse(prov.Endpoint)
+	if err != nil {
+		return fmt.Sprintf("%s: %v", id, err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	host := base.Host
+	// onto the path, keeping any query
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base.JoinPath("models").String(), nil)
 	if err != nil {
 		return fmt.Sprintf("%s: %v", id, err)
 	}
@@ -336,15 +349,15 @@ func probe(ctx context.Context, id string, prov registry.Provider, models []stri
 	}
 
 	var list struct {
-		Data []struct {
+		Data *[]struct {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&list); err != nil || len(list.Data) == 0 {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&list); err != nil || list.Data == nil {
 		return "" // up, but not a list bud can read
 	}
 	listed := map[string]bool{}
-	for _, m := range list.Data {
+	for _, m := range *list.Data {
 		listed[m.ID] = true
 	}
 	var missing []string

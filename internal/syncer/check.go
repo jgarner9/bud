@@ -93,7 +93,9 @@ func LoadRegistry(dir, overlayDir string) (*registry.Registry, error) {
 // were synced again now, with the overlay as it is on disk: nothing is
 // fetched and nothing changes. A change it reports means the files on disk
 // aren't what this bud renders, say after an overlay pull or a bud update
-// changed the adapter. o.DryRun is ignored, since Check never writes
+// changed the adapter; damaged skill and plugin links are an error. The
+// caller holds the lock (TryLock). o.DryRun is ignored, since Check never
+// writes
 func Check(o Options) (*Report, error) {
 	led, err := LoadLedger(o.Paths.SyncLedger())
 	if err != nil {
@@ -105,7 +107,7 @@ func Check(o Options) (*Report, error) {
 	if o.Device == "" {
 		return nil, ErrNoDevice
 	}
-	o.DryRun = true
+	o.DryRun, o.verifyLinks = true, true
 	prof, _, err := profile.Find(o.Device, o.Profiles()...)
 	if err != nil {
 		return nil, err

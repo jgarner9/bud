@@ -41,6 +41,9 @@ type Options struct {
 	// fetched, and a new bundle is checked in a temp dir and thrown away
 	DryRun bool
 	Logf   func(format string, args ...any)
+	// verifyLinks makes a dry run also check the link set active points
+	// at, which Check does and a sync doesn't need to
+	verifyLinks bool
 }
 
 func (o *Options) logf(format string, args ...any) {
@@ -341,6 +344,12 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 		rep.Changes = append(rep.Changes, s.Change)
 	}
 	if o.DryRun {
+		if o.verifyLinks && readLink(p.Active()) == activeTarget {
+			dir := filepath.Join(filepath.Dir(p.Active()), activeTarget)
+			if err := links.validate(dir); err != nil {
+				return fmt.Errorf("the skill and plugin links in %s are damaged (%w); remove %s and run bud sync to build them again", dir, err, dir)
+			}
+		}
 		return nil
 	}
 

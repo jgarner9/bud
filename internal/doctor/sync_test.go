@@ -287,7 +287,11 @@ func TestModelEndpoints(t *testing.T) {
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
-		if r.URL.Path != "/v1/models" {
+		if r.URL.Path == "/empty/models" {
+			w.Write([]byte(`{"data": []}`))
+			return
+		}
+		if r.URL.Path != "/v1/models" || r.URL.Query().Get("v") != "1" {
 			http.NotFound(w, r)
 			return
 		}
@@ -312,8 +316,9 @@ func TestModelEndpoints(t *testing.T) {
 		status   Status
 		detail   string
 	}{
-		{"listed", srv.URL + "/v1", "glm-5.3", OK, "1 provider answered"},
-		{"not listed", srv.URL + "/v1/", "kimi-k3", Warn, "go doesn't list kimi-k3"},
+		{"listed", srv.URL + "/v1?v=1", "glm-5.3", OK, "1 provider answered"},
+		{"not listed", srv.URL + "/v1/?v=1", "kimi-k3", Warn, "go doesn't list kimi-k3"},
+		{"empty list", srv.URL + "/empty", "glm-5.3", Warn, "go doesn't list glm-5.3"},
 		{"down", downURL + "/v1", "glm-5.3", Warn, "go (" + strings.TrimPrefix(downURL, "http://") + ") didn't answer"},
 	}
 	t.Setenv("TEST_GO_KEY", "sekrit")
@@ -337,5 +342,20 @@ func TestModelEndpoints(t *testing.T) {
 	t.Cleanup(locked.Close)
 	if r := checkEndpoints(context.Background(), reg(locked.URL, "anything")); r.Status != OK {
 		t.Errorf("a 401 = %v %q, want ok", r.Status, r.Detail)
+	}
+}
+
+func TestSyncChecksWaitOutARunningSync(t *testing.T) {
+	p, _ := syncedDevice(t)
+	withSyncCheck(t, &syncer.Report{}, nil)
+	unlock, err := syncer.TryLock(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	// another holder of the lock, as a running sync is: flock is per open file
+	results := checkSync(p, device("dev-machine"), false)
+	if len(results) != 1 || results[0].Status != Warn || !strings.Contains(results[0].Detail, "a bud sync is running") {
+		t.Fatalf("got %+v", results)
 	}
 }

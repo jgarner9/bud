@@ -29,14 +29,21 @@ cd "$root"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/bud-leak.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-# every tracked text file, minus this script and its test, which name the shapes
-git ls-files -z | xargs -0 grep -IlE '.' 2>/dev/null |
-	grep -vxE 'scripts/leak-check\.sh|scripts/leak_check_test\.sh' >"$tmp/files" || true
+# every tracked text file; -- keeps a file named like an option (-q) a file
+git ls-files -z | xargs -0 grep -IlE -- '.' 2>/dev/null >"$tmp/all" || true
+# the shape scans skip this script and its test, which name the shapes; the
+# personal patterns still cover them
+grep -vxE 'scripts/leak-check\.sh|scripts/leak_check_test\.sh' "$tmp/all" >"$tmp/files" || true
+
+# with personal patterns set (CI), no match is printed: a shape match can
+# overlap a personal one, and the log is public
+hide_all="${BUD_LEAK_PATTERNS:+hide}"
 
 # scan prints "file:line: what: match" for each match of $1 not excused by
-# $2; with $4 set the match itself is left out of the report
+# $2, in the files listed in $5 (default the shape list); with $4 set the
+# match itself is left out of the report
 scan() {
-	pattern="$1" allowed="$2" what="$3" hide="${4:-}"
+	pattern="$1" allowed="$2" what="$3" hide="${4:-$hide_all}" list="${5:-$tmp/files}"
 	while IFS= read -r f; do
 		grep -noE -- "$pattern" "$f" 2>/dev/null | while IFS= read -r hit; do
 			line="${hit%%:*}"
@@ -50,8 +57,24 @@ scan() {
 			if [ -n "$hide" ]; then match='(not shown)'; fi
 			printf '%s:%s: %s: %s\n' "$f" "$line" "$what" "$match"
 		done
-	done <"$tmp/files"
+	done <"$list"
 }
+
+if [ -n "${BUD_LEAK_PATTERNS:-}" ]; then
+	printf '%s\n' "$BUD_LEAK_PATTERNS" | grep -v '^[[:space:]]*$' >"$tmp/patterns" || true
+	# a pattern grep can't read would silently check nothing, so stop; the
+	# pattern stays out of the message, since it's personal
+	n=0
+	while IFS= read -r p; do
+		n=$((n + 1))
+		status=0
+		printf '' | grep -E -- "$p" >/dev/null 2>&1 || status=$?
+		if [ "$status" -gt 1 ]; then
+			echo "leak-check: pattern $n of BUD_LEAK_PATTERNS isn't a valid extended regex; fix it in the secret" >&2
+			exit 2
+		fi
+	done <"$tmp/patterns"
+fi
 
 {
 	scan '[A-Za-z0-9.-]*\.ts\.net' "^\\.ts\\.net\$|(^|\\.)($placeholder_tailnets)\\.ts\\.net\$" 'a Tailscale name'
@@ -59,10 +82,9 @@ scan() {
 	scan '/(Users|home)/[A-Za-z0-9._-]+' "^/(Users|home)/($placeholder_users)\$" 'a home directory'
 
 	if [ -n "${BUD_LEAK_PATTERNS:-}" ]; then
-		printf '%s\n' "$BUD_LEAK_PATTERNS" | grep -v '^[[:space:]]*$' >"$tmp/patterns" || true
 		while IFS= read -r p; do
 			# the pattern is personal, so the report shows only where it matched
-			scan "$p" '' 'one of your BUD_LEAK_PATTERNS' hide
+			scan "$p" '' 'one of your BUD_LEAK_PATTERNS' hide "$tmp/all"
 		done <"$tmp/patterns"
 	fi
 } >"$tmp/hits"

@@ -53,7 +53,24 @@ check "a personal pattern" fail 'ssh mybox2 for the logs'
 check "no personal pattern" pass 'ssh the server for the logs'
 check "the report hides the pattern's match" fail 'ssh garner-mbp'
 if grep -q 'garner-mbp' "$tmp/out"; then fail "the report printed a personal match"; fi
+check "a shape match is hidden too" fail 'reach mybox7.tail4a2b9.ts.net'
+if grep -q 'mybox7' "$tmp/out"; then fail "the report printed a shape match that a personal pattern covers"; fi
+
+check "the scripts get the personal patterns" pass 'nothing here'
+echo '# ssh mybox3' >>"$tmp/repo/scripts/leak-check.sh"
+git -C "$tmp/repo" add -A
+(cd "$tmp/repo" && sh scripts/leak-check.sh) >/dev/null 2>&1 && fail "a personal pattern in leak-check.sh itself passed"
+
+BUD_LEAK_PATTERNS='good
+['
+check "an invalid pattern fails" fail 'nothing here'
+if grep -q '\[' "$tmp/out"; then fail "the invalid pattern was printed"; fi
 unset BUD_LEAK_PATTERNS
+
+check "a file named like a grep option" fail 'reach it at home.tail4a2b9.ts.net'
+echo 'x' >"$tmp/repo/-q"
+git -C "$tmp/repo" add -- -q
+(cd "$tmp/repo" && sh scripts/leak-check.sh) >/dev/null 2>&1 && fail "a tracked file named -q hid a real tailnet"
 
 if [ "$failed" -ne 0 ]; then exit 1; fi
 echo "leak_check_test: ok"

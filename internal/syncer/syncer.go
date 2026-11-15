@@ -256,6 +256,11 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 		return path
 	}
 
+	// a version dir from a newer bud (before a downgrade, say) can need a
+	// format this one can't read; a download was checked already
+	if err := content.CheckSaved(dir); err != nil {
+		return err
+	}
 	items, err := overlay.Layer(dir, overlayDir)
 	if err != nil {
 		return err

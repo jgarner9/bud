@@ -9,6 +9,9 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/pem"
+	"fmt"
+	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -339,5 +342,58 @@ func TestANewerContentFormatIsRefused(t *testing.T) {
 		if !tc.ok && (err == nil || !strings.Contains(err.Error(), "run bud update")) {
 			t.Errorf("format %d: %v, want a refusal naming bud update", tc.format, err)
 		}
+	}
+}
+
+func TestTheFormatComesFromTheTree(t *testing.T) {
+	src := fstest.MapFS{"AGENTS.md": {Data: []byte("# global\n")}}
+	for _, tc := range []struct {
+		file string
+		err  string
+	}{
+		{"", ""},
+		{"1\n", ""},
+		{fmt.Sprintf("%d\n", Format+1), "raise content.Format"},
+		{"two\n", "isn't a format number"},
+		{"0\n", "isn't a format number"},
+	} {
+		tree := maps.Clone(src)
+		if tc.file != "" {
+			tree[FormatName] = &fstest.MapFile{Data: []byte(tc.file)}
+		}
+		m, err := Pack(tree, "2026.11.15.1", io.Discard)
+		if tc.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tc.err) {
+				t.Errorf("FORMAT %q: %v, want %q", tc.file, err, tc.err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("FORMAT %q: %v", tc.file, err)
+			continue
+		}
+		if m.Format != 0 || len(m.Files) != 1 {
+			t.Errorf("FORMAT %q: format %d, files %v; want no format field and FORMAT left out", tc.file, m.Format, m.Files)
+		}
+	}
+}
+
+func TestSavedContentIsHeldToTheFormat(t *testing.T) {
+	dir := t.TempDir()
+	if err := CheckSaved(dir); err == nil || !strings.Contains(err.Error(), "downloads it again") {
+		t.Fatalf("no content.json: %v", err)
+	}
+	write := func(s string) {
+		if err := os.WriteFile(filepath.Join(dir, ManifestName), []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(`{"version": "2026.11.15.1", "files": []}`)
+	if err := CheckSaved(dir); err != nil {
+		t.Fatalf("format 1: %v", err)
+	}
+	write(fmt.Sprintf(`{"format": %d, "version": "2026.11.15.1", "files": [], "later": true}`, Format+1))
+	if err := CheckSaved(dir); err == nil || !strings.Contains(err.Error(), "run bud update") {
+		t.Fatalf("a newer format: %v", err)
 	}
 }

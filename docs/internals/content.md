@@ -8,7 +8,7 @@ Three release assets plus two signatures:
 
 | File | What it is |
 | --- | --- |
-| `content-<version>.tar.gz` | The files of `content/`, at their paths under it. `README.md` is left out. Anything at the top level other than `AGENTS.md`, `skills/`, `agents/`, `commands/`, `plugins/` or `env/` fails the pack, so a stray file gets noticed instead of shipped. |
+| `content-<version>.tar.gz` | The files of `content/`, at their paths under it. `README.md` and `FORMAT` are left out. Anything at the top level other than `AGENTS.md`, `skills/`, `agents/`, `commands/`, `plugins/` or `env/` fails the pack, so a stray file gets noticed instead of shipped. |
 | `content.json` and `content.json.sig` | The manifest: the version, and each file's path, kind, size and sha256, sorted by path. It's signed under the `bud-content` namespace. |
 | `channel.json` and `channel.json.sig` | The newest content and code version on each channel (`stable`, `edge`). It's signed under `bud-channel`. |
 | `channel-recovery.tar.gz` | The exact signed channel pair, kept as one release asset so a retry can restore either conventional channel asset after an interrupted upload. |
@@ -28,9 +28,13 @@ One key signs everything Bud ships: the release key, `updater.ReleaseKeys`. The 
 
 ## The content format
 
-`content.Format` is the newest content format this bud reads, and `Pack` writes it into `content.json` as `format`. Bump it in the same PR as content that needs new code to read it, such as a new field in `env/registry.jsonc` that an older bud's strict decoder would reject. A device whose bud is older then stops at the manifest with "run bud update" and keeps the content it has, instead of failing partway through on the file it can't parse.
+`content.Format` is the newest content format this bud reads. The format a bundle needs comes from the tree: `content/FORMAT` holds one whole number, and without it the tree is format 1. `Pack` writes that number into `content.json` as `format`, refuses one above its own `content.Format`, and never ships the file. When content starts using something an older bud can't read, such as a new field in `env/registry.jsonc` that an older bud's strict decoder would reject, raise `content.Format` and write the new number to `content/FORMAT` in the same PR. A device whose bud is older then stops at the manifest with "run bud update" and keeps the content it has, instead of failing partway through on the file it can't parse.
 
-Format 1 is written as no field at all (`omitempty`, and `Pack` sets it only above 1), so manifests stay byte-identical, and readable by buds built before the field existed, until the first bump. Those older buds parse strictly, so once the format is 2 they refuse the manifest too, with an unknown-field error rather than the update message. Either way nothing changes on the device.
+Because the format is read from the tree and not from the packing bud, `content-release.sh resign`, which re-packs old releases from their tags with the current bud, gives each one the format it was first published with.
+
+The check also covers content already on disk. `syncer.apply` runs `content.CheckSaved` on the version dir before using it, so a version a newer bud downloaded, and that a sync or `bud sync --rollback` would reuse after a downgrade, is refused the same way.
+
+Format 1 is written as no field at all, so manifests stay byte-identical, and readable by buds built before the field existed, until the first bump. Those older buds parse strictly, so once the format is 2 they refuse the manifest too, with an unknown-field error rather than the update message. Either way nothing changes on the device.
 
 ## Versions
 

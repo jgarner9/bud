@@ -58,26 +58,26 @@ nl='
 '
 
 repo 0.18.1 v0.18.0 v0.18.0-rc.1
-plan "a newer VERSION" "$main" "new=true${nl}tag=v0.18.1"
+plan "a newer VERSION" "$main" "new=true${nl}previous=v0.18.0${nl}tag=v0.18.1"
 
 repo 0.18.1 v0.18.0 v0.18.1
 echo v0.18.1 >"$tmp/released"
 plan "an already released VERSION" "$main" "skip=true"
 
 repo 0.18.1 v0.18.0 v0.18.1
-plan "a tag without a release" "$main" "tag=v0.18.1"
+plan "a tag without a release" "$main" "previous=v0.18.0${nl}tag=v0.18.1"
 
 repo 0.17.2 v0.18.0
 plan "an older VERSION" "$main" fail
 
 repo 0.10.0 v0.9.0
-plan "10 is newer than 9" "$main" "new=true${nl}tag=v0.10.0"
+plan "10 is newer than 9" "$main" "new=true${nl}previous=v0.9.0${nl}tag=v0.10.0"
 
 repo 0.1.0
 plan "the first release" "$main" "new=true${nl}tag=v0.1.0"
 
 repo "  0.18.1 ${nl}" v0.18.0
-plan "whitespace around VERSION" "$main" "new=true${nl}tag=v0.18.1"
+plan "whitespace around VERSION" "$main" "new=true${nl}previous=v0.18.0${nl}tag=v0.18.1"
 
 repo v0.18.1
 plan "a v in VERSION" "$main" fail
@@ -88,6 +88,9 @@ plan "a branch other than main" refs/heads/feature fail
 repo 0.18.1 v0.18.1
 plan "a pushed tag matching VERSION" refs/tags/v0.18.1 "tag=v0.18.1"
 plan "a pushed tag not matching VERSION" refs/tags/v0.18.2 fail
+
+repo 0.18.1 v0.17.0 v0.18.0 v0.18.0-rc.1 content-2026.11.15.1 content-channel nightly
+plan "content and nightly tags never count as previous" "$main" "new=true${nl}previous=v0.18.0${nl}tag=v0.18.1"
 
 [ "$failed" = 0 ] && echo "release_plan_test: ok"
 exit "$failed"

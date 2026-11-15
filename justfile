@@ -67,6 +67,10 @@ install-test:
 leak-check:
   sh scripts/leak-check.sh
 
+# content-release.sh's releases against throwaway repos, with fake gh, bud and signer
+content-release-test:
+  sh scripts/content_release_test.sh
+
 # leak-check.sh's decisions against throwaway repos
 leak-test:
   sh scripts/leak_check_test.sh
@@ -82,7 +86,7 @@ lang-check *langs:
   sh scripts/lang-check.sh "$@"
 
 # everything CI checks (lint + tests + smoke)
-check: lint test lua-test install-test rotate-test release-plan-test leak-test leak-check site-test smoke
+check: lint test lua-test install-test rotate-test release-plan-test content-release-test leak-test leak-check site-test smoke
 
 # fail with an install hint when a tool isn't on PATH
 [private]

@@ -4,6 +4,10 @@
 #   tag=vX.Y.Z  the release to build
 #   new=true    the tag doesn't exist yet: test, then push it
 #   skip=true   VERSION's release already exists; nothing to do
+#   previous=vA.B.C  the newest stable tag older than it, for the changelog;
+#               left out for the first release. GoReleaser would otherwise
+#               take whatever tag git describe finds, and content releases
+#               (content-YYYY.MM.DD.N, content-channel) tag main too
 # Fails when VERSION isn't X.Y.Z, when a pushed tag isn't VERSION's, when a
 # run isn't on main, or when VERSION is older than the newest release.
 # Needs: GITHUB_REF, GITHUB_REF_TYPE, GITHUB_REF_NAME, GITHUB_OUTPUT, and gh
@@ -42,6 +46,9 @@ else
 	fi
 	out new=true
 fi
+
+previous="$( (git tag -l 'v*' | grep -v -- - | grep -vx "$tag" || true; echo "$tag") | sort -V | grep -B1 -x "$tag" | grep -vx "$tag" || true)"
+[ -z "$previous" ] || out "previous=$previous"
 
 echo "releasing $tag"
 out "tag=$tag"

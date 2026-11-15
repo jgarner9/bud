@@ -28,6 +28,7 @@ jobs:
       - run: shellcheck install.sh scripts/*.sh
       - run: sh scripts/install-test.sh
       - run: sh scripts/release_plan_test.sh
+      - run: sh scripts/content_release_test.sh
 
   # Suite D21, D59: nothing personal in this public repo. The shape checks
   # always run; your own strings come from the BUD_LEAK_PATTERNS secret (one

@@ -104,5 +104,17 @@ else
 	echo "install-test: sign-release.sh should sign with the pinned key and refuse another" >&2
 fi
 
+# sign-release.sh with a namespace: a content signature verifies only as content
+printf 'bud-release %s\n' "$pub" >"$tmp/allowed"
+if BUD_RELEASE_KEY="$(cat "$tmp/key")" sh "$tmp/repo/scripts/sign-release.sh" "$tmp/sums" bud-content >/dev/null &&
+	ssh-keygen -Y verify -f "$tmp/allowed" -I bud-release -n bud-content -s "$tmp/sums.sig" <"$tmp/sums" >/dev/null 2>&1 &&
+	! ssh-keygen -Y verify -f "$tmp/allowed" -I bud-release -n bud-release -s "$tmp/sums.sig" <"$tmp/sums" >/dev/null 2>&1 &&
+	! BUD_RELEASE_KEY="$(cat "$tmp/key")" sh "$tmp/repo/scripts/sign-release.sh" "$tmp/sums" bud-other 2>/dev/null; then
+	pass=$((pass + 1))
+else
+	fail=$((fail + 1))
+	echo "install-test: sign-release.sh should sign under the namespace it's given, and only a known one" >&2
+fi
+
 echo "install-test: $pass passed, $fail failed"
 [ "$fail" = 0 ]

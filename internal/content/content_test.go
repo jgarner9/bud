@@ -223,6 +223,23 @@ func rawBundle(t *testing.T, entries ...*tar.Header) []byte {
 	return buf.Bytes()
 }
 
+// appendedArchive is one gzip member holding a valid one-file tar, then a
+// second tar right after its end blocks, small enough to pass as padding
+func appendedArchive(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	for _, name := range []string{"skills/a.md", "skills/evil.md"} {
+		tw := tar.NewWriter(gz)
+		tw.WriteHeader(&tar.Header{Name: name, Size: 1, Typeflag: tar.TypeReg})
+		tw.Write([]byte("x"))
+		tw.Close()
+	}
+	gz.Close()
+
+	return buf.Bytes()
+}
+
 // corrupt changes a copy of b, leaving b as it is
 func corrupt(b []byte, change func([]byte) []byte) []byte {
 	return change(append([]byte(nil), b...))
@@ -253,6 +270,7 @@ func TestUnpackRefusesAnythingTheManifestDoesntVouchFor(t *testing.T) {
 		"a corrupt trailer":  {m, corrupt(bundle, func(b []byte) []byte { b[len(b)-8] ^= 0xff; return b }), "read the bundle"},
 		"a cut-off trailer":  {m, corrupt(bundle, func(b []byte) []byte { return b[:len(b)-4] }), "read the bundle"},
 		"a second member":    {m, append(append([]byte(nil), bundle...), bundle...), "data after"},
+		"a second archive":   {one, appendedArchive(t), "data after"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if name == "a changed file" {

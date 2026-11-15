@@ -182,12 +182,13 @@ func Unpack(r io.Reader, m *Manifest, dst string) (err error) {
 		}
 	}
 	// tar stops at its end blocks, before gzip checks its trailer (CRC and
-	// length), so read what's left; a little zero padding is normal, more is not
-	rest, err := io.Copy(io.Discard, io.LimitReader(gz, maxTrailing+1))
+	// length), so read what's left. A little zero padding is normal; anything
+	// else, such as a second archive, never went through the checks above
+	rest, err := io.ReadAll(io.LimitReader(gz, maxTrailing+1))
 	if err != nil {
 		return fmt.Errorf("read the bundle: %w", err)
 	}
-	if rest > maxTrailing {
+	if len(rest) > maxTrailing || slices.ContainsFunc(rest, func(b byte) bool { return b != 0 }) {
 		return errors.New("read the bundle: data after the archive's end")
 	}
 	if _, err := br.ReadByte(); !errors.Is(err, io.EOF) {

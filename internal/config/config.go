@@ -19,7 +19,10 @@ import (
 
 // Settings is the machine config merged over the defaults
 type Settings struct {
-	Profile  string `json:"profile"` // "full" (desktop) or "minimal" (SSH/server)
+	Profile string `json:"profile"` // "full" (desktop) or "minimal" (SSH/server)
+	// the device profile bud install --device picked (Suite D62); empty
+	// means the IDE alone, as before device profiles
+	Device   string `json:"device"`
 	Terminal string `json:"terminal"`
 	// the pane layout projects open in, a file in layouts/ (bud.layout)
 	Layout string `json:"layout"`

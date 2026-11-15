@@ -157,16 +157,26 @@ func (c Content) globs(kind string) []string {
 	return g
 }
 
+// Dir is somewhere profiles are read from: a directory on disk, or the
+// examples built into bud. Name is what errors call it
+type Dir struct {
+	Name string
+	FS   fs.FS
+}
+
+// OS is the directory dir on disk
+func OS(dir string) Dir { return Dir{Name: dir, FS: os.DirFS(dir)} }
+
 // Find loads the profile called name from the first of dirs that has it, so
 // passing the overlay's profiles/ before the public one lets the overlay win.
-// The profile's name must match its file's
-func Find(name string, dirs ...string) (*Profile, string, error) {
+// The profile's name must match its file's. It returns where it was read from
+func Find(name string, dirs ...Dir) (*Profile, string, error) {
 	if !nameRe.MatchString(name) {
 		return nil, "", fmt.Errorf("%q isn't a profile name: lowercase letters, digits and '-'", name)
 	}
 	for _, dir := range dirs {
-		file := filepath.Join(dir, name+".json")
-		b, err := os.ReadFile(file)
+		file := filepath.Join(dir.Name, name+".json")
+		b, err := fs.ReadFile(dir.FS, name+".json")
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
@@ -191,15 +201,19 @@ func Find(name string, dirs ...string) (*Profile, string, error) {
 	if len(names) > 0 {
 		hint = "there are " + strings.Join(names, ", ")
 	}
+	where := make([]string, len(dirs))
+	for i, d := range dirs {
+		where[i] = d.Name
+	}
 
-	return nil, "", fmt.Errorf("no profile called %q in %s (%s)", name, strings.Join(dirs, ", "), hint)
+	return nil, "", fmt.Errorf("no profile called %q in %s (%s)", name, strings.Join(where, ", "), hint)
 }
 
 // List returns the profile names across dirs, sorted, each once
-func List(dirs ...string) ([]string, error) {
+func List(dirs ...Dir) ([]string, error) {
 	var names []string
 	for _, dir := range dirs {
-		entries, err := os.ReadDir(dir)
+		entries, err := fs.ReadDir(dir.FS, ".")
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}

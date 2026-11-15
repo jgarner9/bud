@@ -31,6 +31,7 @@ bud [global flags] <command> [command flags] [args]
 | Command | What it does |
 | --- | --- |
 | `bud install [--yes]` | Asks for the profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree (on Linux it downloads a checksum-verified Neovim or tree-sitter-cli itself when the package manager's is missing or too old), syncs the config, restores plugins, then runs `bud doctor`. `--yes` takes every default. |
+| `bud install --device <name> [--yes]` | Sets up the components a [device profile](profiles.md) names, such as `dev-machine` (the overlay's profile of that name first, else bud's example) and remembers it as the `device` setting, so a later `bud install` does the same. `ide` is the install above; the others say which phase of the build brings them and exit 1. Without `--device` or the setting, it's the IDE alone. `--profile` stays the IDE's install size. |
 | `bud update` | Installs a newer release (only for a binary `install.sh` installed), syncs the config, restores plugins, parsers and language tools, rebuilds the desktop app if you've run `bud bundle` and it's out of date (another bud built it, kitty updated, or it moved; not while it's open), then runs the full `bud doctor` and exits 1 on a failure. Rolls back by itself if a check that passed before now fails. |
 | `bud update --check [--channel stable\|nightly]` | Only says whether a newer release is out. |
 | `bud update --no-doctor` | Skips the app rebuild and the doctor at the end, for scripts. |

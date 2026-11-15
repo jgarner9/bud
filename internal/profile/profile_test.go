@@ -11,7 +11,7 @@ import (
 var examples = filepath.Join("..", "..", "profiles")
 
 func TestTheExampleProfilesAreValid(t *testing.T) {
-	names, err := List(examples)
+	names, err := List(OS(examples))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,14 +19,14 @@ func TestTheExampleProfilesAreValid(t *testing.T) {
 		t.Fatalf("examples = %v, want %v", names, want)
 	}
 	for _, name := range names {
-		if _, _, err := Find(name, examples); err != nil {
+		if _, _, err := Find(name, OS(examples)); err != nil {
 			t.Error(err)
 		}
 	}
 }
 
 func TestTheDevMachineRunsTheIDEAndOpenCodeOnEdge(t *testing.T) {
-	p, _, err := Find("dev-machine", examples)
+	p, _, err := Find("dev-machine", OS(examples))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,14 +95,14 @@ func TestEachProblemSaysWhatToFix(t *testing.T) {
 func TestTheOverlayProfileWins(t *testing.T) {
 	overlay := t.TempDir()
 	os.WriteFile(filepath.Join(overlay, "dev-machine.json"), []byte(`{"name": "dev-machine", "components": ["ide"], "channel": "stable"}`), 0o644)
-	p, file, err := Find("dev-machine", overlay, examples)
+	p, file, err := Find("dev-machine", OS(overlay), OS(examples))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if file != filepath.Join(overlay, "dev-machine.json") || p.Has("harness") {
 		t.Fatalf("got %s %+v", file, p)
 	}
-	names, _ := List(overlay, examples)
+	names, _ := List(OS(overlay), OS(examples))
 	if len(names) != 3 {
 		t.Fatalf("a name in both dirs is listed once: %v", names)
 	}
@@ -118,11 +118,11 @@ func TestFindExplainsWhatIsWrong(t *testing.T) {
 		"nothere": `no profile called "nothere"`,
 		"../etc":  `isn't a profile name`,
 	} {
-		if _, _, err := Find(name, dir); err == nil || !strings.Contains(err.Error(), want) {
+		if _, _, err := Find(name, OS(dir)); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("Find(%q): want %q, got %v", name, want, err)
 		}
 	}
-	if _, _, err := Find("nothere", dir); !strings.Contains(err.Error(), "there are laptop, typo") {
+	if _, _, err := Find("nothere", OS(dir)); !strings.Contains(err.Error(), "there are laptop, typo") {
 		t.Errorf("the error should list what there is: %v", err)
 	}
 }

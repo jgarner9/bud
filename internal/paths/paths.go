@@ -123,3 +123,6 @@ func SameDir(a, b string) bool {
 	}
 	return resolve(a) == resolve(b)
 }
+
+// Overlay is the clone of the private overlay repo (Suite D21, D59)
+func (p *Paths) Overlay() string { return filepath.Join(p.Data, "overlay") }

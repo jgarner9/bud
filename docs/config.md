@@ -21,6 +21,7 @@ bud config edit                           # open it in bud's editor, then check 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `profile` | `"full"` | `"full"` (desktop: every language, the app) or `"minimal"` (SSH and servers: no app, only Python and Bash to start with). |
+| `device` | unset | The device profile `bud install --device <name>` set up, such as `dev-machine` (see [Device profiles](profiles.md)). It picks which components `bud install` sets up. Unset means the IDE alone, which is how bud installed before device profiles. |
 | `terminal` | `"kitty"` | What `bud launch` and the app open: `"kitty"` or `"ghostty"`. Unset, the first one installed. |
 | `layout` | `"default"` | The pane layout projects open in, a file in `~/.config/bud/layouts/`. One project can have its own (`bud layout set`). |
 | `languages` | unset | The enabled language specs, by name. Unset means the profile's preset: all of bud's for `full`, the `minimal = true` ones for `minimal`. `[]` enables none. `bud lang enable/disable` edits it. |

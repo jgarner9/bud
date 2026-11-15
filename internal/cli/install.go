@@ -1,19 +1,23 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 
+	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/doctor"
 	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/lang"
 	"jgarner.dev/bud/internal/nvim"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/profile"
 )
 
 func init() {
@@ -21,15 +25,19 @@ func init() {
 }
 
 func Install() *Command {
-	var yes bool
+	var (
+		yes    bool
+		device string
+	)
 	return &Command{
 		Name:  "install",
 		Usage: "Sets up bud: asks a few questions, installs missing system packages and the Bud Neovim config",
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&yes, "yes", false, "don't ask anything: take the defaults and run the package manager")
 			fs.BoolVar(&yes, "y", false, "short for -yes")
+			fs.StringVar(&device, "device", "", "the device profile to set up, such as dev-machine; remembered as the device setting")
 		},
-		Run: func(g *Globals, args []string) error { return install(g, args, yes) },
+		Run: func(g *Globals, args []string) error { return install(g, args, yes, device) },
 	}
 }
 
@@ -40,7 +48,37 @@ var (
 	nvimInstalled   = func() bool { _, err := exec.LookPath("nvim"); return err == nil }
 )
 
-func install(g *Globals, args []string, yes bool) error {
+// installComponents sets up each component a device profile can name, in
+// the order profile.Components lists them; swappable in tests. Only ide is
+// built so far, and the rest say which phase of the build plan brings them
+// rather than exiting 0 having done nothing
+var installComponents = map[string]func(g *Globals, yes bool) error{
+	"ide":     installIDE,
+	"harness": notBuilt("OpenCode's pinned install", 1),
+	"app":     notBuilt("the desktop app", 7),
+	"server":  notBuilt("the home-server units", 2),
+	"qwen":    notBuilt("the Qwen box", 3),
+}
+
+func notBuilt(what string, phase int) func(*Globals, bool) error {
+	return func(*Globals, bool) error {
+		return fmt.Errorf("not built yet: %s comes in phase %d of the build plan", what, phase)
+	}
+}
+
+// profileDirs are where device profiles are read from, the overlay's first
+// so it replaces an example of the same name; swappable in tests
+var profileDirs = func(p *paths.Paths) []profile.Dir {
+	return []profile.Dir{
+		profile.OS(filepath.Join(p.Overlay(), "profiles")),
+		{Name: "bud's examples", FS: bud.Profiles()},
+	}
+}
+
+// install sets up the components of the device profile named by --device or,
+// without it, the device setting. With neither, it's the IDE alone, as it
+// was before device profiles (Suite D62)
+func install(g *Globals, args []string, yes bool, device string) error {
 	if len(args) > 0 {
 		return usageErrorf("install takes no arguments")
 	}
@@ -56,6 +94,53 @@ func install(g *Globals, args []string, yes bool) error {
 	s, err := f.Settings()
 	if err != nil {
 		return fmt.Errorf("%w\nfix or remove %s, then run 'bud install' again", err, p.MachineConfig())
+	}
+
+	components := []string{"ide"}
+	if name := firstNonEmpty(device, s.Device); name != "" {
+		prof, file, err := profile.Find(name, profileDirs(p)...)
+		if err != nil {
+			return err
+		}
+		g.Logf("device profile %s from %s: %s", name, file, strings.Join(prof.Components, " "))
+		if name != s.Device {
+			if err := f.Set("device", name); err != nil {
+				return err
+			}
+			if err := f.Save(); err != nil {
+				return err
+			}
+		}
+		components = prof.Components
+	}
+
+	var errs []error
+	for _, c := range profile.Components {
+		if !slices.Contains(components, c) {
+			continue
+		}
+		if err := installComponents[c](g, yes); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", c, err))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// installIDE is the IDE's install (BASE.md 5.2): questions, system packages,
+// the Neovim config, and the optional extras
+func installIDE(g *Globals, yes bool) error {
+	p, err := paths.Resolve()
+	if err != nil {
+		return err
+	}
+	f, err := config.Load(p.MachineConfig())
+	if err != nil {
+		return err
+	}
+	s, err := f.Settings()
+	if err != nil {
+		return err
 	}
 
 	// a downloaded tool the system has since caught up with stops shadowing it

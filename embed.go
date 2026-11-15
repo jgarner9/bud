@@ -13,7 +13,7 @@ import (
 //
 // all:plugins keeps .claude-plugin/, which a plain directory pattern would drop
 //
-//go:embed ide/nvim ide/languages/*.lua ide/layouts/*.lua ide/migrations/*.lua ide/bundles ide/tools all:ide/plugins
+//go:embed ide/nvim ide/languages/*.lua ide/layouts/*.lua ide/migrations/*.lua ide/bundles ide/tools all:ide/plugins profiles/*.json
 var repoFS embed.FS
 
 // Config returns what bud syncs into ~/.config/bud: the repo's nvim/ directory
@@ -41,6 +41,12 @@ func Bundles() fs.FS {
 // IDE starts
 func Plugin() fs.FS {
 	return sub("ide/plugins/bud-ide")
+}
+
+// Profiles returns the example device profiles (Suite D18), which bud install
+// --device falls back to when the overlay has no profile of that name
+func Profiles() fs.FS {
+	return sub("profiles")
 }
 
 func sub(dir string) fs.FS {

@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -709,5 +710,35 @@ func TestLinkSetBuildRejectsMissingTargets(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(root, activeDirs)); !os.IsNotExist(err) {
 		t.Fatalf("active links were created for an invalid target: %v", err)
+	}
+}
+
+func TestContentOnDiskNeedingANewerFormatIsRefused(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", tree(t))
+	o := options(t, s)
+	run(t, o)
+	s.publish("2026.11.15.2", "edge", tree(t))
+	run(t, o)
+	// as a newer bud would have saved it, before this one replaced it
+	saved := filepath.Join(o.Paths.Content(), "2026.11.15.1", content.ManifestName)
+	if err := os.WriteFile(saved, []byte(fmt.Sprintf(`{"format": %d, "version": "2026.11.15.1", "files": []}`, content.Format+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshot(t, o)
+
+	if _, err := Rollback(context.Background(), o); err == nil || !strings.Contains(err.Error(), "run bud update") {
+		t.Fatalf("rolling back to it: %v", err)
+	}
+	if !maps.Equal(snapshot(t, o), before) {
+		t.Fatal("a refused rollback changed files")
+	}
+
+	saved = filepath.Join(o.Paths.Content(), "2026.11.15.2", content.ManifestName)
+	if err := os.WriteFile(saved, []byte(fmt.Sprintf(`{"format": %d, "version": "2026.11.15.2", "files": []}`, content.Format+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(context.Background(), o); err == nil || !strings.Contains(err.Error(), "run bud update") {
+		t.Fatalf("syncing the version on disk: %v", err)
 	}
 }

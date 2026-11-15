@@ -15,8 +15,29 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 )
+
+// treeFormat reads content/FORMAT: the format the tree needs, 1 without it
+func treeFormat(src fs.FS) (int, error) {
+	b, err := fs.ReadFile(src, FormatName)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 1, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("content/%s: %q isn't a format number; write one whole number, such as 2", FormatName, strings.TrimSpace(string(b)))
+	}
+	if n > Format {
+		return 0, fmt.Errorf("content/%s says format %d, but this bud reads up to %d; raise content.Format in the same change, or pack with a newer bud", FormatName, n, Format)
+	}
+
+	return n, nil
+}
 
 // BundleName is the archive name for a content version
 func BundleName(version string) string { return "content-" + version + ".tar.gz" }
@@ -28,9 +49,16 @@ func Pack(src fs.FS, version string, w io.Writer) (*Manifest, error) {
 	if _, err := ParseVersion(version); err != nil {
 		return nil, err
 	}
+	format, err := treeFormat(src)
+	if err != nil {
+		return nil, err
+	}
 	m := &Manifest{Version: version}
+	if format > 1 {
+		m.Format = format
+	}
 	var files [][]byte
-	err := fs.WalkDir(src, ".", func(p string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(src, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || p == "." {
 			return err
 		}

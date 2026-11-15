@@ -17,6 +17,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -47,11 +49,27 @@ var Kinds = map[string]string{
 	"env":       "env",
 }
 
+// FormatName is the file in content/ that says which content format the
+// tree needs; it never ships, and without it the tree is format 1
+const FormatName = "FORMAT"
+
 // skipped are top-level entries of content/ that never ship
-var skipped = []string{"README.md"}
+var skipped = []string{"README.md", FormatName}
+
+// Format is the newest content format this bud reads. When content starts
+// using something an older bud can't read, such as a new registry field,
+// raise this and write the new number to content/FORMAT in the same change,
+// so an older bud refuses the bundle with a message to update rather than
+// failing on the file it can't parse. The format comes from the tree, not
+// from this constant, so re-packing an old release keeps the format it was
+// published with. Format 1 is written as no field at all, which keeps
+// manifests readable by every bud that predates it
+const Format = 1
 
 // Manifest is content.json
 type Manifest struct {
+	// Format is the content format the bundle needs; 0 means 1
+	Format  int    `json:"format,omitempty"`
 	Version string `json:"version"`
 	Files   []File `json:"files"`
 }
@@ -89,8 +107,41 @@ func VerifyManifest(manifest, sig []byte) (*Manifest, error) {
 	if _, err := ParseVersion(m.Version); err != nil {
 		return nil, fmt.Errorf("content.json: %w", err)
 	}
+	if err := CheckFormat(m.Version, m.Format); err != nil {
+		return nil, err
+	}
 
 	return &m, nil
+}
+
+// CheckFormat refuses content version that needs a newer format than this
+// bud reads
+func CheckFormat(version string, format int) error {
+	if format > Format {
+		return fmt.Errorf("content %s needs content format %d, but this bud reads up to %d: run bud update (on edge, the next nightly has it), then bud sync; nothing changed", version, format, Format)
+	}
+
+	return nil
+}
+
+// CheckSaved checks the content.json that Unpack saved in a version dir,
+// so content already on disk (after a bud downgrade, say) is held to the
+// same format as a download. It was verified when it was unpacked, so it
+// isn't checked again here, and fields this bud doesn't know are ignored
+func CheckSaved(dir string) error {
+	b, err := os.ReadFile(filepath.Join(dir, ManifestName))
+	if err != nil {
+		return fmt.Errorf("%w; remove %s so bud sync downloads it again", err, dir)
+	}
+	var m struct {
+		Format  int    `json:"format"`
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("%s: %w; remove %s so bud sync downloads it again", filepath.Join(dir, ManifestName), err, dir)
+	}
+
+	return CheckFormat(m.Version, m.Format)
 }
 
 // VerifyChannel checks channel.json's signature, then parses it

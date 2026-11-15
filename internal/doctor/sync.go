@@ -2,10 +2,8 @@ package doctor
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -374,7 +372,7 @@ func checkEndpoints(ctx context.Context, reg *registry.Registry) Result {
 	r := Result{Name: "model endpoints"}
 	names := map[string][]string{} // provider -> model names its roles use
 	for _, role := range reg.Roles {
-		for _, id := range append([]string{role.Model}, role.Fallbacks...) {
+		for _, id := range role.Members() {
 			m := reg.Models[id]
 			if !slices.Contains(names[m.Provider], m.Name) {
 				names[m.Provider] = append(names[m.Provider], m.Name)
@@ -391,7 +389,7 @@ func checkEndpoints(ctx context.Context, reg *registry.Registry) Result {
 	answered := 0
 	for _, id := range ids {
 		slices.Sort(names[id])
-		if problem := probe(ctx, id, reg.Providers[id], names[id]); problem != "" {
+		if problem := probe(ctx, id, reg, names[id]); problem != "" {
 			problems = append(problems, problem)
 		} else {
 			answered++
@@ -408,8 +406,11 @@ func checkEndpoints(ctx context.Context, reg *registry.Registry) Result {
 	return r
 }
 
-// probe GETs the provider's /models and returns what's wrong, or empty
-func probe(ctx context.Context, id string, prov registry.Provider, models []string) string {
+// probe GETs the provider's /models and returns what's wrong, or empty.
+// When the list carries facts (OpenCode Go's does), facts that drifted from
+// the registry are reported too (Suite D69)
+func probe(ctx context.Context, id string, reg *registry.Registry, models []string) string {
+	prov := reg.Providers[id]
 	base, err := url.Parse(prov.Endpoint)
 	if err != nil {
 		return fmt.Sprintf("%s: %v", id, err)
@@ -434,16 +435,12 @@ func probe(ctx context.Context, id string, prov registry.Provider, models []stri
 		return "" // up; without its key a provider won't say which models it has
 	}
 
-	var list struct {
-		Data *[]struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&list); err != nil || list.Data == nil {
+	list, err := registry.ParseCatalog(resp.Body)
+	if err != nil {
 		return "" // up, but not a list bud can read
 	}
 	listed := map[string]bool{}
-	for _, m := range *list.Data {
+	for _, m := range list {
 		listed[m.ID] = true
 	}
 	var missing []string
@@ -454,6 +451,13 @@ func probe(ctx context.Context, id string, prov registry.Provider, models []stri
 	}
 	if len(missing) > 0 {
 		return fmt.Sprintf("%s doesn't list %s", id, strings.Join(missing, ", "))
+	}
+	if drift := registry.Compare(reg, id, list).Drift; len(drift) > 0 {
+		var fields []string
+		for _, d := range drift {
+			fields = append(fields, d.Model+"."+d.Field)
+		}
+		return fmt.Sprintf("%s reports different facts for %s (bud registry refresh <registry.jsonc> %s shows them)", id, strings.Join(fields, ", "), id)
 	}
 
 	return ""

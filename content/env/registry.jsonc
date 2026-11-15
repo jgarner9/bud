@@ -7,8 +7,12 @@
 // local providers with the real addresses. An overlay entry replaces the entry
 // of the same ID whole, so it restates every field, "local" included.
 //
-// The model picks below are examples to confirm, not decisions; the Go model
-// names and endpoint are checked at the first `bud doctor --net` against Go.
+// Each role names a pool the router picks from (Suite D64). Facts about a
+// model (inputs, caps, context, output, price) come from its provider's model
+// list: `bud registry refresh content/env/registry.jsonc go` rechecks them and
+// --write rewrites them (Suite D69). grade, allowance (Go Plus's included
+// dollars a month) and retention (days the provider keeps requests) are kept
+// by hand from https://opencode.ai/docs/go, last checked 2026-11-15.
 {
   "version": 1,
 
@@ -36,34 +40,81 @@
       "api": "openai",
       "endpoint": "http://home.invalid:8082/v1",
       "local": true
+    },
+    // the classifier on the always-on home server, so routing never waits for the Qwen box (Suite D67)
+    "classify": {
+      "api": "openai",
+      "endpoint": "http://home.invalid:8083/v1",
+      "local": true
     }
   },
 
   "models": {
-    // names on local providers are llama-server --alias values, which bud sets,
-    // so the GGUF behind them can change without touching this file
-    "qwen-35b": { "provider": "qwen", "name": "qwen-35b", "context": 32768, "privacy": ["P0", "P1", "P2"], "cost": "C0" },
-    "qwen-fim": { "provider": "qwen-fim", "name": "coder-fim", "context": 8192, "privacy": ["P0", "P1", "P2"], "cost": "C0" },
-    "qwen3-embedding-0.6b": { "provider": "embed", "name": "qwen3-embedding-0.6b", "privacy": ["P0", "P1", "P2"], "cost": "C0", "dims": 1024 },
+    // Local models: the only ones that may see P0 (Suite D23). Names on local
+    // providers are llama-server --alias values, which bud sets, so the GGUF
+    // behind them can change without touching this file. Their facts are
+    // declared by hand.
+    "qwen-35b": { "provider": "qwen", "name": "qwen-35b", "privacy": ["P0", "P1", "P2"], "cost": "C0",
+      "grade": "mid", "inputs": ["text", "image"], "caps": ["tools", "reasoning", "json"], "context": 32768, "retention": 0 },
+    "qwen-fim": { "provider": "qwen-fim", "name": "coder-fim", "privacy": ["P0", "P1", "P2"], "cost": "C0",
+      "grade": "light", "inputs": ["text"], "caps": ["fim"], "context": 8192, "retention": 0 },
+    // a small dense model that scores fixed answers rather than writing them (Suite D67)
+    "gemma-4-e4b": { "provider": "classify", "name": "gemma-4-e4b", "privacy": ["P0", "P1", "P2"], "cost": "C0",
+      "grade": "light", "inputs": ["text"], "caps": ["json"], "context": 32768, "retention": 0 },
+    "qwen3-embedding-0.6b": { "provider": "embed", "name": "qwen3-embedding-0.6b", "privacy": ["P0", "P1", "P2"], "cost": "C0",
+      "inputs": ["text"], "caps": ["embed"], "dims": 1024, "retention": 0 },
 
-    "kimi-k3": { "provider": "go", "name": "kimi-k3", "privacy": ["P1", "P2"], "cost": "C1" },
-    "glm-5.3": { "provider": "go", "name": "glm-5.3", "privacy": ["P1", "P2"], "cost": "C1" },
-    // the cheapest Go model, for the autocomplete fallback (Suite D38)
-    "mimo-v2.6-flash": { "provider": "go", "name": "mimo-v2.6-flash", "privacy": ["P1", "P2"], "cost": "C1" }
+    // OpenCode Go Plus, all zero-retention (Suite D65). top
+    "kimi-k3.1-pro": { "provider": "go", "name": "kimi-k3.1-pro", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "top", "allowance": 60, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 1048576, "output": 1048576, "price": { "in": 2, "out": 10 } },
+    "glm-5.3": { "provider": "go", "name": "glm-5.3", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "top", "allowance": 120, "retention": 0, "inputs": ["text"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 1.4, "out": 4.4 } },
+    "qwen3.8-max": { "provider": "go", "name": "qwen3.8-max", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "top", "allowance": 60, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 2, "out": 6 } },
+    // the price is half off until 2026-11-30
+    "gemini-4-argon": { "provider": "go", "name": "gemini-4-argon", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "top", "allowance": 120, "retention": 0, "inputs": ["text", "image", "video", "audio", "pdf"], "caps": ["tools", "reasoning", "json"], "context": 1048576, "output": 65536, "price": { "in": 2, "out": 10 } },
+
+    // mid
+    "kimi-k2.7-code": { "provider": "go", "name": "kimi-k2.7-code", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "mid", "allowance": 180, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 262144, "output": 262144, "price": { "in": 0.95, "out": 4 } },
+    "glm-5.2": { "provider": "go", "name": "glm-5.2", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "mid", "allowance": 180, "retention": 0, "inputs": ["text"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 1.4, "out": 4.4 } },
+    "minimax-m3": { "provider": "go", "name": "minimax-m3", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "mid", "allowance": 180, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning"], "context": 1000000, "output": 131072, "price": { "in": 0.3, "out": 1.2 } },
+    "qwen3.7-plus": { "provider": "go", "name": "qwen3.7-plus", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "mid", "allowance": 180, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning"], "context": 1000000, "output": 65536, "price": { "in": 0.4, "out": 1.6 } },
+    "mimo-v2.6-pro": { "provider": "go", "name": "mimo-v2.6-pro", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "mid", "allowance": 60, "retention": 0, "inputs": ["text", "image", "video", "audio"], "caps": ["tools", "reasoning"], "context": 1048576, "output": 131072, "price": { "in": 0.435, "out": 0.87 } },
+
+    // light
+    "glm-5.3-flash": { "provider": "go", "name": "glm-5.3-flash", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "light", "allowance": 180, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 0.15, "out": 0.5 } },
+    "qwen3.8-flash": { "provider": "go", "name": "qwen3.8-flash", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "light", "allowance": 90, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 0.15, "out": 0.47 } },
+    "minimax-m3.1-flash": { "provider": "go", "name": "minimax-m3.1-flash", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "light", "allowance": 80, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning"], "context": 1000000, "output": 512000, "price": { "in": 0.15, "out": 0.6 } },
+    // the cheapest, for the autocomplete fallback (Suite D38)
+    "mimo-v2.6-flash": { "provider": "go", "name": "mimo-v2.6-flash", "privacy": ["P1", "P2"], "cost": "C1",
+      "grade": "light", "allowance": 120, "retention": 0, "inputs": ["text", "image", "video", "audio"], "caps": ["tools", "reasoning"], "context": 1048576, "output": 131072, "price": { "in": 0.14, "out": 0.28 } },
   },
 
+  // Pools are in preference order; the router filters each by privacy, needs,
+  // context, health and allowance left, then ranks by grade (Suite D64)
   "roles": {
-    "manager": { "model": "kimi-k3", "fallbacks": ["qwen-35b"] },
-    "coding": { "model": "glm-5.3", "fallbacks": ["kimi-k3"] },
-    "planning": { "model": "kimi-k3", "fallbacks": ["glm-5.3"] },
-    "classifier": { "model": "qwen-35b" },
+    // Qwen first: routine chores stay on C0 (Suite D24)
+    "manager": { "needs": ["tools"], "pool": ["qwen-35b", "glm-5.3-flash", "qwen3.8-flash", "mimo-v2.6-pro", "glm-5.3", "kimi-k3.1-pro"] },
+    "coding": { "needs": ["tools"], "pool": ["glm-5.3", "kimi-k2.7-code", "minimax-m3", "glm-5.2", "glm-5.3-flash", "minimax-m3.1-flash", "qwen-35b"] },
+    "planning": { "needs": ["reasoning"], "pool": ["kimi-k3.1-pro", "glm-5.3", "qwen3.8-max", "gemini-4-argon", "qwen3.7-plus", "qwen-35b"] },
+    // the home server's classifier, then the Qwen box when it's awake (Suite D67)
+    "classifier": { "needs": ["json"], "pool": ["gemma-4-e4b", "qwen-35b"] },
     // Qwen first, a Go model when the box is off, never on P0 paths (Suite D32, D38)
-    "fim": { "model": "qwen-fim", "fallbacks": ["mimo-v2.6-flash"] },
-    "embedding": { "model": "qwen3-embedding-0.6b" },
-    // what any role uses once its own list is exhausted; local, so it is P0-safe
-    "fallback": { "model": "qwen-35b" },
-    "curator": { "model": "qwen-35b" },
-    // confirm the pick takes images
-    "vision": { "model": "kimi-k3" }
+    "fim": { "pool": ["qwen-fim", "mimo-v2.6-flash"] },
+    "embedding": { "needs": ["embed"], "pool": ["qwen3-embedding-0.6b"] },
+    // what any role uses once its own pool is exhausted; local, so it is P0-safe
+    "fallback": { "pool": ["qwen-35b"] },
+    "curator": { "needs": ["json"], "pool": ["qwen-35b"] },
+    // qwen-35b is the only one that may see a P0 image
+    "vision": { "needs": ["image"], "pool": ["qwen-35b", "qwen3.8-flash", "glm-5.3-flash", "kimi-k3.1-pro", "gemini-4-argon"] },
   },
 }

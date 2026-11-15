@@ -94,7 +94,7 @@ func TestRolesBecomeModelsAndUpdatesAreOff(t *testing.T) {
 		t.Fatalf("model %v, update %v", cfg["model"], cfg["update"])
 	}
 	plan := cfg["agents"].(map[string]any)["plan"].(map[string]any)
-	if plan["model"] != "go/kimi-k3" {
+	if plan["model"] != "go/kimi-k3.1-pro" {
 		t.Fatalf("the plan agent should use the planning role, got %v", plan["model"])
 	}
 	providers := cfg["providers"].(map[string]any)
@@ -146,7 +146,7 @@ func TestFragmentsMergeInOrderAndRulesAppend(t *testing.T) {
 		t.Fatalf("the overlay's rule should come last, after the public ones: first %v, last %v", rules[0], last)
 	}
 	plan := cfg["agents"].(map[string]any)["plan"].(map[string]any)
-	if plan["model"] != "go/kimi-k3" || plan["description"] != "planning" {
+	if plan["model"] != "go/kimi-k3.1-pro" || plan["description"] != "planning" {
 		t.Fatalf("objects merge key by key: %v", plan)
 	}
 	if cfg["model"] != "qwen/qwen-35b" {
@@ -167,5 +167,21 @@ func TestABrokenFragmentIsNamed(t *testing.T) {
 	in.Env = append(in.Env, Fragment{Name: "overlay/bad", Src: []byte(`{"permissions": [`)})
 	if _, err := Render(in); err == nil || !strings.Contains(err.Error(), "overlay/bad") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestAnOutputLimitNeedsNoContext(t *testing.T) {
+	in := shipped(t)
+	m := in.Registry.Models["glm-5.3"]
+	m.Context = 0
+	in.Registry.Models["glm-5.3"] = m
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	glm := decode(t, out.Config)["providers"].(map[string]any)["go"].(map[string]any)["models"].(map[string]any)["glm-5.3"].(map[string]any)
+	limit, _ := glm["limit"].(map[string]any)
+	if _, ok := limit["context"]; ok || limit["output"] != float64(131072) {
+		t.Fatalf("want only the output limit, got %v", glm["limit"])
 	}
 }

@@ -42,6 +42,18 @@ var Tiers = []string{"P0", "P1", "P2"}
 // Costs are the cost tiers (Suite D24)
 var Costs = []string{"C0", "C1", "C2"}
 
+// Inputs are what a model can be given (Suite D64)
+var Inputs = []string{"text", "image", "video", "audio", "pdf"}
+
+// Caps are what a model can do beyond plain chat (Suite D64). A provider's
+// model list reports tools, reasoning and json; fim and embed are declared
+// by hand
+var Caps = []string{"tools", "reasoning", "json", "fim", "embed"}
+
+// Grades say how hard a task a model is worth spending on: the router
+// matches them to a request's difficulty (Suite D64)
+var Grades = []string{"top", "mid", "light"}
+
 type Registry struct {
 	Version   int                 `json:"version"`
 	Providers map[string]Provider `json:"providers"`
@@ -72,12 +84,72 @@ type Model struct {
 	// Dims is an embedding model's vector size, which each stored vector
 	// records so a swap is a re-embed job (Suite D52)
 	Dims int `json:"dims,omitempty"`
+
+	// The capability fields (Suite D64). Inputs, Caps, Context, Output and
+	// Price are facts bud registry refresh reads from the provider; Grade,
+	// Allowance, Retention and Trains are kept by hand
+	Inputs []string `json:"inputs,omitempty"`
+	Caps   []string `json:"caps,omitempty"`
+	Output int      `json:"output,omitempty"`
+	Grade  string   `json:"grade,omitempty"`
+	// Allowance is the plan's included spend on this model, in dollars a month
+	Allowance float64 `json:"allowance,omitempty"`
+	Price     *Price  `json:"price,omitempty"`
+	// Retention is how many days the provider keeps requests; nil is unknown.
+	// Only a model kept 0 days may see P1 (Suite D65)
+	Retention *int `json:"retention,omitempty"`
+	// Trains says the provider trains on request data, so the model may see
+	// only P2 (Suite D65)
+	Trains bool `json:"trains,omitempty"`
 }
 
-// Role is the model a role uses and the ones it falls back to, in order
+// Price is dollars per million tokens
+type Price struct {
+	In  float64 `json:"in"`
+	Out float64 `json:"out"`
+}
+
+// Has says whether the model has a capability or takes an input
+func (m Model) Has(need string) bool {
+	return slices.Contains(m.Caps, need) || slices.Contains(m.Inputs, need)
+}
+
+// Role lists the models a role may use. Pool is the current form (Suite
+// D64): the router picks among its members, in preference order. Model plus
+// Fallbacks is the older form and reads as a pool of [Model, Fallbacks...]
 type Role struct {
-	Model     string   `json:"model"`
+	Model     string   `json:"model,omitempty"`
 	Fallbacks []string `json:"fallbacks,omitempty"`
+	Pool      []string `json:"pool,omitempty"`
+	// Needs are capabilities or inputs every member must have
+	Needs []string `json:"needs,omitempty"`
+	// Pin, when set, is the member the router always uses
+	Pin string `json:"pin,omitempty"`
+}
+
+// Members returns the role's models in preference order
+func (r Role) Members() []string {
+	if len(r.Pool) > 0 {
+		return r.Pool
+	}
+	if r.Model == "" {
+		return nil
+	}
+
+	return append([]string{r.Model}, r.Fallbacks...)
+}
+
+// Default is the model a runtime is configured with when it takes one model
+// per role: the pin, or else the first member
+func (r Role) Default() string {
+	if r.Pin != "" {
+		return r.Pin
+	}
+	if m := r.Members(); len(m) > 0 {
+		return m[0]
+	}
+
+	return ""
 }
 
 // Load reads a registry file and validates it
@@ -249,6 +321,7 @@ func (r *Registry) Validate() error {
 		if !slices.Contains(Costs, m.Cost) {
 			add("%s.cost: %q isn't one of %s", at, m.Cost, strings.Join(Costs, ", "))
 		}
+		checkModelCaps(at, m, add)
 	}
 
 	for _, role := range Roles {
@@ -262,29 +335,7 @@ func (r *Registry) Validate() error {
 			add("%s: not a role; the roles are %s", at, strings.Join(Roles, ", "))
 			continue
 		}
-		seen := map[string]bool{}
-		for i, id := range append([]string{role.Model}, role.Fallbacks...) {
-			field := at + ".model"
-			if i > 0 {
-				field = fmt.Sprintf("%s.fallbacks[%d]", at, i-1)
-			}
-			if seen[id] {
-				add("%s: %q is listed twice; drop the repeat", field, id)
-				continue
-			}
-			seen[id] = true
-			m, ok := r.Models[id]
-			if !ok {
-				add("%s: %q isn't in models; add it there or name one that is", field, id)
-				continue
-			}
-			if slices.Contains(privateRoles, name) && !slices.Contains(m.Privacy, "P0") {
-				add("%s: %q isn't allowed P0, but %s sees private data; use a local model", field, id, name)
-			}
-			if name == "embedding" && m.Dims == 0 {
-				add("%s: %q has no dims; embedding models record their vector size", field, id)
-			}
-		}
+		checkRole(r, name, role, add)
 	}
 
 	if len(errs) == 0 {
@@ -293,6 +344,83 @@ func (r *Registry) Validate() error {
 	sort.Strings(errs)
 
 	return fmt.Errorf("%d %s:%s%s", len(errs), plural(len(errs), "problem"), errorSep, strings.Join(errs, errorSep))
+}
+
+// checkModelCaps checks the capability fields (Suite D64, D65)
+func checkModelCaps(at string, m Model, add func(string, ...any)) {
+	for _, in := range m.Inputs {
+		if !slices.Contains(Inputs, in) {
+			add("%s.inputs: %q isn't one of %s", at, in, strings.Join(Inputs, ", "))
+		}
+	}
+	for _, c := range m.Caps {
+		if !slices.Contains(Caps, c) {
+			add("%s.caps: %q isn't one of %s", at, c, strings.Join(Caps, ", "))
+		}
+	}
+	if m.Grade != "" && !slices.Contains(Grades, m.Grade) {
+		add("%s.grade: %q isn't one of %s", at, m.Grade, strings.Join(Grades, ", "))
+	}
+	if m.Output < 0 || m.Allowance < 0 || (m.Price != nil && (m.Price.In < 0 || m.Price.Out < 0)) || (m.Retention != nil && *m.Retention < 0) {
+		add("%s: output, allowance, price and retention can't be negative", at)
+	}
+	if m.Trains && slices.ContainsFunc(m.Privacy, func(t string) bool { return t != "P2" }) {
+		add("%s.privacy: the provider trains on its requests, so it may see only P2 (Suite D65)", at)
+	} else if m.Retention != nil && *m.Retention > 0 && slices.ContainsFunc(m.Privacy, func(t string) bool { return t != "P2" }) {
+		add("%s.privacy: the provider keeps requests %d days, so it may see only P2; only a 0-day model sees P1 (Suite D65)", at, *m.Retention)
+	}
+}
+
+// checkRole checks one role's members, needs and pin
+func checkRole(r *Registry, name string, role Role, add func(string, ...any)) {
+	at := "roles." + name
+	if len(role.Pool) > 0 && (role.Model != "" || len(role.Fallbacks) > 0) {
+		add("%s: has both a pool and model/fallbacks; keep the pool", at)
+		return
+	}
+	if len(role.Members()) == 0 {
+		add("%s: lists no models; give it a pool", at)
+		return
+	}
+	for _, need := range role.Needs {
+		if !slices.Contains(Caps, need) && !slices.Contains(Inputs, need) {
+			add("%s.needs: %q isn't a capability (%s) or an input (%s)", at, need, strings.Join(Caps, ", "), strings.Join(Inputs, ", "))
+		}
+	}
+	seen := map[string]bool{}
+	for i, id := range role.Members() {
+		field := fmt.Sprintf("%s.pool[%d]", at, i)
+		if len(role.Pool) == 0 {
+			field = at + ".model"
+			if i > 0 {
+				field = fmt.Sprintf("%s.fallbacks[%d]", at, i-1)
+			}
+		}
+		if seen[id] {
+			add("%s: %q is listed twice; drop the repeat", field, id)
+			continue
+		}
+		seen[id] = true
+		m, ok := r.Models[id]
+		if !ok {
+			add("%s: %q isn't in models; add it there or name one that is", field, id)
+			continue
+		}
+		if slices.Contains(privateRoles, name) && !slices.Contains(m.Privacy, "P0") {
+			add("%s: %q isn't allowed P0, but %s sees private data; use a local model", field, id, name)
+		}
+		if name == "embedding" && m.Dims == 0 {
+			add("%s: %q has no dims; embedding models record their vector size", field, id)
+		}
+		for _, need := range role.Needs {
+			if !m.Has(need) {
+				add("%s: %q lacks %q, which %s needs; add it to the model's caps or inputs if it has it, or drop it from the pool", field, id, need, name)
+			}
+		}
+	}
+	if role.Pin != "" && !seen[role.Pin] {
+		add("%s.pin: %q isn't in the role's pool; add it there or pin a member", at, role.Pin)
+	}
 }
 
 func plural(n int, word string) string {

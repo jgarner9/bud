@@ -20,7 +20,7 @@ A release host serves two kinds of path, so a mirror is a plain file server laid
 <base>/content-<v>/content.json.sig        signed under bud-content
 ```
 
-The content release workflow (task 1.10) must publish exactly these. Content releases have to be GitHub prereleases, or one of them becomes the repo's "latest" release and `install.sh`'s `releases/latest/download` stops finding the code archives.
+The content release workflow (`.github/workflows/content.yml`, described in [release.md](release.md)) publishes exactly these. Content releases are GitHub prereleases, or one of them would become the repo's "latest" release and `install.sh`'s `releases/latest/download` would stop finding the code archives.
 
 ## What a sync does
 

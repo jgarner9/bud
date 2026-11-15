@@ -11,9 +11,19 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/bud-rotate-test.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 repo="$tmp/repo"
-mkdir -p "$repo/internal/updater" "$tmp/bin" "$tmp/vault"
+mkdir -p "$repo/internal/updater" "$repo/scripts" "$tmp/bin" "$tmp/vault"
 cp "$root/install.sh" "$repo/install.sh"
 cp "$root/internal/updater/sshsig.go" "$repo/internal/updater/sshsig.go"
+cat >"$repo/scripts/content-release.sh" <<FAKE
+#!/bin/sh
+[ "\$1" = resign ] && [ -n "\$BUD_RELEASE_KEY" ] || exit 1
+count="\$(awk '/^RELEASE_KEYS="$/ { f = 1; next } f && /^"$/ { exit } f && NF' "$repo/install.sh" | wc -l | tr -d ' ')"
+[ "\$count" = 2 ] || exit 1
+echo "\$count" >"$tmp/content-release-key-count"
+FAKE
+chmod +x "$repo/scripts/content-release.sh"
+printf '#!/bin/sh\nexit 0\n' >"$tmp/bin/bud"
+chmod +x "$tmp/bin/bud"
 git -C "$repo" init -q
 git -C "$repo" remote add origin https://example.com/bud.git
 git -C "$repo" -c user.name=t -c user.email=t@t add .
@@ -32,7 +42,9 @@ FAKE
 # fake gh: keeps what it was given as the secret
 cat >"$tmp/bin/gh" <<FAKE
 #!/bin/sh
-cat >"$tmp/secret"
+if [ "\$1" = secret ] && [ "\$2" = set ]; then
+	cat >"$tmp/secret"
+fi
 FAKE
 chmod +x "$tmp/bin/op" "$tmp/bin/gh"
 
@@ -49,7 +61,7 @@ go_keys() {
 
 old="$(awk '/^RELEASE_KEYS="$/ { f = 1; next } f && NF { print; exit }' "$repo/install.sh")"
 run() {
-	env PATH="$tmp/bin:$PATH" BUD_REPO="$repo" GIT_CONFIG_COUNT=3 \
+	env PATH="$tmp/bin:$PATH" BUD=bud BUD_REPO="$repo" GIT_CONFIG_COUNT=3 \
 		GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=t \
 		GIT_CONFIG_KEY_1=user.email GIT_CONFIG_VALUE_1=t@t \
 		GIT_CONFIG_KEY_2=commit.gpgsign GIT_CONFIG_VALUE_2=false \
@@ -72,6 +84,7 @@ if [ "$(keys)" != 1 ] || [ "$(go_keys)" != 1 ]; then
 fi
 grep -qxF "$old" "$repo/install.sh" && fail "the old key is still trusted"
 cmp -s "$tmp/secret" "$tmp/vault/$title" || fail "the secret isn't the new private key"
+grep -qx 2 "$tmp/content-release-key-count" || fail "content wasn't re-signed while both keys were trusted"
 grep -qx "bud release key old" "$tmp/archived" || fail "the old 1Password item wasn't archived"
 new="$(ssh-keygen -y -f "$tmp/vault/$title" | cut -d' ' -f1,2)"
 grep -qxF "$new" "$repo/install.sh" || fail "install.sh doesn't trust the new key"

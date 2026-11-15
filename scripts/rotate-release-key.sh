@@ -11,8 +11,9 @@
 #
 #   scripts/rotate-release-key.sh finish --item TITLE [--old-item TITLE] [--vault NAME]
 #       after the grace period (30 days is a good default): signs from now on
-#       with the new key (the BUD_RELEASE_KEY Actions secret), drops the old
-#       public key from both lists, and archives the old 1Password item.
+#       with the new key: re-signs the channel and its content manifests,
+#       switches the BUD_RELEASE_KEY Actions secret, drops the old public key
+#       from both lists, and archives the old 1Password item.
 #       A machine that didn't update during the grace period has to reinstall.
 #
 # --now does both at once, for a leaked key: every machine has to reinstall.
@@ -134,6 +135,7 @@ finish() {
 	need ssh-keygen
 	need op "https://developer.1password.com/docs/cli"
 	need gh "https://cli.github.com"
+	need "${BUD:-bud}" "needed to re-sign the published content before retiring the old key"
 	[ "$check" = 0 ] || clean_tree
 	op whoami >/dev/null 2>&1 || die "op isn't signed in: run op signin"
 
@@ -143,11 +145,19 @@ finish() {
 	trap 'rm -rf "$ktmp"' EXIT INT TERM
 	(umask 077 && op document get "$item" --vault "$vault" >"$ktmp/key")
 	new_pub="$(ssh-keygen -y -f "$ktmp/key" | cut -d' ' -f1,2)"
-	rm -f "$ktmp/key"
 	trusted | grep -qxF "$new_pub" || die "\"$item\" isn't one of the trusted keys; run start first"
 
+	# Rebuild and re-sign the currently offered content with the new key while
+	# both keys are still trusted. If this fails, keep both keys trusted.
+	(
+		cd "$repo"
+		BUD_RELEASE_KEY="$(cat "$ktmp/key")" \
+			GITHUB_SHA="$(git rev-parse HEAD)" BUD="${BUD:-bud}" \
+			OUT="${OUT:-$ktmp/content}" sh scripts/content-release.sh resign
+	)
 	op document get "$item" --vault "$vault" | gh secret set BUD_RELEASE_KEY --repo "$(git -C "$repo" remote get-url origin)"
 	echo "Releases are signed with \"$item\" from now on."
+	rm -f "$ktmp/key"
 
 	trusted | while IFS= read -r key; do
 		if [ "$key" != "$new_pub" ]; then

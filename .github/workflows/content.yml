@@ -1,0 +1,83 @@
+name: Content
+
+# Suite D60, D61 (build plan task 1.10): a push to main that changes content/
+# cuts a content release, content-YYYY.MM.DD.N, and moves the edge channel to
+# it. A manual run promotes the version edge offers to stable, or resigns
+# (rebuilds and re-signs what the channel offers, for a key rotation or to
+# repair the channel). All of it goes through scripts/content-release.sh, which publishes the layout bud sync
+# reads (docs/internals/sync.md). Every release here is a prerelease, so
+# install.sh's releases/latest/download keeps finding the code archives.
+# Nothing is published until the BUD_RELEASE_KEY secret is set, since an
+# unsigned bundle is one no device will take
+on:
+  push:
+    branches: [main]
+    paths: ["content/**"]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "edge cuts a release from main; promote moves stable to the version below, which must be what edge offers now; resign re-signs what the channel offers"
+        type: choice
+        options: [edge, promote, resign]
+        default: edge
+      version:
+        description: "For promote: the content version (YYYY.MM.DD.N)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: content
+  cancel-in-progress: false
+
+jobs:
+  content:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # every content-* tag: they're the record the channel is built from
+      - name: Only from main
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::content releases come from main, not $GITHUB_REF"
+            exit 1
+          fi
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      # the checks a content change can break, before anything is published
+      - name: Check
+        if: github.event_name == 'push' || inputs.mode == 'edge'
+        run: |
+          go test ./...
+          sh scripts/leak-check.sh
+          go run ./cmd/bud registry check content/env/registry.jsonc
+        env:
+          BUD_LEAK_PATTERNS: ${{ secrets.BUD_LEAK_PATTERNS }}
+      - name: Build bud
+        run: go build -trimpath -o "$RUNNER_TEMP/bud" ./cmd/bud
+      - name: Is the release key set?
+        id: key
+        run: |
+          set="${{ secrets.BUD_RELEASE_KEY != '' }}"
+          echo "set=$set" >>"$GITHUB_OUTPUT"
+          if [ "$set" != true ]; then
+            echo "::warning::BUD_RELEASE_KEY isn't set, so nothing is published: devices only take signed content"
+          fi
+      - name: Release
+        if: steps.key.outputs.set == 'true'
+        env:
+          BUD: ${{ runner.temp }}/bud
+          BUD_RELEASE_KEY: ${{ secrets.BUD_RELEASE_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: ${{ inputs.mode || 'edge' }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          case "$MODE" in
+          promote) sh scripts/content-release.sh promote "$VERSION" ;;
+          resign) sh scripts/content-release.sh resign ;;
+          *) sh scripts/content-release.sh edge ;;
+          esac

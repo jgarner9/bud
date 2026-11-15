@@ -63,6 +63,14 @@ smoke:
 install-test:
   sh scripts/install-test.sh </dev/null
 
+# fail when a tracked file names something personal (set BUD_LEAK_PATTERNS for your own strings)
+leak-check:
+  sh scripts/leak-check.sh
+
+# leak-check.sh's decisions against throwaway repos
+leak-test:
+  sh scripts/leak_check_test.sh
+
 # assemble the docs site's Jekyll source (site/ plus docs/*.md) into a temp dir,
 # failing when a docs page is missing from the sidebar
 site-test:
@@ -74,7 +82,7 @@ lang-check *langs:
   sh scripts/lang-check.sh "$@"
 
 # everything CI checks (lint + tests + smoke)
-check: lint test lua-test install-test rotate-test release-plan-test site-test smoke
+check: lint test lua-test install-test rotate-test release-plan-test leak-test leak-check site-test smoke
 
 # fail with an install hint when a tool isn't on PATH
 [private]

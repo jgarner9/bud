@@ -29,6 +29,18 @@ jobs:
       - run: sh scripts/install-test.sh
       - run: sh scripts/release_plan_test.sh
 
+  # Suite D21, D59: nothing personal in this public repo. The shape checks
+  # always run; your own strings come from the BUD_LEAK_PATTERNS secret (one
+  # regex per line), which forks' PRs don't get, so they run shapes only
+  leak-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: sh scripts/leak_check_test.sh
+      - run: sh scripts/leak-check.sh
+        env:
+          BUD_LEAK_PATTERNS: ${{ secrets.BUD_LEAK_PATTERNS }}
+
   lua:
     runs-on: ubuntu-latest
     env:

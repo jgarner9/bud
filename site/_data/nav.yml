@@ -14,6 +14,7 @@
     - { file: config, title: Config }
     - { file: registry, title: Model registry }
     - { file: profiles, title: Device profiles }
+    - { file: overlay, title: The private overlay }
 - title: How-to
   pages:
     - { file: languages, title: Adding a language }

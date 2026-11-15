@@ -47,6 +47,16 @@ func TestLeftOutKindsTakeEverythingButEnvTakesBase(t *testing.T) {
 	}
 }
 
+func TestAnEmptyEnvListTakesNoEnv(t *testing.T) {
+	p, err := Parse([]byte(`{"name": "x", "components": ["harness"], "channel": "stable", "content": {"env": []}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Selects("env", "base") {
+		t.Error(`"env": [] should take nothing, not fall back to base`)
+	}
+}
+
 func TestGlobsSelectByID(t *testing.T) {
 	p := &Profile{Content: Content{Skills: []string{"plan-*", "learn"}, Plugins: []string{}}}
 	for id, want := range map[string]bool{"plan-to-linear": true, "learn": true, "learning": false, "code-style": false} {

@@ -144,7 +144,8 @@ func (c Content) globs(kind string) []string {
 	case "plugins":
 		g = c.Plugins
 	case "env":
-		if len(c.Env) == 0 {
+		// nil is left out; an explicit [] takes nothing, as for the other kinds
+		if c.Env == nil {
 			return DefaultEnv
 		}
 		return c.Env

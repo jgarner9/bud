@@ -118,10 +118,10 @@ func TestToolsPromote(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if !isFile(filepath.Join(repo, "tools", "mine", "init.lua")) || exists(filepath.Join(p.UserTools(), "mine")) {
+	if !isFile(filepath.Join(repo, "ide", "tools", "mine", "init.lua")) || exists(filepath.Join(p.UserTools(), "mine")) {
 		t.Fatal("not moved")
 	}
-	want := []string{"add tools/mine", `commit -m feat: promote the mine tool -- tools/mine`, "push"}
+	want := []string{"add ide/tools/mine", `commit -m feat: promote the mine tool -- ide/tools/mine`, "push"}
 	if !slices.Equal(ran, want) {
 		t.Fatalf("git %q, want %q", ran, want)
 	}

@@ -1,11 +1,13 @@
 #!/bin/sh
-# Runs the headless Lua tests (tests/lua/*_test.lua, or the files given), each in
+# Runs the headless Lua tests (ide/tests/lua/*_test.lua, or the files given), each in
 # its own `nvim --clean --headless -l` with a time limit, and stops at the first
 # failure. A test still running after the limit is killed and fails with its name,
 # so a hang never stalls `just check` or CI. macOS has no `timeout`, so perl
 # does the timing: it runs each test in a process group of its own and kills
 # the whole group, so nothing the test started is left holding the output open.
-# Run from the repo root: sh scripts/lua-test.sh [test ...]
+# Run from the repo root: sh scripts/lua-test.sh [test ...]. The tests run
+# inside ide/, the IDE's own tree (D56), since they read nvim/, languages/ and
+# tests/ by relative path; a test given as ide/tests/lua/x_test.lua works too
 
 set -u
 
@@ -49,9 +51,12 @@ limited() {
 	' "$@"
 }
 
+cd "$(dirname "$0")/../ide" || exit 1
+
 if [ $# -eq 0 ]; then set -- tests/lua/*_test.lua; fi
 
 for t in "$@"; do
+	t="${t#ide/}"
 	limited "$limit" nvim --clean --headless -l "$t"
 	status=$?
 	# Ctrl-C: the test's group is gone already, so just stop

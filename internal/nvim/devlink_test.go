@@ -13,10 +13,10 @@ func fakeCheckout(t *testing.T) string {
 	t.Helper()
 	repo := t.TempDir()
 	for path, body := range map[string]string{
-		"nvim/init.lua":         "-- init",
-		"nvim/lua/bud/core.lua": "-- core",
-		"languages/go.lua":      "return {}",
-		"layouts/focus.lua":     "return {}",
+		"ide/nvim/init.lua":         "-- init",
+		"ide/nvim/lua/bud/core.lua": "-- core",
+		"ide/languages/go.lua":      "return {}",
+		"ide/layouts/focus.lua":     "return {}",
 	} {
 		full := filepath.Join(repo, filepath.FromSlash(path))
 		os.MkdirAll(filepath.Dir(full), 0o755)
@@ -59,7 +59,7 @@ func TestLinkUnlink(t *testing.T) {
 	}
 
 	// edits in the checkout show through
-	os.WriteFile(filepath.Join(repo, "nvim/init.lua"), []byte("-- edited"), 0o644)
+	os.WriteFile(filepath.Join(repo, "ide/nvim/init.lua"), []byte("-- edited"), 0o644)
 	if b, _ := os.ReadFile(filepath.Join(dst, "init.lua")); string(b) != "-- edited" {
 		t.Errorf("init.lua = %q", b)
 	}
@@ -69,7 +69,7 @@ func TestLinkUnlink(t *testing.T) {
 	if err != nil || changed(res) {
 		t.Fatalf("sync touched a dev link: %+v, %v", res, err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(repo, "nvim/init.lua")); string(b) != "-- edited" {
+	if b, _ := os.ReadFile(filepath.Join(repo, "ide/nvim/init.lua")); string(b) != "-- edited" {
 		t.Fatal("sync wrote through the link into the checkout")
 	}
 
@@ -116,7 +116,7 @@ func TestLinkInTheWay(t *testing.T) {
 
 func TestLinkSkipsDotEntries(t *testing.T) {
 	repo := fakeCheckout(t)
-	os.MkdirAll(filepath.Join(repo, "nvim/.claude/.cc-writes"), 0o755)
+	os.MkdirAll(filepath.Join(repo, "ide/nvim/.claude/.cc-writes"), 0o755)
 	dst := t.TempDir()
 	os.MkdirAll(filepath.Join(dst, ".claude/.cc-writes"), 0o755)
 	if err := Link(repo, dst); err != nil {
@@ -139,7 +139,7 @@ func TestRemoveConfigDevLink(t *testing.T) {
 	if _, err := os.Stat(dst); !os.IsNotExist(err) {
 		t.Fatalf("dir still there: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(repo, "nvim/init.lua")); err != nil {
+	if _, err := os.Stat(filepath.Join(repo, "ide/nvim/init.lua")); err != nil {
 		t.Fatal("removing the config deleted the checkout's files")
 	}
 }

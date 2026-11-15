@@ -62,7 +62,7 @@ p.boxes.prompt.map("<CR>", function() ... end)        -- <Tab> moves between box
 
 A TUI that shouldn't share the project's conversation can have its own: `claude.session(dir, { key = "my-tui", resume = "new", extra = true })`, then `claude.send(text, { key = "my-tui" })`; `extra` keeps it from counting against the project sessions. `:BudGen` (`key = "gen"`) and issues work this way.
 
-Put it in `nvim/lua/bud/` to ship it with bud, or make it a tool (see tools.md) to keep it on your machine.
+Put it in `ide/nvim/lua/bud/` to ship it with bud, or make it a tool (see tools.md) to keep it on your machine.
 
 ## Answering permission requests yourself
 

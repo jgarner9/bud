@@ -83,9 +83,9 @@ func TestIssueTargetBud(t *testing.T) {
 	p := layoutHome(t)
 	checkout := t.TempDir()
 	// Link wants something that looks like a bud checkout
-	os.MkdirAll(filepath.Join(checkout, "nvim"), 0o755)
-	os.WriteFile(filepath.Join(checkout, "nvim", "init.lua"), nil, 0o644)
-	os.MkdirAll(filepath.Join(checkout, "languages"), 0o755)
+	os.MkdirAll(filepath.Join(checkout, "ide", "nvim"), 0o755)
+	os.WriteFile(filepath.Join(checkout, "ide", "nvim", "init.lua"), nil, 0o644)
+	os.MkdirAll(filepath.Join(checkout, "ide", "languages"), 0o755)
 
 	// bud's own tracker by default, with no checkout until one is dev-linked
 	if got := targetJSON(t, nil, true); got != (target{Team: "JGA", Project: "Bud IDE", Source: "bud"}) {
@@ -128,9 +128,9 @@ func budRepo(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.MkdirAll(filepath.Join(dir, "nvim"), 0o755)
-	os.WriteFile(filepath.Join(dir, "nvim", "init.lua"), nil, 0o644)
-	os.MkdirAll(filepath.Join(dir, "languages"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "ide", "nvim"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ide", "nvim", "init.lua"), nil, 0o644)
+	os.MkdirAll(filepath.Join(dir, "ide", "languages"), 0o755)
 	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
 
 	return dir

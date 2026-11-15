@@ -13,34 +13,34 @@ import (
 //
 // all:plugins keeps .claude-plugin/, which a plain directory pattern would drop
 //
-//go:embed nvim languages/*.lua layouts/*.lua migrations/*.lua bundles tools all:plugins
+//go:embed ide/nvim ide/languages/*.lua ide/layouts/*.lua ide/migrations/*.lua ide/bundles ide/tools all:ide/plugins
 var repoFS embed.FS
 
 // Config returns what bud syncs into ~/.config/bud: the repo's nvim/ directory
 // at the root, so paths read like "init.lua", with languages/, layouts/ and tools/ inside it
 func Config() fs.FS {
 	return configFS{
-		root:   sub("nvim"),
-		mounts: map[string]fs.FS{"languages": sub("languages"), "layouts": sub("layouts"), "tools": sub("tools")},
+		root:   sub("ide/nvim"),
+		mounts: map[string]fs.FS{"languages": sub("ide/languages"), "layouts": sub("ide/layouts"), "tools": sub("ide/tools")},
 	}
 }
 
 // Migrations returns the numbered scripts `bud update` runs once each when a
 // release changes layout or paths (BASE.md 5.7 step 3)
 func Migrations() fs.FS {
-	return sub("migrations")
+	return sub("ide/migrations")
 }
 
 // Bundles returns the app bundle templates bud bundle builds from (BASE.md 5.6)
 func Bundles() fs.FS {
-	return sub("bundles")
+	return sub("ide/bundles")
 }
 
 // Plugin returns the bud-ide Claude Code plugin (D142), whose root has
 // .claude-plugin/plugin.json; internal/plugin extracts it for the sessions the
 // IDE starts
 func Plugin() fs.FS {
-	return sub("plugins/bud-ide")
+	return sub("ide/plugins/bud-ide")
 }
 
 func sub(dir string) fs.FS {

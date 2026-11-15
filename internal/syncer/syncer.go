@@ -67,6 +67,13 @@ var ErrNoDevice = errors.New("no device profile is set, so bud sync doesn't know
 
 // Run syncs the device to its channel's newest content
 func Run(ctx context.Context, o Options) (*Report, error) {
+	if !o.DryRun {
+		unlock, err := lock(o.Paths.SyncLedger())
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
+	}
 	led, err := LoadLedger(o.Paths.SyncLedger())
 	if err != nil {
 		return nil, err
@@ -103,9 +110,9 @@ func Run(ctx context.Context, o Options) (*Report, error) {
 	rolledBack := led.RolledBack
 	switch {
 	case offered == led.Content:
-	case slices.Contains(led.RolledBack, offered) && led.Content != "":
+	case heldBack(led.RolledBack, offered) && led.Content != "":
 		target = led.Content
-		rep.Notes = append(rep.Notes, fmt.Sprintf("content %s was rolled back, so this device stays on %s until a newer version is out", offered, led.Content))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("content %s isn't newer than a version that was rolled back, so this device stays on %s until a newer one is out", offered, led.Content))
 	default:
 		if err := content.CheckNewer(led.Content, offered); err != nil {
 			return nil, err
@@ -144,6 +151,13 @@ func Run(ctx context.Context, o Options) (*Report, error) {
 // older than the one in use, with the overlay as it is on disk. A later
 // sync won't move to the version it left until a newer one is out
 func Rollback(ctx context.Context, o Options) (*Report, error) {
+	if !o.DryRun {
+		unlock, err := lock(o.Paths.SyncLedger())
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
+	}
 	led, err := LoadLedger(o.Paths.SyncLedger())
 	if err != nil {
 		return nil, err
@@ -336,13 +350,21 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	}
 
 	next.Files = keep
-	if err := switchLink(p.ContentCurrent(), next.Content); err != nil {
-		return err
-	}
+	// build the link set before switching anything, and put current back if
+	// active can't follow it, so the two never point at different versions
 	if err := links.build(p.Active()); err != nil {
 		return err
 	}
+	oldCurrent := readLink(p.ContentCurrent())
+	if err := switchLink(p.ContentCurrent(), next.Content); err != nil {
+		return err
+	}
 	if err := switchLink(p.Active(), activeTarget); err != nil {
+		if oldCurrent != "" {
+			if back := switchLink(p.ContentCurrent(), oldCurrent); back != nil {
+				return fmt.Errorf("%w; and current couldn't be put back to %s: %v", err, oldCurrent, back)
+			}
+		}
 		return err
 	}
 	var errs []error
@@ -365,6 +387,23 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	}
 
 	return errors.Join(errs...)
+}
+
+// heldBack says whether offered is no newer than a version a rollback left,
+// so a sync stays on the rollback's version: an offer has to be newer than
+// every rolled-back version to be taken
+func heldBack(rolledBack []string, offered string) bool {
+	o, err := content.ParseVersion(offered)
+	if err != nil {
+		return false
+	}
+	for _, rb := range rolledBack {
+		if v, err := content.ParseVersion(rb); err == nil && o.Compare(v) <= 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // loadRegistry reads the public registry from content dir, merges the

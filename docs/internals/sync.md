@@ -24,7 +24,7 @@ The content release workflow (task 1.10) must publish exactly these. Content rel
 
 ## What a sync does
 
-1. Reads the ledger, `~/.local/state/bud/sync.json`. Missing means this device has never synced.
+1. Takes the device's sync lock (an `flock` on `~/.local/state/bud/sync.lock`, dropped when the process exits), so a timer and a hand run never interleave; a second run fails at once. A dry run takes no lock. Then reads the ledger, `~/.local/state/bud/sync.json`. Missing means this device has never synced.
 2. Fast-forwards the overlay with `overlay.Fetch` (never forced; it stops on local changes or divergence), then finds the profile.
 3. Downloads `channel.json` and checks its signature. The offered version is the profile's channel's `content`.
 4. Picks the version to use. The installed one again when it's what's offered; the installed one when the offer is a version `--rollback` left; otherwise the offer, which `content.CheckNewer` must find newer than the installed one, so an old signed bundle can't roll a device back.
@@ -32,14 +32,15 @@ The content release workflow (task 1.10) must publish exactly these. Content rel
 6. Layers the overlay over that dir with `overlay.Layer` and keeps what the profile selects. The registry is the content's `env/registry.jsonc` with the overlay's merged over it, validated; it is never treated as an env fragment.
 7. Builds the active link set. `~/.local/share/bud/active` links to `active.d/<hash>`, which holds `skills/<id>` and `plugins/<id>` links into the content version or the overlay. The hash is of the links themselves, so an unchanged selection keeps the same dir.
 8. If the profile runs OpenCode (`harness` or `server`), renders `opencode.jsonc` with `adapter/opencode`: skills from `active/skills`, instructions from `content/current/AGENTS.md` then the overlay's, plugins from `active/plugins/<id>`, env fragments public first and the overlay's last. Agents and commands are copied to `~/.config/opencode/{agents,commands}/<id>.md`. Provider keys that are `op://` references go in `~/.local/state/bud/opencode.env` (mode 0600, references only) for `op run --env-file`.
-9. Plans each file against the disk and the ledger, then switches `content/current` and `active` (each a new link renamed over the old, so readers see one or the other), writes and deletes the files, saves the ledger, and removes unused `active.d` dirs.
+9. Plans each file against the disk and the ledger, builds the link set, then switches `content/current` and `active` (each a new link renamed over the old, so readers see one or the other; if `active` can't follow, `current` is put back), writes and deletes the files, saves the ledger, and removes unused `active.d` dirs.
 
 ## The manifest rule
 
 | On disk | Ledger | What happens |
 | --- | --- | --- |
 | missing | any | written |
-| what bud would write | any | left, recorded |
+| what bud would write | has it | left, recorded |
+| what bud would write | doesn't | left, never recorded, so a later release can't overwrite or delete it |
 | what bud last wrote | has it | rewritten |
 | anything else | has it | skipped and named as a hand edit; the ledger keeps bud's hash, so `bud doctor` keeps flagging it |
 | anything else | doesn't | skipped and named as not bud's; never recorded |
@@ -52,7 +53,7 @@ A file the ledger has that the sync no longer wants is deleted when it's still w
 
 ## Rollback
 
-`bud sync --rollback` takes the newest version dir on disk older than the ledger's, and runs steps 6 to 9 on it with the overlay as it is on disk (it isn't fetched). The version it left goes into `rolled_back`, so a later sync stays put while the channel still offers it, and a newer version on the channel clears the list. Old version dirs aren't pruned yet.
+`bud sync --rollback` takes the newest version dir on disk older than the ledger's, and runs steps 6 to 9 on it with the overlay as it is on disk (it isn't fetched). The version it left goes into `rolled_back`. A later sync stays put while the channel offers anything no newer than a rolled-back version, so going .1 to .3, rolling back, then being offered .2 and .3 again never brings .3 back; an offer newer than all of them is taken and clears the list. Old version dirs aren't pruned yet.
 
 ## Dry run
 

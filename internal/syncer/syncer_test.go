@@ -593,3 +593,89 @@ func TestTheOverlayLayersOverPublicContent(t *testing.T) {
 		t.Fatalf("a second sync with the overlay changed %+v", rep.Changes)
 	}
 }
+
+func TestAFileBudDidntWriteIsNotTakenOverEvenWhenItMatches(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", tree(t))
+	o := options(t, s)
+	check := filepath.Join(o.Paths.OpenCodeConfig(), "commands", "check.md")
+	if err := os.MkdirAll(filepath.Dir(check), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(check, []byte("run the checks\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, o)
+	led, _ := LoadLedger(o.Paths.SyncLedger())
+	if slices.ContainsFunc(led.Files, func(f File) bool { return f.Path == check }) {
+		t.Fatal("a matching file bud didn't write was taken into the ledger")
+	}
+
+	next := tree(t)
+	delete(next, "commands/check.md")
+	s.publish("2026.11.15.2", "edge", next)
+	run(t, o)
+	if read(t, check) != "run the checks\n" {
+		t.Fatal("a file bud didn't write was deleted")
+	}
+}
+
+func TestARollbackHoldsUntilAnOfferIsNewerThanEveryRolledBackVersion(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", tree(t))
+	o := options(t, s)
+	run(t, o)
+	s.publish("2026.11.15.3", "edge", tree(t))
+	run(t, o)
+	if _, err := Rollback(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+
+	s.publish("2026.11.15.2", "edge", tree(t))
+	if rep := run(t, o); rep.Content != "2026.11.15.1" {
+		t.Fatalf("an offer older than the rolled-back version moved the device to %s", rep.Content)
+	}
+	s.offer("edge", "2026.11.15.3")
+	if rep := run(t, o); rep.Content != "2026.11.15.1" {
+		t.Fatalf("the rolled-back version came back: %s", rep.Content)
+	}
+}
+
+func TestASecondSyncWaitsForTheFirst(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", tree(t))
+	o := options(t, s)
+	unlock, err := lock(o.Paths.SyncLedger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	if _, err := Run(context.Background(), o); err == nil || !strings.Contains(err.Error(), "another bud sync is running") {
+		t.Fatalf("a sync ran while another held the lock: %v", err)
+	}
+	if _, err := Rollback(context.Background(), o); err == nil || !strings.Contains(err.Error(), "another bud sync is running") {
+		t.Fatalf("a rollback ran while a sync held the lock: %v", err)
+	}
+}
+
+func TestCurrentIsPutBackWhenActiveCantFollow(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", tree(t))
+	o := options(t, s)
+	run(t, o)
+
+	// something that isn't a link where active goes: bud won't replace it
+	if err := os.Remove(o.Paths.Active()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(o.Paths.Active(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s.publish("2026.11.15.2", "edge", tree(t))
+	if _, err := Run(context.Background(), o); err == nil {
+		t.Fatal("the sync should fail when active isn't a link")
+	}
+	if got := readLink(o.Paths.ContentCurrent()); got != "2026.11.15.1" {
+		t.Fatalf("current is %s after a failed switch, want it put back to 2026.11.15.1", got)
+	}
+}

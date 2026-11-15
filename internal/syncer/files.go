@@ -45,7 +45,8 @@ type fileStep struct {
 // planFiles compares the files a sync wants with the disk and the ledger.
 // It writes a file that's missing, or that is still what bud last wrote
 // there; a file edited by hand, or that bud never wrote, is skipped and
-// named, never overwritten. A file bud wrote that the sync no longer wants
+// named, never overwritten. A file bud never wrote that already holds what
+// bud would write is left alone and not taken over. A file bud wrote that the sync no longer wants
 // is deleted if it's unchanged. keep is the ledger entries for files left
 // as they are; each step's entry joins them once it's done
 func planFiles(old []File, wants []want) (steps []fileStep, keep []File, skips []Change, err error) {
@@ -67,8 +68,11 @@ func planFiles(old []File, wants []want) (steps []fileStep, keep []File, skips [
 		}
 		prev, ours := tracked[w.path]
 		switch {
-		case exists && have == sum:
+		case exists && have == sum && ours:
 			keep = append(keep, entry)
+		case exists && have == sum:
+			// the same bytes, but not bud's: left as it is and never
+			// recorded, so a later release can't overwrite or delete it
 		case !exists || (ours && have == prev.SHA256):
 			steps = append(steps, fileStep{Change: Change{Action: Write, Path: w.path}, want: w, entry: entry})
 		case ours:

@@ -140,7 +140,7 @@ func TestSyncChecksPassRightAfterASync(t *testing.T) {
 			t.Errorf("%s = %v: %s", r.Name, r.Status, r.Detail)
 		}
 	}
-	if r := byName(t, results, "content layers"); r.Detail != "no overlay set, so public content only; public: nothing; rendered from both: opencode.jsonc" {
+	if r := byName(t, results, "content layers"); r.Detail != "no overlay set, so public content only; public: nothing; rendered: opencode.jsonc" {
 		t.Errorf("layers detail = %q", r.Detail)
 	}
 	if r := byName(t, results, "sync ledger"); r.Detail != "content "+synced+", 1 file as bud sync wrote them" {
@@ -181,10 +181,17 @@ func TestContentLayersNameEachItemsLayer(t *testing.T) {
 	prof := &profile.Profile{Name: "dev-machine", Components: []string{"harness"}, Channel: "edge", Content: profile.Content{Env: []string{"base", "coding"}}}
 
 	r := checkLayers(dir, led.Overlay.Repo, p.Overlay(), prof, led)
-	want := "overlay 0123456: env/coding, instructions/AGENTS, skills/learn (replaces public); " +
-		"public: env/base, instructions/AGENTS, skills/plan; rendered from both: opencode.jsonc"
+	want := "overlay on disk (last sync layered 0123456): env/coding, instructions/AGENTS, skills/learn (replaces public); " +
+		"public: env/base, instructions/AGENTS, skills/plan; rendered: opencode.jsonc"
 	if r.Status != OK || r.Detail != want {
 		t.Errorf("layers = %v: %q\nwant %q", r.Status, r.Detail, want)
+	}
+
+	// a device that runs no OpenCode takes only skills and plugins
+	box := &profile.Profile{Name: "model-box", Components: []string{"qwen"}, Channel: "stable"}
+	r = checkLayers(dir, led.Overlay.Repo, p.Overlay(), box, led)
+	if want := "overlay on disk (last sync layered 0123456): skills/learn (replaces public); public: skills/plan; rendered: opencode.jsonc"; r.Detail != want {
+		t.Errorf("model-box layers = %q\nwant %q", r.Detail, want)
 	}
 
 	// set but never cloned: public content only, and a sync fixes it

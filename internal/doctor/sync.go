@@ -201,7 +201,9 @@ func checkRegistry(dir, overlayDir string) (*registry.Registry, Result) {
 // checkLayers names every piece of content the device takes and the layer
 // it comes from, the way the last sync layered them: the overlay's items
 // (and which of them replace a public one), the public ones, and the files
-// rendered from both. It only reports, so it never fails; an overlay that
+// rendered from them. Items are read from the overlay as it is on disk,
+// and a device that runs no OpenCode takes only skills and plugins, as the
+// sync does. It only reports, so it never fails; an overlay that
 // is set but not on disk warns, since the device runs on public content
 // alone until a sync clones it
 func checkLayers(dir, repo, overlayDir string, prof *profile.Profile, led *syncer.Ledger) Result {
@@ -214,6 +216,7 @@ func checkLayers(dir, repo, overlayDir string, prof *profile.Profile, led *synce
 		return r
 	}
 
+	opencode := prof.Has("harness") || prof.Has("server")
 	byLayer := map[string][]string{}
 	for _, it := range items {
 		if it.Kind == "env" && it.ID == "registry" {
@@ -221,6 +224,9 @@ func checkLayers(dir, repo, overlayDir string, prof *profile.Profile, led *synce
 		}
 		if it.Kind != "instructions" && !prof.Selects(it.Kind, it.ID) {
 			continue
+		}
+		if !opencode && it.Kind != "skills" && it.Kind != "plugins" {
+			continue // only OpenCode reads the rest, and the sync drops it
 		}
 		name := it.Kind + "/" + it.ID
 		if it.Overrides {
@@ -243,15 +249,15 @@ func checkLayers(dir, repo, overlayDir string, prof *profile.Profile, led *synce
 		parts = append(parts, "the overlay "+repo+" isn't cloned yet, so public content only")
 		r.Fix = "bud sync (it clones the overlay)"
 	default:
-		label := "overlay"
+		label := "overlay on disk"
 		if led.Overlay != nil && led.Overlay.Commit != "" {
-			label += " " + shortCommit(led.Overlay.Commit)
+			label += " (last sync layered " + shortCommit(led.Overlay.Commit) + ")"
 		}
 		parts = append(parts, label+": "+listOrNone(byLayer[overlay.Private]))
 	}
 	parts = append(parts, "public: "+listOrNone(byLayer[overlay.Public]))
 	if len(byLayer["rendered"]) > 0 {
-		parts = append(parts, "rendered from both: "+strings.Join(byLayer["rendered"], ", "))
+		parts = append(parts, "rendered: "+strings.Join(byLayer["rendered"], ", "))
 	}
 	r.Detail = strings.Join(parts, "; ")
 

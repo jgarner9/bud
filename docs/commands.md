@@ -40,6 +40,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud bootstrap [--config] user@host` | Installs this version of bud on another machine over SSH, minimal profile by default. `--config` copies your `config.json` across first. |
 | `bud version` | Prints the version. |
 | `bud completion bash\|zsh\|fish` | Prints shell completion. Add `eval "$(bud completion zsh)"` to your shell rc. |
+| `bud registry check <registry.jsonc> [overlay.jsonc]` | Validates the model registry, with an overlay's merged on top when given, and lists every problem with its fix. See [the model registry](registry.md). |
 
 ## Languages, layouts and projects
 

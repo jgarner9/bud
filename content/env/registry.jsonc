@@ -1,0 +1,69 @@
+// The provider and model registry (Suite D46, D58). bud sync renders every
+// runtime's config from this file, so a model swap for a role is one edit here.
+// The format is in docs/registry.md.
+//
+// This is the public, generic file. Hosts here are placeholders under .invalid,
+// which never resolves: the private overlay's env/registry.jsonc replaces the
+// local providers with the real addresses. An overlay entry replaces the entry
+// of the same ID whole, so it restates every field, "local" included.
+//
+// The model picks below are examples to confirm, not decisions; the Go model
+// names and endpoint are checked at the first `bud doctor --net` against Go.
+{
+  "version": 1,
+
+  "providers": {
+    // OpenCode Go Plus (Suite D11), the one cloud key for the manager and coding
+    "go": {
+      "api": "openai",
+      "endpoint": "https://opencode.ai/inference/go/openai/v1",
+      "key": "{env:OPENCODE_GO_API_KEY}"
+    },
+    // llama.cpp on the Qwen box (Suite D25), woken on demand (D26)
+    "qwen": {
+      "api": "openai",
+      "endpoint": "http://qwen.invalid:8080/v1",
+      "local": true
+    },
+    // the small FIM model, a second llama-server on the Qwen box (Suite D32, D55)
+    "qwen-fim": {
+      "api": "openai",
+      "endpoint": "http://qwen.invalid:8081/v1",
+      "local": true
+    },
+    // embeddings on the always-on home server, so memory never waits for the Qwen box (Suite D52)
+    "embed": {
+      "api": "openai",
+      "endpoint": "http://home.invalid:8082/v1",
+      "local": true
+    }
+  },
+
+  "models": {
+    // names on local providers are llama-server --alias values, which bud sets,
+    // so the GGUF behind them can change without touching this file
+    "qwen-35b": { "provider": "qwen", "name": "qwen-35b", "context": 32768, "privacy": ["P0", "P1", "P2"], "cost": "C0" },
+    "qwen-fim": { "provider": "qwen-fim", "name": "coder-fim", "context": 8192, "privacy": ["P0", "P1", "P2"], "cost": "C0" },
+    "qwen3-embedding-0.6b": { "provider": "embed", "name": "qwen3-embedding-0.6b", "privacy": ["P0", "P1", "P2"], "cost": "C0", "dims": 1024 },
+
+    "kimi-k3": { "provider": "go", "name": "kimi-k3", "privacy": ["P1", "P2"], "cost": "C1" },
+    "glm-5.3": { "provider": "go", "name": "glm-5.3", "privacy": ["P1", "P2"], "cost": "C1" },
+    // the cheapest Go model, for the autocomplete fallback (Suite D38)
+    "mimo-v2.6-flash": { "provider": "go", "name": "mimo-v2.6-flash", "privacy": ["P1", "P2"], "cost": "C1" }
+  },
+
+  "roles": {
+    "manager": { "model": "kimi-k3", "fallbacks": ["qwen-35b"] },
+    "coding": { "model": "glm-5.3", "fallbacks": ["kimi-k3"] },
+    "planning": { "model": "kimi-k3", "fallbacks": ["glm-5.3"] },
+    "classifier": { "model": "qwen-35b" },
+    // Qwen first, a Go model when the box is off, never on P0 paths (Suite D32, D38)
+    "fim": { "model": "qwen-fim", "fallbacks": ["mimo-v2.6-flash"] },
+    "embedding": { "model": "qwen3-embedding-0.6b" },
+    // what any role uses once its own list is exhausted; local, so it is P0-safe
+    "fallback": { "model": "qwen-35b" },
+    "curator": { "model": "qwen-35b" },
+    // confirm the pick takes images
+    "vision": { "model": "kimi-k3" }
+  },
+}

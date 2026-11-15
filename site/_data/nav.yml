@@ -12,6 +12,7 @@
     - { file: commands, title: Commands }
     - { file: keys, title: Keys }
     - { file: config, title: Config }
+    - { file: registry, title: Model registry }
 - title: How-to
   pages:
     - { file: languages, title: Adding a language }

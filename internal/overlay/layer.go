@@ -78,17 +78,23 @@ func Layer(publicDir, overlayDir string) ([]Item, error) {
 	return out, nil
 }
 
-// sortItems orders items by kind, then ID, then layer, public first so the
-// overlay applies last
+// sortItems orders items by kind, then ID. Env fragments and instructions
+// are merged in this order rather than replaced, so for them the layer comes
+// before the ID: every public one, then every overlay one, and the overlay's
+// apply last whatever they're called
 func sortItems(items []Item) {
 	slices.SortStableFunc(items, func(a, b Item) int {
 		if c := strings.Compare(a.Kind, b.Kind); c != 0 {
 			return c
 		}
+		layer := strings.Compare(layerOrder(a.Layer), layerOrder(b.Layer))
+		if !replacedByID(a.Kind) && layer != 0 {
+			return layer
+		}
 		if c := strings.Compare(a.ID, b.ID); c != 0 {
 			return c
 		}
-		return strings.Compare(layerOrder(a.Layer), layerOrder(b.Layer))
+		return layer
 	})
 }
 

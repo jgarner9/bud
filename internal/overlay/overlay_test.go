@@ -152,6 +152,51 @@ func TestFetchRefusesLocalChangesAndOtherRepos(t *testing.T) {
 	}
 }
 
+func TestFetchWontActOnAnEnclosingClone(t *testing.T) {
+	isolate(t)
+	url, work := remote(t)
+	// a plain dir inside a clean clone of the same repo
+	inner := filepath.Join(work, "nested")
+	if err := os.MkdirAll(inner, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	before := run(t, work, "rev-parse", "HEAD")
+	if _, err := Fetch(context.Background(), url, inner); err == nil || !strings.Contains(err.Error(), "isn't a git clone") {
+		t.Fatalf("want a refusal, got %v", err)
+	}
+	if after := run(t, work, "rev-parse", "HEAD"); after != before {
+		t.Fatal("the enclosing clone was moved")
+	}
+}
+
+func TestFetchNeedsABranchThatTracksOrigin(t *testing.T) {
+	isolate(t)
+	url, work := remote(t)
+	dir := filepath.Join(t.TempDir(), "overlay")
+	ctx := context.Background()
+	if _, err := Fetch(ctx, url, dir); err != nil {
+		t.Fatal(err)
+	}
+	other, _ := remote(t)
+	run(t, dir, "remote", "add", "other", other)
+	run(t, dir, "fetch", "--quiet", "other")
+	run(t, dir, "branch", "--quiet", "--set-upstream-to=other/main")
+	push(t, work, "new.md")
+	before := run(t, dir, "rev-parse", "HEAD")
+	if _, err := Fetch(ctx, url, dir); err == nil || !strings.Contains(err.Error(), "doesn't track origin") {
+		t.Fatalf("tracking another remote: %v", err)
+	}
+	if after := run(t, dir, "rev-parse", "HEAD"); after != before {
+		t.Fatal("an overlay tracking another remote was moved")
+	}
+
+	run(t, dir, "branch", "--quiet", "--set-upstream-to=origin/main")
+	run(t, dir, "checkout", "--quiet", "--detach")
+	if _, err := Fetch(ctx, url, dir); err == nil || !strings.Contains(err.Error(), "isn't on a branch") {
+		t.Fatalf("detached: %v", err)
+	}
+}
+
 func TestCheckFormat(t *testing.T) {
 	dir := t.TempDir()
 	if err := CheckFormat(dir); err != nil {
@@ -219,8 +264,8 @@ func TestTheOverlayWinsByIDAndEnvAppliesLast(t *testing.T) {
 		"agents/plan overlay override",
 		"commands/check public",
 		"env/base public",
-		"env/laptop overlay",
 		"env/registry public",
+		"env/laptop overlay",
 		"env/registry overlay",
 		"instructions/AGENTS public",
 		"instructions/AGENTS overlay",

@@ -42,6 +42,12 @@ func Fetch(ctx context.Context, url, dir string) (string, error) {
 		return "", err
 	}
 
+	// git looks upward for a repo, so a plain dir inside some other clone
+	// would act on that clone; dir must be the top of its own
+	top, err := git(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil || !sameDir(top, dir) {
+		return "", fmt.Errorf("%s isn't a git clone of the overlay; move it aside and sync again to clone it", dir)
+	}
 	origin, err := git(ctx, dir, "remote", "get-url", "origin")
 	if err != nil {
 		return "", fmt.Errorf("%s isn't a git clone of the overlay: %w", dir, err)
@@ -54,6 +60,15 @@ func Fetch(ctx context.Context, url, dir string) (string, error) {
 	} else if status != "" {
 		return "", fmt.Errorf("the overlay at %s has local changes; commit and push them, or stash them, and sync again (nothing changed)", dir)
 	}
+	// the merge below takes the branch's upstream, which has to be origin's,
+	// or it could merge another remote's commits or none at all
+	branch, err := git(ctx, dir, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("the overlay at %s isn't on a branch; check out its main branch with git -C %s switch main (nothing changed)", dir, dir)
+	}
+	if remote, _ := git(ctx, dir, "config", "--get", "branch."+branch+".remote"); remote != "origin" {
+		return "", fmt.Errorf("the overlay's branch %s doesn't track origin; set it with git -C %s branch --set-upstream-to=origin/%s (nothing changed)", branch, dir, branch)
+	}
 	if _, err := git(ctx, dir, "fetch", "--quiet", "origin"); err != nil {
 		return "", fmt.Errorf("fetch the overlay: %w", err)
 	}
@@ -62,6 +77,18 @@ func Fetch(ctx context.Context, url, dir string) (string, error) {
 	}
 
 	return git(ctx, dir, "rev-parse", "HEAD")
+}
+
+// sameDir says whether a and b name the same directory, through symlinks
+// and relative spellings
+func sameDir(a, b string) bool {
+	ai, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	bi, err := os.Stat(b)
+
+	return err == nil && os.SameFile(ai, bi)
 }
 
 // git runs git in dir and returns its trimmed stdout; on failure the error

@@ -83,7 +83,11 @@ func Render(in Input) (*Output, error) {
 			}
 			entry := map[string]any{"modelID": m.Name}
 			if m.Context > 0 {
-				entry["limit"] = map[string]any{"context": m.Context}
+				limit := map[string]any{"context": m.Context}
+				if m.Output > 0 {
+					limit["output"] = m.Output
+				}
+				entry["limit"] = limit
 			}
 			models[mid] = entry
 		}
@@ -110,11 +114,12 @@ func Render(in Input) (*Output, error) {
 		if !ok {
 			return "", fmt.Errorf("render opencode.jsonc: the registry has no %s role", role)
 		}
-		m, ok := r.Models[ro.Model]
+		id := ro.Default()
+		m, ok := r.Models[id]
 		if !ok {
-			return "", fmt.Errorf("render opencode.jsonc: the %s role's model %q isn't in the registry", role, ro.Model)
+			return "", fmt.Errorf("render opencode.jsonc: the %s role's model %q isn't in the registry", role, id)
 		}
-		return m.Provider + "/" + ro.Model, nil
+		return m.Provider + "/" + id, nil
 	}
 	coding, err := ref("coding")
 	if err != nil {

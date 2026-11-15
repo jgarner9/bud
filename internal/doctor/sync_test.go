@@ -287,6 +287,10 @@ func TestModelEndpoints(t *testing.T) {
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
+		if r.URL.Path == "/facts/models" {
+			w.Write([]byte(`{"data": [{"id": "glm-5.3", "limit": {"context": 2000000, "output": 0}}]}`))
+			return
+		}
 		if r.URL.Path == "/empty/models" {
 			w.Write([]byte(`{"data": []}`))
 			return
@@ -319,6 +323,7 @@ func TestModelEndpoints(t *testing.T) {
 		{"listed", srv.URL + "/v1?v=1", "glm-5.3", OK, "1 provider answered"},
 		{"not listed", srv.URL + "/v1/?v=1", "kimi-k3", Warn, "go doesn't list kimi-k3"},
 		{"empty list", srv.URL + "/empty", "glm-5.3", Warn, "go doesn't list glm-5.3"},
+		{"facts drifted", srv.URL + "/facts", "glm-5.3", Warn, "go reports different facts for m.context"},
 		{"down", downURL + "/v1", "glm-5.3", Warn, "go (" + strings.TrimPrefix(downURL, "http://") + ") didn't answer"},
 	}
 	t.Setenv("TEST_GO_KEY", "sekrit")

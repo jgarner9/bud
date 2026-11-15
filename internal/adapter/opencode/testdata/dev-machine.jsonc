@@ -4,7 +4,7 @@
   "$schema": "https://opencode.ai/config.json",
   "agents": {
     "plan": {
-      "model": "go/kimi-k3"
+      "model": "go/kimi-k3.1-pro"
     }
   },
   "instructions": [
@@ -499,19 +499,116 @@
     }
   ],
   "providers": {
+    "classify": {
+      "models": {
+        "gemma-4-e4b": {
+          "limit": {
+            "context": 32768
+          },
+          "modelID": "gemma-4-e4b"
+        }
+      },
+      "name": "classify",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "http://home.invalid:8083/v1"
+      }
+    },
     "go": {
       "env": [
         "OPENCODE_GO_API_KEY"
       ],
       "models": {
+        "gemini-4-argon": {
+          "limit": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modelID": "gemini-4-argon"
+        },
+        "glm-5.2": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "glm-5.2"
+        },
         "glm-5.3": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
           "modelID": "glm-5.3"
         },
-        "kimi-k3": {
-          "modelID": "kimi-k3"
+        "glm-5.3-flash": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "glm-5.3-flash"
+        },
+        "kimi-k2.7-code": {
+          "limit": {
+            "context": 262144,
+            "output": 262144
+          },
+          "modelID": "kimi-k2.7-code"
+        },
+        "kimi-k3.1-pro": {
+          "limit": {
+            "context": 1048576,
+            "output": 1048576
+          },
+          "modelID": "kimi-k3.1-pro"
         },
         "mimo-v2.6-flash": {
+          "limit": {
+            "context": 1048576,
+            "output": 131072
+          },
           "modelID": "mimo-v2.6-flash"
+        },
+        "mimo-v2.6-pro": {
+          "limit": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modelID": "mimo-v2.6-pro"
+        },
+        "minimax-m3": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "minimax-m3"
+        },
+        "minimax-m3.1-flash": {
+          "limit": {
+            "context": 1000000,
+            "output": 512000
+          },
+          "modelID": "minimax-m3.1-flash"
+        },
+        "qwen3.7-plus": {
+          "limit": {
+            "context": 1000000,
+            "output": 65536
+          },
+          "modelID": "qwen3.7-plus"
+        },
+        "qwen3.8-flash": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "qwen3.8-flash"
+        },
+        "qwen3.8-max": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "qwen3.8-max"
         }
       },
       "name": "go",

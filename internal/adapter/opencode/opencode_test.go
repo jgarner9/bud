@@ -94,7 +94,7 @@ func TestRolesBecomeModelsAndUpdatesAreOff(t *testing.T) {
 		t.Fatalf("model %v, update %v", cfg["model"], cfg["update"])
 	}
 	plan := cfg["agents"].(map[string]any)["plan"].(map[string]any)
-	if plan["model"] != "go/kimi-k3" {
+	if plan["model"] != "go/kimi-k3.1-pro" {
 		t.Fatalf("the plan agent should use the planning role, got %v", plan["model"])
 	}
 	providers := cfg["providers"].(map[string]any)
@@ -146,7 +146,7 @@ func TestFragmentsMergeInOrderAndRulesAppend(t *testing.T) {
 		t.Fatalf("the overlay's rule should come last, after the public ones: first %v, last %v", rules[0], last)
 	}
 	plan := cfg["agents"].(map[string]any)["plan"].(map[string]any)
-	if plan["model"] != "go/kimi-k3" || plan["description"] != "planning" {
+	if plan["model"] != "go/kimi-k3.1-pro" || plan["description"] != "planning" {
 		t.Fatalf("objects merge key by key: %v", plan)
 	}
 	if cfg["model"] != "qwen/qwen-35b" {

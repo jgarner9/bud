@@ -71,6 +71,20 @@ func TestEachProblemSaysWhatToFix(t *testing.T) {
 		{"cloud classifier", func(r *Registry) { r.Roles["classifier"] = Role{Model: "big"} }, `roles.classifier.model: "big" isn't allowed P0, but classifier sees private data`},
 		{"cloud curator fallback", func(r *Registry) { r.Roles["curator"] = Role{Model: "local", Fallbacks: []string{"big"}} }, `roles.curator.fallbacks[0]: "big" isn't allowed P0`},
 		{"embedding without dims", func(r *Registry) { r.Roles["embedding"] = Role{Model: "local"} }, `roles.embedding.model: "local" has no dims`},
+		{"bad input", func(r *Registry) { m := r.Models["big"]; m.Inputs = []string{"smell"}; r.Models["big"] = m }, `models.big.inputs: "smell" isn't one of text, image, video, audio, pdf`},
+		{"bad cap", func(r *Registry) { m := r.Models["big"]; m.Caps = []string{"telepathy"}; r.Models["big"] = m }, `models.big.caps: "telepathy" isn't one of tools, reasoning, json, fim, embed`},
+		{"bad grade", func(r *Registry) { m := r.Models["big"]; m.Grade = "best"; r.Models["big"] = m }, `models.big.grade: "best" isn't one of top, mid, light`},
+		{"negative price", func(r *Registry) { m := r.Models["big"]; m.Price = &Price{In: -1}; r.Models["big"] = m }, `models.big: output, allowance, price and retention can't be negative`},
+		{"trains on P1", func(r *Registry) { m := r.Models["big"]; m.Trains = true; r.Models["big"] = m }, `models.big.privacy: the provider trains on its requests, so it may see only P2`},
+		{"30-day retention on P1", func(r *Registry) { m := r.Models["big"]; d := 30; m.Retention = &d; r.Models["big"] = m }, `models.big.privacy: the provider keeps requests 30 days, so it may see only P2`},
+		{"pool and model", func(r *Registry) { r.Roles["coding"] = Role{Model: "big", Pool: []string{"big"}} }, `roles.coding: has both a pool and model/fallbacks`},
+		{"empty role", func(r *Registry) { r.Roles["coding"] = Role{} }, `roles.coding: lists no models`},
+		{"unknown pool member", func(r *Registry) { r.Roles["coding"] = Role{Pool: []string{"big", "huge"}} }, `roles.coding.pool[1]: "huge" isn't in models`},
+		{"repeated pool member", func(r *Registry) { r.Roles["coding"] = Role{Pool: []string{"big", "big"}} }, `roles.coding.pool[1]: "big" is listed twice`},
+		{"cloud in a private pool", func(r *Registry) { r.Roles["classifier"] = Role{Pool: []string{"local", "big"}} }, `roles.classifier.pool[1]: "big" isn't allowed P0`},
+		{"bad need", func(r *Registry) { r.Roles["coding"] = Role{Pool: []string{"big"}, Needs: []string{"magic"}} }, `roles.coding.needs: "magic" isn't a capability`},
+		{"unmet need", func(r *Registry) { r.Roles["vision"] = Role{Pool: []string{"big"}, Needs: []string{"image"}} }, `roles.vision.pool[0]: "big" lacks "image", which vision needs`},
+		{"pin outside the pool", func(r *Registry) { r.Roles["coding"] = Role{Pool: []string{"big"}, Pin: "local"} }, `roles.coding.pin: "local" isn't in the role's pool`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := valid()
@@ -80,6 +94,40 @@ func TestEachProblemSaysWhatToFix(t *testing.T) {
 				t.Fatalf("want an error containing\n  %s\ngot\n  %v", tc.want, err)
 			}
 		})
+	}
+}
+
+func TestAPoolWithMetNeedsAndAPinPasses(t *testing.T) {
+	r := valid()
+	m := r.Models["big"]
+	zero := 0
+	m.Inputs, m.Caps, m.Grade, m.Retention = []string{"text", "image"}, []string{"tools"}, "top", &zero
+	m.Price = &Price{In: 1.4, Out: 4.4}
+	r.Models["big"] = m
+	r.Roles["vision"] = Role{Pool: []string{"big"}, Needs: []string{"image", "tools"}}
+	r.Roles["coding"] = Role{Pool: []string{"big", "local"}, Pin: "local"}
+	if err := r.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMembersAndDefault(t *testing.T) {
+	for _, tc := range []struct {
+		role    Role
+		members string
+		def     string
+	}{
+		{Role{Model: "a", Fallbacks: []string{"b"}}, "a,b", "a"},
+		{Role{Pool: []string{"c", "d"}}, "c,d", "c"},
+		{Role{Pool: []string{"c", "d"}, Pin: "d"}, "c,d", "d"},
+		{Role{}, "", ""},
+	} {
+		if got := strings.Join(tc.role.Members(), ","); got != tc.members {
+			t.Errorf("%+v: members %q, want %q", tc.role, got, tc.members)
+		}
+		if got := tc.role.Default(); got != tc.def {
+			t.Errorf("%+v: default %q, want %q", tc.role, got, tc.def)
+		}
 	}
 }
 

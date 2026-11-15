@@ -71,10 +71,25 @@ func TestTheShippedContentSyncsOnADevMachine(t *testing.T) {
 		}
 	}
 
-	if got := read(t, filepath.Join(o.Paths.OpenCodeConfig(), "agents", "chat.md")); !strings.Contains(got, "mode: primary") {
+	if got := read(t, filepath.Join(o.Paths.OpenCodeConfig(), "agents", "chat.md")); !strings.Contains(got, "mode: primary") || !strings.Contains(got, "action: subagent") {
 		t.Errorf("agents/chat.md = %q", got)
 	}
 	cfg := read(t, filepath.Join(o.Paths.OpenCodeConfig(), "opencode.jsonc"))
+	// the data dir here is a temp dir, not ~/.local/share/bud: the exceptions
+	// for synced content follow it, and come after the coding fragment's ask
+	ask := strings.Index(cfg, `"action": "external_directory",
+      "effect": "ask",
+      "resource": "*"`)
+	allow := strings.Index(cfg, `"resource": "`+filepath.Join(o.Paths.Content(), "*")+`"`)
+	if ask < 0 || allow < ask {
+		t.Errorf("the synced content's external_directory allow (at %d) should follow the coding fragment's ask (at %d):\n%s", allow, ask, cfg)
+	}
+	if !strings.Contains(cfg, filepath.Join(o.Paths.Overlay(), "*")) {
+		t.Errorf("opencode.jsonc lacks the overlay's exception:\n%s", cfg)
+	}
+	if strings.Contains(cfg, ".local/share/bud") {
+		t.Errorf("opencode.jsonc names the default data dir:\n%s", cfg)
+	}
 	for _, want := range []string{
 		filepath.Join(o.Paths.ContentCurrent(), "AGENTS.md"),
 		`"formatter": true`,

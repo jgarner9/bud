@@ -8,6 +8,10 @@ permissions:
   - action: shell
     resource: "*"
     effect: deny
+  # a subagent runs with its own permissions, so chat hands nothing off
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 
 You're in a conversation, not a coding task. Talk it through the way a knowledgeable friend would: answer the question, explain, compare, brainstorm, or think out loud together.

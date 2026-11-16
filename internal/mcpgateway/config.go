@@ -1,0 +1,189 @@
+// Package mcpgateway is the home server's MCP gateway (Suite D72): it
+// forwards MCP requests from devices on the tailnet to keyed upstream
+// servers, adds each server's key from the environment op run fills, logs
+// every tool call and refuses cloud tools to P0 sessions (Suite D81). See
+// docs/internals/mcp-gateway.md
+package mcpgateway
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+	"net/netip"
+	"net/url"
+	"os"
+	"regexp"
+	"slices"
+	"sort"
+	"strings"
+
+	models "jgarner.dev/bud/internal/registry"
+)
+
+// Config is mcp-gateway.json
+type Config struct {
+	Listen   string            `json:"listen"`
+	AuditLog string            `json:"audit_log,omitempty"`
+	Servers  map[string]Server `json:"servers"`
+}
+
+// Server is one upstream MCP server
+type Server struct {
+	URL     string   `json:"url"`
+	Privacy []string `json:"privacy"`
+	Key     *Key     `json:"key,omitempty"`
+}
+
+// Key says where an upstream reads its key from and which environment
+// variable op run puts it in (Suite D7, D73)
+type Key struct {
+	Header string `json:"header"`
+	Prefix string `json:"prefix,omitempty"`
+	Env    string `json:"env"`
+}
+
+var (
+	nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+	envRe  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+	// tailnet holds Tailscale's address ranges: the CGNAT block it gives
+	// IPv4 addresses from, and its IPv6 ULA prefix
+	tailnet = []netip.Prefix{
+		netip.MustParsePrefix("100.64.0.0/10"),
+		netip.MustParsePrefix("fd7a:115c:a1e0::/48"),
+	}
+)
+
+// Read loads and validates a config file
+func Read(path string) (*Config, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("no gateway config at %s: copy server/mcp-gateway/mcp-gateway.example.json there, or pass --config", path)
+		}
+		return nil, fmt.Errorf("read the gateway config: %w", err)
+	}
+	var c Config
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&c); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if err := c.Validate(); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return &c, nil
+}
+
+// Validate reports every problem at once, each naming the field to fix
+func (c *Config) Validate() error {
+	var errs []string
+	add := func(format string, a ...any) { errs = append(errs, fmt.Sprintf(format, a...)) }
+
+	if host, _, err := net.SplitHostPort(c.Listen); err != nil {
+		add("listen: %q isn't host:port", c.Listen)
+	} else if !insideHost(host) || host == "localhost" {
+		add("listen: %q must be a loopback or tailnet IP address, so the gateway is never reachable from outside the tailnet (Suite D72)", host)
+	}
+	if len(c.Servers) == 0 {
+		add("servers: none configured")
+	}
+	for _, name := range sortedNames(c.Servers) {
+		s := c.Servers[name]
+		at := "servers." + name
+		if !nameRe.MatchString(name) {
+			add("%s: names are lowercase letters, digits and -", at)
+		}
+		u, err := url.Parse(s.URL)
+		inside := false
+		switch {
+		case err != nil || u.Host == "":
+			add("%s.url: %q isn't a URL", at, s.URL)
+		case u.Scheme == "https":
+			inside = insideHost(u.Hostname())
+		case u.Scheme == "http" && insideHost(u.Hostname()):
+			inside = true
+		default:
+			add("%s.url: use https, or http only to a loopback or tailnet host", at)
+		}
+		if len(s.Privacy) == 0 {
+			add("%s.privacy: list the session tiers that may use it (P1, P2)", at)
+		}
+		for _, t := range s.Privacy {
+			if !slices.Contains(models.Tiers, t) {
+				add("%s.privacy: %q isn't a tier (P0, P1, P2)", at, t)
+			}
+		}
+		if slices.Contains(s.Privacy, "P0") && !inside {
+			add("%s.privacy: allows P0, but %s is outside the house; P0 sessions may use only tools that never leave it (Suite D81)", at, s.URL)
+		}
+		if k := s.Key; k != nil {
+			if k.Header == "" {
+				add("%s.key.header: name the header the server reads its key from", at)
+			}
+			if !envRe.MatchString(k.Env) {
+				add("%s.key.env: %q isn't an environment variable name", at, k.Env)
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "\n"))
+	}
+	return nil
+}
+
+// keys reads each server's key from the environment, failing on the first
+// server whose variable is missing or empty
+func (c *Config) keys(getenv func(string) string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, name := range sortedNames(c.Servers) {
+		k := c.Servers[name].Key
+		if k == nil {
+			continue
+		}
+		v := getenv(k.Env)
+		if v == "" {
+			return nil, fmt.Errorf("servers.%s: %s is empty; start the gateway under op run with an env file that sets it (see server/mcp-gateway/README.md)", name, k.Env)
+		}
+		out[name] = k.Prefix + v
+	}
+	return out, nil
+}
+
+// insideHost says whether host is an IP address on loopback or the tailnet.
+// "localhost" counts for an upstream URL, though not for listen, where a
+// resolver could map it elsewhere
+func insideHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	a, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	return insideAddr(a)
+}
+
+func insideAddr(a netip.Addr) bool {
+	a = a.Unmap()
+	if a.IsLoopback() {
+		return true
+	}
+	for _, p := range tailnet {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
+}
+
+func sortedNames(m map[string]Server) []string {
+	names := make([]string, 0, len(m))
+	for n := range m {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
+}

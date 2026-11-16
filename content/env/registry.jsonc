@@ -54,6 +54,8 @@
     // providers are llama-server --alias values, which bud sets, so the GGUF
     // behind them can change without touching this file. Their facts are
     // declared by hand.
+    // qwen-35b is Qwen3.6-35B-A3B, the 35B MoE with about 3B parameters active
+    // per token (confirmed by Jason, 2026-11-16)
     "qwen-35b": { "provider": "qwen", "name": "qwen-35b", "privacy": ["P0", "P1", "P2"], "cost": "C0",
       "grade": "mid", "inputs": ["text", "image"], "caps": ["tools", "reasoning", "json"], "context": 32768, "retention": 0 },
     "qwen-fim": { "provider": "qwen-fim", "name": "coder-fim", "privacy": ["P0", "P1", "P2"], "cost": "C0",

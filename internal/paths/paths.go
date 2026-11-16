@@ -148,3 +148,10 @@ func (p *Paths) OpenCodeConfig() string { return filepath.Join(filepath.Dir(p.Co
 // OpenCodeEnv is the env file op run fills OpenCode's keys from: variable
 // names and op:// references, never the values (Suite D7)
 func (p *Paths) OpenCodeEnv() string { return filepath.Join(p.State, "opencode.env") }
+
+// MCPGateway is the home server's MCP gateway config (Suite D72)
+func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway.json") }
+
+// MCPAudit is where the MCP gateway logs every tool call until the shared
+// audit log (JGA-348) exists
+func (p *Paths) MCPAudit() string { return filepath.Join(p.State, "mcp-audit.jsonl") }

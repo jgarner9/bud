@@ -29,6 +29,10 @@ import (
 // Header opens the rendered file, so a hand edit is never a surprise loss
 const Header = "# Written by bud sync from env fragments. Edits here are replaced on the next\n# sync: change content/env or your overlay's env instead.\n"
 
+// transportKeys are the fields of a Hermes server entry that come from the
+// bud block, which bud.hermes.mcp_servers may not set
+var transportKeys = []string{"url", "headers", "command", "args", "env", "transport"}
+
 // Output is the rendered config
 type Output struct {
 	Config []byte
@@ -76,17 +80,16 @@ func Render(frags []env.Fragment) (*Output, error) {
 		cfg["mcp_servers"] = servers
 	}
 	// the fragments' own Hermes settings, which may add to a server's entry
-	// (say, trust: untrusted) but not bring back one that was left out
+	// (say, trust: untrusted) but not its transport, and not bring back one
+	// that was left out
 	if tools.Hermes != nil {
 		extra, err := clone(tools.Hermes)
 		if err != nil {
 			return nil, err
 		}
 		if m, ok := extra["mcp_servers"].(map[string]any); ok {
-			for name := range m {
-				if _, ok := tools.Servers[name]; !ok {
-					delete(m, name)
-				}
+			if err := tools.CheckExtras("bud.hermes.mcp_servers", m, transportKeys); err != nil {
+				return nil, err
 			}
 		}
 		env.MergeInto(cfg, extra)

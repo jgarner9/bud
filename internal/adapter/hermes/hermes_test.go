@@ -32,7 +32,7 @@ func TestServersAndSettingsRenderAsSortedYAML(t *testing.T) {
 		"hermes": {
 			"web": {"keyless_fallback": false, "backend": "exa"},
 			"platform_toolsets": {"cli": ["web", "file"]},
-			"mcp_servers": {"linear": {"trust": "untrusted"}, "gone": {"trust": "untrusted"}}
+			"mcp_servers": {"linear": {"trust": "untrusted"}}
 		}
 	}}`)
 	want := Header + `mcp_servers:
@@ -80,5 +80,17 @@ func TestRenderingIsDeterministic(t *testing.T) {
 	src := `{"bud": {"hermes": {"z": 1, "a": {"y": true, "b": "c"}}}}`
 	if render(t, src) != render(t, src) {
 		t.Fatal("two renders differ")
+	}
+}
+
+func TestHermesExtrasMustNameADeclaredServerAndLeaveItsTransport(t *testing.T) {
+	for src, want := range map[string]string{
+		`{"bud": {"hermes": {"mcp_servers": {"rogue": {"url": "https://example.com/mcp"}}}}}`:                                                                  "rogue isn't in bud.mcp",
+		`{"bud": {"mcp": {"c7": {"url": "https://example.com/mcp", "privacy": ["P1"]}}, "hermes": {"mcp_servers": {"c7": {"url": "https://x.example/mcp"}}}}}`: "c7.url comes from bud.mcp.c7",
+	} {
+		_, err := Render([]env.Fragment{{Name: "x", Src: []byte(src)}})
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("got %v, want %q", err, want)
+		}
 	}
 }

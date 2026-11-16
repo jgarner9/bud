@@ -299,3 +299,21 @@ func TestExtrasForALeftOutServerAreDropped(t *testing.T) {
 		t.Fatalf("context7 = %v", c)
 	}
 }
+
+// Every server needs its tiers from bud.mcp, so the private agent can deny
+// it, and a fragment's own entry adds fields but never the transport or the
+// private agent's rules
+func TestFragmentsCantGoAroundTheP0Rule(t *testing.T) {
+	for src, want := range map[string]string{
+		`{"mcp": {"servers": {"rogue": {"type": "remote", "url": "https://example.com/mcp"}}}}`:           "mcp.servers.rogue isn't in bud.mcp",
+		`{"mcp": {"servers": {"serena": {"type": "remote", "url": "https://example.com/mcp"}}}}`:          "mcp.servers.serena.type comes from bud.mcp.serena",
+		`{"agents": {"private": {"model": "go/glm-5.3"}}}`:                                                "sets agents.private",
+		`{"agents": {"private": {"permissions": [{"action": "*", "resource": "*", "effect": "allow"}]}}}`: "sets agents.private",
+	} {
+		in := withCoding(t)
+		in.Env = append(in.Env, Fragment{Name: "overlay/x", Src: []byte(src)})
+		if _, err := Render(in); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: got %v, want %q", src, err, want)
+		}
+	}
+}

@@ -41,10 +41,45 @@ func Merge(frags []Fragment) (map[string]any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("env fragment %s: %w", f.Name, err)
 		}
+		replaceServerLists(out, frag)
 		MergeInto(out, frag)
 	}
 
 	return out, nil
+}
+
+// replacedLists are the bud.mcp.<name> lists a later fragment replaces
+// rather than appends to: a server's tiers, so an overlay can narrow them,
+// and its command, so an overlay can swap the executable
+var replacedLists = []string{"privacy", "command"}
+
+// replaceServerLists drops from out each list in replacedLists that frag
+// sets for the same server, so the merge that follows replaces it
+func replaceServerLists(out, frag map[string]any) {
+	next := serverMap(frag)
+	cur := serverMap(out)
+	for name, v := range next {
+		ns, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		cs, ok := cur[name].(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, k := range replacedLists {
+			if _, ok := ns[k]; ok {
+				delete(cs, k)
+			}
+		}
+	}
+}
+
+func serverMap(m map[string]any) map[string]any {
+	b, _ := m["bud"].(map[string]any)
+	servers, _ := b["mcp"].(map[string]any)
+
+	return servers
 }
 
 // MergeInto lays src over dst, the way Merge lays fragments
@@ -204,11 +239,9 @@ func (b *Bud) Resolve() (*Resolved, error) {
 			add("%s: a gateway server takes no headers or env; the gateway adds its key", at)
 			continue
 		}
-		if s.URL != "" {
-			if u, err := url.Parse(s.URL); err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
-				add("%s.url: %q isn't an http(s) URL", at, s.URL)
-				continue
-			}
+		if s.URL != "" && !validURL(s.URL) {
+			add("%s.url: %q isn't an http(s) URL", at, s.URL)
+			continue
 		}
 		switch {
 		case s.Disabled:
@@ -233,6 +266,57 @@ func (b *Bud) Resolve() (*Resolved, error) {
 	}
 
 	return r, nil
+}
+
+// validURL accepts an http(s) URL. {env:VAR} references are filled at
+// launch, so a URL that is one reference is taken as it is, and in one that
+// holds some, each stands in for a plain word while the rest is checked
+func validURL(raw string) bool {
+	if m := EnvRef.FindString(raw); m == raw {
+		return true
+	}
+	u, err := url.Parse(EnvRef.ReplaceAllString(raw, "env"))
+
+	return err == nil && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http")
+}
+
+// Declared says whether name is one of the block's servers, rendered or left out
+func (r *Resolved) Declared(name string) bool {
+	_, rendered := r.Servers[name]
+	_, left := r.Left[name]
+
+	return rendered || left
+}
+
+// CheckExtras checks a runtime's own entries for servers (OpenCode's
+// mcp.servers, Hermes's mcp_servers): each must name a server the bud block
+// declares, so none goes without its tiers and the private agent's rules,
+// and none may set a field in transport, which comes from the bud block. It
+// drops the entries of servers that were left out, so none becomes an
+// entry without a transport
+func (r *Resolved) CheckExtras(where string, extras map[string]any, transport []string) error {
+	var errs []string
+	for _, name := range sortedKeys(extras) {
+		if !r.Declared(name) {
+			errs = append(errs, fmt.Sprintf("%s.%s isn't in bud.mcp; declare it there with its privacy tiers, and keep only extra fields here", where, name))
+			continue
+		}
+		if _, ok := r.Servers[name]; !ok {
+			delete(extras, name)
+			continue
+		}
+		e, _ := extras[name].(map[string]any)
+		for _, k := range transport {
+			if _, ok := e[k]; ok {
+				errs = append(errs, fmt.Sprintf("%s.%s.%s comes from bud.mcp.%s; set it there", where, name, k, name))
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("env fragments: %s", strings.Join(errs, "; "))
+	}
+
+	return nil
 }
 
 // checkGateway accepts an http(s) URL whose host is a loopback or tailnet IP

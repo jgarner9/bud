@@ -131,3 +131,32 @@ func TestTakeRemovesTheBudBlock(t *testing.T) {
 		t.Fatalf("merged = %v", merged)
 	}
 }
+
+// An overlay narrows a server's tiers or swaps its command: those lists are
+// replaced, not appended to, so P0 can be taken away
+func TestALaterFragmentReplacesAServersTiersAndCommand(t *testing.T) {
+	r, err := resolve(t,
+		`{"bud": {"mcp": {"memory": {"command": ["old", "--a"], "privacy": ["P0", "P1", "P2"]}}}}`,
+		`{"bud": {"mcp": {"memory": {"command": ["new"], "privacy": ["P1", "P2"]}}}}`,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := r.Servers["memory"]
+	if s.P0() || len(s.Privacy) != 2 || strings.Join(s.Command, " ") != "new" {
+		t.Fatalf("got %+v", s)
+	}
+}
+
+func TestAURLMayHoldEnvReferences(t *testing.T) {
+	for _, u := range []string{"{env:MCP_URL}", "https://{env:MCP_HOST}/mcp", "https://example.com/{env:PATH_PART}"} {
+		if _, err := resolve(t, `{"bud": {"mcp": {"x": {"url": "`+u+`", "privacy": ["P1"]}}}}`); err != nil {
+			t.Errorf("%s: %v", u, err)
+		}
+	}
+	for _, u := range []string{"ftp://{env:H}/mcp", "{env:A}{env:B}", "not a url"} {
+		if _, err := resolve(t, `{"bud": {"mcp": {"x": {"url": "`+u+`", "privacy": ["P1"]}}}}`); err == nil {
+			t.Errorf("%s: want an error", u)
+		}
+	}
+}

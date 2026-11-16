@@ -62,6 +62,10 @@ type Fragment = env.Fragment
 // PrivateAgent is the agent P0 sessions run as (Suite D81)
 const PrivateAgent = "private"
 
+// transportKeys are the fields of an OpenCode server entry that come from
+// the bud block, which a fragment's own mcp.servers entry may not set
+var transportKeys = []string{"type", "url", "headers", "command", "environment"}
+
 // cloudTools are the built-in tools that send text out of the house, which
 // the private agent is denied along with every MCP server not allowed P0.
 // Subagents are denied too, since a subagent runs under its own rules, not
@@ -195,16 +199,21 @@ func Render(in Input) (*Output, error) {
 	} else {
 		out.Notes = append(out.Notes, note)
 	}
-	env.MergeInto(cfg, frags)
-	// a fragment's extras for a server that was left out would be an
-	// entry without a type, which OpenCode refuses
-	if m, ok := cfg["mcp"].(map[string]any); ok {
+	if m, ok := frags["mcp"].(map[string]any); ok {
 		if servers, ok := m["servers"].(map[string]any); ok {
-			for name := range tools.Left {
-				delete(servers, name)
+			if err := tools.CheckExtras("mcp.servers", servers, transportKeys); err != nil {
+				return nil, err
 			}
 		}
 	}
+	// the private agent is the P0 tool rule, so no fragment may change its
+	// model or add a rule after its denies
+	if agents, ok := frags["agents"].(map[string]any); ok {
+		if _, ok := agents[PrivateAgent]; ok {
+			return nil, fmt.Errorf("an env fragment sets agents.%s, which bud renders as the P0 tool rule (Suite D81); drop it, and limit P0 tools in bud.mcp's privacy lists instead", PrivateAgent)
+		}
+	}
+	env.MergeInto(cfg, frags)
 	if len(in.Reachable) > 0 {
 		rules, _ := cfg["permissions"].([]any)
 		for _, dir := range in.Reachable {

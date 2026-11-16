@@ -206,7 +206,7 @@ func TestPublicContentAloneLeavesOutTheGatewayServers(t *testing.T) {
 		t.Fatal(err)
 	}
 	servers := decode(t, out.Config)["mcp"].(map[string]any)["servers"].(map[string]any)
-	for _, gone := range []string{"linear", "exa", "memory"} {
+	for _, gone := range []string{"linear", "exa", "memory", "ops"} {
 		if _, ok := servers[gone]; ok {
 			t.Errorf("%s rendered without its address", gone)
 		}
@@ -216,7 +216,7 @@ func TestPublicContentAloneLeavesOutTheGatewayServers(t *testing.T) {
 			t.Errorf("%s is missing", kept)
 		}
 	}
-	if len(out.Notes) != 3 {
+	if len(out.Notes) != 4 {
 		t.Fatalf("notes = %q", out.Notes)
 	}
 }

@@ -76,8 +76,8 @@ What each example profile gets, from `content/env/coding.jsonc` and `content/env
 
 | Profile | OpenCode | Hermes |
 | --- | --- | --- |
-| `dev-machine` | `websearch` off; Linear and Exa through the gateway; Context7, Bud memory, Serena (its read-only symbol tools only), cocoindex-code and Playwright (opening a URL asks, since a rule for an MCP tool can't see the URL); Linear reads run alone and writes ask | none |
-| `server` | `websearch` on Exa; Linear through the gateway, GitHub (`github-mcp-server` with `GITHUB_PERSONAL_ACCESS_TOKEN` from `op run`; reads and opening PRs run alone, the rest asks), Context7 and Bud memory | the same servers, with Linear and GitHub `trust: untrusted`; the tool map's toolsets on `cli`, `signal`, `api_server` and `cron` (no `clarify` where nobody can answer); `web` searching through SearXNG and extracting through Exa, with `keyless_fallback: false` |
+| `dev-machine` | `websearch` off; Linear, Exa and the Bud ops MCP through the gateway; Context7, Bud memory, Serena (its read-only symbol tools only), cocoindex-code and Playwright (opening a URL asks, since a rule for an MCP tool can't see the URL); Linear reads run alone and writes ask, the ops tools run alone | none |
+| `server` | `websearch` on Exa; Linear through the gateway, GitHub (`github-mcp-server` with `GITHUB_PERSONAL_ACCESS_TOKEN` from `op run`; reads and opening PRs run alone, the rest asks), Context7, Bud memory and the Bud ops MCP on loopback | the same servers, with Linear and GitHub `trust: untrusted`; the tool map's toolsets on `cli`, `signal`, `api_server` and `cron` (no `clarify` where nobody can answer); `web` searching through SearXNG and extracting through Exa, with `keyless_fallback: false` |
 | `model-box` | none | none |
 
 Golden files for each profile, synced with the shipped content and an overlay's personal fragment, are in `internal/syncer/testdata/profiles/`; `go test ./internal/syncer -run Golden -update` rewrites them.

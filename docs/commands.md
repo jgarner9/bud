@@ -110,6 +110,7 @@ How the pieces fit together is in [Claude Code in bud](claude-code.md).
 | Command | What it does |
 | --- | --- |
 | `bud mcp-gateway [--config file]` | Runs the MCP gateway (Suite D72): devices on the tailnet reach Linear, Exa and other keyed MCP servers at `http://<listen>/<server>/mcp`, the gateway adds each server's key from its environment, logs every tool call and refuses cloud servers to sessions whose `X-Bud-Privacy` tier they don't allow (no header counts as P0). The config defaults to `~/.local/state/bud/mcp-gateway.json`. It runs under `op run` as the unit in `server/mcp-gateway/`; see [its README](https://github.com/jgarner9/bud/tree/main/server/mcp-gateway). |
+| `bud mcp-ops [--listen addr]` | Runs the Bud ops MCP server (Suite D83) on loopback, `127.0.0.1:8792` by default: read-only tools for `bud doctor` and the sync status (the content version, the overlay commit and any drift), so Hermes can say whether everything is healthy. Spend, the approval queue and the review queue are listed and say they aren't built yet. Devices reach it through the gateway's `ops` server. It runs as the unit in `server/mcp-ops/`; see [its README](https://github.com/jgarner9/bud/tree/main/server/mcp-ops). |
 
 ## Working on bud
 

@@ -1,6 +1,6 @@
 # The MCP gateway
 
-`bud mcp-gateway` (`internal/mcpgateway`) is the home server's MCP gateway (Suite D72). Devices reach the keyed MCP servers (Linear, Exa and later the Bud ops MCP) only through it, so a laptop holds no MCP key. It does four things: it listens on the tailnet only, forwards each MCP request to its upstream server with that server's key added, writes every tool call to an audit log, and refuses cloud tools to P0 sessions (the P0 tool rule, Suite D81). It runs as the user unit in `server/mcp-gateway/`, under `op run`, so the keys reach it as environment variables and never sit in a file (Suite D7, D73).
+`bud mcp-gateway` (`internal/mcpgateway`) is the home server's MCP gateway (Suite D72). Devices reach the keyed MCP servers (Linear, Exa) and the Bud ops MCP (`docs/internals/mcp-ops.md`) only through it, so a laptop holds no MCP key. It does four things: it listens on the tailnet only, forwards each MCP request to its upstream server with that server's key added, writes every tool call to an audit log, and refuses cloud tools to P0 sessions (the P0 tool rule, Suite D81). It runs as the user unit in `server/mcp-gateway/`, under `op run`, so the keys reach it as environment variables and never sit in a file (Suite D7, D73).
 
 ## Config
 

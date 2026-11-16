@@ -12,7 +12,7 @@ func TestTheExampleConfigIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Servers) != 2 {
+	if len(c.Servers) != 3 {
 		t.Errorf("servers: %v", c.Servers)
 	}
 }

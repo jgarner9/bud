@@ -185,3 +185,135 @@ func TestAnOutputLimitNeedsNoContext(t *testing.T) {
 		t.Fatalf("want only the output limit, got %v", glm["limit"])
 	}
 }
+
+func withCoding(t *testing.T) Input {
+	t.Helper()
+	in := shipped(t)
+	coding, err := os.ReadFile(filepath.Join("..", "..", "..", "content", "env", "coding.jsonc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Env = append(in.Env, Fragment{Name: "public/coding", Src: coding})
+
+	return in
+}
+
+// Without an overlay there's no gateway or memory URL, so those servers are
+// left out and named, and the rest still render
+func TestPublicContentAloneLeavesOutTheGatewayServers(t *testing.T) {
+	out, err := Render(withCoding(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	servers := decode(t, out.Config)["mcp"].(map[string]any)["servers"].(map[string]any)
+	for _, gone := range []string{"linear", "exa", "memory"} {
+		if _, ok := servers[gone]; ok {
+			t.Errorf("%s rendered without its address", gone)
+		}
+	}
+	for _, kept := range []string{"context7", "serena", "cocoindex", "playwright"} {
+		if _, ok := servers[kept]; !ok {
+			t.Errorf("%s is missing", kept)
+		}
+	}
+	if len(out.Notes) != 3 {
+		t.Fatalf("notes = %q", out.Notes)
+	}
+}
+
+func TestTheLaptopsOwnWebsearchIsOff(t *testing.T) {
+	out, err := Render(withCoding(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ws, ok := decode(t, out.Config)["websearch"]; !ok || ws != false {
+		t.Fatalf("websearch = %v", ws)
+	}
+}
+
+// The P0 tool rule (Suite D81): the private agent runs on a P0 model and
+// denies every server that isn't allowed P0, after every global rule
+func TestThePrivateAgentDeniesEveryCloudTool(t *testing.T) {
+	in := withCoding(t)
+	in.Env = append(in.Env, Fragment{Name: "overlay/personal", Src: []byte(`{"bud": {"gateway": "http://127.0.0.1:8790", "mcp": {"memory": {"url": "http://127.0.0.1:8791/mcp"}}}}`)})
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := decode(t, out.Config)["agents"].(map[string]any)[PrivateAgent].(map[string]any)
+	if agent["model"] != "qwen/qwen-35b" || agent["mode"] != "primary" {
+		t.Fatalf("agent = %v", agent)
+	}
+	denied := map[string]bool{}
+	for _, r := range agent["permissions"].([]any) {
+		rule := r.(map[string]any)
+		if rule["effect"] != "deny" || rule["resource"] != "*" {
+			t.Fatalf("rule %v isn't a deny", rule)
+		}
+		denied[rule["action"].(string)] = true
+	}
+	for _, want := range []string{"linear_*", "exa_*", "context7_*", "playwright_*", "webfetch", "websearch", "subagent"} {
+		if !denied[want] {
+			t.Errorf("the private agent doesn't deny %s: %v", want, denied)
+		}
+	}
+	for _, p0 := range []string{"memory_*", "serena_*", "cocoindex_*"} {
+		if denied[p0] {
+			t.Errorf("the private agent denies P0-safe %s", p0)
+		}
+	}
+}
+
+func TestNoP0ModelMeansNoPrivateAgentAndANote(t *testing.T) {
+	in := shipped(t)
+	for id, m := range in.Registry.Models {
+		m.Privacy = []string{"P1", "P2"}
+		in.Registry.Models[id] = m
+	}
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := decode(t, out.Config)["agents"].(map[string]any)[PrivateAgent]; ok {
+		t.Fatal("rendered a private agent with no P0 model")
+	}
+	if len(out.Notes) != 1 || !strings.Contains(out.Notes[0], "no private agent") {
+		t.Fatalf("notes = %q", out.Notes)
+	}
+}
+
+// A fragment can add to a server's entry, but extras for one that was left
+// out don't make an entry OpenCode would refuse
+func TestExtrasForALeftOutServerAreDropped(t *testing.T) {
+	in := withCoding(t)
+	in.Env = append(in.Env, Fragment{Name: "overlay/x", Src: []byte(`{"mcp": {"servers": {"linear": {"codemode": false}, "context7": {"codemode": false}}}}`)})
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	servers := decode(t, out.Config)["mcp"].(map[string]any)["servers"].(map[string]any)
+	if _, ok := servers["linear"]; ok {
+		t.Fatal("linear's extras made an entry")
+	}
+	if c := servers["context7"].(map[string]any); c["codemode"] != false || c["type"] != "remote" {
+		t.Fatalf("context7 = %v", c)
+	}
+}
+
+// Every server needs its tiers from bud.mcp, so the private agent can deny
+// it, and a fragment's own entry adds fields but never the transport or the
+// private agent's rules
+func TestFragmentsCantGoAroundTheP0Rule(t *testing.T) {
+	for src, want := range map[string]string{
+		`{"mcp": {"servers": {"rogue": {"type": "remote", "url": "https://example.com/mcp"}}}}`:           "mcp.servers.rogue isn't in bud.mcp",
+		`{"mcp": {"servers": {"serena": {"type": "remote", "url": "https://example.com/mcp"}}}}`:          "mcp.servers.serena.type comes from bud.mcp.serena",
+		`{"agents": {"private": {"model": "go/glm-5.3"}}}`:                                                "sets agents.private",
+		`{"agents": {"private": {"permissions": [{"action": "*", "resource": "*", "effect": "allow"}]}}}`: "sets agents.private",
+	} {
+		in := withCoding(t)
+		in.Env = append(in.Env, Fragment{Name: "overlay/x", Src: []byte(src)})
+		if _, err := Render(in); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: got %v, want %q", src, err, want)
+		}
+	}
+}

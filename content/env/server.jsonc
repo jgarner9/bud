@@ -1,0 +1,63 @@
+// For the home server (the server profile): the planning OpenCode (Suite
+// D49) and Hermes, the manager (D48). Applies after base.jsonc.
+//
+// The tools follow the tool map (Suite D72-D78, D85). On the server, search
+// uses Exa natively, with EXA_API_KEY from op run: the planning OpenCode's
+// websearch, and Hermes's web tools, which search through SearXNG (D85) and
+// extract through Exa, with the keyless fallback off so a search never
+// quietly goes to another provider (D77). Linear goes through the MCP
+// gateway (D75), and GitHub runs here only, with a fine-grained PAT from op
+// run (D76). Your overlay's env sets bud.gateway and bud.mcp.memory.url.
+{
+  "websearch": { "provider": "exa" },
+  "permissions": [
+    { "action": "experimental_image_generate", "resource": "*", "effect": "deny" },
+
+    // Linear: reads run alone, creating or changing anything asks (D75)
+    { "action": "linear_*", "resource": "*", "effect": "ask" },
+    { "action": "linear_get_*", "resource": "*", "effect": "allow" },
+    { "action": "linear_list_*", "resource": "*", "effect": "allow" },
+    { "action": "linear_search_*", "resource": "*", "effect": "allow" },
+    { "action": "linear_extract_images", "resource": "*", "effect": "allow" },
+
+    // GitHub: reads and opening PRs run alone, the rest (merges among them) asks (D76)
+    { "action": "github_*", "resource": "*", "effect": "ask" },
+    { "action": "github_get_*", "resource": "*", "effect": "allow" },
+    { "action": "github_list_*", "resource": "*", "effect": "allow" },
+    { "action": "github_search_*", "resource": "*", "effect": "allow" },
+    { "action": "github_create_pull_request", "resource": "*", "effect": "allow" },
+
+    { "action": "context7_*", "resource": "*", "effect": "allow" },
+    { "action": "memory_*", "resource": "*", "effect": "allow" },
+  ],
+  "bud": {
+    "privacy": "P1",
+    "mcp": {
+      "linear": { "gateway": true, "privacy": ["P1", "P2"] },
+      "github": {
+        "command": ["github-mcp-server", "stdio"],
+        "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}" },
+        "privacy": ["P1", "P2"],
+      },
+      "context7": { "url": "https://mcp.context7.com/mcp", "privacy": ["P1", "P2"] },
+      "memory": { "privacy": ["P0", "P1", "P2"] },
+    },
+    "hermes": {
+      // the built-in toolsets per platform, from the tool map. Off: tts,
+      // computer_use, image_gen, video, x_search, kanban, discord, feishu,
+      // debugging. clarify is left out where nobody can answer (the API and cron)
+      "platform_toolsets": {
+        "cli": ["terminal", "file", "code_execution", "web", "browser", "memory", "session_search", "skills", "cronjob", "delegation", "todo", "clarify", "vision"],
+        "signal": ["terminal", "file", "code_execution", "web", "browser", "memory", "session_search", "skills", "cronjob", "delegation", "todo", "clarify", "vision"],
+        "api_server": ["terminal", "file", "code_execution", "web", "browser", "memory", "session_search", "skills", "cronjob", "delegation", "todo", "vision"],
+        "cron": ["terminal", "file", "code_execution", "web", "browser", "memory", "session_search", "skills", "cronjob", "delegation", "todo", "vision"],
+      },
+      "web": { "backend": "exa", "search_backend": "searxng", "extract_backend": "exa", "keyless_fallback": false },
+      // Hermes asks before any tool on these that isn't marked read-only
+      "mcp_servers": {
+        "linear": { "trust": "untrusted" },
+        "github": { "trust": "untrusted" },
+      },
+    },
+  },
+}

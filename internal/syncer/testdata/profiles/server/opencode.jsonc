@@ -1,0 +1,807 @@
+// Written by bud sync from the model registry and env fragments. Edits here are
+// replaced on the next sync: change content/env or your overlay's env instead.
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agents": {
+    "plan": {
+      "model": "go/kimi-k3.1-pro"
+    },
+    "private": {
+      "description": "Private (P0) work: a local model, and only tools that never leave the house",
+      "mode": "primary",
+      "model": "qwen/qwen-35b",
+      "permissions": [
+        {
+          "action": "webfetch",
+          "effect": "deny",
+          "resource": "*"
+        },
+        {
+          "action": "websearch",
+          "effect": "deny",
+          "resource": "*"
+        },
+        {
+          "action": "experimental_image_generate",
+          "effect": "deny",
+          "resource": "*"
+        },
+        {
+          "action": "subagent",
+          "effect": "deny",
+          "resource": "*"
+        },
+        {
+          "action": "context7_*",
+          "effect": "deny",
+          "resource": "*"
+        },
+        {
+          "action": "github_*",
+          "effect": "deny",
+          "resource": "*"
+        },
+        {
+          "action": "linear_*",
+          "effect": "deny",
+          "resource": "*"
+        }
+      ]
+    }
+  },
+  "instructions": [
+    "/home/you/data/bud/content/current/AGENTS.md"
+  ],
+  "mcp": {
+    "servers": {
+      "context7": {
+        "oauth": false,
+        "type": "remote",
+        "url": "https://mcp.context7.com/mcp"
+      },
+      "github": {
+        "command": [
+          "github-mcp-server",
+          "stdio"
+        ],
+        "environment": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+        },
+        "type": "local"
+      },
+      "linear": {
+        "headers": {
+          "X-Bud-Privacy": "P1"
+        },
+        "oauth": false,
+        "type": "remote",
+        "url": "http://100.64.0.1:8790/linear/mcp"
+      },
+      "memory": {
+        "oauth": false,
+        "type": "remote",
+        "url": "http://100.64.0.1:8791/mcp"
+      }
+    }
+  },
+  "model": "go/glm-5.3",
+  "permissions": [
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "*"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "go test"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "go test *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "go vet"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "go vet *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "go build"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "go build *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "gofmt"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "gofmt *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "go fmt"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "go fmt *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "just check"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "just check *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "just test"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "just test *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "just lint"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "just lint *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "just fmt"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "just fmt *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "make"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "make *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "shellcheck"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "shellcheck *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "stylua"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "stylua *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "selene"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "selene *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "golangci-lint"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "golangci-lint *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git status"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git status *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git diff"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git diff *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git log"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git log *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git show"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git show *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git blame"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git blame *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "scc"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "scc *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "tokei"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "tokei *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "hyperfine"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "hyperfine *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "bud run"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "bud run *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker build"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker build *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker compose up"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker compose up *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker compose down"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker compose down *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker compose ps"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker compose ps *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker compose logs"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker compose logs *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker ps"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker ps *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker logs"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker logs *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker exec"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "docker exec *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "npm test"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "npm test *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "npm run"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "npm run *"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "npm ci"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "npm ci *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "git commit"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "git commit *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "git push"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "git push *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker system prune"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker system prune *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker image prune"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker image prune *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker volume prune"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker volume prune *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker container prune"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker container prune *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker volume rm"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker volume rm *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker image rm"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker image rm *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker rmi"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker rmi *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "npm install"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "npm install *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "npm i"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "npm i *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "npm add"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "npm add *"
+    },
+    {
+      "action": "shell",
+      "effect": "ask",
+      "resource": "docker * --privileged*"
+    },
+    {
+      "action": "shell",
+      "effect": "deny",
+      "resource": "op"
+    },
+    {
+      "action": "shell",
+      "effect": "deny",
+      "resource": "op *"
+    },
+    {
+      "action": "read",
+      "effect": "ask",
+      "resource": "*.env"
+    },
+    {
+      "action": "experimental_image_generate",
+      "effect": "deny",
+      "resource": "*"
+    },
+    {
+      "action": "linear_*",
+      "effect": "ask",
+      "resource": "*"
+    },
+    {
+      "action": "linear_get_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "linear_list_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "linear_search_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "linear_extract_images",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "github_*",
+      "effect": "ask",
+      "resource": "*"
+    },
+    {
+      "action": "github_get_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "github_list_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "github_search_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "github_create_pull_request",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "context7_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "memory_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "external_directory",
+      "effect": "allow",
+      "resource": "/home/you/data/bud/content/*"
+    },
+    {
+      "action": "external_directory",
+      "effect": "allow",
+      "resource": "/home/you/data/bud/overlay/*"
+    }
+  ],
+  "providers": {
+    "classify": {
+      "models": {
+        "gemma-4-e4b": {
+          "limit": {
+            "context": 32768
+          },
+          "modelID": "gemma-4-e4b"
+        }
+      },
+      "name": "classify",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "http://home.invalid:8083/v1"
+      }
+    },
+    "go": {
+      "env": [
+        "OPENCODE_GO_API_KEY"
+      ],
+      "models": {
+        "gemini-4-argon": {
+          "limit": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modelID": "gemini-4-argon"
+        },
+        "glm-5.2": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "glm-5.2"
+        },
+        "glm-5.3": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "glm-5.3"
+        },
+        "glm-5.3-flash": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "glm-5.3-flash"
+        },
+        "kimi-k2.7-code": {
+          "limit": {
+            "context": 262144,
+            "output": 262144
+          },
+          "modelID": "kimi-k2.7-code"
+        },
+        "kimi-k3.1-pro": {
+          "limit": {
+            "context": 1048576,
+            "output": 1048576
+          },
+          "modelID": "kimi-k3.1-pro"
+        },
+        "mimo-v2.6-flash": {
+          "limit": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modelID": "mimo-v2.6-flash"
+        },
+        "mimo-v2.6-pro": {
+          "limit": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modelID": "mimo-v2.6-pro"
+        },
+        "minimax-m3": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "minimax-m3"
+        },
+        "minimax-m3.1-flash": {
+          "limit": {
+            "context": 1000000,
+            "output": 512000
+          },
+          "modelID": "minimax-m3.1-flash"
+        },
+        "qwen3.7-plus": {
+          "limit": {
+            "context": 1000000,
+            "output": 65536
+          },
+          "modelID": "qwen3.7-plus"
+        },
+        "qwen3.8-flash": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "qwen3.8-flash"
+        },
+        "qwen3.8-max": {
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          },
+          "modelID": "qwen3.8-max"
+        }
+      },
+      "name": "go",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "https://opencode.ai/inference/go/openai/v1"
+      }
+    },
+    "qwen": {
+      "models": {
+        "qwen-35b": {
+          "limit": {
+            "context": 32768
+          },
+          "modelID": "qwen-35b"
+        }
+      },
+      "name": "qwen",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "http://qwen.invalid:8080/v1"
+      }
+    },
+    "qwen-fim": {
+      "models": {
+        "qwen-fim": {
+          "limit": {
+            "context": 8192
+          },
+          "modelID": "coder-fim"
+        }
+      },
+      "name": "qwen-fim",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "http://qwen.invalid:8081/v1"
+      }
+    }
+  },
+  "skills": [
+    "/home/you/data/bud/active/skills"
+  ],
+  "update": "disable",
+  "websearch": {
+    "provider": "exa"
+  }
+}

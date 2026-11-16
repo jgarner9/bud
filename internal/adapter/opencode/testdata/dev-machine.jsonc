@@ -5,6 +5,33 @@
   "agents": {
     "plan": {
       "model": "go/kimi-k3.1-pro"
+    },
+    "private": {
+      "description": "Private (P0) work: a local model, and only tools that never leave the house",
+      "mode": "primary",
+      "model": "qwen/qwen-35b",
+      "permissions": [
+        {
+          "action": "webfetch",
+          "effect": "deny",
+          "resource": "*"
+        },
+        {
+          "action": "websearch",
+          "effect": "deny",
+          "resource": "*"
+        },
+        {
+          "action": "experimental_image_generate",
+          "effect": "deny",
+          "resource": "*"
+        },
+        {
+          "action": "subagent",
+          "effect": "deny",
+          "resource": "*"
+        }
+      ]
     }
   },
   "instructions": [

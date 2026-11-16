@@ -11,7 +11,12 @@
 // that moves OpenCode's pinned version. Env fragments are merged on top, in
 // order, so the overlay's apply last. Keys never appear in the file: each
 // provider names an environment variable, filled at launch by OpenCode
-// itself ({env:VAR}) or by op run from an op:// reference (Suite D7)
+// itself ({env:VAR}) or by op run from an op:// reference (Suite D7).
+//
+// The fragments' bud block (internal/adapter/env) becomes OpenCode's MCP
+// servers, and the P0 tool rule (Suite D81) becomes a private agent: a
+// primary agent on a model allowed P0 whose permission rules deny every tool
+// that leaves the house
 package opencode
 
 import (
@@ -22,6 +27,7 @@ import (
 	"slices"
 	"strings"
 
+	"jgarner.dev/bud/internal/adapter/env"
 	"jgarner.dev/bud/internal/registry"
 )
 
@@ -50,10 +56,21 @@ type Input struct {
 	Env []Fragment
 }
 
-type Fragment struct {
-	Name string // for errors, such as public/base or overlay/laptop
-	Src  []byte
-}
+// Fragment is one env fragment
+type Fragment = env.Fragment
+
+// PrivateAgent is the agent P0 sessions run as (Suite D81)
+const PrivateAgent = "private"
+
+// transportKeys are the fields of an OpenCode server entry that come from
+// the bud block, which a fragment's own mcp.servers entry may not set
+var transportKeys = []string{"type", "url", "headers", "command", "environment"}
+
+// cloudTools are the built-in tools that send text out of the house, which
+// the private agent is denied along with every MCP server not allowed P0.
+// Subagents are denied too, since a subagent runs under its own rules, not
+// its parent's
+var cloudTools = []string{"webfetch", "websearch", "experimental_image_generate", "subagent"}
 
 // Output is the rendered config and the secrets op run must fill in
 type Output struct {
@@ -61,6 +78,9 @@ type Output struct {
 	// Secrets maps an environment variable to the op:// reference it is read
 	// from; bud writes these to an env file for op run --env-file
 	Secrets map[string]string
+	// Notes say what was left out of the config and why, such as an MCP
+	// server whose URL only the overlay sets
+	Notes []string
 }
 
 // Render builds opencode.jsonc. The same input always gives the same bytes
@@ -154,20 +174,46 @@ func Render(in Input) (*Output, error) {
 		cfg["plugins"] = ps
 	}
 
+	frags := map[string]any{}
 	for _, f := range in.Env {
-		var frag map[string]any
-		b, err := registry.StripJSONC(f.Src)
-		if err == nil {
-			err = json.Unmarshal(b, &frag)
-		}
+		frag, err := env.Merge([]Fragment{f})
 		if err != nil {
-			return nil, fmt.Errorf("env fragment %s: %w", f.Name, err)
+			return nil, err
 		}
 		if _, ok := frag["update"]; ok {
 			return nil, fmt.Errorf("env fragment %s sets update, which bud owns so only bud update moves OpenCode's pin; drop it", f.Name)
 		}
-		merge(cfg, frag)
+		env.MergeInto(frags, frag)
 	}
+	tools, err := env.Take(frags)
+	if err != nil {
+		return nil, err
+	}
+	out.Notes = tools.Notes()
+	if servers := mcpServers(tools); len(servers) > 0 {
+		cfg["mcp"] = map[string]any{"servers": servers}
+	}
+	private, note := privateAgent(r, tools)
+	if private != nil {
+		cfg["agents"].(map[string]any)[PrivateAgent] = private
+	} else {
+		out.Notes = append(out.Notes, note)
+	}
+	if m, ok := frags["mcp"].(map[string]any); ok {
+		if servers, ok := m["servers"].(map[string]any); ok {
+			if err := tools.CheckExtras("mcp.servers", servers, transportKeys); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// the private agent is the P0 tool rule, so no fragment may change its
+	// model or add a rule after its denies
+	if agents, ok := frags["agents"].(map[string]any); ok {
+		if _, ok := agents[PrivateAgent]; ok {
+			return nil, fmt.Errorf("an env fragment sets agents.%s, which bud renders as the P0 tool rule (Suite D81); drop it, and limit P0 tools in bud.mcp's privacy lists instead", PrivateAgent)
+		}
+	}
+	env.MergeInto(cfg, frags)
 	if len(in.Reachable) > 0 {
 		rules, _ := cfg["permissions"].([]any)
 		for _, dir := range in.Reachable {
@@ -211,25 +257,81 @@ func keyVar(provider, key string) string {
 	}
 }
 
-// merge lays src over dst: objects merge key by key, arrays append (so an
-// overlay's permission rules come after the public ones, and OpenCode's
-// last-match-wins makes them count), and anything else replaces
-func merge(dst, src map[string]any) {
-	for k, v := range src {
-		switch sv := v.(type) {
-		case map[string]any:
-			if dv, ok := dst[k].(map[string]any); ok {
-				merge(dv, sv)
-				continue
+// mcpServers is OpenCode's mcp.servers for the resolved servers: remote
+// ones with OAuth off, since every key bud uses is a header or the
+// gateway's, and local ones as a command
+func mcpServers(tools *env.Resolved) map[string]any {
+	servers := map[string]any{}
+	for _, name := range tools.Names() {
+		s := tools.Servers[name]
+		var entry map[string]any
+		if s.Remote() {
+			entry = map[string]any{"type": "remote", "url": s.URL, "oauth": false}
+			if len(s.Headers) > 0 {
+				entry["headers"] = strMap(s.Headers)
 			}
-		case []any:
-			if dv, ok := dst[k].([]any); ok {
-				dst[k] = append(slices.Clone(dv), sv...)
-				continue
+		} else {
+			entry = map[string]any{"type": "local", "command": strs(s.Command)}
+			if len(s.Env) > 0 {
+				entry["environment"] = strMap(s.Env)
 			}
 		}
-		dst[k] = v
+		servers[name] = entry
 	}
+
+	return servers
+}
+
+// privateAgent is the agent P0 sessions use (Suite D81): the first model of
+// the coding role's pool that may see P0, then the fallback role's, with
+// rules that deny every MCP server not allowed P0 and the built-in tools
+// that leave the house. Agent rules apply after every global rule, so no
+// fragment's allow outranks them. With no such model there's nowhere for a
+// P0 session to run, and note says so
+func privateAgent(r *registry.Registry, tools *env.Resolved) (agent map[string]any, note string) {
+	var model string
+	for _, role := range []string{"coding", "fallback"} {
+		for _, id := range r.Roles[role].Members() {
+			if m, ok := r.Models[id]; ok && slices.Contains(m.Privacy, "P0") {
+				model = m.Provider + "/" + id
+				break
+			}
+		}
+		if model != "" {
+			break
+		}
+	}
+	if model == "" {
+		return nil, "no private agent: neither the coding nor the fallback role has a model allowed P0"
+	}
+	var rules []any
+	deny := func(action string) {
+		rules = append(rules, map[string]any{"action": action, "resource": "*", "effect": "deny"})
+	}
+	for _, t := range cloudTools {
+		deny(t)
+	}
+	for _, name := range tools.Names() {
+		if !tools.Servers[name].P0() {
+			deny(name + "_*")
+		}
+	}
+
+	return map[string]any{
+		"description": "Private (P0) work: a local model, and only tools that never leave the house",
+		"mode":        "primary",
+		"model":       model,
+		"permissions": rules,
+	}, ""
+}
+
+func strMap(m map[string]string) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+
+	return out
 }
 
 func strs(ss []string) []any {

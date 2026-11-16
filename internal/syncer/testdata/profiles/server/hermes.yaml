@@ -22,6 +22,8 @@ mcp_servers:
     url: "http://100.64.0.1:8790/linear/mcp"
   memory:
     url: "http://100.64.0.1:8791/mcp"
+  ops:
+    url: "http://127.0.0.1:8792/mcp"
 platform_toolsets:
   api_server:
     - "terminal"

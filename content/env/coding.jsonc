@@ -29,6 +29,7 @@
     { "action": "exa_*", "resource": "*", "effect": "allow" },
     { "action": "context7_*", "resource": "*", "effect": "allow" },
     { "action": "memory_*", "resource": "*", "effect": "allow" },
+    { "action": "ops_*", "resource": "*", "effect": "allow" },
     { "action": "cocoindex_*", "resource": "*", "effect": "allow" },
 
     // Serena: its read-only symbol tools only; the edit and shell tools are
@@ -56,6 +57,8 @@
       "context7": { "url": "https://mcp.context7.com/mcp", "privacy": ["P1", "P2"] },
       // Bud memory on the home server (D74); the overlay sets its url
       "memory": { "privacy": ["P0", "P1", "P2"] },
+      // the Bud ops MCP on the home server (D83): read-only, and it stays in the house
+      "ops": { "gateway": true, "privacy": ["P0", "P1", "P2"] },
       "serena": {
         "command": ["uvx", "--from", "serena-agent==2.1.0", "serena", "start-mcp-server", "--context", "ide", "--project-from-cwd", "--open-web-dashboard", "false"],
         "privacy": ["P0", "P1", "P2"],

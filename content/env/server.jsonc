@@ -7,9 +7,10 @@
 // extract through Exa, with the keyless fallback off so a search never
 // quietly goes to another provider (D77). Linear goes through the MCP
 // gateway (D75), and GitHub runs here only, with a fine-grained PAT from op
-// run (D76). The calendar (D82) goes through the gateway too, which lets
-// only P0 sessions use it; it is Hermes's alone, so the planning OpenCode
-// is denied it. Your overlay's env sets bud.gateway and bud.mcp.memory.url.
+// run (D76). The Bud ops MCP (D83) is on this machine's loopback. The
+// calendar (D82) goes through the gateway, which lets only P0 sessions use
+// it; it is Hermes's alone, so the planning OpenCode is denied it. Your
+// overlay's env sets bud.gateway and bud.mcp.memory.url.
 {
   "websearch": { "provider": "exa" },
   "permissions": [
@@ -34,6 +35,7 @@
 
     { "action": "context7_*", "resource": "*", "effect": "allow" },
     { "action": "memory_*", "resource": "*", "effect": "allow" },
+    { "action": "ops_*", "resource": "*", "effect": "allow" },
   ],
   "bud": {
     "privacy": "P1",
@@ -46,6 +48,9 @@
       },
       "context7": { "url": "https://mcp.context7.com/mcp", "privacy": ["P1", "P2"] },
       "memory": { "privacy": ["P0", "P1", "P2"] },
+      // the Bud ops MCP (D83), bud mcp-ops on this machine's loopback;
+      // read-only, and its answers never leave the house, so P0 may use it
+      "ops": { "url": "http://127.0.0.1:8792/mcp", "privacy": ["P0", "P1", "P2"] },
       // bud calendar-mcp, server/calendar-mcp/ (D82)
       "calendar": { "gateway": true, "privacy": ["P0"] },
     },

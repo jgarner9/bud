@@ -12,7 +12,7 @@ func TestTheExampleConfigIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"linear", "exa", "calendar"} {
+	for _, name := range []string{"linear", "exa", "ops", "calendar"} {
 		if _, ok := c.Servers[name]; !ok {
 			t.Errorf("no %s in servers: %v", name, c.Servers)
 		}

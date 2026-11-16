@@ -23,6 +23,25 @@ content/plugins/<name>/  personal plugins
 - **Profiles** in the overlay's `profiles/` replace the public examples with the same name.
 - **Every item remembers which layer it came from**, so `bud doctor` lists what you take from each layer, marks each overlay skill, agent, command or plugin that replaces a public one, and names the files it rendered.
 
+## Your MCP addresses
+
+The public fragments list the MCP servers each profile uses, but not the addresses only your tailnet has: the MCP gateway and Bud memory. Put them in an env fragment such as `env/personal.jsonc`, and add `personal` to each profile's `env` list after the public fragments:
+
+```jsonc
+{
+  "bud": {
+    // the home server's tailnet IP (tailscale ip -4) and the gateway's port; the
+    // gateway answers only its IP address, so a MagicDNS name is refused here
+    "gateway": "http://100.64.0.1:8790",
+    "mcp": {
+      "memory": { "url": "http://100.64.0.1:8791/mcp" },
+    },
+  },
+}
+```
+
+Until a fragment sets them, `bud sync` leaves Linear, Exa (on a dev machine) and Bud memory out and says so. The same block can add servers of your own or turn a public one off with `"disabled": true`; the format is in [bud sync's internals](https://github.com/jgarner9/bud/blob/main/docs/internals/sync.md#tools-and-mcp-servers).
+
 ## How it's fetched
 
 The overlay is a plain git repo over SSH, and Bud stores no token for it. On a dev machine, git uses the credentials already there; with 1Password's SSH agent, the key never sits on disk. On the home server, a read-only deploy key for the overlay repo is kept in the Bud vault (Suite D7).

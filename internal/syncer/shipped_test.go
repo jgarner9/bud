@@ -1,8 +1,11 @@
 package syncer
 
 import (
+	"bytes"
+	"flag"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -100,4 +103,107 @@ func TestTheShippedContentSyncsOnADevMachine(t *testing.T) {
 			t.Errorf("opencode.jsonc lacks %s:\n%s", want, cfg)
 		}
 	}
+}
+
+var update = flag.Bool("update", false, "rewrite the golden files")
+
+// personalEnv stands in for an overlay's env/personal.jsonc: the gateway and
+// the memory server by tailnet IP (Suite D72, D74). Example addresses only
+const personalEnv = `{"bud": {"gateway": "http://100.64.0.1:8790", "mcp": {"memory": {"url": "http://100.64.0.1:8791/mcp"}}}}`
+
+// JGA-358: each example profile, synced with the shipped content and an
+// overlay that adds a personal fragment, renders the golden configs: the MCP
+// servers and built-in tool settings of the tool map
+func TestEachExampleProfileRendersItsGoldenConfigs(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("needs git")
+	}
+	for _, name := range []string{"dev-machine", "server", "model-box"} {
+		t.Run(name, func(t *testing.T) {
+			s := newServer(t)
+			o := options(t, s)
+			o.Device = name
+			o.Profiles = func() []profile.Dir { return ProfileDirs(o.Paths) }
+
+			// the overlay's profile is the example's, plus the personal fragment
+			ex, _, err := profile.Find(name, profile.Dir{Name: "examples", FS: bud.Profiles()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.publish("2026.11.16.1", ex.Channel, repoContent(t))
+			prof := string(repoFileAt(t, "profiles", name+".json"))
+			if ex.Content.Env != nil {
+				prof = strings.Replace(prof, `"env": [`, `"env": ["personal", `, 1)
+			}
+			repo := t.TempDir()
+			for path, data := range map[string]string{
+				"overlay.json":               `{"format": 1}`,
+				"profiles/" + name + ".json": prof,
+				"env/personal.jsonc":         personalEnv,
+			} {
+				full := filepath.Join(repo, path)
+				if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(full, []byte(data), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			git(t, repo, "init", "-q")
+			git(t, repo, "add", ".")
+			git(t, repo, "commit", "-q", "-m", "overlay")
+			o.Overlay = repo
+
+			rep := run(t, o)
+			for _, n := range rep.Notes {
+				if strings.Contains(n, "MCP server") {
+					t.Errorf("with the overlay's personal fragment nothing should be left out: %s", n)
+				}
+			}
+			root := filepath.Dir(filepath.Dir(o.Paths.Config))
+			for _, f := range []struct{ path, golden string }{
+				{filepath.Join(o.Paths.OpenCodeConfig(), "opencode.jsonc"), "opencode.jsonc"},
+				{o.Paths.HermesConfig(), "hermes.yaml"},
+			} {
+				golden := filepath.Join("testdata", "profiles", name, f.golden)
+				got, err := os.ReadFile(f.path)
+				if os.IsNotExist(err) {
+					if _, err := os.Stat(golden); err == nil {
+						t.Errorf("%s wasn't rendered, but %s expects it", f.path, golden)
+					}
+					continue
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				// the temp dirs stand in for a home dir
+				got = bytes.ReplaceAll(got, []byte(root), []byte("/home/you"))
+				if *update {
+					if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(golden, got, 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				want, err := os.ReadFile(golden)
+				if err != nil {
+					t.Fatalf("%v (run go test ./internal/syncer -run Golden -update to create it)", err)
+				}
+				if !bytes.Equal(got, want) {
+					t.Errorf("%s differs from %s; check the diff and run go test ./internal/syncer -run Golden -update\ngot:\n%s", f.path, golden, got)
+				}
+			}
+		})
+	}
+}
+
+func repoFileAt(t *testing.T, parts ...string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(append([]string{"..", ".."}, parts...)...))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return b
 }

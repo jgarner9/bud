@@ -1,0 +1,79 @@
+# Written by bud sync from env fragments. Edits here are replaced on the next
+# sync: change content/env or your overlay's env instead.
+mcp_servers:
+  context7:
+    url: "https://mcp.context7.com/mcp"
+  github:
+    args:
+      - "stdio"
+    command: "github-mcp-server"
+    env:
+      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+    trust: "untrusted"
+  linear:
+    headers:
+      X-Bud-Privacy: "P1"
+    trust: "untrusted"
+    url: "http://100.64.0.1:8790/linear/mcp"
+  memory:
+    url: "http://100.64.0.1:8791/mcp"
+platform_toolsets:
+  api_server:
+    - "terminal"
+    - "file"
+    - "code_execution"
+    - "web"
+    - "browser"
+    - "memory"
+    - "session_search"
+    - "skills"
+    - "cronjob"
+    - "delegation"
+    - "todo"
+    - "vision"
+  cli:
+    - "terminal"
+    - "file"
+    - "code_execution"
+    - "web"
+    - "browser"
+    - "memory"
+    - "session_search"
+    - "skills"
+    - "cronjob"
+    - "delegation"
+    - "todo"
+    - "clarify"
+    - "vision"
+  cron:
+    - "terminal"
+    - "file"
+    - "code_execution"
+    - "web"
+    - "browser"
+    - "memory"
+    - "session_search"
+    - "skills"
+    - "cronjob"
+    - "delegation"
+    - "todo"
+    - "vision"
+  signal:
+    - "terminal"
+    - "file"
+    - "code_execution"
+    - "web"
+    - "browser"
+    - "memory"
+    - "session_search"
+    - "skills"
+    - "cronjob"
+    - "delegation"
+    - "todo"
+    - "clarify"
+    - "vision"
+web:
+  backend: "exa"
+  extract_backend: "exa"
+  keyless_fallback: false
+  search_backend: "searxng"

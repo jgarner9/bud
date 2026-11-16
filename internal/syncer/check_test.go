@@ -8,6 +8,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
+
+	"jgarner.dev/bud/internal/profile"
 )
 
 func TestCheckFindsNothingRightAfterASync(t *testing.T) {
@@ -164,4 +167,55 @@ func TestTryLockIsBusyWhileASyncHoldsTheLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	unlock()
+}
+
+// JGA-358: turning a rendered tool setting back on by hand, Hermes's
+// keyless search fallback or the laptop's own websearch, is drift that bud
+// doctor names, and Check says a sync would put it back
+func TestAHandEditedToolSettingIsDrift(t *testing.T) {
+	s := newServer(t)
+	content := tree(t)
+	content["env/server.jsonc"] = &fstest.MapFile{Data: repoFile(t, "server.jsonc")}
+	s.publish("2026.11.16.1", "edge", content)
+	o := options(t, s)
+	o.Device = "home"
+	examples := o.Profiles
+	o.Profiles = func() []profile.Dir {
+		return append(examples(), profile.Dir{Name: "home", FS: fstest.MapFS{
+			"home.json": {Data: []byte(`{"name": "home", "components": ["server"], "channel": "edge", "content": {"env": ["base", "server"]}}`)},
+		}})
+	}
+	run(t, o)
+
+	hermesCfg := o.Paths.HermesConfig()
+	b, err := os.ReadFile(hermesCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "keyless_fallback: false") {
+		t.Fatalf("config.yaml lacks the keyless fallback setting:\n%s", b)
+	}
+	edited := strings.Replace(string(b), "keyless_fallback: false", "keyless_fallback: true", 1)
+	if err := os.WriteFile(hermesCfg, []byte(edited), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	led, err := LoadLedger(o.Paths.SyncLedger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	drift, err := led.Drift()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(drift) != 1 || drift[0].Path != hermesCfg || drift[0].Missing {
+		t.Fatalf("drift = %+v, want config.yaml changed", drift)
+	}
+	rep, err := Check(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Skipped) != 1 || rep.Skipped[0].Path != hermesCfg {
+		t.Fatalf("Check skipped %+v, want the hand-edited config.yaml named", rep.Skipped)
+	}
 }

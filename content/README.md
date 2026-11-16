@@ -10,6 +10,8 @@ What syncs to every device that runs OpenCode (Suite D17, D57): generic instruct
 | `commands/*.md` | Commands, with fixed, trusted command lines only | phase 4 |
 | `plugins/<name>/` | OpenCode TypeScript plugins | phase 7 |
 | `env/registry.jsonc` | Providers, models and the nine roles (Suite D46, D58) | task 1.2 |
-| `env/*.jsonc` | Config fragments: `base` (the action tiers as permission rules, every device) and `coding` (formatters, asking outside the project; dev machines). MCP servers and routes come later | built (tasks 1.7, 1.11) |
+| `env/*.jsonc` | Config fragments: `base` (the action tiers as permission rules, every device), `coding` (formatters, asking outside the project, the dev machine's tools and MCP servers) and `server` (the home server's tools and MCP servers, for OpenCode and Hermes). The `bud` key in a fragment lists MCP servers once for every runtime (docs/internals/sync.md). Routes come later | built (tasks 1.7, 1.11, JGA-358) |
+
+`FORMAT` is the content format this tree needs (docs/internals/content.md); it's 2 since the env fragments' `bud` block.
 
 Nothing personal goes here: no hostnames, tailnet names, home paths or real `op://` paths.

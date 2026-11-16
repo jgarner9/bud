@@ -4,9 +4,65 @@
 // anything outside the open project. bud sync adds rules after this one that
 // allow its own synced content, wherever its data dir is, so skills and
 // instructions still load. Applies after base.jsonc.
+//
+// The tools follow the tool map (Suite D72-D79, D86, D87): search goes
+// through the MCP gateway's Exa, so the built-in websearch is off and the
+// laptop holds no search key (D77). The bud block lists the MCP servers once
+// for every runtime; bud sync renders them, and its private agent denies P0
+// sessions every server not allowed P0 (D81). Your overlay's env sets
+// bud.gateway (the gateway's tailnet IP and port) and bud.mcp.memory.url.
 {
   "formatter": true,
+  "websearch": false,
   "permissions": [
     { "action": "external_directory", "resource": "*", "effect": "ask" },
+    { "action": "experimental_image_generate", "resource": "*", "effect": "deny" },
+
+    // Linear: reads run alone, creating or changing anything asks (D75)
+    { "action": "linear_*", "resource": "*", "effect": "ask" },
+    { "action": "linear_get_*", "resource": "*", "effect": "allow" },
+    { "action": "linear_list_*", "resource": "*", "effect": "allow" },
+    { "action": "linear_search_*", "resource": "*", "effect": "allow" },
+    { "action": "linear_extract_images", "resource": "*", "effect": "allow" },
+
+    // these run alone (D74, D77, D78, D87)
+    { "action": "exa_*", "resource": "*", "effect": "allow" },
+    { "action": "context7_*", "resource": "*", "effect": "allow" },
+    { "action": "memory_*", "resource": "*", "effect": "allow" },
+    { "action": "cocoindex_*", "resource": "*", "effect": "allow" },
+
+    // Serena: its read-only symbol tools only; the edit and shell tools are
+    // denied, since OpenCode's own edit and shell carry the action tiers (D79)
+    { "action": "serena_*", "resource": "*", "effect": "deny" },
+    { "action": "serena_get_symbols_overview", "resource": "*", "effect": "allow" },
+    { "action": "serena_find_symbol", "resource": "*", "effect": "allow" },
+    { "action": "serena_find_referencing_symbols", "resource": "*", "effect": "allow" },
+    { "action": "serena_find_implementations", "resource": "*", "effect": "allow" },
+    { "action": "serena_find_declaration", "resource": "*", "effect": "allow" },
+    { "action": "serena_get_diagnostics_for_file", "resource": "*", "effect": "allow" },
+
+    // Playwright: driving the page runs alone, and opening a URL asks, since
+    // OpenCode's rule for an MCP tool can't see the URL to let localhost
+    // through on its own (D86)
+    { "action": "playwright_*", "resource": "*", "effect": "allow" },
+    { "action": "playwright_browser_navigate", "resource": "*", "effect": "ask" },
   ],
+  "bud": {
+    // the tier these sessions send the gateway; the private agent is P0
+    "privacy": "P1",
+    "mcp": {
+      "linear": { "gateway": true, "privacy": ["P1", "P2"] },
+      "exa": { "gateway": true, "privacy": ["P1", "P2"] },
+      "context7": { "url": "https://mcp.context7.com/mcp", "privacy": ["P1", "P2"] },
+      // Bud memory on the home server (D74); the overlay sets its url
+      "memory": { "privacy": ["P0", "P1", "P2"] },
+      "serena": {
+        "command": ["uvx", "--from", "serena-agent==2.1.0", "serena", "start-mcp-server", "--context", "ide", "--project-from-cwd", "--open-web-dashboard", "false"],
+        "privacy": ["P0", "P1", "P2"],
+      },
+      // local embeddings by default, so nothing leaves the machine
+      "cocoindex": { "command": ["uvx", "--from", "cocoindex-code==0.2.43", "ccc", "mcp"], "privacy": ["P0", "P1", "P2"] },
+      "playwright": { "command": ["npx", "-y", "@playwright/mcp@0.0.85"], "privacy": ["P1", "P2"] },
+    },
+  },
 }

@@ -1,0 +1,288 @@
+// Package env reads env fragments (Suite D57) and the bud block inside them
+// that every runtime adapter shares. A fragment is JSONC laid over a
+// runtime's config: its top level is OpenCode's, and the "bud" key holds
+// what isn't any one runtime's, so each adapter renders it in its own shape.
+// The MCP servers a device uses, the MCP gateway they go through and the
+// privacy tier the device's sessions send are described once there, and
+// rendered into both OpenCode and Hermes (Suite D72-D79, D81, D85-D87).
+// The bud block is documented in docs/internals/sync.md
+package env
+
+import (
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/netip"
+	"net/url"
+	"regexp"
+	"slices"
+	"strings"
+
+	"jgarner.dev/bud/internal/registry"
+)
+
+// Fragment is one env fragment's JSONC
+type Fragment struct {
+	Name string // for errors, such as public/base or overlay/laptop
+	Src  []byte
+}
+
+// Merge lays the fragments over each other in order: objects merge key by
+// key, arrays append (so an overlay's permission rules come after the
+// public ones), and anything else replaces
+func Merge(frags []Fragment) (map[string]any, error) {
+	out := map[string]any{}
+	for _, f := range frags {
+		var frag map[string]any
+		b, err := registry.StripJSONC(f.Src)
+		if err == nil {
+			err = json.Unmarshal(b, &frag)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("env fragment %s: %w", f.Name, err)
+		}
+		MergeInto(out, frag)
+	}
+
+	return out, nil
+}
+
+// MergeInto lays src over dst, the way Merge lays fragments
+func MergeInto(dst, src map[string]any) {
+	for k, v := range src {
+		switch sv := v.(type) {
+		case map[string]any:
+			if dv, ok := dst[k].(map[string]any); ok {
+				MergeInto(dv, sv)
+				continue
+			}
+		case []any:
+			if dv, ok := dst[k].([]any); ok {
+				dst[k] = append(slices.Clone(dv), sv...)
+				continue
+			}
+		}
+		dst[k] = v
+	}
+}
+
+// Tiers are the privacy tiers (Suite D23)
+var Tiers = []string{"P0", "P1", "P2"}
+
+// PrivacyHeader carries a session's tier to the MCP gateway, which treats a
+// request without it as P0 (internal/mcpgateway)
+const PrivacyHeader = "X-Bud-Privacy"
+
+// Bud is the bud block of the merged fragments
+type Bud struct {
+	// Gateway is the MCP gateway's base URL, such as http://<tailnet IP>:8790.
+	// It lives in the overlay, since the address is personal. Empty means
+	// none, and servers reached through it are left out
+	Gateway string `json:"gateway,omitempty"`
+	// Privacy is the tier this device's sessions send the gateway. Empty
+	// sends no header, which the gateway takes as P0
+	Privacy string `json:"privacy,omitempty"`
+	// MCP holds the device's MCP servers by name
+	MCP map[string]Server `json:"mcp,omitempty"`
+	// Hermes is laid over Hermes's config.yaml as it is (Suite D48)
+	Hermes map[string]any `json:"hermes,omitempty"`
+}
+
+// Server is one MCP server. Exactly one of Gateway, URL and Command says how
+// it's reached
+type Server struct {
+	// Gateway reaches it through the MCP gateway at <gateway>/<name>/mcp,
+	// with the device's tier in X-Bud-Privacy
+	Gateway bool `json:"gateway,omitempty"`
+	// URL is a remote server's Streamable HTTP endpoint. A server with
+	// neither URL nor Command is left out until a later fragment (usually
+	// the overlay's) sets one
+	URL     string            `json:"url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+	// Command starts a local server over stdio, its arguments after it
+	Command []string          `json:"command,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	// Privacy lists the tiers whose sessions may use it; a P0 session gets
+	// none of a server that leaves P0 out (Suite D81)
+	Privacy  []string `json:"privacy"`
+	Disabled bool     `json:"disabled,omitempty"`
+}
+
+// Remote says whether the resolved server is reached over HTTP
+func (s Server) Remote() bool { return s.URL != "" }
+
+// P0 says whether P0 sessions may use the server
+func (s Server) P0() bool { return slices.Contains(s.Privacy, "P0") }
+
+// Resolved is the bud block with every server's transport worked out
+type Resolved struct {
+	// Servers are the servers to render, by name, each with its URL and
+	// headers or its command
+	Servers map[string]Server
+	// Left are the servers left out, by name, each with why
+	Left   map[string]string
+	Hermes map[string]any
+}
+
+// Names are the resolved servers' names, sorted
+func (r *Resolved) Names() []string { return sortedKeys(r.Servers) }
+
+// Notes say which servers were left out and why, sorted
+func (r *Resolved) Notes() []string {
+	var out []string
+	for _, n := range sortedKeys(r.Left) {
+		out = append(out, fmt.Sprintf("MCP server %s is left out: %s", n, r.Left[n]))
+	}
+
+	return out
+}
+
+var nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+// Take removes the bud block from merged fragments and resolves it
+func Take(merged map[string]any) (*Resolved, error) {
+	raw, ok := merged["bud"]
+	delete(merged, "bud")
+	var b Bud
+	if ok {
+		buf, err := json.Marshal(raw)
+		if err != nil {
+			return nil, err
+		}
+		dec := json.NewDecoder(strings.NewReader(string(buf)))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&b); err != nil {
+			return nil, fmt.Errorf("env fragments: the bud block: %w", err)
+		}
+	}
+
+	return b.Resolve()
+}
+
+// Resolve checks the block and works out each server's transport, reporting
+// every problem at once
+func (b *Bud) Resolve() (*Resolved, error) {
+	var errs []string
+	add := func(format string, args ...any) { errs = append(errs, fmt.Sprintf(format, args...)) }
+
+	if b.Privacy != "" && !slices.Contains(Tiers, b.Privacy) {
+		add("bud.privacy: %q isn't a tier (P0, P1, P2)", b.Privacy)
+	}
+	if b.Gateway != "" {
+		if err := checkGateway(b.Gateway); err != nil {
+			add("bud.gateway: %v", err)
+		}
+	}
+
+	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Hermes: b.Hermes}
+	for _, name := range sortedKeys(b.MCP) {
+		s := b.MCP[name]
+		at := "bud.mcp." + name
+		if !nameRe.MatchString(name) {
+			add("%s: the name must be lowercase letters, digits and '-'", at)
+			continue
+		}
+		if len(s.Privacy) == 0 {
+			add("%s.privacy: list the tiers whose sessions may use it (P0, P1, P2)", at)
+		}
+		for _, t := range s.Privacy {
+			if !slices.Contains(Tiers, t) {
+				add("%s.privacy: %q isn't a tier (P0, P1, P2)", at, t)
+			}
+		}
+		ways := 0
+		for _, set := range []bool{s.Gateway, s.URL != "", len(s.Command) > 0} {
+			if set {
+				ways++
+			}
+		}
+		if ways > 1 {
+			add("%s: set one of gateway, url and command", at)
+			continue
+		}
+		if s.Gateway && (len(s.Headers) > 0 || len(s.Env) > 0) {
+			add("%s: a gateway server takes no headers or env; the gateway adds its key", at)
+			continue
+		}
+		if s.URL != "" {
+			if u, err := url.Parse(s.URL); err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+				add("%s.url: %q isn't an http(s) URL", at, s.URL)
+				continue
+			}
+		}
+		switch {
+		case s.Disabled:
+			r.Left[name] = "disabled"
+		case s.Gateway && b.Gateway == "":
+			r.Left[name] = "it goes through the MCP gateway, and no fragment sets bud.gateway (your overlay's env sets it)"
+		case s.Gateway:
+			s.URL = strings.TrimSuffix(b.Gateway, "/") + "/" + name + "/mcp"
+			if b.Privacy != "" {
+				s.Headers = map[string]string{PrivacyHeader: b.Privacy}
+			}
+			r.Servers[name] = s
+		case ways == 0:
+			r.Left[name] = "no fragment sets its url or command (your overlay's env sets it)"
+		default:
+			r.Servers[name] = s
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("env fragments: %s", strings.Join(errs, "; "))
+	}
+
+	return r, nil
+}
+
+// checkGateway accepts an http(s) URL whose host is a loopback or tailnet IP
+// address, since the gateway refuses a Host that isn't one (it guards
+// against DNS rebinding), so a MagicDNS name would never get through
+func checkGateway(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("%q isn't an http(s) URL such as http://<tailnet IP>:8790", raw)
+	}
+	if u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.User != nil {
+		return fmt.Errorf("%q: give only the scheme, address and port; bud adds /<server>/mcp", raw)
+	}
+	ip, err := netip.ParseAddr(strings.Trim(u.Hostname(), "[]"))
+	if err != nil {
+		return fmt.Errorf("%q names a host, and the gateway answers only its IP address; use the tailnet IP (tailscale ip -4)", raw)
+	}
+	if !ip.IsLoopback() && !tailnet(ip) {
+		return fmt.Errorf("%q isn't a loopback or tailnet address, and the gateway listens on the tailnet only", raw)
+	}
+	if _, _, err := net.SplitHostPort(u.Host); err != nil {
+		return fmt.Errorf("%q: give the gateway's port, such as :8790", raw)
+	}
+
+	return nil
+}
+
+var tailnetRanges = []netip.Prefix{netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("fd7a:115c:a1e0::/48")}
+
+func tailnet(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	for _, p := range tailnetRanges {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// EnvRef matches an {env:VAR} reference, the form fragments use for a value
+// a runtime fills from its environment at launch
+var EnvRef = regexp.MustCompile(`\{env:([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	return keys
+}

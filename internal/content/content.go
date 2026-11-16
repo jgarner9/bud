@@ -63,8 +63,10 @@ var skipped = []string{"README.md", FormatName}
 // failing on the file it can't parse. The format comes from the tree, not
 // from this constant, so re-packing an old release keeps the format it was
 // published with. Format 1 is written as no field at all, which keeps
-// manifests readable by every bud that predates it
-const Format = 1
+// manifests readable by every bud that predates it. Format 2 (JGA-358): env
+// fragments carry the bud block (MCP servers and the gateway), which an
+// older bud would pass into opencode.jsonc as it is
+const Format = 2
 
 // Manifest is content.json
 type Manifest struct {

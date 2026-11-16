@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 
+	"jgarner.dev/bud/internal/adapter/hermes"
 	"jgarner.dev/bud/internal/adapter/opencode"
 	"jgarner.dev/bud/internal/content"
 	"jgarner.dev/bud/internal/overlay"
@@ -326,6 +327,21 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 		wants = append(wants, want{filepath.Join(p.OpenCodeConfig(), "opencode.jsonc"), out.Config, 0o644, "config", "rendered"})
 		if len(out.Secrets) > 0 {
 			wants = append(wants, want{p.OpenCodeEnv(), envFile(out.Secrets), 0o600, "secrets", "rendered"})
+		}
+		rep.Notes = append(rep.Notes, out.Notes...)
+	}
+	if prof.Has("server") {
+		// Hermes, the manager, runs on the home server only (Suite D48)
+		out, err := hermes.Render(in.Env)
+		if err != nil {
+			return err
+		}
+		wants = append(wants, want{p.HermesConfig(), out.Config, 0o600, "config", "rendered"})
+		// the same servers were left out of opencode.jsonc, for the same reasons
+		for _, n := range out.Notes {
+			if !slices.Contains(rep.Notes, n) {
+				rep.Notes = append(rep.Notes, n)
+			}
 		}
 	}
 

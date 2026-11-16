@@ -149,6 +149,11 @@ func (p *Paths) OpenCodeConfig() string { return filepath.Join(filepath.Dir(p.Co
 // names and op:// references, never the values (Suite D7)
 func (p *Paths) OpenCodeEnv() string { return filepath.Join(p.State, "opencode.env") }
 
+// HermesConfig is Hermes's config.yaml, which bud sync renders on the home
+// server (Suite D48). Hermes reads it from ~/.hermes unless HERMES_HOME says
+// otherwise, and bud's units leave HERMES_HOME unset
+func (p *Paths) HermesConfig() string { return filepath.Join(p.Home, ".hermes", "config.yaml") }
+
 // MCPGateway is the home server's MCP gateway config (Suite D72)
 func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway.json") }
 

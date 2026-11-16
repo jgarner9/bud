@@ -65,6 +65,7 @@ func newGateway(t *testing.T, upstream string, privacy ...string) (*Gateway, str
 func call(g http.Handler, tier, body string, edit ...func(*http.Request)) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(http.MethodPost, "/linear/mcp", strings.NewReader(body))
 	r.RemoteAddr = "100.101.102.103:41000"
+	r.Host = "100.64.0.1:8790"
 	r.Header.Set("Content-Type", "application/json")
 	if tier != "" {
 		r.Header.Set(PrivacyHeader, tier)
@@ -207,6 +208,8 @@ func TestRequestsTheGatewayTurnsAway(t *testing.T) {
 		{"LAN client", "P1", func(r *http.Request) { r.RemoteAddr = "192.168.1.20:5000" }, http.StatusForbidden},
 		{"public client", "P1", func(r *http.Request) { r.RemoteAddr = "[2001:db8::1]:5000" }, http.StatusForbidden},
 		{"web page", "P1", func(r *http.Request) { r.Header.Set("Origin", "https://evil.example") }, http.StatusForbidden},
+		{"rebound domain", "P1", func(r *http.Request) { r.Host = "evil.example:8790" }, http.StatusForbidden},
+		{"public IP host", "P1", func(r *http.Request) { r.Host = "203.0.113.5" }, http.StatusForbidden},
 		{"unknown server", "P1", func(r *http.Request) { r.URL.Path = "/github/mcp" }, http.StatusNotFound},
 	}
 	for _, tt := range tests {
@@ -231,7 +234,8 @@ func TestLoopbackClientsAreServed(t *testing.T) {
 	up, got := fakeUpstream(t)
 	g, _ := newGateway(t, up.URL, "P1")
 	for _, addr := range []string{"127.0.0.1:5000", "[::1]:5000", "[fd7a:115c:a1e0::5]:5000"} {
-		if w := call(g, "P1", toolCall, func(r *http.Request) { r.RemoteAddr = addr }); w.Code != http.StatusOK {
+		host := func(r *http.Request) { r.RemoteAddr = addr; r.Host = addr }
+		if w := call(g, "P1", toolCall, host); w.Code != http.StatusOK {
 			t.Errorf("%s: status %d", addr, w.Code)
 		}
 		<-got
@@ -281,5 +285,62 @@ func TestMissingKeyStopsTheGateway(t *testing.T) {
 	_, err := New(c, nil, func(string) string { return "" })
 	if err == nil || !strings.Contains(err.Error(), "EXA_API_KEY") || !strings.Contains(err.Error(), "op run") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestACallIsLoggedWhenTheClientLeavesMidStream(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "event: message\ndata: {}\n\n")
+		w.(http.Flusher).Flush()
+		<-r.Context().Done() // the stream stays open until the gateway gives up on it
+	}))
+	defer up.Close()
+	g, logPath := newGateway(t, up.URL, "P1")
+	front := httptest.NewServer(g)
+	defer front.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, front.URL+"/linear/mcp", strings.NewReader(toolCall))
+	req.Header.Set(PrivacyHeader, "P1")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bufio.NewReader(resp.Body).ReadString('\n'); err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if recs := readAudit(t, logPath); len(recs) == 1 && recs[0].Tool == "create_issue" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("the call the upstream ran was never logged")
+}
+
+func TestInterimStatusesAreNotTheAuditedOne(t *testing.T) {
+	sw := &statusWriter{ResponseWriter: httptest.NewRecorder()}
+	sw.WriteHeader(http.StatusEarlyHints)
+	sw.WriteHeader(http.StatusBadGateway)
+	if sw.code() != http.StatusBadGateway {
+		t.Errorf("code = %d", sw.code())
+	}
+}
+
+func TestAnExistingAuditLogIsMadePrivate(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "audit.jsonl")
+	if err := os.WriteFile(p, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, err := OpenAudit(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o600 {
+		t.Errorf("mode %v", fi.Mode().Perm())
 	}
 }

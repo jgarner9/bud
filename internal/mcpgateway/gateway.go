@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -109,8 +110,10 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mcp-gateway: only loopback and tailnet clients are served", http.StatusForbidden)
 		return
 	}
-	if r.Header.Get("Origin") != "" {
-		http.Error(w, "mcp-gateway: requests from web pages are refused", http.StatusForbidden)
+	if r.Header.Get("Origin") != "" || !literalHost(r.Host) {
+		// a DNS-rebound page names its own domain in Host and may leave
+		// Origin out of a GET, so both are checked
+		http.Error(w, "mcp-gateway: requests from web pages are refused; reach the gateway by its IP address", http.StatusForbidden)
 		return
 	}
 	tier := r.Header.Get(PrivacyHeader)
@@ -143,13 +146,28 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 	r.Body = io.NopCloser(bytes.NewReader(body))
 	r.ContentLength = int64(len(body))
 	sw := &statusWriter{ResponseWriter: w}
-	up.proxy.ServeHTTP(sw, r)
-	for _, m := range msgs {
-		if m.Method != "tools/call" {
-			continue
+	// deferred, so a call the upstream ran is logged even when the proxy
+	// unwinds with http.ErrAbortHandler (the client left mid-stream)
+	defer func() {
+		for _, m := range msgs {
+			if m.Method == "tools/call" {
+				g.log(m.record(base, "allowed", sw.code(), g.now().Sub(start)))
+			}
 		}
-		g.log(m.record(base, "allowed", sw.code(), g.now().Sub(start)))
+	}()
+	up.proxy.ServeHTTP(sw, r)
+}
+
+// literalHost says whether the request's Host names the gateway by a
+// loopback or tailnet IP address (or localhost). A DNS-rebinding page can
+// only send its own domain there
+func literalHost(hostport string) bool {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
 	}
+	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	return insideHost(host)
 }
 
 // refuse answers every request in the body with a JSON-RPC error, sending
@@ -270,7 +288,8 @@ type statusWriter struct {
 }
 
 func (s *statusWriter) WriteHeader(code int) {
-	if s.status == 0 {
+	// interim 1xx answers (103 Early Hints) come before the real one
+	if s.status == 0 && code >= 200 {
 		s.status = code
 	}
 	s.ResponseWriter.WriteHeader(code)

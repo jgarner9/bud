@@ -41,6 +41,12 @@ func OpenAudit(path string) (*Audit, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open the audit log: %w", err)
 	}
+	// the mode above applies only to a new file; an existing or rotated
+	// one is made private too
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("make the audit log private (chmod 600 %s): %w", path, err)
+	}
 	return &Audit{f: f}, nil
 }
 

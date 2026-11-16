@@ -60,6 +60,7 @@ func TestEventsFromTimes(t *testing.T) {
 		{"utc and duration", "DTSTART:20261120T150000Z\r\nDURATION:PT1H30M\r\n", time.Date(2026, 11, 20, 15, 0, 0, 0, time.UTC), time.Date(2026, 11, 20, 16, 30, 0, 0, time.UTC), false, false},
 		{"floating", "DTSTART:20261120T080000\r\nDTEND:20261120T090000\r\n", time.Date(2026, 11, 20, 8, 0, 0, 0, chicago), time.Date(2026, 11, 20, 9, 0, 0, 0, chicago), false, false},
 		{"unknown zone", "DTSTART;TZID=Custom Zone:20261120T080000\r\n", time.Date(2026, 11, 20, 8, 0, 0, 0, chicago), time.Date(2026, 11, 20, 8, 0, 0, 0, chicago), false, false},
+		{"extra dates", "RDATE:20261127T150000Z\r\nDTSTART:20261120T150000Z\r\nDTEND:20261120T160000Z\r\n", time.Date(2026, 11, 20, 15, 0, 0, 0, time.UTC), time.Date(2026, 11, 20, 16, 0, 0, 0, time.UTC), false, true},
 		{"occurrence", "RECURRENCE-ID:20261120T150000Z\r\nDTSTART:20261120T150000Z\r\nDTEND:20261120T160000Z\r\n", time.Date(2026, 11, 20, 15, 0, 0, 0, time.UTC), time.Date(2026, 11, 20, 16, 0, 0, 0, time.UTC), false, true},
 	}
 	for _, c := range cases {
@@ -162,5 +163,22 @@ func TestMoveEventKeepsTheRest(t *testing.T) {
 	repeating := strings.Replace(sample, "SEQUENCE:2\r\n", "RRULE:FREQ=WEEKLY\r\n", 1)
 	if _, err := moveEvent(repeating, start, start.Add(time.Hour), false, now); err == nil || !strings.Contains(err.Error(), "repeat") {
 		t.Errorf("a repeating event: err = %v", err)
+	}
+}
+
+// an alarm relative to the end counts back from there, and one that rings
+// after the start is left out, since alarm_minutes can't say it
+func TestAlarmsRelativeToTheEnd(t *testing.T) {
+	data := "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:x\r\nDTSTART:20261120T150000Z\r\nDTEND:20261120T160000Z\r\n" +
+		"BEGIN:VALARM\r\nTRIGGER;RELATED=END:-PT75M\r\nEND:VALARM\r\n" +
+		"BEGIN:VALARM\r\nTRIGGER;RELATED=END:-PT15M\r\nEND:VALARM\r\n" +
+		"BEGIN:VALARM\r\nTRIGGER:PT5M\r\nEND:VALARM\r\n" +
+		"END:VEVENT\r\nEND:VCALENDAR\r\n"
+	evs, err := eventsFrom(data, time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := evs[0].Alarms; len(a) != 1 || a[0] != 15 {
+		t.Errorf("alarms %v, want [15]", a)
 	}
 }

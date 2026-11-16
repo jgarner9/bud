@@ -31,9 +31,9 @@ type Client struct {
 }
 
 // NewClient checks the server URL and credentials. Credentials go only to
-// https, or to http on loopback (for tests), and only to the base host or
-// another host under its parent domain (iCloud answers from p<n>-caldav
-// hosts beside caldav.icloud.com)
+// https, or to http on loopback (for tests), and only to the base host, or
+// for iCloud to another icloud.com host (it answers from p<n>-caldav hosts
+// beside caldav.icloud.com)
 func NewClient(rawURL, user, pass string, loc *time.Location) (*Client, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Host == "" {
@@ -55,6 +55,11 @@ func NewClient(rawURL, user, pass string, loc *time.Location) (*Client, error) {
 			if !c.trusted(req.URL) {
 				return fmt.Errorf("refusing a redirect to %s, outside the CalDAV server's domain", req.URL.Host)
 			}
+			// a 301, 302 or 303 turns PROPFIND, REPORT, PUT and DELETE into a
+			// GET without its body, which would look like success
+			if req.Method != via[0].Method {
+				return fmt.Errorf("refusing a redirect that turns %s into %s", via[0].Method, req.Method)
+			}
 			req.SetBasicAuth(c.user, c.pass)
 			return nil
 		},
@@ -75,18 +80,16 @@ func (c *Client) trusted(u *url.URL) bool {
 	default:
 		return false
 	}
-	base := c.base.Hostname()
-	if strings.EqualFold(host, base) {
+	host, base := strings.ToLower(host), strings.ToLower(c.base.Hostname())
+	if host == base {
 		return true
 	}
-	// a sibling under the base's parent domain, which must itself have a dot
-	_, parent, ok := strings.Cut(base, ".")
-	if !ok || !strings.Contains(parent, ".") {
-		return false
-	}
-
-	return strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(parent))
+	// iCloud hands each account to a p<n>-caldav host beside caldav.icloud.com;
+	// any other server gets its own host only
+	return icloud(base) && icloud(host)
 }
+
+func icloud(host string) bool { return host == "icloud.com" || strings.HasSuffix(host, ".icloud.com") }
 
 // do sends one request with the credentials and returns the body of a 2xx
 func (c *Client) do(ctx context.Context, method string, u *url.URL, hdr map[string]string, body string) (*http.Response, []byte, error) {

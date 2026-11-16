@@ -329,7 +329,7 @@ func eventFrom(c *component, loc *time.Location) (Event, error) {
 	if p, ok := c.get("RRULE"); ok {
 		e.Repeats, e.Recurring = p.Value, true
 	}
-	if has(c, "RECURRENCE-ID") {
+	if has(c, "RECURRENCE-ID") || has(c, "RDATE") {
 		e.Recurring = true
 	}
 	for _, a := range c.Comps {
@@ -340,8 +340,18 @@ func eventFrom(c *component, loc *time.Location) (Event, error) {
 		if !ok || t.Params["VALUE"] == "DATE-TIME" {
 			continue
 		}
-		if d, err := parseDuration(t.Value); err == nil && d <= 0 {
-			e.Alarms = append(e.Alarms, int(-d/time.Minute))
+		d, err := parseDuration(t.Value)
+		if err != nil {
+			continue
+		}
+		// how long before the start it rings; one relative to the end
+		// counts from there, and one after the start can't be shown
+		before := -d
+		if strings.EqualFold(t.Params["RELATED"], "END") {
+			before = -(e.End.Sub(e.Start) + d)
+		}
+		if before >= 0 {
+			e.Alarms = append(e.Alarms, int(before/time.Minute))
 		}
 	}
 

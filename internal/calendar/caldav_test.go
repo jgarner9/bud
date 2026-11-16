@@ -259,6 +259,7 @@ func TestClientTrustsOnlyItsDomain(t *testing.T) {
 		"https://caldav.icloud.com/x":     true,
 		"https://p42-caldav.icloud.com/x": true,
 		"https://evil.example.com/x":      false,
+		"https://icloud.com/x":            true,
 		"https://icloud.com.evil.com/x":   false,
 		"http://p42-caldav.icloud.com/x":  false,
 		"http://127.0.0.1:9/x":            false,
@@ -266,6 +267,14 @@ func TestClientTrustsOnlyItsDomain(t *testing.T) {
 		if got := c.trusted(mustParse(t, raw)); got != want {
 			t.Errorf("%s: trusted = %v", raw, got)
 		}
+	}
+	// another server's neighbours under its parent domain aren't trusted
+	other, err := NewClient("https://calendar.co.uk/", "u", "p", time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.trusted(mustParse(t, "https://attacker.co.uk/")) || other.trusted(mustParse(t, "https://p1-caldav.icloud.com/")) {
+		t.Error("a host beside calendar.co.uk was trusted")
 	}
 	if _, err := NewClient("http://caldav.icloud.com/", "u", "p", time.UTC); err == nil {
 		t.Error("plain http was accepted")
@@ -286,4 +295,24 @@ func mustParse(t *testing.T, raw string) *url.URL {
 	}
 
 	return u
+}
+
+// a redirect that would turn a DAV method into a GET is refused, not taken
+// for success
+func TestClientRefusesMethodChangingRedirects(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			http.Redirect(w, r, "/moved", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewClient(srv.URL+"/", "u", "p", time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := c.do(context.Background(), "DELETE", mustParse(t, srv.URL+"/x.ics"), nil, ""); err == nil || !strings.Contains(err.Error(), "turns DELETE into GET") {
+		t.Errorf("err = %v", err)
+	}
 }

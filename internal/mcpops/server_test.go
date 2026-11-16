@@ -106,13 +106,14 @@ func TestDoctorReportsCountsAndResults(t *testing.T) {
 		{Name: "registry", Status: doctor.Fail, Detail: "bad"},
 	}, &got)))
 
-	_, out := post(t, s, call("doctor", `{"net":true}`))
+	_, out := post(t, s, call("doctor", `{}`))
 	text, isErr := toolText(t, out)
 	if isErr {
 		t.Fatalf("error: %s", text)
 	}
-	if !got.Quick || !got.Net {
-		t.Errorf("options %+v, want Quick and Net", got)
+	// quick, and never the network, since P0 sessions may call it
+	if !got.Quick || got.Net {
+		t.Errorf("options %+v, want Quick and not Net", got)
 	}
 	var rep doctorOut
 	if err := json.Unmarshal([]byte(text), &rep); err != nil {
@@ -121,13 +122,7 @@ func TestDoctorReportsCountsAndResults(t *testing.T) {
 	if rep.Failed != 1 || rep.Warnings != 1 || len(rep.Results) != 3 || rep.Results[1] != (check{"sync ledger", "warn", "1 file changed", "bud sync"}) || rep.Results[2].Status != "fail" {
 		t.Errorf("report %+v", rep)
 	}
-
-	// no arguments means no network
-	post(t, s, call("doctor", `{}`))
-	if got.Net {
-		t.Error("net without asking")
-	}
-	for _, bad := range []string{`{"net":"yes"}`, `{"nett":true}`} {
+	for _, bad := range []string{`{"net":true}`, `{"x":1}`} {
 		if _, out := post(t, s, call("doctor", bad)); errCode(out) != -32602 {
 			t.Errorf("%s: %v", bad, out)
 		}
@@ -162,6 +157,16 @@ func TestProtocolErrors(t *testing.T) {
 	}
 	if code, _ := post(t, s, `{"jsonrpc":"2.0","method":"notifications/initialized"}`); code != 202 {
 		t.Errorf("notification: %d", code)
+	}
+	if code, _ := post(t, s, `{"jsonrpc":"2.0","id":9,"result":{}}`); code != 202 {
+		t.Errorf("response: %d", code)
+	}
+	// malformed messages without an id aren't notifications
+	for _, bad := range []string{`{}`, `null`, `{"method":"ping"}`, `{"jsonrpc":"2.0"}`} {
+		code, out := post(t, s, bad)
+		if code != 200 || errCode(out) != -32600 || out["id"] != nil {
+			t.Errorf("%s: %d %v", bad, code, out)
+		}
 	}
 
 	// a batch is answered as a batch, leaving the notification out

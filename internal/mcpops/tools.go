@@ -31,22 +31,15 @@ func Tools(src Sources) []Tool {
 	return []Tool{
 		{
 			Name:        "doctor",
-			Description: "Runs bud doctor on the home server and returns each check's status (ok, warn, fail), what it found and the fix. Use it to answer whether everything is healthy. net adds the checks that use the network: newer content on the channel and whether the model endpoints answer.",
-			Schema: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"net": map[string]any{"type": "boolean", "description": "also run the checks that use the network", "default": false},
-				},
-				"additionalProperties": false,
-			},
+			Description: "Runs bud doctor on the home server and returns each check's status (ok, warn, fail), what it found and the fix. Use it to answer whether everything is healthy. It runs offline: the network checks (bud doctor --net) are left out, since P0 sessions may call this tool.",
 			Run: func(_ context.Context, args json.RawMessage) (any, error) {
-				var a struct {
-					Net bool `json:"net"`
-				}
-				if err := decodeArgs(args, &a); err != nil {
+				if err := decodeArgs(args, &struct{}{}); err != nil {
 					return nil, err
 				}
-				return doctorReport(src.Doctor(doctor.Options{Quick: true, Net: a.Net})), nil
+				// never Net: the server can't see the session's tier (the
+				// gateway strips it), and P0 sessions may call this, so
+				// nothing here reaches outside the house (D81)
+				return doctorReport(src.Doctor(doctor.Options{Quick: true})), nil
 			},
 		},
 		{

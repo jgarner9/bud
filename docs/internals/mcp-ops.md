@@ -8,7 +8,7 @@ Every tool is read-only and wraps code bud already has. The only thing it touche
 
 | Tool | Arguments | What it returns |
 | --- | --- | --- |
-| `doctor` | `net` (boolean, default false) | `bud doctor --quick` as JSON: `failed` and `warnings` counts, then each result's `name`, `status` (`ok`, `warn`, `fail`), `detail` and `fix`. `net` adds the checks that use the network, as `bud doctor --net` does. The slow startup timing is always skipped. |
+| `doctor` | none | `bud doctor --quick` as JSON: `failed` and `warnings` counts, then each result's `name`, `status` (`ok`, `warn`, `fail`), `detail` and `fix`. It never runs the network checks (`--net`): the server can't see a session's tier, since the gateway strips `X-Bud-Privacy`, and P0 sessions may call it, so nothing it does may leave the house (D81). The slow startup timing is skipped too. |
 | `sync_status` | none | What the sync ledger says this device has: `device`, `channel`, `content` (the version in use), `current` (where the `content/current` link points), `overlay` (repo and commit), `rolled_back`, and `drift`, each file bud wrote whose bytes changed (`changed`) or that's gone (`missing`). `synced` is false on a device `bud sync` never ran on. A sync running right now is an error saying to ask again. |
 | `spend` | none | Not built yet: the error says router spend comes with the model gateway (build plan phase 3, D70). |
 | `approvals` | none | Not built yet: the error says the approval queue comes with the approval service (phase 7) and the shared approval log (JGA-348). |
@@ -20,7 +20,7 @@ Tool calls run one at a time, since `doctor` and `sync_status` both take the syn
 
 ## The protocol
 
-MCP over Streamable HTTP, the stateless subset: `POST /mcp` with one JSON-RPC message or a batch, answered with `application/json` (never an event stream), and no `Mcp-Session-Id`. It answers `initialize` (protocol version `2025-06-18`, or the client's own when it's `2025-03-26` or `2025-11-25`), `ping`, `tools/list` and `tools/call`. Notifications get 202 with no body. An unknown method is JSON-RPC error `-32601`, an unknown tool or bad arguments `-32602`, and a body that isn't JSON `-32700` with HTTP 400. `GET` and `DELETE` get 405, since there's no event stream or session to end. A failing check is a result, not an error; a tool that couldn't run returns `isError: true` with the reason.
+MCP over Streamable HTTP, the stateless subset: `POST /mcp` with one JSON-RPC message or a batch, answered with `application/json` (never an event stream), and no `Mcp-Session-Id`. It answers `initialize` (protocol version `2025-06-18`, or the client's own when it's `2025-03-26` or `2025-11-25`), `ping`, `tools/list` and `tools/call`. Notifications (a 2.0 message with a method and no `id`) and responses get 202 with no body; anything else without an `id`, such as `{}`, is `-32600` with a null `id`. An unknown method is JSON-RPC error `-32601`, an unknown tool or bad arguments `-32602`, and a body that isn't JSON `-32700` with HTTP 400. `GET` and `DELETE` get 405, since there's no event stream or session to end. A failing check is a result, not an error; a tool that couldn't run returns `isError: true` with the reason.
 
 ## Who it serves
 

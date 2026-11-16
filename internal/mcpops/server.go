@@ -94,8 +94,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	var out []response
 	for _, m := range msgs {
-		if m.ID == nil {
-			// a notification, or a response to a request this server never sends
+		notification := m.Method != "" && m.ID == nil
+		reply := m.Method == "" && m.ID != nil && (m.Result != nil || m.Error != nil)
+		if m.JSONRPC == "2.0" && (notification || reply) {
+			// nothing to answer: a notification, or a response to a request
+			// this server never sends
 			continue
 		}
 		out = append(out, s.handle(r.Context(), m))
@@ -115,6 +118,9 @@ type message struct {
 	ID      json.RawMessage `json:"id,omitempty"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
+	// Result and Error mark a response, which is ignored
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  json.RawMessage `json:"error,omitempty"`
 }
 
 type response struct {
@@ -157,7 +163,7 @@ func parse(body []byte) (msgs []message, batch, ok bool) {
 }
 
 func (s *Server) handle(ctx context.Context, m message) response {
-	if m.JSONRPC != "2.0" || m.Method == "" {
+	if m.JSONRPC != "2.0" || m.Method == "" || m.ID == nil {
 		return failure(m.ID, -32600, "not a JSON-RPC 2.0 request")
 	}
 	switch m.Method {

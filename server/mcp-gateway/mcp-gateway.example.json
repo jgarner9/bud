@@ -1,0 +1,15 @@
+{
+  "listen": "127.0.0.1:8790",
+  "servers": {
+    "linear": {
+      "url": "https://mcp.linear.app/mcp",
+      "privacy": ["P1", "P2"],
+      "key": { "header": "Authorization", "prefix": "Bearer ", "env": "LINEAR_API_KEY" }
+    },
+    "exa": {
+      "url": "https://mcp.exa.ai/mcp",
+      "privacy": ["P1", "P2"],
+      "key": { "header": "x-api-key", "env": "EXA_API_KEY" }
+    }
+  }
+}

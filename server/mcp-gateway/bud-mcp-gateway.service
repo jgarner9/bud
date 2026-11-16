@@ -1,0 +1,25 @@
+# The home server's MCP gateway (Suite D72), as a systemd user unit:
+#
+#   cp bud-mcp-gateway.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-mcp-gateway
+#
+# op run resolves the op:// references in the env file through the Bud
+# vault's service account, whose token the first EnvironmentFile holds.
+# Keys reach the gateway's environment and never touch disk.
+[Unit]
+Description=Bud MCP gateway
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/mcp-gateway.env -- %h/.local/bin/bud mcp-gateway
+Restart=on-failure
+RestartSec=5
+# the tailnet address may not be up yet at boot; the restart covers it
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

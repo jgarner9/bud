@@ -54,6 +54,14 @@
   ],
   "mcp": {
     "servers": {
+      "calendar": {
+        "headers": {
+          "X-Bud-Privacy": "P1"
+        },
+        "oauth": false,
+        "type": "remote",
+        "url": "http://100.64.0.1:8790/calendar/mcp"
+      },
       "context7": {
         "oauth": false,
         "type": "remote",
@@ -629,6 +637,11 @@
     {
       "action": "github_create_pull_request",
       "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "calendar_*",
+      "effect": "deny",
       "resource": "*"
     },
     {

@@ -1,6 +1,11 @@
 # Written by bud sync from env fragments. Edits here are replaced on the next
 # sync: change content/env or your overlay's env instead.
 mcp_servers:
+  calendar:
+    headers:
+      X-Bud-Privacy: "P1"
+    trust: "untrusted"
+    url: "http://100.64.0.1:8790/calendar/mcp"
   context7:
     url: "https://mcp.context7.com/mcp"
   github:

@@ -10,6 +10,10 @@
       "url": "https://mcp.exa.ai/mcp",
       "privacy": ["P1", "P2"],
       "key": { "header": "x-api-key", "env": "EXA_API_KEY" }
+    },
+    "ops": {
+      "url": "http://127.0.0.1:8792/mcp",
+      "privacy": ["P0", "P1", "P2"]
     }
   }
 }

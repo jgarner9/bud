@@ -81,6 +81,11 @@
         "oauth": false,
         "type": "remote",
         "url": "http://100.64.0.1:8791/mcp"
+      },
+      "ops": {
+        "oauth": false,
+        "type": "remote",
+        "url": "http://127.0.0.1:8792/mcp"
       }
     }
   },
@@ -633,6 +638,11 @@
     },
     {
       "action": "memory_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "ops_*",
       "effect": "allow",
       "resource": "*"
     },

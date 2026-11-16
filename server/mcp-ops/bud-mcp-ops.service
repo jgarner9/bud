@@ -1,0 +1,21 @@
+# The Bud ops MCP server (Suite D83), as a systemd user unit:
+#
+#   cp bud-mcp-ops.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-mcp-ops
+#
+# It takes no keys, so it doesn't run under op run, and it listens on
+# loopback only: Hermes reaches it there, and devices through the MCP
+# gateway's ops server.
+[Unit]
+Description=Bud ops MCP server
+
+[Service]
+ExecStart=%h/.local/bin/bud mcp-ops
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

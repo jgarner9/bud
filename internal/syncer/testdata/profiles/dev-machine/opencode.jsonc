@@ -96,6 +96,14 @@
         "type": "remote",
         "url": "http://100.64.0.1:8791/mcp"
       },
+      "ops": {
+        "headers": {
+          "X-Bud-Privacy": "P1"
+        },
+        "oauth": false,
+        "type": "remote",
+        "url": "http://100.64.0.1:8790/ops/mcp"
+      },
       "playwright": {
         "command": [
           "npx",
@@ -655,6 +663,11 @@
     },
     {
       "action": "memory_*",
+      "effect": "allow",
+      "resource": "*"
+    },
+    {
+      "action": "ops_*",
       "effect": "allow",
       "resource": "*"
     },

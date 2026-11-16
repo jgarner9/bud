@@ -12,8 +12,14 @@ func TestTheExampleConfigIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Servers) != 2 {
-		t.Errorf("servers: %v", c.Servers)
+	for _, name := range []string{"linear", "exa", "calendar"} {
+		if _, ok := c.Servers[name]; !ok {
+			t.Errorf("no %s in servers: %v", name, c.Servers)
+		}
+	}
+	// the calendar stays with Qwen (Suite D82)
+	if p := c.Servers["calendar"].Privacy; len(p) != 1 || p[0] != "P0" {
+		t.Errorf("calendar privacy %v", p)
 	}
 }
 

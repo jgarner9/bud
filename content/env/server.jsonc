@@ -7,7 +7,9 @@
 // extract through Exa, with the keyless fallback off so a search never
 // quietly goes to another provider (D77). Linear goes through the MCP
 // gateway (D75), and GitHub runs here only, with a fine-grained PAT from op
-// run (D76). Your overlay's env sets bud.gateway and bud.mcp.memory.url.
+// run (D76). The calendar (D82) goes through the gateway too, which lets
+// only P0 sessions use it; it is Hermes's alone, so the planning OpenCode
+// is denied it. Your overlay's env sets bud.gateway and bud.mcp.memory.url.
 {
   "websearch": { "provider": "exa" },
   "permissions": [
@@ -27,6 +29,9 @@
     { "action": "github_search_*", "resource": "*", "effect": "allow" },
     { "action": "github_create_pull_request", "resource": "*", "effect": "allow" },
 
+    // the calendar is the manager's only (D82)
+    { "action": "calendar_*", "resource": "*", "effect": "deny" },
+
     { "action": "context7_*", "resource": "*", "effect": "allow" },
     { "action": "memory_*", "resource": "*", "effect": "allow" },
   ],
@@ -41,6 +46,8 @@
       },
       "context7": { "url": "https://mcp.context7.com/mcp", "privacy": ["P1", "P2"] },
       "memory": { "privacy": ["P0", "P1", "P2"] },
+      // bud calendar-mcp, server/calendar-mcp/ (D82)
+      "calendar": { "gateway": true, "privacy": ["P0"] },
     },
     "hermes": {
       // the built-in toolsets per platform, from the tool map. Off: tts,
@@ -57,6 +64,9 @@
       "mcp_servers": {
         "linear": { "trust": "untrusted" },
         "github": { "trust": "untrusted" },
+        // reads are marked read-only and run alone; creating, moving and
+        // deleting events ask by phone (D82)
+        "calendar": { "trust": "untrusted" },
       },
     },
   },

@@ -110,6 +110,7 @@ How the pieces fit together is in [Claude Code in bud](claude-code.md).
 | Command | What it does |
 | --- | --- |
 | `bud mcp-gateway [--config file]` | Runs the MCP gateway (Suite D72): devices on the tailnet reach Linear, Exa and other keyed MCP servers at `http://<listen>/<server>/mcp`, the gateway adds each server's key from its environment, logs every tool call and refuses cloud servers to sessions whose `X-Bud-Privacy` tier they don't allow (no header counts as P0). The config defaults to `~/.local/state/bud/mcp-gateway.json`. It runs under `op run` as the unit in `server/mcp-gateway/`; see [its README](https://github.com/jgarner9/bud/tree/main/server/mcp-gateway). |
+| `bud calendar-mcp [--listen addr] [--url url] [--tz zone]` | Runs the calendar MCP server (Suite D82) on loopback, behind the MCP gateway, which lets only P0 sessions use it: Hermes lists calendars and events, and creates, moves and deletes events, which it asks Jason about first. It reads iCloud over CalDAV with the Apple ID and app-specific password `op run` puts in `BUD_CALDAV_USER` and `BUD_CALDAV_PASSWORD`. Reminders are events with alarms. It runs as the unit in `server/calendar-mcp/`; see [its README](https://github.com/jgarner9/bud/tree/main/server/calendar-mcp). |
 
 ## Working on bud
 

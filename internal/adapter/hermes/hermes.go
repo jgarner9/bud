@@ -48,6 +48,7 @@ var owned = []string{
 	"skills.write_approval", "skills.external_dirs", "memory.write_approval",
 	"auxiliary.background_review", "curator.consolidate",
 	"terminal.backend", "terminal.docker_mount_cwd_to_workspace",
+	"plugins", "platforms.signal",
 }
 
 // ConfigVersion is the config schema version of the Hermes release bud
@@ -68,6 +69,11 @@ const ApprovalTimeout = 3600
 // blocks the call
 const GateTimeout = 10
 
+// SignalURL is where signal-cli's daemon serves JSON-RPC and events for
+// Hermes's Signal adapter (Suite D30): loopback only, on the home server's
+// 879x ports (server/signal-cli/)
+const SignalURL = "http://127.0.0.1:8793"
+
 // Input is what the config is rendered from. Paths are absolute
 type Input struct {
 	Registry *registry.Registry
@@ -76,6 +82,9 @@ type Input struct {
 	// Gate is the tier gate's command line, the program first: Hermes runs
 	// it before every tool call
 	Gate []string
+	// Plugins are the Hermes plugins bud installed, which the config enables
+	// (bud-signal, D30); no other plugin's code runs
+	Plugins []string
 }
 
 // Output is the rendered config and the gate's tiers file
@@ -173,6 +182,21 @@ func Render(in Input) (*Output, error) {
 	cfg["curator"] = map[string]any{"consolidate": false}
 	cfg["terminal"] = map[string]any{"backend": Sandbox, "docker_mount_cwd_to_workspace": false}
 	cfg["updates"] = map[string]any{"check": false}
+	plugins := []any{}
+	for _, n := range in.Plugins {
+		plugins = append(plugins, n)
+	}
+	cfg["plugins"] = map[string]any{"enabled": plugins}
+	// Signal (D30): the bot number, Jason's number as the only allowed user
+	// and the home channel are personal, so they come from Hermes's .env or
+	// the overlay (SIGNAL_ACCOUNT, SIGNAL_ALLOWED_USERS, SIGNAL_HOME_CHANNEL).
+	// Anyone else is ignored rather than offered pairing, and groups stay off
+	// while SIGNAL_GROUP_ALLOWED_USERS is unset
+	cfg["platforms"] = map[string]any{"signal": map[string]any{
+		"enabled":                  true,
+		"unauthorized_dm_behavior": "ignore",
+		"extra":                    map[string]any{"http_url": SignalURL},
+	}}
 
 	if len(tools.Servers) > 0 {
 		cfg["mcp_servers"] = mcpServers(tools)

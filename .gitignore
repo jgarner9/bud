@@ -6,3 +6,4 @@ dist/
 nvim.log
 /_site_src/
 /_site/
+__pycache__/

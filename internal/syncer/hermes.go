@@ -88,43 +88,117 @@ func skillFiles(src, dst, layer string) ([]want, error) {
 // hermesSkill is Hermes's copy of the skill id (its files in src) under
 // root, Hermes's skills dir. Whether bud may write it is decided for the
 // whole skill, so a skill is never half written or locked when it isn't
-// bud's: a skill dir bud doesn't track (Hermes's own, or Jason's) is left
-// alone, and so is one whose path goes through a link, which could take a
-// write outside Hermes's skills dir. Either way the note says so, and the
-// skill gets no files and no lock
+// bud's (see guardHermesDir); either way the note says so, and the skill
+// gets no files and no lock
 func hermesSkill(root, id, src, layer string, tracked []File) ([]want, string, error) {
 	dst := filepath.Join(root, id)
 	ws, err := skillFiles(src, dst, layer)
 	if err != nil {
 		return nil, "", err
 	}
+	note, err := guardHermesDir(root, dst, ws, tracked)
+	if err != nil {
+		return nil, "", fmt.Errorf("copy skill %s for Hermes: %w", id, err)
+	}
+	switch {
+	case note == errLinked:
+		return nil, fmt.Sprintf("%s is a link, so bud didn't copy or lock the skill %s through it; replace it with a plain dir and run bud sync again", dirOfLink(root, dst, ws), id), nil
+	case note == errNotOurs:
+		return nil, fmt.Sprintf("Hermes already has a skill named %s that bud didn't write (%s), so it was left alone and not locked; move it aside and run bud sync again to use bud's", id, dst), nil
+	}
+
+	return ws, "", nil
+}
+
+// HermesPluginName is the plugin bud installs in Hermes, and enables in the
+// config it renders, so Signal reactions and codes answer approvals (Suite
+// D30)
+const HermesPluginName = "bud-signal"
+
+// hermesPlugin is bud-signal's files (from plugin, the copy in the binary)
+// under root, Hermes's plugins dir, decided for the whole plugin the way a
+// skill is
+func hermesPlugin(root string, plugin fs.FS, tracked []File) ([]want, string, error) {
+	dst := filepath.Join(root, HermesPluginName)
+	var ws []want
+	err := fs.WalkDir(plugin, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(plugin, path)
+		if err != nil {
+			return err
+		}
+		ws = append(ws, want{filepath.Join(dst, filepath.FromSlash(path)), b, 0o644, "hermes-plugin", "binary"})
+		return nil
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("install the %s plugin for Hermes: %w", HermesPluginName, err)
+	}
+	note, err := guardHermesDir(root, dst, ws, tracked)
+	if err != nil {
+		return nil, "", fmt.Errorf("install the %s plugin for Hermes: %w", HermesPluginName, err)
+	}
+	switch note {
+	case errLinked:
+		return nil, fmt.Sprintf("%s is a link, so bud didn't install the %s plugin through it, and Signal approvals take a typed /approve; replace it with a plain dir and run bud sync again", dirOfLink(root, dst, ws), HermesPluginName), nil
+	case errNotOurs:
+		return nil, fmt.Sprintf("Hermes already has a plugin dir %s that bud didn't write, so it was left alone and Signal approvals take a typed /approve; move it aside and run bud sync again", dst), nil
+	}
+
+	return ws, "", nil
+}
+
+const (
+	errLinked  = "linked"
+	errNotOurs = "not ours"
+)
+
+// guardHermesDir says whether bud may write ws, the files of dst under root:
+// errLinked when a dir on their path is a link, which could take a write
+// outside Hermes's dir, errNotOurs when dst holds files bud doesn't track
+// (Hermes's own, or Jason's), else ""
+func guardHermesDir(root, dst string, ws []want, tracked []File) (string, error) {
+	if dirOfLink(root, dst, ws) != "" {
+		return errLinked, nil
+	}
+	for _, d := range hermesDirs(root, dst, ws) {
+		if _, err := os.Lstat(d); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return "", err
+		}
+	}
+	// an empty dir is what's left of one bud removed, so it's fair game
+	if _, err := os.Lstat(dst); err == nil && !emptyTree(dst) {
+		ours := slices.ContainsFunc(tracked, func(f File) bool { return strings.HasPrefix(f.Path, dst+string(filepath.Separator)) })
+		if !ours {
+			return errNotOurs, nil
+		}
+	}
+
+	return "", nil
+}
+
+// hermesDirs is root, dst and every dir under dst that holds one of ws
+func hermesDirs(root, dst string, ws []want) []string {
 	dirs := []string{root, dst}
 	for _, w := range ws {
 		for d := filepath.Dir(w.path); len(d) > len(dst); d = filepath.Dir(d) {
 			dirs = append(dirs, d)
 		}
 	}
-	for _, d := range dirs {
-		info, err := os.Lstat(d)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return nil, "", fmt.Errorf("copy skill %s for Hermes: %w", id, err)
-		}
-		if info.Mode()&fs.ModeSymlink != 0 {
-			return nil, fmt.Sprintf("%s is a link, so bud didn't copy or lock the skill %s through it; replace it with a plain dir and run bud sync again", d, id), nil
-		}
-	}
-	// an empty dir is what's left of a skill bud removed, so it's fair game
-	if _, err := os.Lstat(dst); err == nil && !emptyTree(dst) {
-		ours := slices.ContainsFunc(tracked, func(f File) bool { return strings.HasPrefix(f.Path, dst+string(filepath.Separator)) })
-		if !ours {
-			return nil, fmt.Sprintf("Hermes already has a skill named %s that bud didn't write (%s), so it was left alone and not locked; move it aside and run bud sync again to use bud's", id, dst), nil
+
+	return dirs
+}
+
+// dirOfLink is the first of hermesDirs that is a link, or ""
+func dirOfLink(root, dst string, ws []want) string {
+	for _, d := range hermesDirs(root, dst, ws) {
+		if info, err := os.Lstat(d); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+			return d
 		}
 	}
 
-	return ws, "", nil
+	return ""
 }
 
 // emptyTree says dir holds only dirs, none of them links

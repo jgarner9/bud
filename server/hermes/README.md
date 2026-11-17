@@ -9,6 +9,7 @@ Setting it up, at the machine:
 3. Point the registry at the real Qwen box in your overlay's `env/registry.jsonc` (the public file's hosts are `.invalid`).
 4. Run `bud sync`. It copies the synced skills into `~/.hermes/skills` and locks them; its notes name any it couldn't copy or lock. A skill Hermes already had under the same name is left alone and named, so move it aside first if you want bud's.
 5. Check the gate refuses the never tier: `echo '{"hook_event_name": "pre_tool_call", "tool_name": "terminal", "tool_input": {"command": "op read x"}}' | ~/.local/bin/bud hermes-gate ~/.local/state/bud/hermes-tiers.json` prints a block.
-6. `hermes doctor`, then `hermes gateway install`, `loginctl enable-linger "$USER"` and `hermes gateway start`.
+6. For Signal, set up signal-cli and the numbers as in [server/signal-cli/README.md](../signal-cli/README.md); `bud sync` installs the `bud-signal` plugin that lets a reaction or code answer an approval.
+7. `hermes doctor`, then `hermes gateway install`, `loginctl enable-linger "$USER"` and `hermes gateway start`.
 
 After a Hermes version bump, run `bud sync` again and `hermes gateway restart`.

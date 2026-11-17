@@ -44,6 +44,7 @@ just install-test    # install.sh's checks against fake releases signed with a t
 just rotate-test     # rotate-release-key.sh against a throwaway repo, with fake op and gh
 just release-plan-test # release-plan.sh's decisions against throwaway repos with a fake gh
 just content-release-test # content-release.sh's releases against throwaway repos with fake gh, bud and signer
+just hermes-plugin-test # the bud-signal Hermes plugin's Python tests (stdlib unittest, no Hermes needed)
 just site-test       # assemble the docs site from site/ and docs/*.md; fails when a page isn't in the sidebar
 just leak-check      # fail on personal details in tracked files (tailnet hosts, real op:// vaults, home dirs, BUD_LEAK_PATTERNS)
 just leak-test       # leak-check.sh's own tests
@@ -92,6 +93,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | `bud mcp-gateway` (`internal/mcpgateway`): the home server's MCP gateway and its unit in `server/mcp-gateway/` | `docs/internals/mcp-gateway.md` |
 | `bud calendar-mcp` (`internal/calendar`): the calendar MCP server over CalDAV and its unit in `server/calendar-mcp/` | `docs/internals/calendar.md` |
 | `bud mcp-ops` (`internal/mcpops`): the Bud ops MCP server and its unit in `server/mcp-ops/` | `docs/internals/mcp-ops.md` |
+| Signal for Hermes: the `bud-signal` plugin in `server/hermes/plugins/`, approvals by reaction or code, signal-cli's unit in `server/signal-cli/` | `docs/internals/signal.md` |
 | `internal/content`: content bundles, `content.json`, `channel.json` and their signatures | `docs/internals/content.md` |
 | `bud sync` (`internal/syncer`): fetching, layering, rendering, the ledger and rollback; the adapters (`internal/adapter/opencode`, `hermes`) and the env fragments' `bud` block (`internal/adapter/env`) | `docs/internals/sync.md` |
 

@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 
+	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/adapter/hermes"
 	"jgarner.dev/bud/internal/adapter/opencode"
 	"jgarner.dev/bud/internal/content"
@@ -347,10 +348,24 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	}
 	if prof.Has("server") {
 		// Hermes, the manager, runs on the home server only (Suite D48)
+		// bud-signal, which lets Signal reactions and codes answer approvals
+		// (Suite D30), from the binary; the config enables it only if it's
+		// installed, so a plugin dir bud can't write leaves Hermes's own
+		// Signal adapter, with typed /approve, rather than a broken one
+		pws, note, err := hermesPlugin(p.HermesPlugins(), hermesPluginFS(), led.Files)
+		if err != nil {
+			return err
+		}
+		if note != "" {
+			rep.Notes = append(rep.Notes, note)
+		} else {
+			wants = append(wants, pws...)
+		}
 		hin := hermes.Input{
 			Registry: in.Registry,
 			Env:      in.Env,
 			Gate:     []string{filepath.Join(p.BinDir, "bud"), "hermes-gate", p.HermesTiers()},
+			Plugins:  pluginNames(note),
 		}
 		out, err := hermes.Render(hin)
 		if err != nil {
@@ -445,6 +460,19 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	}
 
 	return errors.Join(errs...)
+}
+
+// hermesPluginFS is the bud-signal plugin in the binary; tests swap it
+var hermesPluginFS = bud.HermesPlugin
+
+// pluginNames is the Hermes plugins to enable: bud-signal, unless it couldn't
+// be installed (note says why)
+func pluginNames(note string) []string {
+	if note != "" {
+		return nil
+	}
+
+	return []string{HermesPluginName}
 }
 
 // heldBack says whether offered is no newer than a version a rollback left,

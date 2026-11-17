@@ -13,7 +13,10 @@ import (
 //
 // all:plugins keeps .claude-plugin/, which a plain directory pattern would drop
 //
-//go:embed ide/nvim ide/languages/*.lua ide/layouts/*.lua ide/migrations/*.lua ide/bundles ide/tools all:ide/plugins profiles/*.json
+// the Hermes plugin's files are named by glob, so __init__.py comes along
+// and a __pycache__ left by its tests doesn't
+//
+//go:embed ide/nvim ide/languages/*.lua ide/layouts/*.lua ide/migrations/*.lua ide/bundles ide/tools all:ide/plugins profiles/*.json server/hermes/plugins/bud-signal/*.py server/hermes/plugins/bud-signal/plugin.yaml
 var repoFS embed.FS
 
 // Config returns what bud syncs into ~/.config/bud: the repo's nvim/ directory
@@ -41,6 +44,13 @@ func Bundles() fs.FS {
 // IDE starts
 func Plugin() fs.FS {
 	return sub("ide/plugins/bud-ide")
+}
+
+// HermesPlugin returns bud-signal, the Hermes plugin that lets Signal
+// reactions and codes answer approvals (Suite D30); bud sync installs it on
+// the home server
+func HermesPlugin() fs.FS {
+	return sub("server/hermes/plugins/bud-signal")
 }
 
 // Profiles returns the example device profiles (Suite D18), which bud install

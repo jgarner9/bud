@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -218,5 +219,72 @@ func TestHermesSkillLeavesAloneWhatIsntBuds(t *testing.T) {
 	}
 	if ws, note, _ = hermesSkill(root, "other", src, "public", nil); ws != nil || !strings.Contains(note, "is a link") {
 		t.Errorf("a linked skill dir: %d files, note %q", len(ws), note)
+	}
+}
+
+func TestTheSignalPluginIsInstalledForHermesWhenItsDirIsBuds(t *testing.T) {
+	plugin := fstest.MapFS{
+		"plugin.yaml": {Data: []byte("name: bud-signal\n")},
+		"__init__.py": {Data: []byte("def register(ctx): pass\n")},
+	}
+	root := filepath.Join(t.TempDir(), "plugins")
+	dst := filepath.Join(root, HermesPluginName)
+
+	ws, note, err := hermesPlugin(root, plugin, nil)
+	if err != nil || note != "" || len(ws) != 2 {
+		t.Fatalf("a new plugin: %d files, note %q, err %v", len(ws), note, err)
+	}
+	for _, w := range ws {
+		if filepath.Dir(w.path) != dst || w.perm != 0o644 || w.kind != "hermes-plugin" || w.layer != "binary" {
+			t.Errorf("file %+v", w)
+		}
+	}
+	if got := pluginNames(note); !slices.Equal(got, []string{"bud-signal"}) {
+		t.Errorf("enabled %q", got)
+	}
+
+	// a plugin dir bud didn't write is left alone, and not enabled
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dst, "plugin.yaml"), []byte("Jason's"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ws, note, err = hermesPlugin(root, plugin, nil)
+	if err != nil || ws != nil || !strings.Contains(note, "didn't write") || !strings.Contains(note, "/approve") {
+		t.Errorf("an untracked plugin dir: %d files, note %q, err %v", len(ws), note, err)
+	}
+	if pluginNames(note) != nil {
+		t.Error("a plugin bud couldn't install is enabled")
+	}
+	tracked := []File{{Path: filepath.Join(dst, "plugin.yaml")}}
+	if ws, note, _ = hermesPlugin(root, plugin, tracked); note != "" || len(ws) != 2 {
+		t.Errorf("bud's own plugin dir: %d files, note %q", len(ws), note)
+	}
+
+	// through a link
+	linked := filepath.Join(t.TempDir(), "plugins")
+	if err := os.Symlink(t.TempDir(), linked); err != nil {
+		t.Fatal(err)
+	}
+	if ws, note, _ = hermesPlugin(linked, plugin, nil); ws != nil || !strings.Contains(note, "is a link") {
+		t.Errorf("a linked plugins dir: %d files, note %q", len(ws), note)
+	}
+}
+
+func TestTheShippedSignalPluginIsInTheBinary(t *testing.T) {
+	for _, f := range []string{"plugin.yaml", "__init__.py", "adapter.py", "approvals.py"} {
+		if _, err := fs.Stat(hermesPluginFS(), f); err != nil {
+			t.Errorf("%s: %v", f, err)
+		}
+	}
+	err := fs.WalkDir(hermesPluginFS(), ".", func(path string, d fs.DirEntry, err error) error {
+		if err == nil && strings.Contains(path, "__pycache__") {
+			t.Errorf("%s is embedded", path)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

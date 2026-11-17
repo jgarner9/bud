@@ -1,0 +1,26 @@
+# signal-cli's daemon for Hermes's Signal adapter (Suite D30), as a systemd
+# user unit:
+#
+#   cp bud-signal-cli.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-signal-cli
+#
+# It serves the bot account registered on this machine (signal-cli's data is
+# in ~/.local/share/signal-cli) as JSON-RPC at /api/v1/rpc and events at
+# /api/v1/events, on loopback only: Hermes on this machine is its one client,
+# and the agent's Docker sandbox can't reach the host's loopback. Use the
+# native build, which needs no Java.
+[Unit]
+Description=Bud signal-cli daemon (Signal for Hermes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/signal-cli daemon --http 127.0.0.1:8793 --ignore-stories --no-receive-stdout
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

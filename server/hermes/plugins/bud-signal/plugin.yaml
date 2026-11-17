@@ -1,0 +1,12 @@
+# Written by bud sync from the bud binary. Edits here are replaced on the next sync.
+name: bud-signal
+label: Signal (Bud approvals)
+kind: platform
+version: 1.0.0
+description: >
+  Hermes's Signal adapter, with approval prompts answered by a thumbs-up or
+  thumbs-down reaction or a "yes <code>" reply from the allowlisted number
+  (Bud Suite D30).
+author: Bud
+# it uses the Signal adapter's private parts, checked against this release
+requires_hermes: "==0.23.2"

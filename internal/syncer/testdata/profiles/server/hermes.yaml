@@ -106,6 +106,15 @@ platform_toolsets:
     - "todo"
     - "clarify"
     - "vision"
+platforms:
+  signal:
+    enabled: true
+    extra:
+      http_url: "http://127.0.0.1:8793"
+    unauthorized_dm_behavior: "ignore"
+plugins:
+  enabled:
+    - "bud-signal"
 providers:
   classify:
     api: "http://home.invalid:8083/v1"

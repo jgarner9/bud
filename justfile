@@ -75,6 +75,10 @@ content-release-test:
 leak-test:
   sh scripts/leak_check_test.sh
 
+# the bud-signal Hermes plugin's tests (python3's unittest, no Hermes needed)
+hermes-plugin-test:
+  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s server/hermes/plugins/tests
+
 # assemble the docs site's Jekyll source (site/ plus docs/*.md) into a temp dir,
 # failing when a docs page is missing from the sidebar
 site-test:
@@ -86,7 +90,7 @@ lang-check *langs:
   sh scripts/lang-check.sh "$@"
 
 # everything CI checks (lint + tests + smoke)
-check: lint test lua-test install-test rotate-test release-plan-test content-release-test leak-test leak-check site-test smoke
+check: lint test lua-test install-test rotate-test release-plan-test content-release-test hermes-plugin-test leak-test leak-check site-test smoke
 
 # fail with an install hint when a tool isn't on PATH
 [private]

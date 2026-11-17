@@ -113,6 +113,8 @@ platform_toolsets:
     - "todo"
     - "clarify"
     - "vision"
+plugins:
+  enabled: []
 providers:
   classify:
     api: "http://home.invalid:8083/v1"

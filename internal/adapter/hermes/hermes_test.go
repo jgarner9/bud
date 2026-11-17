@@ -146,6 +146,10 @@ func TestAFragmentCantSetWhatBudOwns(t *testing.T) {
 		`{"bud": {"hermes": {"memory": "off"}}}`,
 		`{"bud": {"hermes": {"terminal": []}}}`,
 		`{"bud": {"hermes": {"auxiliary": null}}}`,
+		// no plugin's code runs but bud's, and Signal answers only Jason
+		`{"bud": {"hermes": {"plugins": {"enabled": ["other"]}}}}`,
+		`{"bud": {"hermes": {"platforms": {"signal": {"unauthorized_dm_behavior": "pair"}}}}}`,
+		`{"bud": {"hermes": {"platforms": "off"}}}`,
 	} {
 		_, err := Render(input(t, src))
 		if err == nil || !strings.Contains(err.Error(), "bud renders") {
@@ -159,6 +163,35 @@ func TestAFragmentCantSetWhatBudOwns(t *testing.T) {
 			t.Errorf("lacks %q:\n%s", want, got)
 		}
 	}
+}
+
+func TestSignalAndTheInstalledPluginsAreRendered(t *testing.T) {
+	in := input(t)
+	got := string(must(Render(in)).Config)
+	for _, want := range []string{
+		"platforms:\n  signal:\n    enabled: true\n    extra:\n      http_url: \"http://127.0.0.1:8793\"\n    unauthorized_dm_behavior: \"ignore\"\n",
+		"plugins:\n  enabled: []\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lacks:\n%s\nin:\n%s", want, got)
+		}
+	}
+	in.Plugins = []string{"bud-signal"}
+	if got := string(must(Render(in)).Config); !strings.Contains(got, "plugins:\n  enabled:\n    - \"bud-signal\"\n") {
+		t.Errorf("bud-signal isn't enabled:\n%s", got)
+	}
+	// another platform is the fragment's to set
+	if got := render(t, `{"bud": {"hermes": {"platforms": {"discord": {"enabled": false}}}}}`); !strings.Contains(got, "  discord:\n    enabled: false\n  signal:\n") {
+		t.Errorf("a fragment's other platform is lost:\n%s", got)
+	}
+}
+
+func must(out *Output, err error) *Output {
+	if err != nil {
+		panic(err)
+	}
+
+	return out
 }
 
 func TestAFragmentsSecretsStayBesideTheProviderKeys(t *testing.T) {

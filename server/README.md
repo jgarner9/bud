@@ -7,4 +7,5 @@ Home-server units and code (Suite D48, D49, D56): Hermes, the planning OpenCode 
 | `mcp-gateway/` | The MCP gateway's unit and example config (Suite D72) |
 | `calendar-mcp/` | The calendar MCP server's unit, over iCloud CalDAV (Suite D82) |
 | `mcp-ops/` | The Bud ops MCP server's unit (Suite D83) |
-| `hermes/` | How Hermes, the manager, is set up; bud renders its config and Hermes installs its own unit (Suite D48) |
+| `hermes/` | How Hermes, the manager, is set up; bud renders its config and Hermes installs its own unit (Suite D48). `hermes/plugins/bud-signal/` is the Hermes plugin that lets Signal reactions answer approvals (D30) |
+| `signal-cli/` | signal-cli's daemon unit, Signal for Hermes on the bot number (Suite D30) |

@@ -167,6 +167,10 @@ func (p *Paths) HermesEnv() string { return filepath.Join(p.Home, ".hermes", ".e
 // Suite D95), which bud sync renders beside the private one
 func (p *Paths) HermesCloud() string { return filepath.Join(p.Home, ".hermes", "profiles", "cloud") }
 
+// HermesPlugins is Hermes's own plugins dir, where bud sync installs
+// bud-signal, the plugin Signal approvals are answered through (Suite D30)
+func (p *Paths) HermesPlugins() string { return filepath.Join(p.Home, ".hermes", "plugins") }
+
 // HermesTiers is the action tiers bud hermes-gate reads, which bud sync
 // renders beside Hermes's config (Suite D10, D48). It lives in bud's state
 // dir, outside the Docker sandbox the agent's commands run in

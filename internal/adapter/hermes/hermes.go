@@ -10,9 +10,14 @@
 // block (Suite D72-D78) and the fragments' bud.hermes settings laid over the
 // rest (the built-in toolsets per platform and the web backends, D77, D85).
 //
-// Hermes takes only models allowed P0 (Suite D23): until the router (phase
-// 3) can tell a session's tier, any session may hold P0 data, such as the
-// calendar, so a cloud model is only ever picked by hand with /model.
+// Hermes runs as two profiles (Suite D23, D95). The default profile is
+// private: its config lists only the providers and models allowed P0, so
+// neither its own fallbacks nor a model Jason picks with /model can send a
+// chat to the cloud, and that is what lets it read P0 data such as the
+// calendar. It owns Signal and the reminders. The cloud profile
+// (~/.hermes/profiles/cloud, `hermes -p cloud`) lists every chat model and
+// none of the servers only P0 may use, keeps its own memory and sessions,
+// and stays out of the private profile's gateway process.
 //
 // Values a fragment reads from the environment, {env:VAR}, become Hermes's
 // own ${VAR}; Hermes refuses to connect a remote server whose URL or headers
@@ -24,6 +29,7 @@ package hermes
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -48,6 +54,7 @@ var owned = []string{
 	"skills.write_approval", "skills.external_dirs", "memory.write_approval",
 	"auxiliary.background_review", "curator.consolidate",
 	"terminal.backend", "terminal.docker_mount_cwd_to_workspace",
+	"gateway.standalone",
 }
 
 // ConfigVersion is the config schema version of the Hermes release bud
@@ -76,6 +83,8 @@ type Input struct {
 	// Gate is the tier gate's command line, the program first: Hermes runs
 	// it before every tool call
 	Gate []string
+	// Cloud renders the cloud profile instead of the private one
+	Cloud bool
 }
 
 // Output is the rendered config and the gate's tiers file
@@ -84,6 +93,12 @@ type Output struct {
 	Tiers  []byte
 	// Notes say what was left out and why
 	Notes []string
+	// CloudKeys are the variables that hold the keys of the providers left
+	// out for having no model allowed P0. Hermes's own built-in providers
+	// read some of them (OPENCODE_GO_API_KEY among them), so one set in
+	// Hermes's environment would let /model reach a cloud model again; bud
+	// sync refuses a ~/.hermes/.env that sets one (Suite D95)
+	CloudKeys []string
 }
 
 // Render builds config.yaml and the tiers file. The same input always gives
@@ -124,7 +139,7 @@ func Render(in Input) (*Output, error) {
 	}
 	out := &Output{Notes: tools.Notes()}
 
-	cfg, notes, err := models(in.Registry)
+	cfg, notes, err := models(in.Registry, in.Cloud)
 	if err != nil {
 		return nil, err
 	}
@@ -173,9 +188,18 @@ func Render(in Input) (*Output, error) {
 	cfg["curator"] = map[string]any{"consolidate": false}
 	cfg["terminal"] = map[string]any{"backend": Sandbox, "docker_mount_cwd_to_workspace": false}
 	cfg["updates"] = map[string]any{"check": false}
+	if in.Cloud {
+		// never served by the private profile's gateway process, which
+		// would otherwise take in every profile (Hermes multiplexes them)
+		cfg["gateway"] = map[string]any{"standalone": true}
+	}
 
 	if len(tools.Servers) > 0 {
-		cfg["mcp_servers"] = mcpServers(tools)
+		servers, left := mcpServers(tools, in.Cloud)
+		cfg["mcp_servers"] = servers
+		for _, name := range left {
+			out.Notes = append(out.Notes, fmt.Sprintf("Hermes's cloud profile leaves out %s, which only private sessions may use (Suite D95)", name))
+		}
 	}
 	// the fragments' own Hermes settings, which may add to a server's entry
 	// (say, trust: untrusted) but not its transport, and not bring back one
@@ -189,11 +213,25 @@ func Render(in Input) (*Output, error) {
 			if err := tools.CheckExtras("bud.hermes.mcp_servers", m, transportKeys); err != nil {
 				return nil, err
 			}
+			if in.Cloud {
+				// a server the cloud profile left out keeps none of its extras
+				for _, name := range tools.Names() {
+					if privateOnly(tools.Servers[name]) {
+						delete(m, name)
+					}
+				}
+			}
 		}
 		env.MergeInto(cfg, extra)
 	}
 	if err := providerSecrets(in.Registry, cfg); err != nil {
 		return nil, err
+	}
+	if !in.Cloud {
+		out.CloudKeys = cloudKeys(in.Registry, cfg)
+		if err := noCloudSecrets(cfg, out.CloudKeys); err != nil {
+			return nil, err
+		}
 	}
 
 	var b strings.Builder
@@ -203,7 +241,7 @@ func Render(in Input) (*Output, error) {
 	}
 	out.Config = []byte(b.String())
 
-	t := Tiers{Shell: shell, Tools: tools.Tiers}
+	t := Tiers{Shell: shell, Tools: tools.Tiers, Private: privateTools(tools)}
 	if t.Shell == nil {
 		t.Shell = []Rule{}
 	}
@@ -219,9 +257,13 @@ func Render(in Input) (*Output, error) {
 	return out, nil
 }
 
-// models renders the providers, the manager's model and its fallbacks
-func models(r *registry.Registry) (map[string]any, []string, error) {
+// models renders the providers and models, the manager's model and its
+// fallbacks. The private profile gets only the chat models allowed P0, and
+// a provider with none is left out whole, so its key isn't loaded either;
+// the cloud profile gets every chat model
+func models(r *registry.Registry, all bool) (map[string]any, []string, error) {
 	providers := map[string]any{}
+	var cloud []string
 	for _, pid := range sortedKeys(r.Providers) {
 		p := r.Providers[pid]
 		if p.API != "openai" {
@@ -233,6 +275,12 @@ func models(r *registry.Registry) (map[string]any, []string, error) {
 			if m.Provider != pid || m.Dims > 0 || m.Has("fim") {
 				// embedding models are for memory and FIM models for
 				// autocomplete, not chat
+				continue
+			}
+			if !all && !slices.Contains(m.Privacy, "P0") {
+				// a cloud model listed here could be picked with /model
+				// in a chat that holds P0 data (Suite D95)
+				cloud = append(cloud, mid)
 				continue
 			}
 			entry := map[string]any{}
@@ -255,7 +303,13 @@ func models(r *registry.Registry) (map[string]any, []string, error) {
 		providers[pid] = entry
 	}
 
-	chain, left, err := p0Chain(r)
+	var chain, left []string
+	var err error
+	if all {
+		chain, err = anyChain(r)
+	} else {
+		chain, left, err = p0Chain(r)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -274,8 +328,14 @@ func models(r *registry.Registry) (map[string]any, []string, error) {
 		"fallback_providers": fallbacks,
 	}
 	var notes []string
+	// the manager's members not allowed P0 are among the cloud models
+	// named below; only the rest (a missing model, say) get a note here
+	left = slices.DeleteFunc(left, func(id string) bool { return slices.Contains(cloud, id) })
 	if len(left) > 0 {
-		notes = append(notes, fmt.Sprintf("Hermes takes only the manager role's P0 models until the router knows each session's tier; left out: %s", strings.Join(left, ", ")))
+		notes = append(notes, fmt.Sprintf("Hermes is private, so these members of the manager role aren't its model or fallbacks: %s", strings.Join(left, ", ")))
+	}
+	if len(cloud) > 0 {
+		notes = append(notes, fmt.Sprintf("Hermes is private, so its config lists no model not allowed P0, and /model can't reach one: %s", strings.Join(cloud, ", ")))
 	}
 
 	return cfg, notes, nil
@@ -318,6 +378,33 @@ func p0Chain(r *registry.Registry) (chain, left []string, err error) {
 	return chain, left, nil
 }
 
+// anyChain is the manager role's chat models, then the fallback role's, in
+// order, whatever their tier: the cloud profile's model and fallbacks
+func anyChain(r *registry.Registry) ([]string, error) {
+	role, ok := r.Roles["manager"]
+	if !ok {
+		return nil, fmt.Errorf("render Hermes's config: the registry has no manager role")
+	}
+	ids := role.Members()
+	if role.Pin != "" {
+		ids = append([]string{role.Pin}, ids...)
+	}
+	if fb, ok := r.Roles["fallback"]; ok {
+		ids = append(ids, fb.Members()...)
+	}
+	var chain []string
+	for _, id := range ids {
+		if m, ok := r.Models[id]; ok && m.Dims == 0 && !m.Has("fim") && !slices.Contains(chain, id) {
+			chain = append(chain, id)
+		}
+	}
+	if len(chain) == 0 {
+		return nil, fmt.Errorf("render Hermes's config: neither the manager nor the fallback role has a chat model")
+	}
+
+	return chain, nil
+}
+
 // keyVar is the environment variable a provider's key comes from: the one
 // an {env:VAR} names, or BUD_<PROVIDER>_API_KEY for an op:// reference, as
 // the OpenCode adapter names it
@@ -341,13 +428,16 @@ func keyVar(provider, key string) string {
 	return "BUD_" + up + "_API_KEY"
 }
 
-// providerSecrets adds each op:// provider key to Hermes's 1Password source,
-// which reads it with op read at start; a fragment's own entries stay
+// providerSecrets adds the op:// key of each provider the config lists to
+// Hermes's 1Password source, which reads it with op read at start; a
+// fragment's own entries stay. A provider left out (one with no model
+// allowed P0) gets no key, so Hermes holds no cloud model's key at all
 func providerSecrets(r *registry.Registry, cfg map[string]any) error {
+	listed, _ := cfg["providers"].(map[string]any)
 	refs := map[string]any{}
 	for _, pid := range sortedKeys(r.Providers) {
 		p := r.Providers[pid]
-		if strings.HasPrefix(p.Key, "op://") {
+		if _, ok := listed[pid]; ok && strings.HasPrefix(p.Key, "op://") {
 			refs[keyVar(pid, p.Key)] = p.Key
 		}
 	}
@@ -380,6 +470,39 @@ func providerSecrets(r *registry.Registry, cfg map[string]any) error {
 	return nil
 }
 
+// cloudKeys are the key variables of the registry's providers the config
+// leaves out, sorted
+func cloudKeys(r *registry.Registry, cfg map[string]any) []string {
+	listed, _ := cfg["providers"].(map[string]any)
+	var keys []string
+	for _, pid := range sortedKeys(r.Providers) {
+		if _, ok := listed[pid]; ok {
+			continue
+		}
+		if v := keyVar(pid, r.Providers[pid].Key); v != "" && !slices.Contains(keys, v) {
+			keys = append(keys, v)
+		}
+	}
+	slices.Sort(keys)
+
+	return keys
+}
+
+// noCloudSecrets refuses a fragment that loads a left-out provider's key
+// into Hermes through its 1Password source
+func noCloudSecrets(cfg map[string]any, keys []string) error {
+	secrets, _ := cfg["secrets"].(map[string]any)
+	op, _ := secrets["onepassword"].(map[string]any)
+	envs, _ := op["env"].(map[string]any)
+	for _, k := range keys {
+		if _, ok := envs[k]; ok {
+			return fmt.Errorf("bud.hermes.secrets.onepassword.env.%s loads the key of a provider with no model allowed P0, which /model could then reach; Hermes is private (Suite D95), so drop the entry", k)
+		}
+	}
+
+	return nil
+}
+
 // permissionRules are the merged fragments' permission rules, checked
 func permissionRules(merged map[string]any) ([]Rule, error) {
 	raw, ok := merged["permissions"]
@@ -403,18 +526,50 @@ func permissionRules(merged map[string]any) ([]Rule, error) {
 	return rules, nil
 }
 
-// mcpServers is Hermes's mcp_servers for the resolved servers. Gateway
-// servers keep the device's privacy header; Hermes can select a cloud model
-// by hand, so a P0-only server must remain unavailable until its session tier
-// can be enforced.
-func mcpServers(tools *env.Resolved) map[string]any {
+// privateOnly says whether a server is one only private sessions may use:
+// a gateway server the device's tier may not use but P0 may, such as the
+// calendar (Suite D82, D92)
+func privateOnly(s env.Server) bool {
+	tier := s.Headers[env.PrivacyHeader]
+	return s.Gateway && tier != "" && !slices.Contains(s.Privacy, tier) && s.P0()
+}
+
+// privateTools are the tool patterns of the servers only private sessions
+// may use, which the gate refuses outside the private profile
+func privateTools(tools *env.Resolved) []string {
+	out := []string{}
+	for _, name := range tools.Names() {
+		if privateOnly(tools.Servers[name]) {
+			out = append(out, "mcp__"+name+"__*")
+		}
+	}
+
+	return out
+}
+
+// mcpServers is Hermes's mcp_servers for the resolved servers, and the
+// names of those it left out. In the private profile a server only private
+// sessions may use gets P0 in X-Bud-Privacy instead of the device's tier
+// (Suite D95): that profile's config lists only models allowed P0 (see
+// models), so what it reads there stays with them. The cloud profile leaves
+// such a server out. Every other server keeps the device's tier
+func mcpServers(tools *env.Resolved, cloud bool) (map[string]any, []string) {
 	servers := map[string]any{}
+	var left []string
 	for _, name := range tools.Names() {
 		s := tools.Servers[name]
+		if cloud && privateOnly(s) {
+			left = append(left, name)
+			continue
+		}
 		var entry map[string]any
 		if s.Remote() {
 			entry = map[string]any{"url": hermesRefs(s.URL)}
 			headers := s.Headers
+			if privateOnly(s) {
+				headers = maps.Clone(headers)
+				headers[env.PrivacyHeader] = "P0"
+			}
 			if len(headers) > 0 {
 				entry["headers"] = refMap(headers)
 			}
@@ -434,7 +589,7 @@ func mcpServers(tools *env.Resolved) map[string]any {
 		servers[name] = entry
 	}
 
-	return servers
+	return servers, left
 }
 
 // touches says whether m sets a dotted path, or replaces a section on the

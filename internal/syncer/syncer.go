@@ -273,7 +273,9 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 
 	links := linkSet{}
 	skills := 0
-	var hermesSkills []string // the synced skills bud copies into Hermes
+	// the synced skills bud copies into each Hermes profile, by profile
+	// ("" is the private one, Suite D95)
+	hermesSkills := map[string][]string{}
 	var wants []want
 	// skills and instructions resolve into the content versions and the overlay
 	in := opencode.Input{Registry: reg, Reachable: []string{p.Content(), p.Overlay()}}
@@ -290,17 +292,23 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 			if it.Kind == "skills" {
 				skills++
 				if prof.Has("server") {
-					// Hermes locks only skills in its own dir, so it gets
-					// copies there, under the ledger (Suite D48)
-					ws, note, err := hermesSkill(p.HermesSkills(), it.ID, it.Path, it.Layer, led.Files)
-					if err != nil {
-						return err
-					}
-					if note != "" {
-						rep.Notes = append(rep.Notes, note)
-					} else {
-						wants = append(wants, ws...)
-						hermesSkills = append(hermesSkills, it.ID)
+					// Hermes locks only skills in its own dir, so each
+					// profile gets copies there, under the ledger (Suite
+					// D48, D95)
+					for _, hp := range []struct{ name, skills string }{
+						{"", p.HermesSkills()},
+						{hermesCloud, filepath.Join(p.HermesCloud(), "skills")},
+					} {
+						ws, note, err := hermesSkill(hp.skills, it.ID, it.Path, it.Layer, led.Files)
+						if err != nil {
+							return err
+						}
+						if note != "" {
+							rep.Notes = append(rep.Notes, note)
+						} else {
+							wants = append(wants, ws...)
+							hermesSkills[hp.name] = append(hermesSkills[hp.name], it.ID)
+						}
 					}
 				}
 			} else {
@@ -356,12 +364,21 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 		if err != nil {
 			return err
 		}
+		if err := privateEnv(p.HermesEnv(), out.CloudKeys); err != nil {
+			return err
+		}
+		hin.Cloud = true
+		cloud, err := hermes.Render(hin)
+		if err != nil {
+			return err
+		}
 		wants = append(wants,
 			want{p.HermesConfig(), out.Config, 0o600, "config", "rendered"},
+			want{filepath.Join(p.HermesCloud(), "config.yaml"), cloud.Config, 0o600, "config", "rendered"},
 			want{p.HermesTiers(), out.Tiers, 0o600, "config", "rendered"},
 		)
 		// the same servers were left out of opencode.jsonc, for the same reasons
-		for _, n := range out.Notes {
+		for _, n := range append(out.Notes, cloud.Notes...) {
 			if !slices.Contains(rep.Notes, n) {
 				rep.Notes = append(rep.Notes, n)
 			}
@@ -441,7 +458,9 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 		rep.Notes = append(rep.Notes, "couldn't clear out old link sets: "+err.Error())
 	}
 	if prof.Has("server") {
-		rep.Notes = append(rep.Notes, lockSkills(slices.Sorted(slices.Values(hermesSkills)), o.logf)...)
+		for _, hp := range []string{"", hermesCloud} {
+			rep.Notes = append(rep.Notes, lockSkills(hp, slices.Sorted(slices.Values(hermesSkills[hp])), o.logf)...)
+		}
 	}
 
 	return errors.Join(errs...)

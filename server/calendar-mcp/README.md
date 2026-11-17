@@ -1,6 +1,6 @@
 # server/calendar-mcp/
 
-The home server's calendar MCP server (Suite D82): `bud calendar-mcp` behind a systemd user unit. It reads and changes Jason's iCloud calendars over CalDAV behind the MCP gateway, which admits requests marked P0. Hermes currently sends its device's P1 tier and is refused; calendar access will stay unavailable to Hermes until its active session tier can be enforced. Reminders are events with alarms, which ring on the phone; upgraded iCloud Reminders aren't on CalDAV. How it works is in [docs/internals/calendar.md](https://github.com/jgarner9/bud/blob/main/docs/internals/calendar.md).
+The home server's calendar MCP server (Suite D82): `bud calendar-mcp` behind a systemd user unit. It reads and changes Jason's iCloud calendars over CalDAV for Hermes, and sits behind the MCP gateway, which lets only P0 sessions use it. Hermes's private profile, which lists only P0 models, is the one client, so calendar data stays with Qwen (Suite D95). Reminders are events with alarms, which ring on the phone; upgraded iCloud Reminders aren't on CalDAV. How it works is in [docs/internals/calendar.md](https://github.com/jgarner9/bud/blob/main/docs/internals/calendar.md).
 
 | File | What it is |
 | --- | --- |

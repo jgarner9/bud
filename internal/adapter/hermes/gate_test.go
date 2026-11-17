@@ -131,3 +131,31 @@ func TestGlob(t *testing.T) {
 		}
 	}
 }
+
+// Suite D95: a private server's tools are refused outside the private
+// profile, whatever their tier, and a call naming no profile is refused too
+func TestPrivateToolsRunOnlyInThePrivateProfile(t *testing.T) {
+	tiers := testTiers()
+	tiers.Private = []string{"mcp__calendar__*"}
+	call := func(tool, profile string) Payload {
+		return Payload{Event: "pre_tool_call", Tool: tool, Profile: profile}
+	}
+	for _, c := range []struct {
+		p    Payload
+		want string
+	}{
+		{call("mcp__calendar__list_events", PrivateProfile), Allow},
+		{call("mcp__calendar__create_event", PrivateProfile), Ask},
+		{call("mcp__calendar__list_events", "cloud"), Deny},
+		{call("mcp__calendar__list_events", ""), Deny},
+		{call("mcp__linear__get_issue", "cloud"), Allow},
+	} {
+		v := tiers.Decide(c.p)
+		if v.Effect != c.want {
+			t.Errorf("%s from %q: got %s (%s), want %s", c.p.Tool, c.p.Profile, v.Effect, v.Reason, c.want)
+		}
+		if v.Effect == Deny && !strings.Contains(v.Reason, "private profile") {
+			t.Errorf("the refusal should say why: %s", v.Reason)
+		}
+	}
+}

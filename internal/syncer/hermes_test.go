@@ -19,29 +19,36 @@ func TestSyncedSkillsAreLockedInHermes(t *testing.T) {
 	var ran []string
 	runHermes = func(bin string, args ...string) ([]byte, error) {
 		ran = append(ran, bin+" "+strings.Join(args, " "))
-		if args[2] == "broken" {
+		if args[len(args)-1] == "broken" {
 			return []byte("curator: no skill named 'broken'"), errors.New("exit status 1")
 		}
 		return nil, nil
 	}
-	if notes := lockSkills([]string{"a", "b"}, func(string, ...any) {}); notes != nil {
+	if notes := lockSkills("", []string{"a", "b"}, func(string, ...any) {}); notes != nil {
 		t.Errorf("notes: %q", notes)
 	}
-	if want := []string{"/usr/bin/hermes curator lock a", "/usr/bin/hermes curator lock b"}; !slices.Equal(ran, want) {
+	if notes := lockSkills("cloud", []string{"a"}, func(string, ...any) {}); notes != nil {
+		t.Errorf("notes: %q", notes)
+	}
+	if want := []string{"/usr/bin/hermes curator lock a", "/usr/bin/hermes curator lock b", "/usr/bin/hermes -p cloud curator lock a"}; !slices.Equal(ran, want) {
 		t.Errorf("ran %q, want %q", ran, want)
 	}
 
-	notes := lockSkills([]string{"broken"}, func(string, ...any) {})
+	notes := lockSkills("cloud", []string{"broken"}, func(string, ...any) {})
+	if len(notes) != 1 || !strings.Contains(notes[0], "no skill named 'broken'") || !strings.Contains(notes[0], "hermes -p cloud curator lock") {
+		t.Errorf("a failed lock is named, with the profile: %q", notes)
+	}
+	notes = lockSkills("", []string{"broken"}, func(string, ...any) {})
 	if len(notes) != 1 || !strings.Contains(notes[0], "no skill named 'broken'") {
 		t.Errorf("a failed lock is named: %q", notes)
 	}
 
 	hermesBin = func() (string, error) { return "", errors.New("not found") }
-	notes = lockSkills([]string{"a"}, func(string, ...any) {})
+	notes = lockSkills("", []string{"a"}, func(string, ...any) {})
 	if len(notes) != 1 || !strings.Contains(notes[0], "Hermes isn't on PATH") {
 		t.Errorf("without Hermes: %q", notes)
 	}
-	if lockSkills(nil, nil) != nil {
+	if lockSkills("", nil, nil) != nil {
 		t.Error("no skills, no notes")
 	}
 }
@@ -97,7 +104,7 @@ func TestAServerSyncCopiesItsSkillsIntoHermesAndLocksThem(t *testing.T) {
 	hermesBin = func() (string, error) { return "/usr/bin/hermes", nil }
 	var locked []string
 	runHermes = func(bin string, args ...string) ([]byte, error) {
-		locked = append(locked, args[2])
+		locked = append(locked, strings.Join(args[:len(args)-3], " ")+":"+args[len(args)-1])
 		return nil, nil
 	}
 
@@ -117,13 +124,15 @@ func TestAServerSyncCopiesItsSkillsIntoHermesAndLocksThem(t *testing.T) {
 	run(t, o)
 
 	dir := o.Paths.HermesSkills()
-	for _, id := range []string{"learn", "plan"} {
-		if got := read(t, filepath.Join(dir, id, "SKILL.md")); !strings.Contains(got, "name: "+id) {
-			t.Errorf("Hermes's copy of %s = %q", id, got)
+	for _, d := range []string{dir, filepath.Join(o.Paths.HermesCloud(), "skills")} {
+		for _, id := range []string{"learn", "plan"} {
+			if got := read(t, filepath.Join(d, id, "SKILL.md")); !strings.Contains(got, "name: "+id) {
+				t.Errorf("Hermes's copy of %s in %s = %q", id, d, got)
+			}
 		}
 	}
-	if !slices.Equal(locked, []string{"learn", "plan"}) {
-		t.Errorf("locked %q, want both skills", locked)
+	if !slices.Equal(locked, []string{":learn", ":plan", "-p cloud:learn", "-p cloud:plan"}) {
+		t.Errorf("locked %q, want both skills in both profiles", locked)
 	}
 	if cfg := read(t, o.Paths.HermesConfig()); !strings.Contains(cfg, "external_dirs: []") {
 		t.Errorf("config.yaml should set no external skills dir:\n%s", cfg)
@@ -148,7 +157,7 @@ func TestAServerSyncCopiesItsSkillsIntoHermesAndLocksThem(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "plan", "SKILL.md")); !os.IsNotExist(err) {
 		t.Errorf("a dropped skill's copy should be removed; stat: %v", err)
 	}
-	if !slices.Equal(locked, []string{"learn"}) {
+	if !slices.Equal(locked, []string{":learn", "-p cloud:learn"}) {
 		t.Errorf("locked %q, want learn", locked)
 	}
 
@@ -218,5 +227,48 @@ func TestHermesSkillLeavesAloneWhatIsntBuds(t *testing.T) {
 	}
 	if ws, note, _ = hermesSkill(root, "other", src, "public", nil); ws != nil || !strings.Contains(note, "is a link") {
 		t.Errorf("a linked skill dir: %d files, note %q", len(ws), note)
+	}
+}
+
+// Suite D95: the cloud profile is rendered beside the private one, and a
+// private .env holding a cloud provider's key stops the sync
+func TestAServerSyncRendersBothHermesProfilesAndRefusesACloudKey(t *testing.T) {
+	s := newServer(t)
+	content := tree(t)
+	content["env/server.jsonc"] = &fstest.MapFile{Data: repoFile(t, "server.jsonc")}
+	content["env/registry.jsonc"] = &fstest.MapFile{Data: repoFile(t, "registry.jsonc")}
+	s.publish("2026.11.17.1", "edge", content)
+	o := options(t, s)
+	o.Device = "home"
+	examples := o.Profiles
+	o.Profiles = func() []profile.Dir {
+		return append(examples(), profile.Dir{Name: "home", FS: fstest.MapFS{
+			"home.json": {Data: []byte(`{"name": "home", "components": ["server"], "channel": "edge", "content": {"env": ["base", "server"]}}`)},
+		}})
+	}
+	if err := os.MkdirAll(filepath.Dir(o.Paths.HermesEnv()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(o.Paths.HermesEnv(), []byte("OP_SERVICE_ACCOUNT_TOKEN=x\nexport OPENCODE_GO_API_KEY=sk\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(t.Context(), o); err == nil || !strings.Contains(err.Error(), "OPENCODE_GO_API_KEY") || !strings.Contains(err.Error(), "profiles/cloud/.env") {
+		t.Fatalf("a private .env with the Go key: got %v", err)
+	}
+	if _, err := os.Stat(o.Paths.HermesConfig()); !os.IsNotExist(err) {
+		t.Errorf("nothing should be written when the key is found; stat: %v", err)
+	}
+
+	if err := os.WriteFile(o.Paths.HermesEnv(), []byte("OP_SERVICE_ACCOUNT_TOKEN=x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run(t, o)
+	private := read(t, o.Paths.HermesConfig())
+	cloud := read(t, filepath.Join(o.Paths.HermesCloud(), "config.yaml"))
+	if strings.Contains(private, "opencode.ai") || strings.Contains(private, "OPENCODE_GO_API_KEY") {
+		t.Errorf("the private profile reaches the Go provider:\n%s", private)
+	}
+	if !strings.Contains(cloud, "opencode.ai") || !strings.Contains(cloud, "standalone: true") {
+		t.Errorf("the cloud profile should list Go and stay standalone:\n%s", cloud)
 	}
 }

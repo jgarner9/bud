@@ -1,6 +1,6 @@
 # The calendar MCP server
 
-`bud calendar-mcp` (`internal/calendar`) serves Jason's iCloud calendars over CalDAV (Suite D82). It is a small MCP server in standard-library Go (Suite D92), listening on loopback only, behind the MCP gateway (`docs/internals/mcp-gateway.md`), which admits requests marked P0. Hermes's device tier is P1, and its config keeps that tier in the gateway header, so the gateway refuses its calendar calls until the session's active model tier can be enforced. The planning OpenCode also sends P1, and its rules deny the calendar's tools. It runs as the user unit in `server/calendar-mcp/`, under `op run`, so the Apple ID and its app-specific password reach it as `BUD_CALDAV_USER` and `BUD_CALDAV_PASSWORD` and never sit in a file (Suite D7, D31).
+`bud calendar-mcp` (`internal/calendar`) gives Hermes, the home server's manager, Jason's iCloud calendars over CalDAV (Suite D82). It is a small MCP server in standard-library Go (Suite D92), listening on loopback only, behind the MCP gateway (`docs/internals/mcp-gateway.md`), which lists it for P0 sessions alone, so calendar data stays with Qwen. The server device's sessions send `X-Bud-Privacy: P1`, but Hermes's private profile sends `P0` to the calendar (Suite D95): that profile's config lists only models allowed P0, so neither its fallbacks nor `/model` can hand what it reads there to a cloud model. Hermes's cloud profile, which has the cloud models, has no calendar, and its tier gate refuses calendar tools from any profile but the private one. The planning OpenCode keeps P1, so the gateway refuses it, and its rules deny the calendar's tools as well. It runs as the user unit in `server/calendar-mcp/`, under `op run`, so the Apple ID and its app-specific password reach it as `BUD_CALDAV_USER` and `BUD_CALDAV_PASSWORD` and never sit in a file (Suite D7, D31).
 
 Reminders are events with alarms, which ring on Jason's phone, and reminder texts by Signal come from Hermes's own scheduled jobs (Suite D91). Upgraded iCloud Reminders aren't served over CalDAV, so there are no task (VTODO) tools; a reminders-only list still shows in `list_calendars`, with `events: false`.
 
@@ -42,6 +42,6 @@ The credentials go only to `https` (or `http` on loopback) and only to the base 
 
 ## Not yet
 
-- Hermes exposes cloud providers and lets Jason select a model by hand with `/model`, but its gateway header stays P1, so the gateway refuses the P0-only calendar. Making calendar access available requires the router (phase 3) to bind authorization to the session's active model tier.
+- Inside one private Hermes chat, calendar details could still be handed to a cloud tool (Linear, web search); the gateway's header can't see that. Tagging each session's tier is the router's job (phase 3).
 - Moving or deleting a repeating event, or one occurrence of it.
 - The gateway's audit log records each call; the shared approval and audit log is JGA-348.

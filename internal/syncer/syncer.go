@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 
+	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/adapter/hermes"
 	"jgarner.dev/bud/internal/adapter/opencode"
 	"jgarner.dev/bud/internal/content"
@@ -274,6 +275,10 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	links := linkSet{}
 	skills := 0
 	var hermesSkills []string // the synced skills bud copies into Hermes
+	// dirs bud left alone this time (linked, or holding files it didn't
+	// write): their tracked files are neither written nor deleted, so a link
+	// never takes a delete outside Hermes's dir
+	var held []string
 	var wants []want
 	// skills and instructions resolve into the content versions and the overlay
 	in := opencode.Input{Registry: reg, Reachable: []string{p.Content(), p.Overlay()}}
@@ -298,6 +303,7 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 					}
 					if note != "" {
 						rep.Notes = append(rep.Notes, note)
+						held = append(held, filepath.Join(p.HermesSkills(), it.ID))
 					} else {
 						wants = append(wants, ws...)
 						hermesSkills = append(hermesSkills, it.ID)
@@ -347,10 +353,25 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	}
 	if prof.Has("server") {
 		// Hermes, the manager, runs on the home server only (Suite D48)
+		// bud-signal, which lets Signal reactions and codes answer approvals
+		// (Suite D30), from the binary; the config enables it only if it's
+		// installed, so a plugin dir bud can't write leaves Hermes's own
+		// Signal adapter, with typed /approve, rather than a broken one
+		pws, note, err := hermesPlugin(p.HermesPlugins(), hermesPluginFS(), led.Files)
+		if err != nil {
+			return err
+		}
+		if note != "" {
+			rep.Notes = append(rep.Notes, note)
+			held = append(held, filepath.Join(p.HermesPlugins(), HermesPluginName))
+		} else {
+			wants = append(wants, pws...)
+		}
 		hin := hermes.Input{
 			Registry: in.Registry,
 			Env:      in.Env,
 			Gate:     []string{filepath.Join(p.BinDir, "bud"), "hermes-gate", p.HermesTiers()},
+			Plugins:  pluginNames(note),
 		}
 		out, err := hermes.Render(hin)
 		if err != nil {
@@ -368,10 +389,12 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 		}
 	}
 
-	steps, keep, skips, err := planFiles(led.Files, wants)
+	tracked, kept := holdBack(led.Files, held)
+	steps, keep, skips, err := planFiles(tracked, wants)
 	if err != nil {
 		return err
 	}
+	keep = append(keep, kept...)
 	rep.Skipped = skips
 	if t := readLink(p.ContentCurrent()); t != next.Content {
 		from := t
@@ -445,6 +468,34 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	}
 
 	return errors.Join(errs...)
+}
+
+// holdBack splits the tracked files into those under none of the held dirs,
+// which the sync plans as usual, and those under one, which it keeps as
+// they are
+func holdBack(files []File, held []string) (plan, kept []File) {
+	for _, f := range files {
+		if slices.ContainsFunc(held, func(d string) bool { return strings.HasPrefix(f.Path, d+string(filepath.Separator)) }) {
+			kept = append(kept, f)
+			continue
+		}
+		plan = append(plan, f)
+	}
+
+	return plan, kept
+}
+
+// hermesPluginFS is the bud-signal plugin in the binary; tests swap it
+var hermesPluginFS = bud.HermesPlugin
+
+// pluginNames is the Hermes plugins to enable: bud-signal, unless it couldn't
+// be installed (note says why)
+func pluginNames(note string) []string {
+	if note != "" {
+		return nil
+	}
+
+	return []string{HermesPluginName}
 }
 
 // heldBack says whether offered is no newer than a version a rollback left,

@@ -24,6 +24,7 @@ package hermes
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -403,6 +404,11 @@ func permissionRules(merged map[string]any) ([]Rule, error) {
 	return rules, nil
 }
 
+// mcpServers is Hermes's mcp_servers for the resolved servers. A gateway
+// server the device's tier may not use but P0 may, such as the calendar
+// (Suite D82, D92), gets P0 in X-Bud-Privacy instead: Hermes runs only
+// models allowed P0 (see Render), so what it reads there stays with them.
+// Every other server keeps the device's tier
 func mcpServers(tools *env.Resolved) map[string]any {
 	servers := map[string]any{}
 	for _, name := range tools.Names() {
@@ -410,8 +416,13 @@ func mcpServers(tools *env.Resolved) map[string]any {
 		var entry map[string]any
 		if s.Remote() {
 			entry = map[string]any{"url": hermesRefs(s.URL)}
-			if len(s.Headers) > 0 {
-				entry["headers"] = refMap(s.Headers)
+			headers := s.Headers
+			if tier := headers[env.PrivacyHeader]; s.Gateway && tier != "" && !slices.Contains(s.Privacy, tier) && s.P0() {
+				headers = maps.Clone(headers)
+				headers[env.PrivacyHeader] = "P0"
+			}
+			if len(headers) > 0 {
+				entry["headers"] = refMap(headers)
 			}
 		} else {
 			entry = map[string]any{"command": hermesRefs(s.Command[0])}

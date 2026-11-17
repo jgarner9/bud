@@ -68,14 +68,12 @@
         "url": "https://mcp.context7.com/mcp"
       },
       "github": {
-        "command": [
-          "github-mcp-server",
-          "stdio"
-        ],
-        "environment": {
-          "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+        "headers": {
+          "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
         },
-        "type": "local"
+        "oauth": false,
+        "type": "remote",
+        "url": "https://api.githubcopilot.com/mcp/"
       },
       "linear": {
         "headers": {

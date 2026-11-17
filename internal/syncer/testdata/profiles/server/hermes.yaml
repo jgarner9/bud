@@ -27,7 +27,7 @@ hooks_auto_accept: true
 mcp_servers:
   calendar:
     headers:
-      X-Bud-Privacy: "P1"
+      X-Bud-Privacy: "P0"
     trust: "untrusted"
     url: "http://100.64.0.1:8790/calendar/mcp"
   context7:
@@ -121,37 +121,6 @@ providers:
     models:
       gemma-4-e4b:
         context_length: 32768
-    transport: "chat_completions"
-  go:
-    api: "https://opencode.ai/inference/go/openai/v1"
-    key_env: "OPENCODE_GO_API_KEY"
-    models:
-      gemini-4-argon:
-        context_length: 1048576
-      "glm-5.2":
-        context_length: 1000000
-      "glm-5.3":
-        context_length: 1000000
-      "glm-5.3-flash":
-        context_length: 1000000
-      "kimi-k2.7-code":
-        context_length: 262144
-      "kimi-k3.1-pro":
-        context_length: 1048576
-      "mimo-v2.6-flash":
-        context_length: 1048576
-      "mimo-v2.6-pro":
-        context_length: 1048576
-      minimax-m3:
-        context_length: 1000000
-      "minimax-m3.1-flash":
-        context_length: 1000000
-      "qwen3.7-plus":
-        context_length: 1000000
-      "qwen3.8-flash":
-        context_length: 1000000
-      "qwen3.8-max":
-        context_length: 1000000
     transport: "chat_completions"
   qwen:
     api: "http://qwen.invalid:8080/v1"

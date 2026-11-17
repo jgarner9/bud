@@ -1,6 +1,7 @@
 package hermes
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -128,6 +129,54 @@ func TestGlob(t *testing.T) {
 	} {
 		if got := glob(c.pat, c.s); got != c.want {
 			t.Errorf("glob(%q, %q) = %v", c.pat, c.s, got)
+		}
+	}
+}
+
+// Suite D95: a private server's tools are refused outside the private
+// profile, whatever their tier, and a call naming no profile is refused too
+func TestPrivateToolsRunOnlyInThePrivateProfile(t *testing.T) {
+	tiers := testTiers()
+	tiers.Private = []string{"mcp__calendar__*"}
+	call := func(tool, profile string) Payload {
+		return Payload{Event: "pre_tool_call", Tool: tool, Profile: profile}
+	}
+	for _, c := range []struct {
+		p    Payload
+		want string
+	}{
+		{call("mcp__calendar__list_events", PrivateProfile), Allow},
+		{call("mcp__calendar__create_event", PrivateProfile), Ask},
+		{call("mcp__calendar__list_events", "cloud"), Deny},
+		{call("mcp__calendar__list_events", ""), Deny},
+		{call("mcp__linear__get_issue", "cloud"), Allow},
+	} {
+		v := tiers.Decide(c.p)
+		if v.Effect != c.want {
+			t.Errorf("%s from %q: got %s (%s), want %s", c.p.Tool, c.p.Profile, v.Effect, v.Reason, c.want)
+		}
+		if v.Effect == Deny && !strings.Contains(v.Reason, "private profile") {
+			t.Errorf("the refusal should say why: %s", v.Reason)
+		}
+	}
+}
+
+// The profile comes from Hermes v0.23.2's own hook wire
+// (agent/shell_hooks.py _payload_fields: tool_name, tool_input, session_id,
+// cwd, profile, extra), so the private profile's calls carry "default"
+func TestTheGateReadsTheProfileFromHermessWire(t *testing.T) {
+	tiers := testTiers()
+	tiers.Private = []string{"mcp__calendar__*"}
+	for wire, want := range map[string]string{
+		`{"hook_event_name": "pre_tool_call", "tool_name": "mcp__calendar__list_events", "tool_input": {}, "session_id": "s1", "cwd": "/home/you", "profile": "default", "extra": {"task_id": "t"}}`: Allow,
+		`{"hook_event_name": "pre_tool_call", "tool_name": "mcp__calendar__list_events", "tool_input": {}, "session_id": "s1", "cwd": "/home/you", "profile": "cloud", "extra": {}}`:                 Deny,
+	} {
+		var p Payload
+		if err := json.Unmarshal([]byte(wire), &p); err != nil {
+			t.Fatal(err)
+		}
+		if v := tiers.Decide(p); v.Effect != want {
+			t.Errorf("%s: got %s (%s), want %s", wire, v.Effect, v.Reason, want)
 		}
 	}
 }

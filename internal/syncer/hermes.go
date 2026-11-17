@@ -25,10 +25,14 @@ var (
 	}
 )
 
-// lockSkills locks each synced skill in Hermes and returns notes on what it
-// couldn't lock. Locking is idempotent, so every sync locks them all again,
-// which also covers a skill a new content version added
-func lockSkills(ids []string, logf func(string, ...any)) []string {
+// hermesCloud is the name of Hermes's cloud profile (Suite D95)
+const hermesCloud = "cloud"
+
+// lockSkills locks each synced skill in a Hermes profile ("" for the
+// private, default one) and returns notes on what it couldn't lock. Locking
+// is idempotent, so every sync locks them all again, which also covers a
+// skill a new content version added
+func lockSkills(profile string, ids []string, logf func(string, ...any)) []string {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -38,14 +42,63 @@ func lockSkills(ids []string, logf func(string, ...any)) []string {
 	}
 	var failed []error
 	for _, id := range ids {
-		if out, err := runHermes(bin, "curator", "lock", id); err != nil {
+		args := []string{"curator", "lock", id}
+		if profile != "" {
+			args = append([]string{"-p", profile}, args...)
+		}
+		if out, err := runHermes(bin, args...); err != nil {
 			failed = append(failed, fmt.Errorf("%s: %v: %s", id, err, strings.TrimSpace(string(out))))
 			continue
 		}
-		logf("locked skill %s in Hermes", id)
+		logf("locked skill %s in Hermes%s", id, profileSuffix(profile))
 	}
 	if len(failed) > 0 {
-		return []string{fmt.Sprintf("couldn't lock every synced skill in Hermes, so the agent may change those; run hermes curator lock <skill> for each: %v", errors.Join(failed...))}
+		cmd := "hermes"
+		if profile != "" {
+			cmd += " -p " + profile
+		}
+		return []string{fmt.Sprintf("couldn't lock every synced skill in Hermes%s, so the agent may change those; run %s curator lock <skill> for each: %v", profileSuffix(profile), cmd, errors.Join(failed...))}
+	}
+
+	return nil
+}
+
+func profileSuffix(profile string) string {
+	if profile == "" {
+		return ""
+	}
+	return "'s " + profile + " profile"
+}
+
+// privateEnv refuses a private Hermes .env that sets the key of a provider
+// the private profile leaves out: Hermes's built-in providers read keys such
+// as OPENCODE_GO_API_KEY from its environment, so /model could reach that
+// cloud provider again (Suite D95). A missing .env is fine
+func privateEnv(path string, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("check Hermes's .env for cloud keys: %w", err)
+	}
+	var set []string
+	// Hermes's loader takes a first line behind a UTF-8 byte order mark
+	text := strings.TrimPrefix(string(b), "\ufeff")
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+		name, _, ok := strings.Cut(line, "=")
+		name = strings.TrimSpace(name)
+		if ok && slices.Contains(keys, name) && !slices.Contains(set, name) {
+			set = append(set, name)
+		}
+	}
+	if len(set) > 0 {
+		return fmt.Errorf("%s sets %s, the key of a cloud provider, and Hermes's private profile would reach that provider through /model (Suite D95); move the line to %s and run bud sync again (nothing was changed)", path, strings.Join(set, ", "), filepath.Join(filepath.Dir(path), "profiles", hermesCloud, ".env"))
 	}
 
 	return nil

@@ -37,13 +37,23 @@ type Tiers struct {
 	// Tools tiers every other tool by name or pattern: an exact name wins,
 	// then the longest pattern that matches, then "*"
 	Tools map[string]string `json:"tools"`
+	// Private are the tool patterns of the servers only private sessions may
+	// use (the calendar): refused to any profile but Hermes's private one,
+	// whatever Tools says (Suite D95)
+	Private []string `json:"private"`
 }
+
+// PrivateProfile is the name Hermes gives its default profile, the private
+// one (Suite D95)
+const PrivateProfile = "default"
 
 // Payload is what Hermes sends a shell hook on stdin
 type Payload struct {
 	Event string         `json:"hook_event_name"`
 	Tool  string         `json:"tool_name"`
 	Input map[string]any `json:"tool_input"`
+	// Profile is the Hermes profile the call came from
+	Profile string `json:"profile"`
 }
 
 // Verdict is the gate's answer for one tool call
@@ -79,6 +89,11 @@ func (t *Tiers) Decide(p Payload) Verdict {
 	}
 	if p.Tool == "" {
 		return Verdict{Deny, "bud: the tool call names no tool, so it was refused"}
+	}
+	for _, pat := range t.Private {
+		if glob(pat, p.Tool) && p.Profile != PrivateProfile {
+			return Verdict{Deny, fmt.Sprintf("bud: %s holds private data, which only Hermes's private profile may read, and this call came from %q (Suite D95)", p.Tool, p.Profile)}
+		}
 	}
 	if p.Tool == "terminal" {
 		cmd, _ := p.Input["command"].(string)

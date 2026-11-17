@@ -2,6 +2,7 @@ package hermes
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -68,11 +69,8 @@ func TestTheModelIsTheManagersFirstP0ModelAndFallbacksAreP0Only(t *testing.T) {
 	for _, want := range []string{
 		"fallback_providers:\n  - model: \"qwen-small\"\n    provider: \"custom:qwen\"\n",
 		"model:\n  default: \"qwen-35b\"\n  provider: \"custom:qwen\"\n",
-		// every chat provider, so Jason can pick a cloud model by hand with /model
-		"  go:\n    api: \"https://go.example/v1\"\n    key_env: \"BUD_GO_API_KEY\"\n    models:\n      \"glm-5.3\":\n        context_length: 1000000\n    transport: \"chat_completions\"\n",
-		"      qwen-35b:\n        context_length: 32768\n      qwen-small: {}\n",
-		// the op:// key is read by Hermes's 1Password source, never written
-		"secrets:\n  onepassword:\n    enabled: true\n    env:\n      BUD_GO_API_KEY: \"op://vault/go/key\"\n",
+		// only the chat models allowed P0 (D95)
+		"providers:\n  qwen:\n    api: \"http://qwen.invalid:8080/v1\"\n    models:\n      qwen-35b:\n        context_length: 32768\n      qwen-small: {}\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("lacks:\n%s\nin:\n%s", want, got)
@@ -81,7 +79,7 @@ func TestTheModelIsTheManagersFirstP0ModelAndFallbacksAreP0Only(t *testing.T) {
 	if strings.Contains(got, "embed:") || strings.Contains(got, "\"emb\"") || strings.Contains(got, "coder-fim") {
 		t.Errorf("embedding and FIM models aren't chat models:\n%s", got)
 	}
-	if len(out.Notes) != 1 || !strings.Contains(out.Notes[0], "left out: glm") {
+	if len(out.Notes) != 1 || !strings.Contains(out.Notes[0], "can't reach one: glm") {
 		t.Errorf("notes: %q", out.Notes)
 	}
 }
@@ -197,13 +195,59 @@ func must(out *Output, err error) *Output {
 }
 
 func TestAFragmentsSecretsStayBesideTheProviderKeys(t *testing.T) {
-	got := render(t, `{"bud": {"hermes": {"secrets": {"onepassword": {"env": {"EXA_API_KEY": "op://vault/exa/key"}}}}}}`)
-	if !strings.Contains(got, "      BUD_GO_API_KEY: \"op://vault/go/key\"\n      EXA_API_KEY: \"op://vault/exa/key\"\n") {
+	reg := strings.Replace(testRegistry, `"local": true},
+    "embed"`, `"local": true, "key": "op://vault/qwen/key"},
+    "embed"`, 1)
+	in := input(t, `{"bud": {"hermes": {"secrets": {"onepassword": {"env": {"EXA_API_KEY": "op://vault/exa/key"}}}}}}`)
+	in.Registry = testReg(t, reg)
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(out.Config); !strings.Contains(got, "      BUD_QWEN_API_KEY: \"op://vault/qwen/key\"\n      EXA_API_KEY: \"op://vault/exa/key\"\n") {
 		t.Errorf("got:\n%s", got)
 	}
-	_, err := Render(input(t, `{"bud": {"hermes": {"secrets": {"onepassword": {"env": {"BUD_GO_API_KEY": "op://vault/other/key"}}}}}}`))
-	if err == nil || !strings.Contains(err.Error(), "BUD_GO_API_KEY") {
+	in = input(t, `{"bud": {"hermes": {"secrets": {"onepassword": {"env": {"BUD_QWEN_API_KEY": "op://vault/other/key"}}}}}}`)
+	in.Registry = testReg(t, reg)
+	if _, err := Render(in); err == nil || !strings.Contains(err.Error(), "BUD_QWEN_API_KEY") {
 		t.Errorf("a fragment that points the provider's key elsewhere: got %v", err)
+	}
+}
+
+func TestHermesListsNoCloudModelAndLoadsNoCloudKey(t *testing.T) {
+	out, err := Render(input(t, `{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out.Config)
+	for _, bad := range []string{"glm-5.3", "go.example", "BUD_GO_API_KEY", "  go:\n"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("a model not allowed P0 is reachable (%q):\n%s", bad, got)
+		}
+	}
+	// the left-out provider's own key, and Hermes's built-in providers'
+	// keys, which /model would use whatever the config lists
+	for _, k := range []string{"BUD_GO_API_KEY", "OPENCODE_GO_API_KEY", "OPENROUTER_API_KEY"} {
+		if !slices.Contains(out.CloudKeys, k) {
+			t.Errorf("%s isn't a cloud key: %v", k, out.CloudKeys)
+		}
+	}
+	// a key a listed (local) provider uses stays allowed
+	reg := strings.Replace(testRegistry, `"local": true},
+    "embed"`, `"local": true, "key": "{env:LM_API_KEY}"},
+    "embed"`, 1)
+	in := input(t, `{}`)
+	in.Registry = testReg(t, reg)
+	if out, err := Render(in); err != nil || slices.Contains(out.CloudKeys, "LM_API_KEY") {
+		t.Errorf("a listed provider's key: err %v, cloud keys %v", err, out.CloudKeys)
+	}
+	if !slices.ContainsFunc(out.Notes, func(n string) bool { return strings.Contains(n, "/model can't reach one: glm") }) {
+		t.Errorf("no note names the left-out model: %v", out.Notes)
+	}
+	// loading the left-out provider's key through a fragment is refused
+	_, err = Render(input(t, `{"bud": {"hermes": {"secrets": {"onepassword": {"env": {"BUD_GO_API_KEY": "op://vault/go/key"}}}}}}`))
+	if err == nil || !strings.Contains(err.Error(), "BUD_GO_API_KEY") || !strings.Contains(err.Error(), "D95") {
+		t.Errorf("a fragment loading a cloud key: got %v", err)
 	}
 }
 
@@ -242,7 +286,66 @@ func TestServersAndSettingsRenderAsSortedYAML(t *testing.T) {
 	}
 }
 
-func TestAGatewayServerOnlyP0MayUseKeepsDeviceTierHeader(t *testing.T) {
+// Suite D95: the cloud profile lists every chat model and its key, leaves
+// out the servers only private sessions may use (with their extras), stays
+// out of the private gateway process, and the tiers name the private tools
+func TestTheCloudProfileHasCloudModelsAndNoPrivateServer(t *testing.T) {
+	in := input(t, `{"bud": {
+		"privacy": "P1",
+		"gateway": "http://127.0.0.1:8790",
+		"mcp": {
+			"calendar": {"gateway": true, "privacy": ["P0"]},
+			"linear": {"gateway": true, "privacy": ["P1", "P2"]}
+		},
+		"hermes": {"mcp_servers": {"calendar": {"trust": "untrusted"}, "linear": {"trust": "untrusted"}}}
+	}}`)
+	in.Cloud = true
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out.Config)
+	for _, want := range []string{
+		"  go:\n    api: \"https://go.example/v1\"\n    key_env: \"BUD_GO_API_KEY\"\n    models:\n      \"glm-5.3\":\n",
+		"secrets:\n  onepassword:\n    enabled: true\n    env:\n      BUD_GO_API_KEY: \"op://vault/go/key\"\n",
+		"model:\n  default: \"glm-5.3\"\n  provider: \"custom:go\"\n",
+		"gateway:\n  standalone: true\n",
+		"  linear:\n    headers:\n      X-Bud-Privacy: \"P1\"\n    trust: \"untrusted\"\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lacks:\n%s\nin:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "calendar") {
+		t.Errorf("the cloud profile reaches the calendar:\n%s", got)
+	}
+	if !slices.ContainsFunc(out.Notes, func(n string) bool { return strings.Contains(n, "leaves out calendar") }) {
+		t.Errorf("notes: %q", out.Notes)
+	}
+	var tiers Tiers
+	if err := json.Unmarshal(out.Tiers, &tiers); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(tiers.Private, []string{"mcp__calendar__*"}) {
+		t.Errorf("private tools: %q", tiers.Private)
+	}
+	// a device whose own tier is P0, or unset, doesn't hand the cloud
+	// profile a P0-only server (the gateway would read no header as P0)
+	for _, tier := range []string{`"privacy": "P0",`, ``} {
+		cin := input(t, `{"bud": {`+tier+` "gateway": "http://127.0.0.1:8790", "mcp": {"calendar": {"gateway": true, "privacy": ["P0"]}, "homeonly": {"command": ["x"], "privacy": ["P0"]}}}}`)
+		cin.Cloud = true
+		if c, err := Render(cin); err != nil || strings.Contains(string(c.Config), "calendar") || strings.Contains(string(c.Config), "homeonly") {
+			t.Errorf("device tier %q: err %v\n%s", tier, err, c.Config)
+		}
+	}
+	// the private profile stays in the gateway process that owns Signal
+	in.Cloud = false
+	if priv, err := Render(in); err != nil || strings.Contains(string(priv.Config), "standalone") {
+		t.Errorf("the private profile: err %v\n%s", err, priv.Config)
+	}
+}
+
+func TestAGatewayServerOnlyP0MayUseGetsAP0Header(t *testing.T) {
 	got := render(t, `{"bud": {
 		"privacy": "P1",
 		"gateway": "http://127.0.0.1:8790",
@@ -252,10 +355,10 @@ func TestAGatewayServerOnlyP0MayUseKeepsDeviceTierHeader(t *testing.T) {
 			"memory": {"gateway": true, "privacy": ["P0", "P1"]}
 		}
 	}}`)
-	// The gateway sees only the device's tier, so P0-only calendar access
-	// remains denied even though Hermes's startup model is P0.
+	// Hermes runs only P0 models, so it may say P0 to a server the device's
+	// tier can't use; the others keep the device's tier
 	for _, want := range []string{
-		"  calendar:\n    headers:\n      X-Bud-Privacy: \"P1\"\n",
+		"  calendar:\n    headers:\n      X-Bud-Privacy: \"P0\"\n",
 		"  linear:\n    headers:\n      X-Bud-Privacy: \"P1\"\n",
 		"  memory:\n    headers:\n      X-Bud-Privacy: \"P1\"\n",
 	} {

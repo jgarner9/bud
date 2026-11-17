@@ -158,6 +158,15 @@ func (p *Paths) HermesConfig() string { return filepath.Join(p.Home, ".hermes", 
 // skills so Hermes can lock them (Suite D48)
 func (p *Paths) HermesSkills() string { return filepath.Join(p.Home, ".hermes", "skills") }
 
+// HermesEnv is the private profile's .env, which Hermes loads into its
+// environment at start; bud sync refuses one that sets a cloud provider's
+// key (Suite D95)
+func (p *Paths) HermesEnv() string { return filepath.Join(p.Home, ".hermes", ".env") }
+
+// HermesCloud is the home of Hermes's cloud profile (`hermes -p cloud`,
+// Suite D95), which bud sync renders beside the private one
+func (p *Paths) HermesCloud() string { return filepath.Join(p.Home, ".hermes", "profiles", "cloud") }
+
 // HermesPlugins is Hermes's own plugins dir, where bud sync installs
 // bud-signal, the plugin Signal approvals are answered through (Suite D30)
 func (p *Paths) HermesPlugins() string { return filepath.Join(p.Home, ".hermes", "plugins") }

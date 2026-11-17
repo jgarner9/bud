@@ -54,6 +54,46 @@
       // bud calendar-mcp, server/calendar-mcp/ (D82)
       "calendar": { "gateway": true, "privacy": ["P0"] },
     },
+    // Hermes's own tools by action tier (D10, D48), read by bud hermes-gate
+    // before every call; terminal commands follow the shell rules in
+    // base.jsonc. allow runs alone, ask waits for Jason's approval, deny is
+    // refused. A tool not listed asks
+    "tiers": {
+      "*": "ask",
+      // reading, searching and planning
+      "web_search": "allow",
+      "web_extract": "allow",
+      "read_file": "allow",
+      "search_files": "allow",
+      "skills_list": "allow",
+      "skill_view": "allow",
+      "session_search": "allow",
+      "todo_list": "allow",
+      "clarify": "allow",
+      "vision_analyze": "allow",
+      // inside the Docker sandbox (D48)
+      "write_file": "allow",
+      "patch": "allow",
+      "process_manage": "allow",
+      "execute_code": "allow",
+      "delegate_task": "allow",
+      // writes Hermes stages for Jason's review itself (D48)
+      "memory": "allow",
+      "skill_manage": "allow",
+      // creating or changing a job asks first (tool map); one tool does both
+      // reading and writing jobs, so it all asks
+      "cronjob_manage": "ask",
+      // one tool both reads pages and submits forms, so it asks; the vault
+      // stays off (D10)
+      "browser_exec": "ask",
+      "browser_cdp": "ask",
+      "browser_dialog": "ask",
+      "browser_vault": "deny",
+      "computer_use": "deny",
+      // MCP tools run alone here: Hermes itself asks before any tool on an
+      // untrusted server (below) that isn't marked read-only
+      "mcp__*": "allow",
+    },
     "hermes": {
       // the built-in toolsets per platform, from the tool map. Off: tts,
       // computer_use, image_gen, video, x_search, kanban, discord, feishu,

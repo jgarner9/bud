@@ -160,3 +160,20 @@ func TestAURLMayHoldEnvReferences(t *testing.T) {
 		}
 	}
 }
+
+func TestTiersTakeKnownEffectsAndToolNamesOrPatterns(t *testing.T) {
+	r, err := resolve(t,
+		`{"bud": {"tiers": {"*": "ask", "read_file": "allow"}}}`,
+		`{"bud": {"tiers": {"read_file": "deny", "mcp__calendar__*": "ask"}}}`,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Tiers["read_file"] != "deny" || r.Tiers["*"] != "ask" || r.Tiers["mcp__calendar__*"] != "ask" {
+		t.Errorf("a later fragment sets a tool's tier over an earlier one's: %v", r.Tiers)
+	}
+	_, err = resolve(t, `{"bud": {"tiers": {"Read File": "allow", "x": "sometimes"}}}`)
+	if err == nil || !strings.Contains(err.Error(), "bud.tiers.Read File") || !strings.Contains(err.Error(), `"sometimes" isn't allow, ask or deny`) {
+		t.Fatalf("got %v", err)
+	}
+}

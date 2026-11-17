@@ -1,5 +1,28 @@
-# Written by bud sync from env fragments. Edits here are replaced on the next
-# sync: change content/env or your overlay's env instead.
+# Written by bud sync from the model registry and env fragments. Edits here are
+# replaced on the next sync: change content/env or your overlay's env instead.
+approvals:
+  approvers: []
+  cron_mode: "deny"
+  deny:
+    - "op"
+    - "op *"
+  mode: "manual"
+  single_query_mode: "deny"
+  timeout: 3600
+  unattended_mode: "deny"
+auxiliary:
+  background_review:
+    enabled: false
+command_allowlist: []
+curator:
+  consolidate: false
+fallback_providers: []
+hooks:
+  pre_tool_call:
+    - command: "bud hermes-gate /home/you/state/bud/hermes-tiers.json"
+      fail_closed: true
+      timeout: 10
+hooks_auto_accept: true
 mcp_servers:
   calendar:
     headers:
@@ -24,6 +47,11 @@ mcp_servers:
     url: "http://100.64.0.1:8791/mcp"
   ops:
     url: "http://127.0.0.1:8792/mcp"
+memory:
+  write_approval: true
+model:
+  default: "qwen-35b"
+  provider: "custom:qwen"
 platform_toolsets:
   api_server:
     - "terminal"
@@ -79,6 +107,65 @@ platform_toolsets:
     - "todo"
     - "clarify"
     - "vision"
+providers:
+  classify:
+    api: "http://home.invalid:8083/v1"
+    models:
+      gemma-4-e4b:
+        context_length: 32768
+    transport: "chat_completions"
+  go:
+    api: "https://opencode.ai/inference/go/openai/v1"
+    key_env: "OPENCODE_GO_API_KEY"
+    models:
+      gemini-4-argon:
+        context_length: 1048576
+      "glm-5.2":
+        context_length: 1000000
+      "glm-5.3":
+        context_length: 1000000
+      "glm-5.3-flash":
+        context_length: 1000000
+      "kimi-k2.7-code":
+        context_length: 262144
+      "kimi-k3.1-pro":
+        context_length: 1048576
+      "mimo-v2.6-flash":
+        context_length: 1048576
+      "mimo-v2.6-pro":
+        context_length: 1048576
+      minimax-m3:
+        context_length: 1000000
+      "minimax-m3.1-flash":
+        context_length: 1000000
+      "qwen3.7-plus":
+        context_length: 1000000
+      "qwen3.8-flash":
+        context_length: 1000000
+      "qwen3.8-max":
+        context_length: 1000000
+    transport: "chat_completions"
+  qwen:
+    api: "http://qwen.invalid:8080/v1"
+    models:
+      qwen-35b:
+        context_length: 32768
+    transport: "chat_completions"
+  qwen-fim:
+    api: "http://qwen.invalid:8081/v1"
+    models:
+      coder-fim:
+        context_length: 8192
+    transport: "chat_completions"
+skills:
+  external_dirs:
+    - "/home/you/data/bud/active/skills"
+  write_approval: true
+terminal:
+  backend: "docker"
+  docker_mount_cwd_to_workspace: false
+updates:
+  check: false
 web:
   backend: "exa"
   extract_backend: "exa"

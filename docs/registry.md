@@ -1,6 +1,6 @@
 # The model registry
 
-One file names every model provider, every model with what it can do, and the pool of models each of Bud's roles picks from (Suite D46, D58, D64). `bud sync` renders each runtime's own config from it: OpenCode's `opencode.jsonc` today, and Hermes, minuet and llama.cpp as those land. Changing a role's models is one edit in one file. No runtime config names a model by hand, and routing names roles, never models.
+One file names every model provider, every model with what it can do, and the pool of models each of Bud's roles picks from (Suite D46, D58, D64). `bud sync` renders each runtime's own config from it: OpenCode's `opencode.jsonc` and, on the home server, Hermes's `config.yaml` today, and minuet and llama.cpp as those land. Changing a role's models is one edit in one file. No runtime config names a model by hand, and routing names roles, never models.
 
 The public file is `content/env/registry.jsonc`. It is generic: its local hosts are placeholders under `.invalid`, a domain that never resolves. Your private overlay's `env/registry.jsonc` is merged over it (Suite D59). Check either one with:
 

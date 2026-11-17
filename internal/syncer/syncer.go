@@ -332,11 +332,22 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	}
 	if prof.Has("server") {
 		// Hermes, the manager, runs on the home server only (Suite D48)
-		out, err := hermes.Render(in.Env)
+		hin := hermes.Input{
+			Registry: in.Registry,
+			Env:      in.Env,
+			Gate:     []string{filepath.Join(p.BinDir, "bud"), "hermes-gate", p.HermesTiers()},
+		}
+		if skills > 0 {
+			hin.Skills = filepath.Join(p.Active(), "skills")
+		}
+		out, err := hermes.Render(hin)
 		if err != nil {
 			return err
 		}
-		wants = append(wants, want{p.HermesConfig(), out.Config, 0o600, "config", "rendered"})
+		wants = append(wants,
+			want{p.HermesConfig(), out.Config, 0o600, "config", "rendered"},
+			want{p.HermesTiers(), out.Tiers, 0o600, "config", "rendered"},
+		)
 		// the same servers were left out of opencode.jsonc, for the same reasons
 		for _, n := range out.Notes {
 			if !slices.Contains(rep.Notes, n) {
@@ -416,6 +427,9 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	errs = append(errs, next.save(p.SyncLedger()))
 	if err := prune(p.Active(), next.Active); err != nil {
 		rep.Notes = append(rep.Notes, "couldn't clear out old link sets: "+err.Error())
+	}
+	if prof.Has("server") {
+		rep.Notes = append(rep.Notes, lockSkills(links.skills(), o.logf)...)
 	}
 
 	return errors.Join(errs...)

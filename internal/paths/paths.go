@@ -154,6 +154,11 @@ func (p *Paths) OpenCodeEnv() string { return filepath.Join(p.State, "opencode.e
 // otherwise, and bud's units leave HERMES_HOME unset
 func (p *Paths) HermesConfig() string { return filepath.Join(p.Home, ".hermes", "config.yaml") }
 
+// HermesTiers is the action tiers bud hermes-gate reads, which bud sync
+// renders beside Hermes's config (Suite D10, D48). It lives in bud's state
+// dir, outside the Docker sandbox the agent's commands run in
+func (p *Paths) HermesTiers() string { return filepath.Join(p.State, "hermes-tiers.json") }
+
 // MCPGateway is the home server's MCP gateway config (Suite D72)
 func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway.json") }
 

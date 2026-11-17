@@ -121,6 +121,13 @@ type Bud struct {
 	MCP map[string]Server `json:"mcp,omitempty"`
 	// Hermes is laid over Hermes's config.yaml as it is (Suite D48)
 	Hermes map[string]any `json:"hermes,omitempty"`
+	// Tiers gives Hermes's own tools their action tier (Suite D10, D48):
+	// allow runs alone, ask waits for Jason's approval and deny is refused.
+	// Keys are Hermes's tool names or patterns (MCP tools are
+	// mcp__<server>__<tool>): an exact name wins, then the longest pattern,
+	// then "*". A later fragment sets a key over an earlier one's. Terminal
+	// commands are tiered by the shell permission rules instead
+	Tiers map[string]string `json:"tiers,omitempty"`
 }
 
 // Server is one MCP server. Exactly one of Gateway, URL and Command says how
@@ -157,6 +164,7 @@ type Resolved struct {
 	// Left are the servers left out, by name, each with why
 	Left   map[string]string
 	Hermes map[string]any
+	Tiers  map[string]string
 }
 
 // Names are the resolved servers' names, sorted
@@ -173,6 +181,8 @@ func (r *Resolved) Notes() []string {
 }
 
 var nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+var toolRe = regexp.MustCompile(`^[a-z0-9_*?-]+$`)
 
 // Take removes the bud block from merged fragments and resolves it
 func Take(merged map[string]any) (*Resolved, error) {
@@ -209,7 +219,16 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
-	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Hermes: b.Hermes}
+	for _, tool := range sortedKeys(b.Tiers) {
+		if !toolRe.MatchString(tool) {
+			add("bud.tiers.%s: a tool name or pattern is lowercase letters, digits, '_', '-', and * or ? as wildcards", tool)
+		}
+		if e := b.Tiers[tool]; e != "allow" && e != "ask" && e != "deny" {
+			add("bud.tiers.%s: %q isn't allow, ask or deny", tool, e)
+		}
+	}
+
+	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Hermes: b.Hermes, Tiers: b.Tiers}
 	for _, name := range sortedKeys(b.MCP) {
 		s := b.MCP[name]
 		at := "bud.mcp." + name

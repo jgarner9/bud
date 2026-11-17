@@ -43,12 +43,18 @@ var transportKeys = []string{"url", "headers", "command", "args", "env", "transp
 // changes, which no fragment may set, so nothing turns a safety setting
 // back off or routes Hermes around the registry
 var owned = []string{
-	"model", "providers", "fallback_providers", "fallback_model", "custom_providers",
+	"_config_version", "model", "providers", "fallback_providers", "fallback_model", "custom_providers",
 	"approvals", "command_allowlist", "hooks", "hooks_auto_accept", "updates",
 	"skills.write_approval", "skills.external_dirs", "memory.write_approval",
 	"auxiliary.background_review", "curator.consolidate",
 	"terminal.backend", "terminal.docker_mount_cwd_to_workspace",
 }
+
+// ConfigVersion is the config schema version of the Hermes release bud
+// pins (v0.23.2's _config_version). Without it Hermes reads the file as v0
+// and asks to migrate it; raise it with the pin, after checking what the
+// new version's migrations change
+const ConfigVersion = 53
 
 // Sandbox is the terminal backend, so the agent's commands can't read
 // Hermes's own .env, the 1Password token or anything else on the host
@@ -138,6 +144,7 @@ func Render(in Input) (*Output, error) {
 			denied = append(denied, r.Resource)
 		}
 	}
+	cfg["_config_version"] = ConfigVersion
 	cfg["approvals"] = map[string]any{
 		// nobody but Jason answers: no model approves on his behalf, and a
 		// session with nobody to ask is refused

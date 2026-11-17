@@ -1,5 +1,6 @@
 # Written by bud sync from the model registry and env fragments. Edits here are
 # replaced on the next sync: change content/env or your overlay's env instead.
+_config_version: 53
 approvals:
   approvers: []
   cron_mode: "deny"

@@ -107,6 +107,9 @@ func TestTheSafetySettingsAreRendered(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(out.Config)
+	if !strings.HasPrefix(got, Header+"_config_version: 53\n") {
+		t.Errorf("the config doesn't open with Hermes's schema version:\n%s", got)
+	}
 	for _, want := range []string{
 		"approvals:\n  approvers: []\n  cron_mode: \"deny\"\n  deny:\n    - \"op *\"\n  mode: \"manual\"\n  single_query_mode: \"deny\"\n  timeout: 3600\n  unattended_mode: \"deny\"\n",
 		"auxiliary:\n  background_review:\n    enabled: false\n",
@@ -139,6 +142,7 @@ func TestAFragmentCantSetWhatBudOwns(t *testing.T) {
 		`{"bud": {"hermes": {"terminal": {"backend": "local"}}}}`,
 		`{"bud": {"hermes": {"model": {"default": "x"}}}}`,
 		`{"bud": {"hermes": {"hooks": {}}}}`,
+		`{"bud": {"hermes": {"_config_version": 1}}}`,
 		// replacing a section bud shares with something that isn't a map
 		// would replace bud's settings in it whole
 		`{"bud": {"hermes": {"skills": false}}}`,

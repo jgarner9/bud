@@ -100,9 +100,9 @@ class BudSignalAdapter(SignalAdapter):
                 and self._is_sender_authorized(sender, "dm", sender) is True)
 
     def _targets_us(self, reaction) -> bool:
-        if reaction.target_number:
-            return reaction.target_number == self._account_normalized
-        return bool(reaction.target_uuid)  # the timestamp is one we sent; the number is all we know of us
+        # the bot's number is all it knows of itself, so a reaction naming its target by UUID alone
+        # can't be shown to point at the bot's message and answers nothing
+        return bool(reaction.target_number) and reaction.target_number == self._account_normalized
 
     async def _settle(self, p, choice: str, sender: str) -> None:
         from tools.approval import list_gateway_approvals, resolve_gateway_approval_card

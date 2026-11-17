@@ -145,9 +145,10 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def reaction(emoji, ts, sender=JASON, target=BOT, remove=False):
+def reaction(emoji, ts, sender=JASON, target=BOT, remove=False, uuid=None):
     return {"envelope": {"sourceNumber": sender, "dataMessage": {"reaction": {
-        "emoji": emoji, "targetAuthorNumber": target, "targetSentTimestamp": ts, "isRemove": remove}}}}
+        "emoji": emoji, "targetAuthorNumber": target, "targetAuthorUuid": uuid, "targetSentTimestamp": ts,
+        "isRemove": remove}}}}
 
 
 def text(body, sender=JASON):
@@ -215,10 +216,11 @@ class AdapterTest(unittest.TestCase):
         _, p = self.ask()
         for e in [reaction(UP, p.timestamp, sender=OTHER), reaction("❤️", p.timestamp),
                   reaction(UP, p.timestamp, remove=True), reaction(UP, p.timestamp + 99),
-                  reaction(UP, p.timestamp, target=JASON), text(f"yes {p.code}", sender=OTHER), text("hello")]:
+                  reaction(UP, p.timestamp, target=JASON), reaction(UP, p.timestamp, target=None, uuid="uuid-x"),
+                  text(f"yes {p.code}", sender=OTHER), text("hello")]:
             run(self.a._handle_envelope(e))
         self.assertEqual(self.approvals.calls, [])
-        self.assertEqual(len(self.a.passed), 7)
+        self.assertEqual(len(self.a.passed), 8)
         self.assertIn("r1", self.approvals.pending)
 
     def test_the_gateways_own_check_must_say_yes(self):

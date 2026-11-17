@@ -257,9 +257,26 @@ func TestTheSignalPluginIsInstalledForHermesWhenItsDirIsBuds(t *testing.T) {
 	if pluginNames(note) != nil {
 		t.Error("a plugin bud couldn't install is enabled")
 	}
-	tracked := []File{{Path: filepath.Join(dst, "plugin.yaml")}}
+	tracked := []File{{Path: filepath.Join(dst, "plugin.yaml"), SHA256: hash([]byte("Jason's"))}}
 	if ws, note, _ = hermesPlugin(root, plugin, tracked); note != "" || len(ws) != 2 {
 		t.Errorf("bud's own plugin dir: %d files, note %q", len(ws), note)
+	}
+
+	// a file of bud's edited by hand, or swapped for a link, holds the whole plugin back
+	if err := os.WriteFile(filepath.Join(dst, "plugin.yaml"), []byte("edited"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if ws, note, _ = hermesPlugin(root, plugin, tracked); ws != nil || !strings.Contains(note, "changed by hand") || pluginNames(note) != nil {
+		t.Errorf("an edited plugin file: %d files, note %q", len(ws), note)
+	}
+	if err := os.Remove(filepath.Join(dst, "plugin.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "x"), filepath.Join(dst, "plugin.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if ws, note, _ = hermesPlugin(root, plugin, tracked); ws != nil || !strings.Contains(note, "isn't a plain file") {
+		t.Errorf("a linked plugin file: %d files, note %q", len(ws), note)
 	}
 
 	// through a link
@@ -286,5 +303,13 @@ func TestTheShippedSignalPluginIsInTheBinary(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAHeldDirsTrackedFilesAreNeitherPlannedNorDropped(t *testing.T) {
+	files := []File{{Path: "/h/plugins/bud-signal/a.py"}, {Path: "/h/plugins/bud-signal-x/b.py"}, {Path: "/h/config.yaml"}}
+	plan, kept := holdBack(files, []string{"/h/plugins/bud-signal"})
+	if len(kept) != 1 || kept[0].Path != "/h/plugins/bud-signal/a.py" || len(plan) != 2 {
+		t.Errorf("plan %v, kept %v", plan, kept)
 	}
 }

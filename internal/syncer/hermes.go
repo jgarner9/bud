@@ -139,6 +139,16 @@ func hermesPlugin(root string, plugin fs.FS, tracked []File) ([]want, string, er
 	if err != nil {
 		return nil, "", fmt.Errorf("install the %s plugin for Hermes: %w", HermesPluginName, err)
 	}
+	if note == "" {
+		// a file bud would skip (edited by hand, or not a plain file) would
+		// leave Hermes running code that isn't bud's, so the whole plugin
+		// waits, and isn't enabled
+		if bad, err := changedPluginFile(ws, tracked); err != nil {
+			return nil, "", fmt.Errorf("install the %s plugin for Hermes: %w", HermesPluginName, err)
+		} else if bad != "" {
+			return nil, fmt.Sprintf("%s was changed by hand or isn't a plain file, so bud didn't install or enable the %s plugin, and Signal approvals take a typed /approve; move it aside and run bud sync again", bad, HermesPluginName), nil
+		}
+	}
 	switch note {
 	case errLinked:
 		return nil, fmt.Sprintf("%s is a link, so bud didn't install the %s plugin through it, and Signal approvals take a typed /approve; replace it with a plain dir and run bud sync again", dirOfLink(root, dst, ws), HermesPluginName), nil
@@ -147,6 +157,27 @@ func hermesPlugin(root string, plugin fs.FS, tracked []File) ([]want, string, er
 	}
 
 	return ws, "", nil
+}
+
+// changedPluginFile is the first of ws that planFiles would skip: one that
+// isn't a regular file, or holds bytes that are neither the new ones nor
+// what bud last wrote there
+func changedPluginFile(ws []want, tracked []File) (string, error) {
+	for _, w := range ws {
+		have, exists, err := hashFile(w.path)
+		if err != nil {
+			return "", err
+		}
+		if !exists || have == hash(w.data) {
+			continue
+		}
+		i := slices.IndexFunc(tracked, func(f File) bool { return f.Path == w.path })
+		if i < 0 || tracked[i].SHA256 != have {
+			return w.path, nil
+		}
+	}
+
+	return "", nil
 }
 
 const (

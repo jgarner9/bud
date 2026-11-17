@@ -19,6 +19,7 @@ const testRegistry = `{
   "models": {
     "qwen-35b": {"provider": "qwen", "name": "qwen-35b", "privacy": ["P0", "P1", "P2"], "cost": "C0", "context": 32768},
     "qwen-small": {"provider": "qwen", "name": "qwen-small", "privacy": ["P0", "P1", "P2"], "cost": "C0"},
+    "fim": {"provider": "qwen", "name": "coder-fim", "privacy": ["P0", "P1", "P2"], "cost": "C0", "caps": ["fim"]},
     "glm": {"provider": "go", "name": "glm-5.3", "privacy": ["P1", "P2"], "cost": "C1", "context": 1000000},
     "emb": {"provider": "embed", "name": "emb", "privacy": ["P0"], "cost": "C0", "dims": 1024}
   },
@@ -77,8 +78,8 @@ func TestTheModelIsTheManagersFirstP0ModelAndFallbacksAreP0Only(t *testing.T) {
 			t.Errorf("lacks:\n%s\nin:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "embed:") || strings.Contains(got, "\"emb\"") {
-		t.Errorf("an embedding model isn't a chat model:\n%s", got)
+	if strings.Contains(got, "embed:") || strings.Contains(got, "\"emb\"") || strings.Contains(got, "coder-fim") {
+		t.Errorf("embedding and FIM models aren't chat models:\n%s", got)
 	}
 	if len(out.Notes) != 1 || !strings.Contains(out.Notes[0], "left out: glm") {
 		t.Errorf("notes: %q", out.Notes)
@@ -138,6 +139,12 @@ func TestAFragmentCantSetWhatBudOwns(t *testing.T) {
 		`{"bud": {"hermes": {"terminal": {"backend": "local"}}}}`,
 		`{"bud": {"hermes": {"model": {"default": "x"}}}}`,
 		`{"bud": {"hermes": {"hooks": {}}}}`,
+		// replacing a section bud shares with something that isn't a map
+		// would replace bud's settings in it whole
+		`{"bud": {"hermes": {"skills": false}}}`,
+		`{"bud": {"hermes": {"memory": "off"}}}`,
+		`{"bud": {"hermes": {"terminal": []}}}`,
+		`{"bud": {"hermes": {"auxiliary": null}}}`,
 	} {
 		_, err := Render(input(t, src))
 		if err == nil || !strings.Contains(err.Error(), "bud renders") {

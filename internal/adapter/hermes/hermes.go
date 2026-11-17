@@ -100,7 +100,7 @@ func Render(in Input) (*Output, error) {
 		if h, ok := frag["bud"].(map[string]any); ok {
 			if extra, ok := h["hermes"].(map[string]any); ok {
 				for _, path := range owned {
-					if has(extra, path) {
+					if touches(extra, path) {
 						return nil, fmt.Errorf("env fragment %s sets bud.hermes.%s, which bud renders from the registry and the D48 safety settings; drop it", f.Name, path)
 					}
 				}
@@ -228,8 +228,9 @@ func models(r *registry.Registry) (map[string]any, []string, error) {
 		ms := map[string]any{}
 		for _, mid := range sortedKeys(r.Models) {
 			m := r.Models[mid]
-			if m.Provider != pid || m.Dims > 0 {
-				// embedding models are for memory, not chat
+			if m.Provider != pid || m.Dims > 0 || m.Has("fim") {
+				// embedding models are for memory and FIM models for
+				// autocomplete, not chat
 				continue
 			}
 			entry := map[string]any{}
@@ -429,8 +430,10 @@ func mcpServers(tools *env.Resolved) map[string]any {
 	return servers
 }
 
-// has says whether a dotted path is set in m
-func has(m map[string]any, path string) bool {
+// touches says whether m sets a dotted path, or replaces a section on the
+// way to it with something that isn't a map, which would replace bud's
+// section whole when merged
+func touches(m map[string]any, path string) bool {
 	head, rest, nested := strings.Cut(path, ".")
 	v, ok := m[head]
 	if !ok {
@@ -441,7 +444,7 @@ func has(m map[string]any, path string) bool {
 	}
 	sub, ok := v.(map[string]any)
 
-	return ok && has(sub, rest)
+	return !ok || touches(sub, rest)
 }
 
 // hermesRefs turns each {env:VAR} into Hermes's ${VAR}

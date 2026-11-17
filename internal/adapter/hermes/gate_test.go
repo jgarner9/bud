@@ -71,7 +71,7 @@ func TestTheGateTiersToolsByNameThenLongestPatternThenStar(t *testing.T) {
 		}
 	}
 	empty := &Tiers{}
-	if got := empty.Decide(Payload{Tool: "read_file"}); got.Effect != Ask {
+	if got := empty.Decide(Payload{Event: "pre_tool_call", Tool: "read_file"}); got.Effect != Ask {
 		t.Errorf("with no tiers a tool asks, got %s", got.Effect)
 	}
 	if got := empty.Decide(terminal("ls")); got.Effect != Ask {
@@ -84,13 +84,13 @@ func TestTheGateRefusesWhatItCantRead(t *testing.T) {
 		{Event: "pre_tool_call"},
 		{Event: "pre_tool_call", Tool: "terminal"},
 		{Event: "pre_tool_call", Tool: "terminal", Input: map[string]any{"command": 7}},
+		// with no event, or another one, nothing says this is a call to tier
+		{Tool: "read_file"},
+		{Event: "post_tool_call", Tool: "read_file"},
 	} {
 		if got := testTiers().Decide(p); got.Effect != Deny {
 			t.Errorf("%+v: got %s", p, got.Effect)
 		}
-	}
-	if got := testTiers().Decide(Payload{Event: "post_tool_call", Tool: "terminal"}); got.Effect != Allow {
-		t.Errorf("another event isn't the gate's: got %s", got.Effect)
 	}
 }
 

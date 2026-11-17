@@ -18,6 +18,9 @@ func TestHermesGateAnswersOnStdout(t *testing.T) {
 		`{"hook_event_name": "pre_tool_call", "tool_name": "terminal", "tool_input": {"command": "rm -rf x"}}`:      `"action":"approve"`,
 		`{"hook_event_name": "pre_tool_call", "tool_name": "browser_vault", "tool_input": {}}`:                      `"action":"block"`,
 		`not json`: `"action":"block"`,
+		// a second call after the first can't ride on its verdict
+		`{"hook_event_name": "pre_tool_call", "tool_name": "terminal", "tool_input": {"command": "go test ./..."}}{"tool_name": "terminal", "tool_input": {"command": "op read x"}}`: `"action":"block"`,
+		`{"hook_event_name": "pre_tool_call", "tool_name": "terminal", "tool_input": {"command": "go test ./..."}}` + "\n":                                                           "{}\n",
 	} {
 		var out bytes.Buffer
 		if err := runHermesGate(strings.NewReader(in), &out, tiers); err != nil {

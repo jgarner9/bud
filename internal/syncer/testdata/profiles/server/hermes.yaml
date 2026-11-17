@@ -151,12 +151,6 @@ providers:
       qwen-35b:
         context_length: 32768
     transport: "chat_completions"
-  qwen-fim:
-    api: "http://qwen.invalid:8081/v1"
-    models:
-      coder-fim:
-        context_length: 8192
-    transport: "chat_completions"
 skills:
   external_dirs:
     - "/home/you/data/bud/active/skills"

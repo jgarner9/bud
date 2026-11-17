@@ -74,8 +74,8 @@ func (v Verdict) Reply() []byte {
 // Decide tiers one tool call. Anything the rules don't cover waits for
 // approval, and anything malformed is refused, so a gap never runs alone
 func (t *Tiers) Decide(p Payload) Verdict {
-	if p.Event != "" && p.Event != "pre_tool_call" {
-		return Verdict{Allow, ""}
+	if p.Event != "pre_tool_call" {
+		return Verdict{Deny, fmt.Sprintf("bud: the gate only tiers pre_tool_call, and this call came as %q, so it was refused", p.Event)}
 	}
 	if p.Tool == "" {
 		return Verdict{Deny, "bud: the tool call names no tool, so it was refused"}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -52,8 +53,14 @@ func runHermesGate(in io.Reader, out io.Writer, tiersPath string) error {
 		return reply(hermes.Verdict{Effect: hermes.Deny, Reason: fmt.Sprintf("bud: %s is damaged (%v); run bud sync", tiersPath, err)})
 	}
 	var p hermes.Payload
-	if err := json.NewDecoder(io.LimitReader(in, 16<<20)).Decode(&p); err != nil {
+	dec := json.NewDecoder(io.LimitReader(in, 16<<20))
+	if err := dec.Decode(&p); err != nil {
 		return reply(hermes.Verdict{Effect: hermes.Deny, Reason: fmt.Sprintf("bud: can't read the tool call (%v)", err)})
+	}
+	// one call only: anything after it could be a second call riding on the
+	// first one's verdict
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return reply(hermes.Verdict{Effect: hermes.Deny, Reason: "bud: the tool call is followed by more input, so it was refused"})
 	}
 
 	return reply(t.Decide(p))

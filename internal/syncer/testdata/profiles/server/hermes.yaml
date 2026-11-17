@@ -33,12 +33,10 @@ mcp_servers:
   context7:
     url: "https://mcp.context7.com/mcp"
   github:
-    args:
-      - "stdio"
-    command: "github-mcp-server"
-    env:
-      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+    headers:
+      Authorization: "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
     trust: "untrusted"
+    url: "https://api.githubcopilot.com/mcp/"
   linear:
     headers:
       X-Bud-Privacy: "P1"

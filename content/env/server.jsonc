@@ -6,11 +6,12 @@
 // websearch, and Hermes's web tools, which search through SearXNG (D85) and
 // extract through Exa, with the keyless fallback off so a search never
 // quietly goes to another provider (D77). Linear goes through the MCP
-// gateway (D75), and GitHub runs here only, with a fine-grained PAT from op
-// run (D76). The Bud ops MCP (D83) is on this machine's loopback. The
-// calendar (D82) goes through the gateway, which lets only P0 sessions use
-// it; it is Hermes's alone, so the planning OpenCode is denied it. Your
-// overlay's env sets bud.gateway and bud.mcp.memory.url.
+// gateway (D75), and GitHub is reached from here only, at GitHub's hosted
+// MCP server with a fine-grained PAT from op run (D76, D94). The Bud ops MCP
+// (D83) is on this machine's loopback. The calendar (D82) goes through the
+// gateway, which lets only P0 sessions use it; it is Hermes's alone, so the
+// planning OpenCode is denied it. Your overlay's env sets bud.gateway and
+// bud.mcp.memory.url.
 {
   "websearch": { "provider": "exa" },
   "permissions": [
@@ -41,9 +42,12 @@
     "privacy": "P1",
     "mcp": {
       "linear": { "gateway": true, "privacy": ["P1", "P2"] },
+      // GitHub's hosted server, so there is no binary to install or keep up
+      // to date; the fine-grained PAT is sent as a header. A PAT works without
+      // a Copilot licence. With the variable unset, Hermes doesn't connect it
       "github": {
-        "command": ["github-mcp-server", "stdio"],
-        "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}" },
+        "url": "https://api.githubcopilot.com/mcp/",
+        "headers": { "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}" },
         "privacy": ["P1", "P2"],
       },
       "context7": { "url": "https://mcp.context7.com/mcp", "privacy": ["P1", "P2"] },

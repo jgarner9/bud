@@ -209,7 +209,7 @@ func TestServersAndSettingsRenderAsSortedYAML(t *testing.T) {
 	}
 }
 
-func TestAGatewayServerOnlyP0MayUseGetsAP0Header(t *testing.T) {
+func TestAGatewayServerOnlyP0MayUseKeepsDeviceTierHeader(t *testing.T) {
 	got := render(t, `{"bud": {
 		"privacy": "P1",
 		"gateway": "http://127.0.0.1:8790",
@@ -219,10 +219,10 @@ func TestAGatewayServerOnlyP0MayUseGetsAP0Header(t *testing.T) {
 			"memory": {"gateway": true, "privacy": ["P0", "P1"]}
 		}
 	}}`)
-	// Hermes runs only P0 models, so it may say P0 to a server the device's
-	// tier can't use; the others keep the device's tier
+	// The gateway sees only the device's tier, so P0-only calendar access
+	// remains denied even though Hermes's startup model is P0.
 	for _, want := range []string{
-		"  calendar:\n    headers:\n      X-Bud-Privacy: \"P0\"\n",
+		"  calendar:\n    headers:\n      X-Bud-Privacy: \"P1\"\n",
 		"  linear:\n    headers:\n      X-Bud-Privacy: \"P1\"\n",
 		"  memory:\n    headers:\n      X-Bud-Privacy: \"P1\"\n",
 	} {

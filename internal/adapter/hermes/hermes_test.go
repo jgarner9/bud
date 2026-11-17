@@ -192,8 +192,21 @@ func TestHermesListsNoCloudModelAndLoadsNoCloudKey(t *testing.T) {
 			t.Errorf("a model not allowed P0 is reachable (%q):\n%s", bad, got)
 		}
 	}
-	if !slices.Equal(out.CloudKeys, []string{"BUD_GO_API_KEY"}) {
-		t.Errorf("the left-out provider's key variable: %v", out.CloudKeys)
+	// the left-out provider's own key, and Hermes's built-in providers'
+	// keys, which /model would use whatever the config lists
+	for _, k := range []string{"BUD_GO_API_KEY", "OPENCODE_GO_API_KEY", "OPENROUTER_API_KEY"} {
+		if !slices.Contains(out.CloudKeys, k) {
+			t.Errorf("%s isn't a cloud key: %v", k, out.CloudKeys)
+		}
+	}
+	// a key a listed (local) provider uses stays allowed
+	reg := strings.Replace(testRegistry, `"local": true},
+    "embed"`, `"local": true, "key": "{env:LM_API_KEY}"},
+    "embed"`, 1)
+	in := input(t, `{}`)
+	in.Registry = testReg(t, reg)
+	if out, err := Render(in); err != nil || slices.Contains(out.CloudKeys, "LM_API_KEY") {
+		t.Errorf("a listed provider's key: err %v, cloud keys %v", err, out.CloudKeys)
 	}
 	if !slices.ContainsFunc(out.Notes, func(n string) bool { return strings.Contains(n, "/model can't reach one: glm") }) {
 		t.Errorf("no note names the left-out model: %v", out.Notes)
@@ -282,6 +295,15 @@ func TestTheCloudProfileHasCloudModelsAndNoPrivateServer(t *testing.T) {
 	}
 	if !slices.Equal(tiers.Private, []string{"mcp__calendar__*"}) {
 		t.Errorf("private tools: %q", tiers.Private)
+	}
+	// a device whose own tier is P0, or unset, doesn't hand the cloud
+	// profile a P0-only server (the gateway would read no header as P0)
+	for _, tier := range []string{`"privacy": "P0",`, ``} {
+		cin := input(t, `{"bud": {`+tier+` "gateway": "http://127.0.0.1:8790", "mcp": {"calendar": {"gateway": true, "privacy": ["P0"]}, "homeonly": {"command": ["x"], "privacy": ["P0"]}}}}`)
+		cin.Cloud = true
+		if c, err := Render(cin); err != nil || strings.Contains(string(c.Config), "calendar") || strings.Contains(string(c.Config), "homeonly") {
+			t.Errorf("device tier %q: err %v\n%s", tier, err, c.Config)
+		}
 	}
 	// the private profile stays in the gateway process that owns Signal
 	in.Cloud = false

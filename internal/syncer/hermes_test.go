@@ -259,6 +259,14 @@ func TestAServerSyncRendersBothHermesProfilesAndRefusesACloudKey(t *testing.T) {
 		t.Errorf("nothing should be written when the key is found; stat: %v", err)
 	}
 
+	// a byte order mark before the first key doesn't hide it
+	if err := os.WriteFile(o.Paths.HermesEnv(), []byte("\ufeffOPENROUTER_API_KEY=sk\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(t.Context(), o); err == nil || !strings.Contains(err.Error(), "OPENROUTER_API_KEY") {
+		t.Fatalf("a BOM-prefixed built-in provider key: got %v", err)
+	}
+
 	if err := os.WriteFile(o.Paths.HermesEnv(), []byte("OP_SERVICE_ACCOUNT_TOKEN=x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

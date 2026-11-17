@@ -86,7 +86,9 @@ func privateEnv(path string, keys []string) error {
 		return fmt.Errorf("check Hermes's .env for cloud keys: %w", err)
 	}
 	var set []string
-	for _, line := range strings.Split(string(b), "\n") {
+	// Hermes's loader takes a first line behind a UTF-8 byte order mark
+	text := strings.TrimPrefix(string(b), "\ufeff")
+	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
 		line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
 		name, _, ok := strings.Cut(line, "=")

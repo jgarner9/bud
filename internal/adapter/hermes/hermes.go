@@ -470,19 +470,46 @@ func providerSecrets(r *registry.Registry, cfg map[string]any) error {
 	return nil
 }
 
-// cloudKeys are the key variables of the registry's providers the config
-// leaves out, sorted
+// BuiltinKeys are the variables Hermes v0.23.2's built-in model providers
+// read their credentials from (its plugins/model-providers and
+// hermes_cli/auth.py). Any of them in the private profile's environment
+// would let /model reach that provider, whatever the config lists, so they
+// are cloud keys unless a provider the private config lists uses one.
+// Check them again with the pin
+var BuiltinKeys = []string{
+	"ACTUAL_API_KEY", "AI_GATEWAY_API_KEY", "ALIBABA_CODING_PLAN_API_KEY", "ALIBABA_CODING_PLAN_CN_API_KEY",
+	"ALIBABA_TOKEN_PLAN_API_KEY", "ALIBABA_TOKEN_PLAN_CN_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN",
+	"ARCEEAI_API_KEY", "AWS_ACCESS_KEY_ID", "AWS_BEARER_TOKEN_BEDROCK", "AWS_PROFILE", "AWS_SECRET_ACCESS_KEY",
+	"AWS_SESSION_TOKEN", "AZURE_FOUNDRY_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "COMMANDCODE_API_KEY",
+	"DASHSCOPE_API_KEY", "DEEPINFRA_API_KEY", "DEEPSEEK_API_KEY", "FIREWORKS_API_KEY", "GEMINI_API_KEY",
+	"GLM_API_KEY", "GMI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "HF_TOKEN",
+	"KILOCODE_API_KEY", "KIMI_API_KEY", "KIMI_CN_API_KEY", "KIMI_CODING_API_KEY", "LM_API_KEY", "META_API_KEY",
+	"META_MODEL_API_KEY", "MINIMAX_API_KEY", "MINIMAX_CN_API_KEY", "MODEL_API_KEY", "NEBIUS_API_KEY",
+	"NEBIUS_TOKEN_FACTORY_API_KEY", "NOUS_API_KEY", "NOVITA_API_KEY", "NVIDIA_API_KEY", "OLLAMA_API_KEY",
+	"OPENAI_API_KEY", "OPENCODE_GO_API_KEY", "OPENCODE_ZEN_API_KEY", "OPENROUTER_API_KEY", "QWEN_API_KEY",
+	"RAMP_ROUTER_API_KEY", "ROUTER_API_KEY", "STEPFUN_API_KEY", "TOKENHUB_API_KEY", "TOKENPLAN_API_KEY",
+	"UPSTAGE_API_KEY", "XAI_API_KEY", "XIAOMI_API_KEY", "ZAI_API_KEY", "Z_AI_API_KEY",
+}
+
+// cloudKeys are the variables that must not reach the private profile, sorted:
+// the key variables of the registry's providers the config leaves out, and
+// Hermes's built-in provider keys, less those of the providers it lists
 func cloudKeys(r *registry.Registry, cfg map[string]any) []string {
 	listed, _ := cfg["providers"].(map[string]any)
-	var keys []string
+	var keep []string
+	keys := slices.Clone(BuiltinKeys)
 	for _, pid := range sortedKeys(r.Providers) {
-		if _, ok := listed[pid]; ok {
+		v := keyVar(pid, r.Providers[pid].Key)
+		if v == "" {
 			continue
 		}
-		if v := keyVar(pid, r.Providers[pid].Key); v != "" && !slices.Contains(keys, v) {
+		if _, ok := listed[pid]; ok {
+			keep = append(keep, v)
+		} else if !slices.Contains(keys, v) {
 			keys = append(keys, v)
 		}
 	}
+	keys = slices.DeleteFunc(keys, func(k string) bool { return slices.Contains(keep, k) })
 	slices.Sort(keys)
 
 	return keys
@@ -527,9 +554,17 @@ func permissionRules(merged map[string]any) ([]Rule, error) {
 }
 
 // privateOnly says whether a server is one only private sessions may use:
-// a gateway server the device's tier may not use but P0 may, such as the
-// calendar (Suite D82, D92)
+// one P0 may use and no cloud tier may, such as the calendar (Suite D82,
+// D92). It goes by the server's tiers alone, so a device whose own tier is
+// P0 (or unset) doesn't hand the server to the cloud profile
 func privateOnly(s env.Server) bool {
+	return s.P0() && !slices.Contains(s.Privacy, "P1") && !slices.Contains(s.Privacy, "P2")
+}
+
+// sendsP0 says whether the private profile sends P0 instead of the
+// device's tier to a server: a gateway server the device's tier may not use
+// but P0 may
+func sendsP0(s env.Server) bool {
 	tier := s.Headers[env.PrivacyHeader]
 	return s.Gateway && tier != "" && !slices.Contains(s.Privacy, tier) && s.P0()
 }
@@ -566,7 +601,7 @@ func mcpServers(tools *env.Resolved, cloud bool) (map[string]any, []string) {
 		if s.Remote() {
 			entry = map[string]any{"url": hermesRefs(s.URL)}
 			headers := s.Headers
-			if privateOnly(s) {
+			if sendsP0(s) {
 				headers = maps.Clone(headers)
 				headers[env.PrivacyHeader] = "P0"
 			}

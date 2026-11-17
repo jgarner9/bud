@@ -1,6 +1,7 @@
 package hermes
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -156,6 +157,26 @@ func TestPrivateToolsRunOnlyInThePrivateProfile(t *testing.T) {
 		}
 		if v.Effect == Deny && !strings.Contains(v.Reason, "private profile") {
 			t.Errorf("the refusal should say why: %s", v.Reason)
+		}
+	}
+}
+
+// The profile comes from Hermes v0.23.2's own hook wire
+// (agent/shell_hooks.py _payload_fields: tool_name, tool_input, session_id,
+// cwd, profile, extra), so the private profile's calls carry "default"
+func TestTheGateReadsTheProfileFromHermessWire(t *testing.T) {
+	tiers := testTiers()
+	tiers.Private = []string{"mcp__calendar__*"}
+	for wire, want := range map[string]string{
+		`{"hook_event_name": "pre_tool_call", "tool_name": "mcp__calendar__list_events", "tool_input": {}, "session_id": "s1", "cwd": "/home/you", "profile": "default", "extra": {"task_id": "t"}}`: Allow,
+		`{"hook_event_name": "pre_tool_call", "tool_name": "mcp__calendar__list_events", "tool_input": {}, "session_id": "s1", "cwd": "/home/you", "profile": "cloud", "extra": {}}`:                 Deny,
+	} {
+		var p Payload
+		if err := json.Unmarshal([]byte(wire), &p); err != nil {
+			t.Fatal(err)
+		}
+		if v := tiers.Decide(p); v.Effect != want {
+			t.Errorf("%s: got %s (%s), want %s", wire, v.Effect, v.Reason, want)
 		}
 	}
 }

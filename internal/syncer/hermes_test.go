@@ -24,8 +24,7 @@ func TestSyncedSkillsAreLockedInHermes(t *testing.T) {
 		}
 		return nil, nil
 	}
-	set := linkSet{"skills/b": "/x/b", "skills/a": "/x/a", "plugins/p": "/x/p"}
-	if notes := lockSkills(set.skills(), func(string, ...any) {}); notes != nil {
+	if notes := lockSkills([]string{"a", "b"}, func(string, ...any) {}); notes != nil {
 		t.Errorf("notes: %q", notes)
 	}
 	if want := []string{"/usr/bin/hermes curator lock a", "/usr/bin/hermes curator lock b"}; !slices.Equal(ran, want) {
@@ -59,6 +58,7 @@ func TestSkillFilesCopyASkillsRegularFilesForHermes(t *testing.T) {
 		}
 	}
 	write("SKILL.md", 0o644)
+	write("private.md", 0o600)
 	write("scripts/run.sh", 0o755)
 	if err := os.Symlink("/etc/passwd", filepath.Join(src, "link")); err != nil {
 		t.Fatal(err)
@@ -70,6 +70,7 @@ func TestSkillFilesCopyASkillsRegularFilesForHermes(t *testing.T) {
 	}
 	want := []want{
 		{"/h/.hermes/skills/demo/SKILL.md", []byte("SKILL.md"), 0o644, "hermes-skill", "public"},
+		{"/h/.hermes/skills/demo/private.md", []byte("private.md"), 0o600, "hermes-skill", "public"},
 		{"/h/.hermes/skills/demo/scripts/run.sh", []byte("scripts/run.sh"), 0o755, "hermes-skill", "public"},
 	}
 	if len(got) != len(want) {
@@ -149,5 +150,73 @@ func TestAServerSyncCopiesItsSkillsIntoHermesAndLocksThem(t *testing.T) {
 	}
 	if !slices.Equal(locked, []string{"learn"}) {
 		t.Errorf("locked %q, want learn", locked)
+	}
+
+	// adding it back finds no leftover dir in the way
+	skills = `["learn", "plan"]`
+	rep := run(t, o)
+	if got := read(t, filepath.Join(dir, "plan", "SKILL.md")); !strings.Contains(got, "name: plan") {
+		t.Errorf("plan wasn't copied back: %q (notes %q)", got, rep.Notes)
+	}
+}
+
+// A skill bud didn't write, or one whose path goes through a link, gets no
+// files and no lock, and the notes say why
+func TestHermesSkillLeavesAloneWhatIsntBuds(t *testing.T) {
+	src := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"SKILL.md", "scripts/run.sh"} {
+		if err := os.WriteFile(filepath.Join(src, f), []byte(f), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root := filepath.Join(t.TempDir(), "skills")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	ws, note, err := hermesSkill(root, "demo", src, "public", nil)
+	if err != nil || note != "" || len(ws) != 2 {
+		t.Fatalf("a new skill: %d files, note %q, err %v", len(ws), note, err)
+	}
+
+	// an empty dir is what's left of a skill bud removed
+	if err := os.MkdirAll(filepath.Join(root, "demo", "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if ws, note, _ = hermesSkill(root, "demo", src, "public", nil); note != "" || len(ws) != 2 {
+		t.Errorf("an empty leftover dir: %d files, note %q", len(ws), note)
+	}
+
+	// Hermes's own skill of that name
+	if err := os.WriteFile(filepath.Join(root, "demo", "SKILL.md"), []byte("Hermes's"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ws, note, err = hermesSkill(root, "demo", src, "public", nil)
+	if err != nil || ws != nil || !strings.Contains(note, "didn't write") {
+		t.Errorf("an untracked skill dir: %d files, note %q, err %v", len(ws), note, err)
+	}
+	tracked := []File{{Path: filepath.Join(root, "demo", "SKILL.md")}}
+	if ws, note, _ = hermesSkill(root, "demo", src, "public", tracked); note != "" || len(ws) != 2 {
+		t.Errorf("bud's own skill dir: %d files, note %q", len(ws), note)
+	}
+
+	// a link anywhere on the way, even in bud's own skill
+	if err := os.Remove(filepath.Join(root, "demo", "scripts")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(root, "demo", "scripts")); err != nil {
+		t.Fatal(err)
+	}
+	if ws, note, _ = hermesSkill(root, "demo", src, "public", tracked); ws != nil || !strings.Contains(note, "is a link") {
+		t.Errorf("a linked subdir: %d files, note %q", len(ws), note)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(root, "other")); err != nil {
+		t.Fatal(err)
+	}
+	if ws, note, _ = hermesSkill(root, "other", src, "public", nil); ws != nil || !strings.Contains(note, "is a link") {
+		t.Errorf("a linked skill dir: %d files, note %q", len(ws), note)
 	}
 }

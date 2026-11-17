@@ -25,19 +25,6 @@ var (
 	}
 )
 
-// skills are the set's skill IDs, sorted
-func (s linkSet) skills() []string {
-	var ids []string
-	for k := range s {
-		if id, ok := strings.CutPrefix(k, "skills/"); ok {
-			ids = append(ids, id)
-		}
-	}
-	slices.Sort(ids)
-
-	return ids
-}
-
 // lockSkills locks each synced skill in Hermes and returns notes on what it
 // couldn't lock. Locking is idempotent, so every sync locks them all again,
 // which also covers a skill a new content version added
@@ -88,11 +75,7 @@ func skillFiles(src, dst, layer string) ([]want, error) {
 		if err != nil {
 			return err
 		}
-		perm := os.FileMode(0o644)
-		if info.Mode()&0o111 != 0 {
-			perm = 0o755
-		}
-		out = append(out, want{filepath.Join(dst, rel), b, perm, "hermes-skill", layer})
+		out = append(out, want{filepath.Join(dst, rel), b, info.Mode().Perm(), "hermes-skill", layer})
 		return nil
 	})
 	if err != nil {
@@ -100,4 +83,60 @@ func skillFiles(src, dst, layer string) ([]want, error) {
 	}
 
 	return out, nil
+}
+
+// hermesSkill is Hermes's copy of the skill id (its files in src) under
+// root, Hermes's skills dir. Whether bud may write it is decided for the
+// whole skill, so a skill is never half written or locked when it isn't
+// bud's: a skill dir bud doesn't track (Hermes's own, or Jason's) is left
+// alone, and so is one whose path goes through a link, which could take a
+// write outside Hermes's skills dir. Either way the note says so, and the
+// skill gets no files and no lock
+func hermesSkill(root, id, src, layer string, tracked []File) ([]want, string, error) {
+	dst := filepath.Join(root, id)
+	ws, err := skillFiles(src, dst, layer)
+	if err != nil {
+		return nil, "", err
+	}
+	dirs := []string{root, dst}
+	for _, w := range ws {
+		for d := filepath.Dir(w.path); len(d) > len(dst); d = filepath.Dir(d) {
+			dirs = append(dirs, d)
+		}
+	}
+	for _, d := range dirs {
+		info, err := os.Lstat(d)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, "", fmt.Errorf("copy skill %s for Hermes: %w", id, err)
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return nil, fmt.Sprintf("%s is a link, so bud didn't copy or lock the skill %s through it; replace it with a plain dir and run bud sync again", d, id), nil
+		}
+	}
+	// an empty dir is what's left of a skill bud removed, so it's fair game
+	if _, err := os.Lstat(dst); err == nil && !emptyTree(dst) {
+		ours := slices.ContainsFunc(tracked, func(f File) bool { return strings.HasPrefix(f.Path, dst+string(filepath.Separator)) })
+		if !ours {
+			return nil, fmt.Sprintf("Hermes already has a skill named %s that bud didn't write (%s), so it was left alone and not locked; move it aside and run bud sync again to use bud's", id, dst), nil
+		}
+	}
+
+	return ws, "", nil
+}
+
+// emptyTree says dir holds only dirs, none of them links
+func emptyTree(dir string) bool {
+	empty := true
+	filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			empty = false
+			return filepath.SkipAll
+		}
+		return nil
+	})
+
+	return empty
 }

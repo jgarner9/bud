@@ -3,15 +3,19 @@ package syncer
 import (
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 )
 
-// Synced skills are locked in Hermes (Suite D48): `hermes curator lock`
-// records the lock in Hermes's own state, and while it holds, every agent
-// write path refuses to change the skill, in normal turns and background
-// passes alike. Jason's own edits aren't gated
+// Synced skills are locked in Hermes (Suite D48): bud copies each into
+// Hermes's own skills dir, since `hermes curator lock` takes only a skill
+// there, then locks it. Hermes records the lock in its own state, and while
+// it holds, every agent write path refuses to change the skill, in normal
+// turns and background passes alike. Jason's own edits aren't gated
 
 // hermesBin finds Hermes, and runHermes runs it; tests swap both
 var (
@@ -58,4 +62,42 @@ func lockSkills(ids []string, logf func(string, ...any)) []string {
 	}
 
 	return nil
+}
+
+// skillFiles are the files of the skill in src, to be written under dst.
+// A skill's links and special files aren't copied: a link could point
+// Hermes outside the skill
+func skillFiles(src, dst, layer string) ([]want, error) {
+	var out []want
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		perm := os.FileMode(0o644)
+		if info.Mode()&0o111 != 0 {
+			perm = 0o755
+		}
+		out = append(out, want{filepath.Join(dst, rel), b, perm, "hermes-skill", layer})
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("copy skill %s for Hermes: %w", filepath.Base(dst), err)
+	}
+
+	return out, nil
 }

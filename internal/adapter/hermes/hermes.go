@@ -73,9 +73,6 @@ type Input struct {
 	Registry *registry.Registry
 	// Env holds the env fragments' JSONC, in the order they apply
 	Env []env.Fragment
-	// Skills is the dir of synced skills, which Hermes loads read-only, or
-	// empty for none
-	Skills string
 	// Gate is the tier gate's command line, the program first: Hermes runs
 	// it before every tool call
 	Gate []string
@@ -168,11 +165,9 @@ func Render(in Input) (*Output, error) {
 	// the gateway can't answer a consent prompt, and bud owns the hooks key,
 	// so the only hook to accept is the gate
 	cfg["hooks_auto_accept"] = true
-	skills := map[string]any{"write_approval": true}
-	if in.Skills != "" {
-		skills["external_dirs"] = []any{in.Skills}
-	}
-	cfg["skills"] = skills
+	// synced skills are copied into Hermes's own dir and locked there by bud
+	// sync, so no external dir is set: a skill there couldn't be locked
+	cfg["skills"] = map[string]any{"write_approval": true, "external_dirs": []any{}}
 	cfg["memory"] = map[string]any{"write_approval": true}
 	cfg["auxiliary"] = map[string]any{"background_review": map[string]any{"enabled": false}}
 	cfg["curator"] = map[string]any{"consolidate": false}

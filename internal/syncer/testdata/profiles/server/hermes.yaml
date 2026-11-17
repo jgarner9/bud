@@ -153,8 +153,7 @@ providers:
         context_length: 32768
     transport: "chat_completions"
 skills:
-  external_dirs:
-    - "/home/you/data/bud/active/skills"
+  external_dirs: []
   write_approval: true
 terminal:
   backend: "docker"

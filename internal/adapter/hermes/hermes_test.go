@@ -101,7 +101,6 @@ func TestTheSafetySettingsAreRendered(t *testing.T) {
 		{"action": "shell", "resource": "op *", "effect": "deny"},
 		{"action": "read", "resource": "*.env", "effect": "ask"}
 	]}`)
-	in.Skills = "/home/you/.local/share/bud/active/skills"
 	out, err := Render(in)
 	if err != nil {
 		t.Fatal(err)
@@ -118,7 +117,7 @@ func TestTheSafetySettingsAreRendered(t *testing.T) {
 		"hooks:\n  pre_tool_call:\n    - command: \"/home/you/.local/bin/bud hermes-gate /home/you/.local/state/bud/hermes-tiers.json\"\n      fail_closed: true\n      timeout: 10\n",
 		"hooks_auto_accept: true\n",
 		"memory:\n  write_approval: true\n",
-		"skills:\n  external_dirs:\n    - \"/home/you/.local/share/bud/active/skills\"\n  write_approval: true\n",
+		"skills:\n  external_dirs: []\n  write_approval: true\n",
 		"terminal:\n  backend: \"docker\"\n  docker_mount_cwd_to_workspace: false\n",
 		"updates:\n  check: false\n",
 	} {

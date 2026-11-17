@@ -288,6 +288,15 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 			links[it.Kind+"/"+it.ID] = stable(it.Path)
 			if it.Kind == "skills" {
 				skills++
+				if prof.Has("server") {
+					// Hermes locks only skills in its own dir, so it gets
+					// copies there, under the ledger (Suite D48)
+					ws, err := skillFiles(it.Path, filepath.Join(p.HermesSkills(), it.ID), it.Layer)
+					if err != nil {
+						return err
+					}
+					wants = append(wants, ws...)
+				}
 			} else {
 				in.Plugins = append(in.Plugins, filepath.Join(p.Active(), "plugins", it.ID))
 			}
@@ -336,9 +345,6 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 			Registry: in.Registry,
 			Env:      in.Env,
 			Gate:     []string{filepath.Join(p.BinDir, "bud"), "hermes-gate", p.HermesTiers()},
-		}
-		if skills > 0 {
-			hin.Skills = filepath.Join(p.Active(), "skills")
 		}
 		out, err := hermes.Render(hin)
 		if err != nil {

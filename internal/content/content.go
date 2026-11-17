@@ -65,8 +65,10 @@ var skipped = []string{"README.md", FormatName}
 // published with. Format 1 is written as no field at all, which keeps
 // manifests readable by every bud that predates it. Format 2 (JGA-358): env
 // fragments carry the bud block (MCP servers and the gateway), which an
-// older bud would pass into opencode.jsonc as it is
-const Format = 2
+// older bud would pass into opencode.jsonc as it is. Format 3 (JGA-290): the
+// bud block carries tiers, Hermes's tool tiers, which an older bud's strict
+// read of the block refuses
+const Format = 3
 
 // Manifest is content.json
 type Manifest struct {

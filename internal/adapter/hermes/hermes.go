@@ -403,6 +403,10 @@ func permissionRules(merged map[string]any) ([]Rule, error) {
 	return rules, nil
 }
 
+// mcpServers is Hermes's mcp_servers for the resolved servers. Gateway
+// servers keep the device's privacy header; Hermes can select a cloud model
+// by hand, so a P0-only server must remain unavailable until its session tier
+// can be enforced.
 func mcpServers(tools *env.Resolved) map[string]any {
 	servers := map[string]any{}
 	for _, name := range tools.Names() {
@@ -410,8 +414,9 @@ func mcpServers(tools *env.Resolved) map[string]any {
 		var entry map[string]any
 		if s.Remote() {
 			entry = map[string]any{"url": hermesRefs(s.URL)}
-			if len(s.Headers) > 0 {
-				entry["headers"] = refMap(s.Headers)
+			headers := s.Headers
+			if len(headers) > 0 {
+				entry["headers"] = refMap(headers)
 			}
 		} else {
 			entry = map[string]any{"command": hermesRefs(s.Command[0])}

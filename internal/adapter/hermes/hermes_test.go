@@ -209,6 +209,34 @@ func TestServersAndSettingsRenderAsSortedYAML(t *testing.T) {
 	}
 }
 
+func TestAGatewayServerOnlyP0MayUseKeepsDeviceTierHeader(t *testing.T) {
+	got := render(t, `{"bud": {
+		"privacy": "P1",
+		"gateway": "http://127.0.0.1:8790",
+		"mcp": {
+			"calendar": {"gateway": true, "privacy": ["P0"]},
+			"linear": {"gateway": true, "privacy": ["P1", "P2"]},
+			"memory": {"gateway": true, "privacy": ["P0", "P1"]}
+		}
+	}}`)
+	// The gateway sees only the device's tier, so P0-only calendar access
+	// remains denied even though Hermes's startup model is P0.
+	for _, want := range []string{
+		"  calendar:\n    headers:\n      X-Bud-Privacy: \"P1\"\n",
+		"  linear:\n    headers:\n      X-Bud-Privacy: \"P1\"\n",
+		"  memory:\n    headers:\n      X-Bud-Privacy: \"P1\"\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lacks %q:\n%s", want, got)
+		}
+	}
+	// with no device tier there is no header, which the gateway takes as P0
+	got = render(t, `{"bud": {"gateway": "http://127.0.0.1:8790", "mcp": {"calendar": {"gateway": true, "privacy": ["P0"]}}}}`)
+	if strings.Contains(got, "X-Bud-Privacy") {
+		t.Errorf("a device with no tier got a header:\n%s", got)
+	}
+}
+
 func TestAWordYAMLWouldReadAsABoolIsQuoted(t *testing.T) {
 	got := render(t, `{"bud": {"hermes": {"x": {"on": 1, "no": "yes", "a b": [], "e": {}}}}}`)
 	for _, want := range []string{`  "on": 1`, `  "no": "yes"`, `  "a b": []`, `  e: {}`} {

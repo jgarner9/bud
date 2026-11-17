@@ -273,6 +273,7 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 
 	links := linkSet{}
 	skills := 0
+	var hermesSkills []string // the synced skills bud copies into Hermes
 	var wants []want
 	// skills and instructions resolve into the content versions and the overlay
 	in := opencode.Input{Registry: reg, Reachable: []string{p.Content(), p.Overlay()}}
@@ -288,6 +289,20 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 			links[it.Kind+"/"+it.ID] = stable(it.Path)
 			if it.Kind == "skills" {
 				skills++
+				if prof.Has("server") {
+					// Hermes locks only skills in its own dir, so it gets
+					// copies there, under the ledger (Suite D48)
+					ws, note, err := hermesSkill(p.HermesSkills(), it.ID, it.Path, it.Layer, led.Files)
+					if err != nil {
+						return err
+					}
+					if note != "" {
+						rep.Notes = append(rep.Notes, note)
+					} else {
+						wants = append(wants, ws...)
+						hermesSkills = append(hermesSkills, it.ID)
+					}
+				}
 			} else {
 				in.Plugins = append(in.Plugins, filepath.Join(p.Active(), "plugins", it.ID))
 			}
@@ -336,9 +351,6 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 			Registry: in.Registry,
 			Env:      in.Env,
 			Gate:     []string{filepath.Join(p.BinDir, "bud"), "hermes-gate", p.HermesTiers()},
-		}
-		if skills > 0 {
-			hin.Skills = filepath.Join(p.Active(), "skills")
 		}
 		out, err := hermes.Render(hin)
 		if err != nil {
@@ -429,7 +441,7 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 		rep.Notes = append(rep.Notes, "couldn't clear out old link sets: "+err.Error())
 	}
 	if prof.Has("server") {
-		rep.Notes = append(rep.Notes, lockSkills(links.skills(), o.logf)...)
+		rep.Notes = append(rep.Notes, lockSkills(slices.Sorted(slices.Values(hermesSkills)), o.logf)...)
 	}
 
 	return errors.Join(errs...)

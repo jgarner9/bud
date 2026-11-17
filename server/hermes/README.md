@@ -7,7 +7,7 @@ Setting it up, at the machine:
 1. Install Hermes at the pinned version (v0.23.2), and Docker, with your user in the `docker` group: the agent's terminal and file tools run in Hermes's sandbox container. `docker pull nousresearch/hermes-sandbox:desktop` saves the first command a wait.
 2. Put `OP_SERVICE_ACCOUNT_TOKEN` (the Bud vault's service account) in `~/.hermes/.env`, so Hermes can resolve the `op://` references in its config with `op read` at start. Any provider key the registry names as `{env:VAR}`, such as `OPENCODE_GO_API_KEY`, goes there too, or as an `op://` reference under `bud.hermes.secrets.onepassword.env` in your overlay's `env/personal.jsonc`, with `EXA_API_KEY` for Hermes's web tools.
 3. Point the registry at the real Qwen box in your overlay's `env/registry.jsonc` (the public file's hosts are `.invalid`).
-4. Run `bud sync`. Its notes say which skills it locked in Hermes, and name anything it couldn't do.
+4. Run `bud sync`. It copies the synced skills into `~/.hermes/skills` and locks them; its notes name any it couldn't copy or lock. A skill Hermes already had under the same name is left alone and named, so move it aside first if you want bud's.
 5. Check the gate refuses the never tier: `echo '{"hook_event_name": "pre_tool_call", "tool_name": "terminal", "tool_input": {"command": "op read x"}}' | ~/.local/bin/bud hermes-gate ~/.local/state/bud/hermes-tiers.json` prints a block.
 6. `hermes doctor`, then `hermes gateway install`, `loginctl enable-linger "$USER"` and `hermes gateway start`.
 

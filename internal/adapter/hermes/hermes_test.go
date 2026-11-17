@@ -101,12 +101,14 @@ func TestTheSafetySettingsAreRendered(t *testing.T) {
 		{"action": "shell", "resource": "op *", "effect": "deny"},
 		{"action": "read", "resource": "*.env", "effect": "ask"}
 	]}`)
-	in.Skills = "/home/you/.local/share/bud/active/skills"
 	out, err := Render(in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := string(out.Config)
+	if !strings.HasPrefix(got, Header+"_config_version: 53\n") {
+		t.Errorf("the config doesn't open with Hermes's schema version:\n%s", got)
+	}
 	for _, want := range []string{
 		"approvals:\n  approvers: []\n  cron_mode: \"deny\"\n  deny:\n    - \"op *\"\n  mode: \"manual\"\n  single_query_mode: \"deny\"\n  timeout: 3600\n  unattended_mode: \"deny\"\n",
 		"auxiliary:\n  background_review:\n    enabled: false\n",
@@ -115,7 +117,7 @@ func TestTheSafetySettingsAreRendered(t *testing.T) {
 		"hooks:\n  pre_tool_call:\n    - command: \"/home/you/.local/bin/bud hermes-gate /home/you/.local/state/bud/hermes-tiers.json\"\n      fail_closed: true\n      timeout: 10\n",
 		"hooks_auto_accept: true\n",
 		"memory:\n  write_approval: true\n",
-		"skills:\n  external_dirs:\n    - \"/home/you/.local/share/bud/active/skills\"\n  write_approval: true\n",
+		"skills:\n  external_dirs: []\n  write_approval: true\n",
 		"terminal:\n  backend: \"docker\"\n  docker_mount_cwd_to_workspace: false\n",
 		"updates:\n  check: false\n",
 	} {
@@ -139,6 +141,7 @@ func TestAFragmentCantSetWhatBudOwns(t *testing.T) {
 		`{"bud": {"hermes": {"terminal": {"backend": "local"}}}}`,
 		`{"bud": {"hermes": {"model": {"default": "x"}}}}`,
 		`{"bud": {"hermes": {"hooks": {}}}}`,
+		`{"bud": {"hermes": {"_config_version": 1}}}`,
 		// replacing a section bud shares with something that isn't a map
 		// would replace bud's settings in it whole
 		`{"bud": {"hermes": {"skills": false}}}`,

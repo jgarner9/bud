@@ -1,5 +1,6 @@
 # Written by bud sync from the model registry and env fragments. Edits here are
 # replaced on the next sync: change content/env or your overlay's env instead.
+_config_version: 53
 approvals:
   approvers: []
   cron_mode: "deny"
@@ -152,8 +153,7 @@ providers:
         context_length: 32768
     transport: "chat_completions"
 skills:
-  external_dirs:
-    - "/home/you/data/bud/active/skills"
+  external_dirs: []
   write_approval: true
 terminal:
   backend: "docker"

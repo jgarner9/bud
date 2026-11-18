@@ -1,14 +1,19 @@
 ```
-   ___     z
-  [-.-]  z     >_ bud
-  /[_]\        > ...
-   ] [         > [o.o] oh! hi. let's go.
+            ide     sync
+              \     /
+       server--\   /--content
+                \ /
+                 |
+                ___
+               [o.o]   b u d   s u i t e
+               /[_]\
+                ] [
 ```
 
 <!-- the art stays outside the centered div: GitHub centers each line of a code block on its own, which breaks the alignment -->
 <div align="center">
 
-**One small Go binary. One isolated Neovim. Eight languages ready to go.**
+**One Go binary for the IDE, device sync and home-server tools.**
 
 [![CI](https://github.com/jgarner9/bud/actions/workflows/ci.yml/badge.svg)](https://github.com/jgarner9/bud/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jgarner9/bud?color=6ca36c)](https://github.com/jgarner9/bud/releases/latest)
@@ -21,196 +26,73 @@
 
 ---
 
+Bud Suite gives you an isolated Neovim IDE, shared agent configuration across your devices, and tools for running a home-server assistant. The `bud` binary ships the editor config and the Bud MCP servers. It renders configuration for OpenCode and Hermes, which run as separate processes.
+
 ## Install
 
-Linux or macOS, amd64 or arm64:
+On Linux or macOS (amd64 or arm64):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh | sh
 ```
 
-The script downloads the release for your platform, checks its signature and checksum, puts `bud` in `~/.local/bin`, and offers to run `bud install`. That asks for a profile, terminal and languages, shows the package manager command for anything missing and runs it once you agree (on Linux, a Neovim or tree-sitter-cli that is missing or too old is downloaded and checksum-verified instead), then sets up the config, plugins and language tools, Claude Code. [docs/setup.md](docs/setup.md) walks through every step, including the parts that link to your Claude and GitHub accounts.
+The installer verifies the release signature and checksum, installs `bud`, and offers to run `bud install`. The IDE uses Neovim 0.12+ and a [Nerd Font](https://www.nerdfonts.com) for icons. See the [setup guide](docs/setup.md) for dependencies, installer options and backend setup. See [device profiles](docs/profiles.md) to configure Suite sync.
 
-**Requirements:** macOS or Linux on amd64 or arm64, and a terminal using a [Nerd Font](https://www.nerdfonts.com) for the icons. `bud install` takes care of the rest (Neovim 0.12+, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, and each enabled language's toolchain), showing every command before it runs. `bud launch` and the desktop app open bud in Kitty or Ghostty; plain `bud` runs in any terminal.
+To build from source, run `go install ./cmd/bud` from the checkout, then `bud install`.
 
-<details>
-<summary><b>Read the script first, pass options, or build from source</b></summary>
-
-&nbsp;
+## The IDE
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jgarner9/bud/main/install.sh -o install.sh
-less install.sh
-sh install.sh
+bud          # open the dashboard
+bud .        # open the current project
+bud main.go  # open a file
 ```
 
-Options go after `sh -s --`, e.g. `curl -fsSL .../install.sh | sh -s -- --profile minimal --yes`:
+Bud embeds its Neovim config, pins plugins in a lockfile, and runs with `NVIM_APPNAME=bud`. The editor includes project search, completion, formatting, debugging and rendered Markdown. Eight [language specs](docs/languages.md) ship with it, and [layouts](docs/layouts.md) control which panes open around the editor. Press <kbd>Space</kbd> for key hints or see [the full keymap](docs/keys.md).
 
-| Option             | Default        | What it does                                 |
-| ------------------ | -------------- | -------------------------------------------- |
-| `--version <tag>`  | latest release | Install a specific release                   |
-| `--bin-dir <dir>`  | `~/.local/bin` | Where to put the `bud` binary                |
-| `--profile <name>` | `full`         | `full` or `minimal`, handed to `bud install` |
-| `--yes`            | off            | Run `bud install` without asking             |
-| `--no-install`     | off            | Install the binary, skip `bud install`       |
+Claude Code is still the default and Bud drives it directly. OpenCode, Codex and OpenClaw are available over the Agent Client Protocol (ACP). Use `bud ai status` to check the active backend and see [AI backends](docs/backends.md) for setup and differences in chat, edit review and permissions.
 
-Without a terminal to ask on and without `--yes`, the script installs the binary and skips `bud install`.
-
-From source:
-
-```sh
-git clone https://github.com/jgarner9/bud && cd bud
-go install ./cmd/bud
-bud install
-```
-
-</details>
-
-## What is it?
-
-Bud is a fast, reproducible IDE: Neovim plus a small Go CLI that installs, launches, updates and syncs it. The whole Neovim config ships inside the binary, so every machine gets exactly the same setup. It runs as its own Neovim (`NVIM_APPNAME=bud`) and never touches `~/.config/nvim`; `bud uninstall` removes it without a trace.
-
-## Features
-
-### The editor
-
-Neovim 0.12 with plugins pinned in a committed lockfile and lazy-loaded, inside a 50 ms budget to the first screen.
-
-- **Navigation:** fzf-lua for files, grep, buffers and symbols; two-key jumps (`gw`, `s`); a symbols outline; oil.nvim as the explorer; four pinned files per project.
-- **Editing:** blink.cmp completion, format on save, gitsigns and diffview, debugging with nvim-dap.
-- **Interface:** key hints as you type, a floating command line, breadcrumbs, Catppuccin Macchiato.
-- **Markdown:** `.md` files open rendered (up to 250 KB); `<leader>um` switches to plain text for editing (`ui.markdown` turns rendering off).
-
-All keys: [docs/keys.md](docs/keys.md).
-
-### Languages
-
-One Lua file per language wires up its parsers, LSP server, linter and formatter. Eight ship with bud:
-
-| Language | Server | Lint | Format on save |
-| --- | --- | --- | --- |
-| **Go** | gopls | golangci-lint | goimports |
-| **Python** | ty + ruff | ruff | ruff |
-| **TypeScript / JavaScript** | tsc + ESLint | the servers | prettier, else tsc |
-| **C** | clangd | clangd + clang-tidy | clangd, with a `.clang-format` |
-| **Bash / sh** | | shellcheck | shfmt |
-| **HTML** | `html` | | prettier, else the server |
-| **CSS / SCSS / Less** | `cssls` | the server | prettier, else the server |
-| **Lua** | lua_ls | selene | stylua, with a `stylua.toml` |
-
-Prettier runs only in projects with a Prettier config. The `minimal` profile (for servers) starts with Python and Bash. Add your own with `bud lang add`: [docs/languages.md](docs/languages.md).
-
-### Layouts
-
-A layout names the panes that open around the editor: explorer, git, Claude Code, terminal, debugger. bud ships `default`, `focus`, `debug` and `review`; each project can have its own. [docs/layouts.md](docs/layouts.md).
-
-### The AI backend
-
-The AI is your choice of backend: any agent that speaks the Agent Client Protocol, such as Codex, OpenCode or a self-hosted [OpenClaw](https://docs.openclaw.ai) Gateway, one `bud config set ai.backend` away. The default is Claude Code (`claude`). bud's own chat (`<leader>av`) draws the conversation in Neovim on any backend but `claude`. [docs/backends.md](docs/backends.md) says how to choose one and what each needs, and [docs/openclaw.md](docs/openclaw.md) is a worked example. Everything below is the `claude` backend.
-
-### Claude Code
-
-Each project gets one Claude Code session, shared by everything that uses it:
-
-- **The pane** (`<leader>ac`): Claude Code's own TUI beside your code.
-- **Inline actions:** explain, refactor or write tests for a selection; draft commit messages.
-- **Reviewed edits:** every change Claude proposes opens as a diff to accept or reject.
-- **Chat** (`<leader>ch`, `bud chat`): chat mode, outside any project.
-- **Issues:** turn a note into Linear issues, and have Claude fix one in a worktree.
-
-[docs/claude-code.md](docs/claude-code.md) explains how it fits together; [docs/issues.md](docs/issues.md) (the whole file-an-issue, have-Claude-fix-it, merge-it flow, step by step), [docs/tools.md](docs/tools.md) and [docs/claude-tui.md](docs/claude-tui.md) go further.
-
-### Dashboard and projects
-
-Bare `bud` opens a dashboard: your projects with their git state, a health line, and banners for doctor problems and updates, each with a one-key fix. Opening a directory registers it as a project; `bud projects` pins and manages them.
-
-The robot on the dashboard plays 22 moves, from a backflip to a moonwalk. `<leader>ub` gives him a corner of the editor too, where he keeps you company while you work (`ui.buddy` starts him there).
-
-### Tools
-
-Small Neovim extensions in a directory of their own, loaded after the first screen. Write one, or have Claude write and test it with `:BudGen`. [docs/tools.md](docs/tools.md).
-
-### Updates and health
-
-- **`bud doctor`** checks dependencies, languages, config sync, startup time and Claude Code, with the fix for each problem.
-- **`bud update`** installs signed releases (stable or nightly), checks itself afterwards and rolls back if a check breaks. Stable updates install in the background.
-- **Honest installs:** bud shows the package manager command (or the download, for the Neovim and tree-sitter-cli that Linux distros often ship too old) and asks first, and never upgrades anything behind your back.
-
-## Usage
-
-```sh
-bud                 # the dashboard
-bud .               # open the current directory as a project
-bud ~/code/thing    # open a project
-bud main.go util.go # open files from the project they belong to
-```
-
-### Commands
+## Sync, updates and health
 
 | Command | What it does |
 | --- | --- |
-| `bud install` | Set up: profile, terminal, languages, system packages, config |
-| `bud update` | Install a newer release and sync everything; `--check` only looks |
-| `bud doctor` | Health checks, each with its fix |
-| `bud lang` | List, enable, disable and add languages |
-| `bud layout` | List layouts and pick the default |
-| `bud projects` | List, add, remove and pin projects |
-| `bud config` | Read and write settings by key |
-| `bud ai` | Check and set up the AI backend (OpenClaw, Codex, OpenCode) |
-| `bud claude` | Check and set up Claude Code |
-| `bud issue` | Say where issues filed from the editor go in Linear |
-| `bud chat` · `bud agent` | Claude Code outside the editor |
-| `bud tools` | Manage editor tools |
-| `bud launch` · `bud bundle` | Open bud in a new terminal window · install the desktop app |
-| `bud bootstrap` | Install bud on another machine over SSH |
-| `bud uninstall` | Remove everything bud installed |
+| `bud sync` | Pulls signed content for the device's `stable` or `edge` channel, layers the private overlay, and renders runtime config. Use `--dry-run` to see what would change. |
+| `bud doctor` | Checks dependencies and configuration. On a device with sync set up, it also checks the ledger and reports drift in managed files and rendered config. |
+| `bud update` | Installs a signed binary from the `stable` or `nightly` channel and rolls back if a health check starts failing. Use `--check` to check for a release. |
 
-Global flags go before the command: `bud [--verbose] [--profile full|minimal] <command> [flags] [args]`. Every command and flag: [docs/commands.md](docs/commands.md). Shell completion: `eval "$(bud completion zsh)"`.
+See [all commands](docs/commands.md) and [how sync works](docs/internals/sync.md).
 
-### First keys
+## Home server
 
-Leader is <kbd>Space</kbd>; press it and wait to see what follows.
+- **Hermes** runs as the always-on manager. Bud renders its configuration and syncs its skills. [Setup](server/hermes/README.md)
+- **MCP gateway** serves the configured tools to the runtimes that can use them. [Gateway](docs/internals/mcp-gateway.md)
+- **Ops MCP server** reports Bud health, sync status and configuration drift. [Operations](docs/internals/mcp-ops.md)
+- **Calendar MCP server** connects the private Hermes profile to iCloud Calendar over CalDAV, including event alarms for reminders. [Calendar](docs/internals/calendar.md)
 
-| Keys | Does |
+## Repository layout
+
+| Path | What lives there |
 | --- | --- |
-| <kbd>;</kbd> | The command line |
-| <kbd>Space</kbd> <kbd>p</kbd> · <kbd>Space</kbd> <kbd>f</kbd> | Open a project · find a file |
-| <kbd>Space</kbd> <kbd>/</kbd> | Grep the project |
-| <kbd>Space</kbd> <kbd>e</kbd> · <kbd>Space</kbd> <kbd>t</kbd> | Explorer · terminal |
-| <kbd>Space</kbd> <kbd>a</kbd> <kbd>c</kbd> | Claude Code's pane |
-| <kbd>Space</kbd> <kbd>u</kbd> <kbd>m</kbd> | Rendered or plain markdown |
-| <kbd>j</kbd> <kbd>k</kbd> | Leave Insert mode |
-| <kbd>Space</kbd> <kbd>,</kbd> | Settings |
-| <kbd>Space</kbd> <kbd>q</kbd> <kbd>q</kbd> | Quit |
-
-The rest: [docs/keys.md](docs/keys.md).
-
-### Settings
-
-`<leader>,` opens the settings screen; `bud config` does the same from the shell. Every key and its default: [docs/config.md](docs/config.md). When something's off, start with `bud doctor`, then [docs/troubleshooting.md](docs/troubleshooting.md).
+| [`cmd/bud/`](cmd/bud/) and [`internal/`](internal/) | The Go module and the `bud` CLI |
+| [`ide/`](ide/) | Embedded Neovim config, languages, layouts and plugins |
+| [`content/`](content/) | Shared instructions, skills, agents, commands and model configuration |
+| [`profiles/`](profiles/) | Example device profiles |
+| [`server/`](server/) | Home-server service units and setup |
+| [`app/`](app/) | Plans for the Tauri chat app |
+| [`docs/`](docs/) | User guides and internals |
+| [`scripts/`](scripts/) | Build, release and test scripts |
 
 ## Status
 
-Bud is at 1.0 and in maintenance mode: everything above is built, and new features arrive when daily use asks for one. Releases are on the [releases page](https://github.com/jgarner9/bud/releases); the full plan and every decision are in [`BASE.md`](BASE.md).
+The IDE, signed device sync, Hermes integration and home-server MCP services are in the tree today. The Suite work ahead includes shared memory, switching IDE chat between local coding and server-side planning, and the Tauri chat app. See [GitHub Releases](https://github.com/jgarner9/bud/releases) for published builds.
 
 ## Hacking on Bud
 
-You'll need Go and [`just`](https://github.com/casey/just); linting needs `stylua` and `selene`.
-
-```sh
-just                 # list recipes
-just check           # everything CI runs
-just run update      # go run ./cmd/bud update
-just lang-check go   # check one language's tooling on a sample project
-```
-
-The Go side is standard library only, and flags go before positional arguments. [`CLAUDE.md`](CLAUDE.md) has the architecture tour. `bud dev link` points your editor at a checkout.
-
-Releases come from `VERSION`: run the release skill in Claude Code, which reviews everything since the last tag and bumps it on `main`; CI tags the release and GoReleaser builds it.
+Run `just check` to run the CI checks locally. See [AGENTS.md](AGENTS.md) for the architecture, tool requirements and where to find implementation notes.
 
 ## License
 
-[MIT](LICENSE). The plugins bud installs keep their own licenses.
+[MIT](LICENSE). The plugins Bud installs keep their own licenses.
 
 <div align="center">
 <sub>[o.o] beep boop</sub>

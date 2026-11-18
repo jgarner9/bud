@@ -62,11 +62,19 @@ func planFiles(old []File, wants []want) (steps []fileStep, keep []File, skips [
 		wanted[w.path] = true
 		sum := hash(w.data)
 		entry := File{Path: w.path, SHA256: sum, Kind: w.kind, Layer: w.layer}
-		have, exists, err := hashFile(w.path)
+		data, exists, err := readRegularFile(w.path)
+		have := fileHash(data, exists)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		prev, ours := tracked[w.path]
+		if ours && data != nil && have != sum && have != prev.SHA256 && isHermesConfig(entry) {
+			managed, state := splitHermesConfig(data)
+			have = hash(managed)
+			if have == prev.SHA256 && have != sum {
+				w.data = state.carryInto(w.data)
+			}
+		}
 		switch {
 		case exists && have == sum && ours:
 			keep = append(keep, entry)
@@ -127,20 +135,32 @@ func hash(b []byte) string {
 // isn't a regular file, such as a dir or a link, hashes as nothing a
 // sync could have written, so it is never replaced
 func hashFile(path string) (string, bool, error) {
+	data, exists, err := readRegularFile(path)
+	return fileHash(data, exists), exists, err
+}
+
+func fileHash(data []byte, exists bool) string {
+	switch {
+	case data != nil:
+		return hash(data)
+	case exists:
+		return "not a regular file"
+	default:
+		return ""
+	}
+}
+
+func readRegularFile(path string) ([]byte, bool, error) {
 	fi, err := os.Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return "", false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return "", false, err
+		return nil, false, err
 	}
 	if !fi.Mode().IsRegular() {
-		return "not a regular file", true, nil
+		return nil, true, nil
 	}
 	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", false, err
-	}
-
-	return hash(b), true, nil
+	return b, true, err
 }

@@ -108,10 +108,10 @@ class BudSignalAdapter(SignalAdapter):
         text = text_of(envelope)
         if text is None or not self._allowed(text.sender):
             return False
+        self._asked.record(text.sender, text.text)
         parsed = parse_code(text.text)
         if parsed is None:
             # his message to the agent: what it names in backticks is pre-approved for this turn
-            self._asked.record(text.sender, text.text)
             return False
         choice, code = parsed
         p = self._prompts.by_code(code)

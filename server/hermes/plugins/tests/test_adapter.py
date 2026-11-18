@@ -291,6 +291,13 @@ class AdapterTest(unittest.TestCase):
         _, p = self.ask(command="git push")
         self.assertIsNotNone(p)
 
+    def test_an_approval_reply_clears_previous_commands(self):
+        run(self.a._handle_envelope(text("please run `git push`")))
+        _, p = self.ask(command="another command")
+        run(self.a._handle_envelope(text(f"yes {p.code}")))
+        _, p = self.ask("r2", command="git push")
+        self.assertIsNotNone(p)
+
     def test_a_strangers_backticks_cover_nothing(self):
         run(self.a._handle_envelope(text("run `git push`", sender=OTHER)))
         _, p = self.ask(command="git push")

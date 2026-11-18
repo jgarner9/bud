@@ -9,6 +9,11 @@ or "no <code>", denies it. Only a sender SIGNAL_ALLOWED_USERS names may answer, 
 again that it's the person whose message raised the approval (approvals.approvers is empty).
 Typed /approve and /deny keep working as before.
 
+A command Jason puts in backticks in his own Signal message is pre-approved: when the agent then
+asks to run exactly that command, the prompt approves itself once and says so. His next message
+replaces what it covers, and text that reaches the agent any other way (tool output, web pages,
+files, mail) never counts, since only his messages from his own number are read for it.
+
 It relies on SignalAdapter's private parts (_handle_envelope, send's raw_response, the bundled
 plugin's register), so plugin.yaml pins the Hermes version it was checked against.
 """
@@ -16,15 +21,15 @@ plugin's register), so plugin.yaml pins the Hermes version it was checked agains
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from gateway.platforms.base import SendResult
 # the package re-exports register.register, so import the module by its own path
 from plugins.platforms.signal.register import register as bundled_register
 from plugins.platforms.signal.adapter import SignalAdapter
 
-from .approvals import (APPROVE, APPROVED_MARK, DENIED_MARK, GRACE_SECONDS, Prompts, footer, may_answer,
-                        parse_code, reaction_choice, reaction_of, text_of)
+from .approvals import (APPROVE, APPROVED_MARK, DENIED_MARK, GRACE_SECONDS, PreApprovals, Prompts, footer,
+                        may_answer, parse_code, reaction_choice, reaction_of, text_of)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,7 @@ class BudSignalAdapter(SignalAdapter):
     def __init__(self, config):
         super().__init__(config)
         self._prompts = Prompts(ttl=_timeout() + GRACE_SECONDS)
+        self._asked = PreApprovals(ttl=_timeout())
         if not any(may_answer(u, self.dm_allow_from) for u in self.dm_allow_from):
             logger.warning("bud-signal: SIGNAL_ALLOWED_USERS names nobody, so no Signal reaction or code "
                            "can answer an approval; set it to your own number")
@@ -49,6 +55,10 @@ class BudSignalAdapter(SignalAdapter):
             # an answer couldn't be tied to one request, so leave it to the typed /approve prompt
             return SendResult(success=False, error="no request id")
         deny_only = not any(choice != "deny" for _, choice, _ in prompt.actions)
+        if not deny_only and self._asked.take(prompt.chat_id, prompt.command):
+            done = await self._approve_asked(prompt)
+            if done is not None:
+                return done
         p = self._prompts.reserve(prompt.session_key, prompt.request_id, prompt.chat_id, deny_only)
         result = await self.send(prompt.chat_id, f"{prompt.text}\n\n{footer(p.code, deny_only)}",
                                  metadata=prompt.metadata)
@@ -62,6 +72,17 @@ class BudSignalAdapter(SignalAdapter):
         else:
             logger.warning("bud-signal: signal-cli sent no timestamp for an approval, so only its code answers it")
         return SendResult(success=True, message_id=str(ts) if ts else None, raw_response=result.raw_response)
+
+    async def _approve_asked(self, prompt) -> Optional[SendResult]:
+        """Approve once a call Jason named in his message and tell him so; None when Hermes refuses
+        it (it isn't his request, or it's gone), so the caller asks as usual."""
+        from tools.approval import resolve_gateway_approval_card
+        if not resolve_gateway_approval_card(prompt.session_key, APPROVE, prompt.request_id,
+                                             actor_id=prompt.chat_id, extra=self.config.extra or {}):
+            return None
+        result = await self.send(prompt.chat_id, f"{APPROVED_MARK} Running `{prompt.command.strip()}`, "
+                                 "approved once by your message.", metadata=prompt.metadata)
+        return SendResult(success=True, message_id=None, raw_response=result.raw_response)
 
     async def _handle_envelope(self, envelope: dict) -> None:
         try:
@@ -85,8 +106,12 @@ class BudSignalAdapter(SignalAdapter):
             await self._settle(p, choice, reaction.sender)
             return True
         text = text_of(envelope)
-        parsed = parse_code(text.text) if text is not None else None
-        if parsed is None or not self._allowed(text.sender):
+        if text is None or not self._allowed(text.sender):
+            return False
+        parsed = parse_code(text.text)
+        if parsed is None:
+            # his message to the agent: what it names in backticks is pre-approved for this turn
+            self._asked.record(text.sender, text.text)
             return False
         choice, code = parsed
         p = self._prompts.by_code(code)

@@ -144,5 +144,46 @@ class PromptsTest(unittest.TestCase):
         self.assertIs(ps.by_code("0005"), p2)
 
 
+
+class CommandsIn(unittest.TestCase):
+    def test_backticked_commands_only(self):
+        self.assertEqual(a.commands_in("please run `git push` then ` make test `"), ["git push", "make test"])
+        self.assertEqual(a.commands_in("run this:\n```sh\ngo test ./...\n```"), ["go test ./..."])
+        self.assertEqual(a.commands_in("push the branch for me"), [])
+        self.assertEqual(a.commands_in("an empty `` pair"), [])
+        self.assertEqual(a.commands_in(None), [])
+
+
+class PreApprovalsTest(unittest.TestCase):
+    def setUp(self):
+        self.now = 100.0
+        self.pa = a.PreApprovals(ttl=60, clock=lambda: self.now)
+
+    def test_it_covers_the_exact_command_once(self):
+        self.pa.record("j", "run `git push`")
+        self.assertFalse(self.pa.take("j", "git push --force"))
+        self.assertTrue(self.pa.take("j", " git push "))
+        self.assertFalse(self.pa.take("j", "git push"))
+
+    def test_only_that_chat(self):
+        self.pa.record("j", "run `git push`")
+        self.assertFalse(self.pa.take("x", "git push"))
+
+    def test_the_next_message_replaces_it(self):
+        self.pa.record("j", "run `git push`")
+        self.pa.record("j", "thanks")
+        self.assertFalse(self.pa.take("j", "git push"))
+
+    def test_it_lapses(self):
+        self.pa.record("j", "run `git push`")
+        self.now += 61
+        self.assertFalse(self.pa.take("j", "git push"))
+
+    def test_an_empty_command_never_matches(self):
+        self.pa.record("j", "run `git push`")
+        self.assertFalse(self.pa.take("j", ""))
+        self.assertFalse(self.pa.take("j", None))
+
+
 if __name__ == "__main__":
     unittest.main()

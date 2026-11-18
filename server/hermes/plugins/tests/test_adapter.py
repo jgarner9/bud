@@ -165,11 +165,11 @@ class AdapterTest(unittest.TestCase):
         self.registered = load(self.approvals)
         self.a = self.registered["adapter_factory"](Config([JASON]))
 
-    def ask(self, request_id="r1", actions=BOTH, deny_only=False):
-        self.approvals.pending[request_id] = ("sess", JASON, deny_only)
+    def ask(self, request_id="r1", actions=BOTH, deny_only=False, command="rm -rf build", requester=JASON):
+        self.approvals.pending[request_id] = ("sess", requester, deny_only)
         res = run(self.a._send_exec_approval_prompt(ExecApprovalPrompt(
             chat_id=JASON, session_key="sess", text="Hermes wants to run a command", actions=actions,
-            request_id=request_id)))
+            command=command, request_id=request_id)))
         prompt = self.a._prompts.by_timestamp(int(res.message_id)) if res.message_id else None
         return res, prompt
 
@@ -265,6 +265,49 @@ class AdapterTest(unittest.TestCase):
             chat_id=JASON, session_key="sess", text="t", actions=BOTH, request_id=None)))
         self.assertFalse(res.success)
         self.assertEqual(self.a.sent, [])
+
+
+    def test_a_command_he_named_in_backticks_runs_once_without_asking(self):
+        run(self.a._handle_envelope(text("please run `git push`")))
+        self.assertEqual(len(self.a.passed), 1)  # his message still reaches the agent
+        res, p = self.ask(command="git push")
+        self.assertTrue(res.success)
+        self.assertIsNone(p)
+        self.assertEqual(self.approvals.calls, [("sess", "once", "r1", JASON)])
+        self.assertIn("approved once by your message", self.a.sent[-1][1])
+        _, p2 = self.ask("r2", command="git push")
+        self.assertIsNotNone(p2)
+        self.assertEqual(len(self.approvals.calls), 1)
+
+    def test_anything_else_still_asks(self):
+        run(self.a._handle_envelope(text("please run `git push`")))
+        _, p = self.ask(command="git push --force")
+        self.assertIsNotNone(p)
+        self.assertEqual(self.approvals.calls, [])
+
+    def test_his_next_message_replaces_what_it_covers(self):
+        run(self.a._handle_envelope(text("please run `git push`")))
+        run(self.a._handle_envelope(text("actually wait")))
+        _, p = self.ask(command="git push")
+        self.assertIsNotNone(p)
+
+    def test_a_strangers_backticks_cover_nothing(self):
+        run(self.a._handle_envelope(text("run `git push`", sender=OTHER)))
+        _, p = self.ask(command="git push")
+        self.assertIsNotNone(p)
+        self.assertEqual(self.approvals.calls, [])
+
+    def test_a_deny_only_prompt_is_never_pre_approved(self):
+        run(self.a._handle_envelope(text("run `git push`")))
+        _, p = self.ask(actions=[("Deny", "deny", "danger")], deny_only=True, command="git push")
+        self.assertIsNotNone(p)
+        self.assertEqual(self.approvals.calls, [])
+
+    def test_when_hermes_refuses_the_pre_approval_it_asks_instead(self):
+        run(self.a._handle_envelope(text("run `git push`")))
+        _, p = self.ask(command="git push", requester=OTHER)
+        self.assertIsNotNone(p)
+        self.assertIn(f"yes {p.code}", self.a.sent[-1][1])
 
 
 if __name__ == "__main__":

@@ -30,6 +30,10 @@ _CODE = re.compile(r"^\s*(yes|no)\s+(\d{4})\s*[.!]?\s*$", re.IGNORECASE)
 # a prompt is kept this long past the approval timeout, so a late answer is told it came too late
 GRACE_SECONDS = 600
 
+# a command Jason puts in backticks: `cmd` or a ```fenced``` block (its first line may name a language)
+_FENCED = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
+_INLINE = re.compile(r"`([^`\n]+)`")
+
 
 def reaction_choice(emoji: Optional[str]) -> Optional[str]:
     """The choice a reaction's emoji stands for, or None for any other emoji."""
@@ -47,6 +51,16 @@ def parse_code(text: Optional[str]) -> Optional[tuple[str, str]]:
     if not m:
         return None
     return (APPROVE if m.group(1).lower() == "yes" else DENY), m.group(2)
+
+
+def commands_in(text: Optional[str]) -> list[str]:
+    """The commands a message names in backticks, stripped, in order. Only backticked text counts,
+    so a request in plain words never pre-approves anything."""
+    text = text or ""
+    found = [m.strip() for m in _FENCED.findall(text)]
+    rest = _FENCED.sub(" ", text)
+    found += [m.strip() for m in _INLINE.findall(rest)]
+    return [c for c in found if c]
 
 
 def footer(code: str, deny_only: bool) -> str:
@@ -191,3 +205,39 @@ class Prompts:
 
     def __len__(self) -> int:
         return len(self._by_code)
+
+
+@dataclass
+class PreApprovals:
+    """Commands Jason named in backticks in his latest Signal message, by chat (Suite D42: a
+    pre-approval comes from Jason directly and covers only the named action). Each covers one
+    call whose command is exactly that text. His next message replaces them, and they lapse after
+    ttl, so one doesn't outlive the turn it was given for."""
+
+    ttl: float
+    clock: Callable[[], float] = time.monotonic
+    _by_chat: dict[str, tuple[float, list[str]]] = field(default_factory=dict)
+
+    def record(self, chat_id: str, text: Optional[str]) -> None:
+        commands = commands_in(text)
+        if commands:
+            self._by_chat[chat_id] = (self.clock(), commands)
+        else:
+            self._by_chat.pop(chat_id, None)
+
+    def take(self, chat_id: str, command: Optional[str]) -> bool:
+        """True, using it up, when the chat's latest message named exactly this command."""
+        entry = self._by_chat.get(chat_id)
+        wanted = (command or "").strip()
+        if entry is None or not wanted:
+            return False
+        at, commands = entry
+        if self.clock() - at > self.ttl:
+            del self._by_chat[chat_id]
+            return False
+        if wanted not in commands:
+            return False
+        commands.remove(wanted)
+        if not commands:
+            del self._by_chat[chat_id]
+        return True

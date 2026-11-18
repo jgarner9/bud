@@ -1,6 +1,6 @@
 # server/
 
-Home-server units and code (Suite D48, D49, D56): Hermes, the planning OpenCode server, the router, the curator job, the Hugo KB site and the working-memory schema. Ships with the binary, never through content sync. Phase 2 of the build plan fills it.
+Home-server setup and service units for Hermes, the Bud MCP servers and Signal. The service units and setup guides live in this repo. The Bud binary includes the MCP server commands and the Hermes plugin.
 
 | Dir | What it holds |
 | --- | --- |

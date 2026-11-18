@@ -9,9 +9,9 @@ or "no <code>", denies it. Only a sender SIGNAL_ALLOWED_USERS names may answer, 
 again that it's the person whose message raised the approval (approvals.approvers is empty).
 Typed /approve and /deny keep working as before.
 
-A command Jason puts in backticks in his own Signal message is pre-approved: when the agent then
-asks to run exactly that command, the prompt approves itself once and says so. His next message
-replaces what it covers, and text that reaches the agent any other way (tool output, web pages,
+A command Jason puts in backticks in his own Signal message, or on a line that starts "run:", is
+pre-approved: when the agent then asks to run exactly that command, the prompt approves itself
+once and says so. His next message replaces what it covers, and text that reaches the agent any other way (tool output, web pages,
 files, mail) never counts, since only his messages from his own number are read for it.
 
 It relies on SignalAdapter's private parts (_handle_envelope, send's raw_response, the bundled
@@ -111,7 +111,7 @@ class BudSignalAdapter(SignalAdapter):
         self._asked.record(text.sender, text.text)
         parsed = parse_code(text.text)
         if parsed is None:
-            # his message to the agent: what it names in backticks is pre-approved for this turn
+            # his message to the agent: what it names in backticks or on a run: line is pre-approved for this turn
             return False
         choice, code = parsed
         p = self._prompts.by_code(code)

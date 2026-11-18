@@ -153,6 +153,17 @@ class CommandsIn(unittest.TestCase):
         self.assertEqual(a.commands_in("an empty `` pair"), [])
         self.assertEqual(a.commands_in(None), [])
 
+    def test_run_lines(self):
+        self.assertEqual(a.commands_in("run: touch /tmp/bud-approval-test"), ["touch /tmp/bud-approval-test"])
+        self.assertEqual(a.commands_in("ok\n  Run:  git push  \nthanks"), ["git push"])
+        self.assertEqual(a.commands_in("run: make\nrun: make test"), ["make", "make test"])
+        # only at the start of a line, and not an empty one
+        self.assertEqual(a.commands_in("please run: git push"), [])
+        self.assertEqual(a.commands_in("run:"), [])
+        self.assertEqual(a.commands_in("rerun: git push"), [])
+        # inside a fenced block it is part of that block's command
+        self.assertEqual(a.commands_in("```\nrun: rm -rf x\n```"), ["run: rm -rf x"])
+
 
 class PreApprovalsTest(unittest.TestCase):
     def setUp(self):
@@ -164,6 +175,13 @@ class PreApprovalsTest(unittest.TestCase):
         self.assertFalse(self.pa.take("j", "git push --force"))
         self.assertTrue(self.pa.take("j", " git push "))
         self.assertFalse(self.pa.take("j", "git push"))
+
+    def test_a_run_line_covers_the_exact_command_once(self):
+        self.pa.record("j", "run: touch /tmp/bud-approval-test")
+        self.assertFalse(self.pa.take("j", "touch /tmp/bud-approval-test2"))
+        self.assertFalse(self.pa.take("j", "touch  /tmp/bud-approval-test"))
+        self.assertTrue(self.pa.take("j", "touch /tmp/bud-approval-test"))
+        self.assertFalse(self.pa.take("j", "touch /tmp/bud-approval-test"))
 
     def test_only_that_chat(self):
         self.pa.record("j", "run `git push`")

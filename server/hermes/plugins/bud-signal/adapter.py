@@ -19,7 +19,8 @@ import logging
 from typing import Any
 
 from gateway.platforms.base import SendResult
-from plugins.platforms.signal import register as bundled
+# the package re-exports register.register, so import the module by its own path
+from plugins.platforms.signal.register import register as bundled_register
 from plugins.platforms.signal.adapter import SignalAdapter
 
 from .approvals import (APPROVE, APPROVED_MARK, DENIED_MARK, GRACE_SECONDS, Prompts, footer, may_answer,
@@ -143,4 +144,4 @@ class _Swap:
 
 
 def register(ctx: Any) -> None:
-    bundled.register(_Swap(ctx))
+    bundled_register(_Swap(ctx))

@@ -106,7 +106,8 @@ def load(approvals):
                               cron_deliver_env_var="SIGNAL_HOME_CHANNEL")
     sig_register.register = bundled_register
     sig_pkg = types.ModuleType("plugins.platforms.signal")
-    sig_pkg.register = sig_register
+    # as in Hermes v0.23.2, whose __init__ re-exports the function over the submodule
+    sig_pkg.register = bundled_register
     tools_approval = types.ModuleType("tools.approval")
     tools_approval.resolve_gateway_approval_card = approvals.resolve_gateway_approval_card
     tools_approval.list_gateway_approvals = approvals.list_gateway_approvals

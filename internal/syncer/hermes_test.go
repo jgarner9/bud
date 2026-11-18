@@ -431,3 +431,70 @@ func TestSignalEnvSetsOnlyTheURL(t *testing.T) {
 		})
 	}
 }
+
+func TestHermesConfigKeepsRuntimeStateAcrossSync(t *testing.T) {
+	const onboarding = "onboarding:\n  seen:\n    busy_input_prompt: true\n"
+	const choice = "  service_install_choice: decline\n"
+	for _, tc := range []struct {
+		name, gateway, gatewayWithState string
+	}{
+		{"private", "", "gateway:\n" + choice},
+		{"cloud", "gateway:\n  standalone: true\n", "gateway:\n  standalone: true\n" + choice},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			original := "# config\n" + tc.gateway + "web:\n  keyless_fallback: false\n"
+			runtimeConfig := "# config\n" + tc.gatewayWithState + "web:\n  keyless_fallback: false\n" + onboarding
+			if err := os.WriteFile(path, []byte(runtimeConfig), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			// An existing ledger hashes the exact bytes Bud originally wrote.
+			ledger := Ledger{Files: []File{{Path: path, SHA256: hash([]byte(original)), Kind: "config", Layer: "rendered"}}}
+			assertClean := func() {
+				t.Helper()
+				if drift, err := ledger.Drift(); err != nil || len(drift) != 0 {
+					t.Fatalf("Drift() = %+v, %v", drift, err)
+				}
+			}
+			assertClean()
+			plan := func(rendered string) ([]fileStep, []Change) {
+				t.Helper()
+				steps, _, skips, err := planFiles(ledger.Files, []want{{path, []byte(rendered), 0o600, "config", "rendered"}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return steps, skips
+			}
+			if steps, skips := plan(original); len(steps) != 0 || len(skips) != 0 {
+				t.Fatalf("unchanged render planned steps %v, skips %v", steps, skips)
+			}
+			updated := original + "updates:\n  check: false\n"
+			steps, skips := plan(updated)
+			if len(steps) != 1 || steps[0].Action != Write || len(skips) != 0 {
+				t.Fatalf("changed render planned steps %v, skips %v", steps, skips)
+			}
+			if err := steps[0].apply(); err != nil {
+				t.Fatal(err)
+			}
+			ledger.Files[0] = steps[0].entry
+			got := read(t, path)
+			if !strings.Contains(got, onboarding) || !strings.Contains(got, choice) {
+				t.Fatalf("Hermes state missing after rewrite:\n%s", got)
+			}
+			assertClean()
+			if steps, skips := plan(updated); len(steps) != 0 || len(skips) != 0 {
+				t.Fatalf("repeat sync planned steps %v, skips %v", steps, skips)
+			}
+			edited := strings.Replace(got, "keyless_fallback: false", "keyless_fallback: true", 1)
+			if err := os.WriteFile(path, []byte(edited), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if drift, err := ledger.Drift(); err != nil || len(drift) != 1 || drift[0].Path != path {
+				t.Fatalf("Drift() with manual edit = %+v, %v", drift, err)
+			}
+			if steps, skips := plan(updated); len(steps) != 0 || len(skips) != 1 {
+				t.Fatalf("manually edited render planned steps %v, skips %v", steps, skips)
+			}
+		})
+	}
+}

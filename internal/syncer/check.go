@@ -63,19 +63,33 @@ type Drift struct {
 func (l *Ledger) Drift() ([]Drift, error) {
 	var out []Drift
 	for _, f := range l.Files {
-		sum, exists, err := hashFile(f.Path)
+		data, exists, err := readRegularFile(f.Path)
 		if err != nil {
 			return nil, err
 		}
 		switch {
 		case !exists:
 			out = append(out, Drift{Path: f.Path, Missing: true})
-		case sum != f.SHA256:
+		case !matchesLedger(f, data):
 			out = append(out, Drift{Path: f.Path})
 		}
 	}
 
 	return out, nil
+}
+
+func matchesLedger(f File, data []byte) bool {
+	if data == nil {
+		return false
+	}
+	if hash(data) == f.SHA256 {
+		return true
+	}
+	if isHermesConfig(f) {
+		managed, _ := splitHermesConfig(data)
+		return hash(managed) == f.SHA256
+	}
+	return false
 }
 
 // CurrentLink is what the content/current link points at, or empty when

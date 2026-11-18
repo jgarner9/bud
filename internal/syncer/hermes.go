@@ -351,10 +351,15 @@ func signalEnv(path, url string) (data []byte, perm fs.FileMode, changed bool, e
 	}
 	out := strings.Join(lines, "")
 	if !found {
-		if out != "" && !strings.HasSuffix(out, "\n") {
-			out += "\n"
+		// a file written with CRLF keeps it
+		eol := "\n"
+		if strings.Contains(out, "\r\n") {
+			eol = "\r\n"
 		}
-		out += want + "\n"
+		if out != "" && !strings.HasSuffix(out, "\n") {
+			out += eol
+		}
+		out += want + eol
 		changed = true
 	}
 

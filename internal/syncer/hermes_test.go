@@ -402,6 +402,7 @@ func TestSignalEnvSetsOnlyTheURL(t *testing.T) {
 		{"missing", "", "SIGNAL_HTTP_URL=" + url + "\n", true},
 		{"appended", "SIGNAL_ACCOUNT=+1\n# note\nOTHER=x", "SIGNAL_ACCOUNT=+1\n# note\nOTHER=x\nSIGNAL_HTTP_URL=" + url + "\n", true},
 		{"replaced", "A=1\nexport SIGNAL_HTTP_URL=http://old:1\r\nB=2\n", "A=1\nexport SIGNAL_HTTP_URL=" + url + "\r\nB=2\n", true},
+		{"appended with CRLF", "A=1\r\nB=2", "A=1\r\nB=2\r\nSIGNAL_HTTP_URL=" + url + "\r\n", true},
 		{"behind a BOM", "\ufeffSIGNAL_HTTP_URL=x\n", "\ufeffSIGNAL_HTTP_URL=" + url + "\n", true},
 		{"already set", "SIGNAL_HTTP_URL=\"" + url + "\"\nA=1\n", "SIGNAL_HTTP_URL=\"" + url + "\"\nA=1\n", false},
 		{"a longer name", "SIGNAL_HTTP_URL_OLD=x\n", "SIGNAL_HTTP_URL_OLD=x\nSIGNAL_HTTP_URL=" + url + "\n", true},

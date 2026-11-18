@@ -9,6 +9,7 @@ wires it into Hermes's Signal adapter. Standard library only, so its tests run a
 
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import time
@@ -35,6 +36,15 @@ GRACE_SECONDS = 600
 _FENCED = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
 _INLINE = re.compile(r"`([^`\n]+)`")
 _RUN = re.compile(r"^[ \t]*run:(.*)$", re.IGNORECASE | re.MULTILINE)
+_RUN_PREFIX = re.compile(r"^run:", re.IGNORECASE)
+
+# Hermes v0.23.2 shows an approval a plugin's pre_tool_call hook asked for with this label in place of the
+# command (tools/approval.py request_tool_approval), and the hook's reason as the description. bud's gate
+# (internal/adapter/hermes/gate.go) starts a terminal call's reason with COMMAND_PREFIX and the whole command
+# as a JSON string, so the command is read back from there; keep the two in step.
+TERMINAL_RULE_LABEL = "<terminal> (plugin approval rule)"
+COMMAND_PREFIX = "bud: run "
+_RULE_LABEL = re.compile(r"^<[^<>]*> \(plugin approval rule\)$")
 
 
 def reaction_choice(emoji: Optional[str]) -> Optional[str]:
@@ -58,13 +68,38 @@ def parse_code(text: Optional[str]) -> Optional[tuple[str, str]]:
 def commands_in(text: Optional[str]) -> list[str]:
     """The commands a message names in backticks or on a "run:" line, stripped: fenced blocks,
     then run lines, then inline backticks. Only those count, so a request in plain words never
-    pre-approves anything. A "run:" line inside a fenced block is part of that block's command."""
+    pre-approves anything. A "run:" line inside a fenced block is part of that block's command, and a leading
+    "run:" inside inline backticks is dropped."""
     text = text or ""
     found = [m.strip() for m in _FENCED.findall(text)]
     rest = _FENCED.sub(" ", text)
     found += [m.strip() for m in _RUN.findall(rest)]
-    found += [m.strip() for m in _INLINE.findall(rest)]
+    # `run: cmd` in backticks is the run form typed inside them, so it names cmd
+    found += [_RUN_PREFIX.sub("", m.strip(), count=1).strip() for m in _INLINE.findall(rest)]
     return [c for c in found if c]
+
+
+def command_of(command: Optional[str], description: Optional[str]) -> Optional[str]:
+    """The command an approval prompt asks to run, or None when it names none that can be matched.
+
+    Hermes's own prompt for a command it deems dangerous carries the command itself. One raised by bud's gate
+    carries TERMINAL_RULE_LABEL instead, and the command is the JSON string after COMMAND_PREFIX at the very
+    start of the description, which only the gate writes. Any other plugin's rule, a description in another
+    shape, or one Hermes's redaction changed, names nothing, so it always asks."""
+    command = command or ""
+    if command != TERMINAL_RULE_LABEL:
+        return None if _RULE_LABEL.match(command) else command
+    description = description or ""
+    start = len(COMMAND_PREFIX)
+    if not description.startswith(COMMAND_PREFIX) or description[start:start + 1] != '"':
+        return None
+    try:
+        value, end = json.JSONDecoder().raw_decode(description, start)
+    except ValueError:
+        return None
+    if not isinstance(value, str) or description[end:end + 2] != "? ":
+        return None
+    return value
 
 
 def footer(code: str, deny_only: bool) -> str:

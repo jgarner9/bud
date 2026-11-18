@@ -11,7 +11,8 @@ Typed /approve and /deny keep working as before.
 
 A command Jason puts in backticks in his own Signal message, or on a line that starts "run:", is
 pre-approved: when the agent then asks to run exactly that command, the prompt approves itself
-once and says so. His next message replaces what it covers, and text that reaches the agent any other way (tool output, web pages,
+once and says so. bud's gate raises most of these, and Hermes shows them with a label for the
+command, so the command is read from the gate's reason (approvals.command_of). His next message replaces what it covers, and text that reaches the agent any other way (tool output, web pages,
 files, mail) never counts, since only his messages from his own number are read for it.
 
 It relies on SignalAdapter's private parts (_handle_envelope, send's raw_response, the bundled
@@ -28,8 +29,8 @@ from gateway.platforms.base import SendResult
 from plugins.platforms.signal.register import register as bundled_register
 from plugins.platforms.signal.adapter import SignalAdapter
 
-from .approvals import (APPROVE, APPROVED_MARK, DENIED_MARK, GRACE_SECONDS, PreApprovals, Prompts, footer,
-                        may_answer, parse_code, reaction_choice, reaction_of, text_of)
+from .approvals import (APPROVE, APPROVED_MARK, DENIED_MARK, GRACE_SECONDS, PreApprovals, Prompts, command_of,
+                        footer, may_answer, parse_code, reaction_choice, reaction_of, text_of)
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,9 @@ class BudSignalAdapter(SignalAdapter):
             # an answer couldn't be tied to one request, so leave it to the typed /approve prompt
             return SendResult(success=False, error="no request id")
         deny_only = not any(choice != "deny" for _, choice, _ in prompt.actions)
-        if not deny_only and self._asked.take(prompt.chat_id, prompt.command):
-            done = await self._approve_asked(prompt)
+        command = command_of(prompt.command, prompt.description)
+        if not deny_only and command is not None and self._asked.take(prompt.chat_id, command):
+            done = await self._approve_asked(prompt, command)
             if done is not None:
                 return done
         p = self._prompts.reserve(prompt.session_key, prompt.request_id, prompt.chat_id, deny_only)
@@ -73,14 +75,14 @@ class BudSignalAdapter(SignalAdapter):
             logger.warning("bud-signal: signal-cli sent no timestamp for an approval, so only its code answers it")
         return SendResult(success=True, message_id=str(ts) if ts else None, raw_response=result.raw_response)
 
-    async def _approve_asked(self, prompt) -> Optional[SendResult]:
+    async def _approve_asked(self, prompt, command: str) -> Optional[SendResult]:
         """Approve once a call Jason named in his message and tell him so; None when Hermes refuses
         it (it isn't his request, or it's gone), so the caller asks as usual."""
         from tools.approval import resolve_gateway_approval_card
         if not resolve_gateway_approval_card(prompt.session_key, APPROVE, prompt.request_id,
                                              actor_id=prompt.chat_id, extra=self.config.extra or {}):
             return None
-        result = await self.send(prompt.chat_id, f"{APPROVED_MARK} Running `{prompt.command.strip()}`, "
+        result = await self.send(prompt.chat_id, f"{APPROVED_MARK} Running `{command.strip()}`, "
                                  "approved once by your message.", metadata=prompt.metadata)
         return SendResult(success=True, message_id=None, raw_response=result.raw_response)
 

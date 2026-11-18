@@ -164,6 +164,51 @@ class CommandsIn(unittest.TestCase):
         # inside a fenced block it is part of that block's command
         self.assertEqual(a.commands_in("```\nrun: rm -rf x\n```"), ["run: rm -rf x"])
 
+    def test_a_run_line_typed_inside_backticks(self):
+        self.assertEqual(a.commands_in("`run: touch x`"), ["touch x"])
+        self.assertEqual(a.commands_in("please ` RUN:  git push ` now"), ["git push"])
+        self.assertEqual(a.commands_in("`run:`"), [])
+        # only a leading one
+        self.assertEqual(a.commands_in("`echo run: x`"), ["echo run: x"])
+
+
+# reasons as bud's gate (internal/adapter/hermes/gate.go askCommand) writes them, after Hermes decodes the hook's JSON
+GATE_REASON = 'bud: run "touch /tmp/bud-approval-test"? It needs your approval (Suite D10).'
+GATE_TRICKY = 'bud: run "echo \\"\\"? It needs\\" && git push"? It needs your approval (Suite D10).'
+
+
+class CommandOf(unittest.TestCase):
+    def test_a_gate_prompt_names_the_command_in_its_reason(self):
+        self.assertEqual(a.command_of(a.TERMINAL_RULE_LABEL, GATE_REASON), "touch /tmp/bud-approval-test")
+        self.assertEqual(a.command_of(a.TERMINAL_RULE_LABEL,
+                                      'bud: run "go test ./... && git push"? Its part "git push" needs your approval '
+                                      '(Suite D10).'), "go test ./... && git push")
+
+    def test_quotes_in_the_command_cant_end_it_early(self):
+        self.assertEqual(a.command_of(a.TERMINAL_RULE_LABEL, GATE_TRICKY), 'echo ""? It needs" && git push')
+
+    def test_hermess_own_prompt_carries_the_command(self):
+        self.assertEqual(a.command_of("rm -rf build", "recursive delete"), "rm -rf build")
+
+    def test_anything_else_names_nothing(self):
+        for command, description in [
+            (a.TERMINAL_RULE_LABEL, None),
+            (a.TERMINAL_RULE_LABEL, ""),
+            (a.TERMINAL_RULE_LABEL, "touch /tmp/bud-approval-test"),
+            # the shape must start the description, so text quoted later in it counts for nothing
+            (a.TERMINAL_RULE_LABEL, "Plugin requires approval: " + GATE_REASON),
+            (a.TERMINAL_RULE_LABEL, " " + GATE_REASON),
+            (a.TERMINAL_RULE_LABEL, 'bud: run touch x? It needs your approval (Suite D10).'),
+            (a.TERMINAL_RULE_LABEL, 'bud: run "touch x'),
+            (a.TERMINAL_RULE_LABEL, 'bud: run "touch x"'),
+            (a.TERMINAL_RULE_LABEL, 'bud: run "touch x". It needs your approval.'),
+            (a.TERMINAL_RULE_LABEL, 'bud: run 7? It needs your approval.'),
+            # another plugin rule, another tool's, never names a command
+            ("<mcp__linear__save_issue> (plugin approval rule)", GATE_REASON),
+        ]:
+            with self.subTest(command=command, description=description):
+                self.assertIsNone(a.command_of(command, description))
+
 
 class PreApprovalsTest(unittest.TestCase):
     def setUp(self):

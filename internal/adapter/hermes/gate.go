@@ -1,6 +1,7 @@
 package hermes
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -156,6 +157,26 @@ func (t *Tiers) shell(cmd string) (string, bool) {
 	return effect, found
 }
 
+// CommandPrefix starts the reason of every terminal call the gate sends for
+// approval, and a JSON string holding the whole command line follows it.
+// Hermes shows a plugin's approval with a label in place of the command, so
+// the reason is the only place Jason sees what will run, and bud-signal reads
+// the command back from here to match a pre-approval (Suite D42). JSON makes
+// the command's end unambiguous whatever it holds; keep this in step with
+// COMMAND_PREFIX in server/hermes/plugins/bud-signal/approvals.py
+const CommandPrefix = "bud: run "
+
+// askCommand is the approval reason for a terminal command line: the whole
+// line, quoted, then why it asks
+func askCommand(line, why string) Verdict {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false) // keep && and > readable on the card
+	_ = enc.Encode(line)     // a string always encodes
+
+	return Verdict{Ask, CommandPrefix + strings.TrimSuffix(b.String(), "\n") + "? " + why}
+}
+
 // command tiers a shell command line. Each simple command in it is tiered
 // on its own and the strictest wins; anything the split can't see into
 // (substitutions, redirections, subshells) needs approval at least
@@ -173,10 +194,16 @@ func (t *Tiers) command(line string) Verdict {
 		}
 	}
 	if opaque && rank(worst) < rank(Ask) {
-		return Verdict{Ask, "bud: the command uses substitution, redirection or a subshell, which bud can't tier, so it needs your approval"}
+		return askCommand(line, "It uses substitution, redirection or a subshell, which bud can't tier, so it needs your approval.")
 	}
-	if worst == Allow {
+	switch worst {
+	case Allow:
 		return Verdict{Allow, ""}
+	case Ask:
+		if len(parts) == 1 {
+			return askCommand(line, "It needs your approval (Suite D10).")
+		}
+		return askCommand(line, fmt.Sprintf("Its part %q needs your approval (Suite D10).", why))
 	}
 
 	return verdict(worst, fmt.Sprintf("the command %q", why))

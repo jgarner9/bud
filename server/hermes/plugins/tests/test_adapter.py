@@ -304,6 +304,26 @@ class AdapterTest(unittest.TestCase):
         self.assertIsNotNone(p)
         self.assertEqual(self.approvals.calls, [])
 
+    def test_a_run_line_runs_once_without_asking(self):
+        run(self.a._handle_envelope(text("run: touch /tmp/bud-approval-test")))
+        _, p = self.ask(command="touch /tmp/bud-approval-test")
+        self.assertIsNone(p)
+        self.assertEqual(self.approvals.calls, [("sess", "once", "r1", JASON)])
+        _, p2 = self.ask("r2", command="touch /tmp/bud-approval-test")
+        self.assertIsNotNone(p2)
+
+    def test_a_variation_on_a_run_line_still_asks(self):
+        run(self.a._handle_envelope(text("run: touch /tmp/bud-approval-test")))
+        _, p = self.ask(command="touch /tmp/bud-approval-test && rm -rf ~")
+        self.assertIsNotNone(p)
+        self.assertEqual(self.approvals.calls, [])
+
+    def test_a_strangers_run_line_covers_nothing(self):
+        run(self.a._handle_envelope(text("run: git push", sender=OTHER)))
+        _, p = self.ask(command="git push")
+        self.assertIsNotNone(p)
+        self.assertEqual(self.approvals.calls, [])
+
     def test_a_deny_only_prompt_is_never_pre_approved(self):
         run(self.a._handle_envelope(text("run `git push`")))
         _, p = self.ask(actions=[("Deny", "deny", "danger")], deny_only=True, command="git push")

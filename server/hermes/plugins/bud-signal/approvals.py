@@ -30,9 +30,11 @@ _CODE = re.compile(r"^\s*(yes|no)\s+(\d{4})\s*[.!]?\s*$", re.IGNORECASE)
 # a prompt is kept this long past the approval timeout, so a late answer is told it came too late
 GRACE_SECONDS = 600
 
-# a command Jason puts in backticks: `cmd` or a ```fenced``` block (its first line may name a language)
+# a command Jason puts in backticks: `cmd` or a ```fenced``` block (its first line may name a language),
+# or a line of its own starting "run:", where the rest of the line is the command (no backticks to type)
 _FENCED = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
 _INLINE = re.compile(r"`([^`\n]+)`")
+_RUN = re.compile(r"^[ \t]*run:(.*)$", re.IGNORECASE | re.MULTILINE)
 
 
 def reaction_choice(emoji: Optional[str]) -> Optional[str]:
@@ -54,11 +56,13 @@ def parse_code(text: Optional[str]) -> Optional[tuple[str, str]]:
 
 
 def commands_in(text: Optional[str]) -> list[str]:
-    """The commands a message names in backticks, stripped, in order. Only backticked text counts,
-    so a request in plain words never pre-approves anything."""
+    """The commands a message names in backticks or on a "run:" line, stripped: fenced blocks,
+    then run lines, then inline backticks. Only those count, so a request in plain words never
+    pre-approves anything. A "run:" line inside a fenced block is part of that block's command."""
     text = text or ""
     found = [m.strip() for m in _FENCED.findall(text)]
     rest = _FENCED.sub(" ", text)
+    found += [m.strip() for m in _RUN.findall(rest)]
     found += [m.strip() for m in _INLINE.findall(rest)]
     return [c for c in found if c]
 
@@ -209,7 +213,7 @@ class Prompts:
 
 @dataclass
 class PreApprovals:
-    """Commands Jason named in backticks in his latest Signal message, by chat (Suite D42: a
+    """Commands Jason named in backticks or on a "run:" line in his latest Signal message, by chat (Suite D42: a
     pre-approval comes from Jason directly and covers only the named action). Each covers one
     call whose command is exactly that text. His next message replaces them, and they lapse after
     ttl, so one doesn't outlive the turn it was given for."""

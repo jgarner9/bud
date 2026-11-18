@@ -12,7 +12,7 @@ This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module
 | `ide/` | The Neovim IDE: `nvim/`, `languages/`, `layouts/`, `tools/`, `migrations/`, `bundles/`, `plugins/` and its Lua tests, all embedded in the binary |
 | `content/` | What syncs to every device running OpenCode: `AGENTS.md`, skills, agents, commands, plugins and `env/` (the model registry and config fragments) |
 | `profiles/` | Example device profiles only; real ones live in the private overlay |
-| `server/` | Home-server units (Hermes, the planning OpenCode, router, curator, KB site); empty until phase 2 |
+| `server/` | Home-server service units for the MCP gateway, calendar, ops and Signal, plus Hermes setup and its Bud plugin |
 | `app/` | The Tauri chat app, shipped through platform channels, never sync; empty until phase 7 |
 | `docs/`, `scripts/` | User and internals docs (also the docs site), and build and test scripts |
 

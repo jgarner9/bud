@@ -280,6 +280,21 @@ func TestAServerSyncRendersBothHermesProfilesAndRefusesACloudKey(t *testing.T) {
 	if !strings.Contains(cloud, "opencode.ai") || !strings.Contains(cloud, "standalone: true") {
 		t.Errorf("the cloud profile should list Go and stay standalone:\n%s", cloud)
 	}
+	// Hermes reads signal-cli's URL from the private .env, which keeps
+	// Jason's own lines; the cloud profile's .env isn't touched
+	if got := read(t, o.Paths.HermesEnv()); got != "OP_SERVICE_ACCOUNT_TOKEN=x\nSIGNAL_HTTP_URL=http://127.0.0.1:8793\n" {
+		t.Errorf("the private .env: got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(o.Paths.HermesCloud(), ".env")); !os.IsNotExist(err) {
+		t.Errorf("the cloud profile's .env should be left alone; stat: %v", err)
+	}
+	// set once, it's left alone
+	rep := run(t, o)
+	for _, c := range rep.Changes {
+		if c.Path == o.Paths.HermesEnv() {
+			t.Errorf("a second sync changes the .env again: %+v", c)
+		}
+	}
 	// Signal and bud-signal are the private profile's alone
 	if strings.Contains(cloud, "platforms:") || strings.Contains(cloud, "bud-signal") || !strings.Contains(private, "bud-signal") {
 		t.Errorf("Signal belongs to the private profile only:\n%s", cloud)
@@ -375,5 +390,43 @@ func TestAHeldDirsTrackedFilesAreNeitherPlannedNorDropped(t *testing.T) {
 	plan, kept := holdBack(files, []string{"/h/plugins/bud-signal"})
 	if len(kept) != 1 || kept[0].Path != "/h/plugins/bud-signal/a.py" || len(plan) != 2 {
 		t.Errorf("plan %v, kept %v", plan, kept)
+	}
+}
+
+func TestSignalEnvSetsOnlyTheURL(t *testing.T) {
+	const url = "http://127.0.0.1:8793"
+	for _, tc := range []struct {
+		name, have, want string
+		changed          bool
+	}{
+		{"missing", "", "SIGNAL_HTTP_URL=" + url + "\n", true},
+		{"appended", "SIGNAL_ACCOUNT=+1\n# note\nOTHER=x", "SIGNAL_ACCOUNT=+1\n# note\nOTHER=x\nSIGNAL_HTTP_URL=" + url + "\n", true},
+		{"replaced", "A=1\nexport SIGNAL_HTTP_URL=http://old:1\r\nB=2\n", "A=1\nexport SIGNAL_HTTP_URL=" + url + "\r\nB=2\n", true},
+		{"behind a BOM", "\ufeffSIGNAL_HTTP_URL=x\n", "\ufeffSIGNAL_HTTP_URL=" + url + "\n", true},
+		{"already set", "SIGNAL_HTTP_URL=\"" + url + "\"\nA=1\n", "SIGNAL_HTTP_URL=\"" + url + "\"\nA=1\n", false},
+		{"a longer name", "SIGNAL_HTTP_URL_OLD=x\n", "SIGNAL_HTTP_URL_OLD=x\nSIGNAL_HTTP_URL=" + url + "\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), ".env")
+			if tc.have != "" {
+				if err := os.WriteFile(path, []byte(tc.have), 0o640); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, perm, changed, err := signalEnv(path, url)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.want || changed != tc.changed {
+				t.Errorf("got %q (changed %v), want %q (changed %v)", got, changed, tc.want, tc.changed)
+			}
+			wantPerm := os.FileMode(0o640)
+			if tc.have == "" {
+				wantPerm = 0o600
+			}
+			if perm != wantPerm {
+				t.Errorf("perm %o, want %o", perm, wantPerm)
+			}
+		})
 	}
 }

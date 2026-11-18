@@ -298,3 +298,65 @@ func emptyTree(dir string) bool {
 
 	return empty
 }
+
+// signalEnvName is the variable Hermes's Signal adapter reads signal-cli's
+// URL from. Hermes turns the platform on only when the URL and the bot
+// account are both in its environment, so the config's extra.http_url alone
+// leaves Signal off
+const signalEnvName = "SIGNAL_HTTP_URL"
+
+// signalEnv is the private Hermes .env at path with SIGNAL_HTTP_URL set to
+// url, and whether that changes the file. Only that variable's lines are
+// touched: every other line, the numbers and tokens Jason keeps there among
+// them, stays as it is. A missing .env becomes one holding just that line
+func signalEnv(path, url string) (data []byte, perm fs.FileMode, changed bool, err error) {
+	perm = 0o600
+	b, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, 0, false, fmt.Errorf("read Hermes's .env to set %s: %w", signalEnvName, err)
+	}
+	if err == nil {
+		fi, err := os.Stat(path)
+		if err != nil {
+			return nil, 0, false, fmt.Errorf("read Hermes's .env to set %s: %w", signalEnvName, err)
+		}
+		perm = fi.Mode().Perm()
+	}
+	text := string(b)
+	want := signalEnvName + "=" + url
+	lines := strings.SplitAfter(text, "\n")
+	found := false
+	for i, line := range lines {
+		body := strings.TrimRight(line, "\r\n")
+		bare := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(body), "\ufeff"))
+		export := strings.HasPrefix(bare, "export ")
+		bare = strings.TrimSpace(strings.TrimPrefix(bare, "export "))
+		name, value, ok := strings.Cut(bare, "=")
+		if !ok || strings.TrimSpace(name) != signalEnvName {
+			continue
+		}
+		found = true
+		if strings.Trim(strings.TrimSpace(value), `"'`) == url {
+			continue
+		}
+		next := want
+		if export {
+			next = "export " + want
+		}
+		if i == 0 && strings.HasPrefix(body, "\ufeff") {
+			next = "\ufeff" + next
+		}
+		lines[i] = next + line[len(body):]
+		changed = true
+	}
+	out := strings.Join(lines, "")
+	if !found {
+		if out != "" && !strings.HasSuffix(out, "\n") {
+			out += "\n"
+		}
+		out += want + "\n"
+		changed = true
+	}
+
+	return []byte(out), perm, changed, nil
+}

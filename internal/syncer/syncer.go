@@ -20,6 +20,7 @@ import (
 	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/adapter/hermes"
 	"jgarner.dev/bud/internal/adapter/opencode"
+	"jgarner.dev/bud/internal/atomicfile"
 	"jgarner.dev/bud/internal/content"
 	"jgarner.dev/bud/internal/overlay"
 	"jgarner.dev/bud/internal/paths"
@@ -281,6 +282,9 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	// write): their tracked files are neither written nor deleted, so a link
 	// never takes a delete outside Hermes's dir
 	var held []string
+	// the private Hermes .env, when SIGNAL_HTTP_URL has to be set in it;
+	// it's Jason's file, so it isn't in the ledger and only that line changes
+	var hermesEnv *want
 	var wants []want
 	// skills and instructions resolve into the content versions and the overlay
 	in := opencode.Input{Registry: reg, Reachable: []string{p.Content(), p.Overlay()}}
@@ -388,6 +392,15 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 		if err := privateEnv(p.HermesEnv(), out.CloudKeys); err != nil {
 			return err
 		}
+		// Hermes reads signal-cli's URL from its .env, not from the config
+		// (D30), so the private profile's .env gets SIGNAL_HTTP_URL
+		envData, envPerm, envChanged, err := signalEnv(p.HermesEnv(), hermes.SignalURL)
+		if err != nil {
+			return err
+		}
+		if envChanged {
+			hermesEnv = &want{p.HermesEnv(), envData, envPerm, "hermes-env", "rendered"}
+		}
 		// the cloud profile has no bot, so no Signal and no plugin
 		hin.Cloud, hin.Plugins = true, nil
 		cloud, err := hermes.Render(hin)
@@ -428,6 +441,9 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 	}
 	for _, s := range steps {
 		rep.Changes = append(rep.Changes, s.Change)
+	}
+	if hermesEnv != nil {
+		rep.Changes = append(rep.Changes, Change{Write, hermesEnv.path, "sets " + signalEnvName})
 	}
 	if o.DryRun {
 		if o.verifyLinks && readLink(p.Active()) == activeTarget {
@@ -475,6 +491,11 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 		}
 		if s.Action == Write {
 			next.Files = append(next.Files, s.entry)
+		}
+	}
+	if hermesEnv != nil {
+		if err := atomicfile.WriteFile(hermesEnv.path, hermesEnv.data, hermesEnv.perm); err != nil {
+			errs = append(errs, fmt.Errorf("set %s in %s: %w", signalEnvName, hermesEnv.path, err))
 		}
 	}
 	errs = append(errs, next.save(p.SyncLedger()))

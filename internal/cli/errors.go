@@ -26,13 +26,20 @@ func usageErrorf(format string, a ...any) error {
 	return &UsageError{Err: fmt.Errorf(format, a...)}
 }
 
+type commandExitError struct{ code int }
+
+func (e *commandExitError) Error() string { return "command failed" }
+
 // ExitCode reports err on stderr, once and prefixed with "bud:", and returns the exit code
 func ExitCode(err error, stderr io.Writer) int {
 	var usage *UsageError
+	var command *commandExitError
 	switch {
 	case err == nil, errors.Is(err, flag.ErrHelp):
 		// -h/--help already printed usage, so it's a clean exit, not a failure
 		return 0
+	case errors.As(err, &command):
+		return command.code
 	case errors.As(err, &usage):
 		if !usage.Printed {
 			fmt.Fprintf(stderr, "%s %v\n", paint(stderr, ansiRed, "bud:"), usage.Err)

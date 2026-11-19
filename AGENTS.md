@@ -4,7 +4,7 @@ How to work on this repository. OpenCode reads only this file (Bud Suite D17); `
 
 ## What this is
 
-This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module building one `bud` binary, plus the IDE, the app, the home-server units and the content that syncs to devices. The Suite's architecture, its decision log (cited as "Suite Dn" here, to keep it apart from `BASE.md`'s own D-numbers) and the build plan live outside this repo for now; `docs/suite/` will hold them once they are carried over.
+This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module building one `bud` binary, plus the IDE, home-server units and content that syncs to devices. The [current Suite architecture](docs/internals/suite.md) records decisions that guide work here. The full Suite decision log and build plan live separately. "Suite Dn" refers to that log. `BASE.md` has its own decision numbers for the IDE and CLI.
 
 | Path | What it holds |
 | --- | --- |
@@ -13,7 +13,7 @@ This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module
 | `content/` | What syncs to every device running OpenCode: `AGENTS.md`, skills, agents, commands, plugins and `env/` (the model registry and config fragments) |
 | `profiles/` | Example device profiles only; real ones live in the private overlay |
 | `server/` | Home-server service units for the MCP gateway, calendar, ops and Signal, plus Hermes setup and its Bud plugin |
-| `app/` | The Tauri chat app, shipped through platform channels, never sync; empty until phase 7 |
+| `app/` | Notes for Bud's planned Herdr desktop and mobile integration |
 | `docs/`, `scripts/` | User and internals docs (also the docs site), and build and test scripts |
 
 Nothing personal goes in this public repo: no hostnames, tailnet names, home paths, real `op://` paths or personal skills. Those live in the private overlay (Suite D21, D59).

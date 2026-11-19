@@ -34,9 +34,9 @@ class ServiceTest(unittest.TestCase):
 
             def serve():
                 server = MemoryServer(path, str(Path(tmp) / "memory.db"), {
-                    AGENT: {"actions": ["stage", "search", "vector_put", "vector_search", "reference"], "tiers": ["P0"]},
+                    AGENT: {"actions": ["stage", "search", "vector_put", "vector_search", "retrieve", "reference"], "tiers": ["P0"]},
                     REVIEWER: {"actions": ["approve", "search"], "tiers": ["P0"]},
-                    CLOUD: {"actions": ["search", "export", "reference"], "tiers": ["P1", "P2"]},
+                    CLOUD: {"actions": ["search", "retrieve", "export", "reference"], "tiers": ["P1", "P2"]},
                     BACKUP: {"actions": ["backup", "restore"], "tiers": ["P0", "P1", "P2"]},
                 })
                 if os.environ.get("VEC_EXTENSION"):
@@ -91,6 +91,11 @@ class ServiceTest(unittest.TestCase):
                 status, hits = request(AGENT, "/vector_search", {"model": "synthetic", "values": [0.1, 0.2]})
                 self.assertEqual(200, status)
                 self.assertEqual(data["id"], hits["records"][0]["id"])
+                req = {"query": "orchard", "model": "synthetic", "values": [0.1, 0.2]}
+                self.assertEqual(data["id"], request(AGENT, "/retrieve", req)[1]["records"][0]["id"])
+                self.assertEqual([], request(CLOUD, "/retrieve", req)[1]["records"])
+                self.assertEqual(400, request(CLOUD, "/retrieve", {**req, "privacy": ["P0"]})[0])
+
             self.assertEqual(404, request(CLOUD, "/reference", {"id": data["id"], "source": "test", "reference_key": "1"})[0])
             self.assertEqual([], request(CLOUD, "/export", {})[1]["records"])
             self.assertEqual(403, request(CLOUD, "/backup", {})[0])

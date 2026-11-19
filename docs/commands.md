@@ -48,6 +48,10 @@ bud [global flags] <command> [command flags] [args]
 | `bud content channel --edge V [--stable V] [--out dir]` | Writes `channel.json` naming each channel's content version, for the content release workflow to sign and publish; stable can't be ahead of edge. You don't normally run it. |
 | `bud content offered [--channel edge] <channel.json>` | Prints the content version a published `channel.json` offers on one channel, refusing it unless `<file>.sig` verifies. The workflow reads it before promoting. You don't normally run it. |
 
+## Running commands
+
+`bud run [--timeout D] [--tail N] [--context N] [--max-failures N] [--json] [--max-chars N] -- <command> [args...]` runs a command and saves its full combined output in a private log under Bud's state directory. It prints a compact summary with failure lines and a bounded tail. A failing command returns its exit status; a timeout returns 124. Use `--sh` for an explicit shell command. Read a saved log with `bud run --log <path> --lines 1:40` or `--tail N`.
+
 ## Finding code
 
 `bud locate [--kind any|def|use] [--lang <language>] [--max <hits>] [--json] [--max-chars <chars>] [--] <query> [path ...]` finds a symbol or literal phrase in local files. Paths default to the working directory. Put `--` before a query that starts with a dash.

@@ -106,7 +106,7 @@ func TestTheReplyIsWhatHermesReads(t *testing.T) {
 			t.Errorf("%+v: got %s, want %s", v, got, want)
 		}
 	}
-	// no rule_key, so an approval never becomes a standing one
+	// The reply omits rule_key; Hermes may still substitute a broader key.
 	if strings.Contains(string(Verdict{Ask, "x"}.Reply()), "rule_key") {
 		t.Error("the reply carries a rule_key")
 	}

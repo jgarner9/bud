@@ -4,6 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=%h/.config/bud-server/op-service-account.env
 ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/contacts-mcp.env -- %h/.local/bin/bud contacts-mcp --listen 127.0.0.1:8794
 Restart=on-failure

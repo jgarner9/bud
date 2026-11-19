@@ -51,11 +51,16 @@ existing executable and arguments exactly, prefixing them with `op run`:
 [Service]
 EnvironmentFile=%h/.config/bud-server/op-service-account.env
 ExecStart=
-ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/hermes-contacts.env -- /absolute/path/to/original-gateway <original-arguments>
+ExecStart=/absolute/path/to/op run --env-file=%h/.config/bud-server/hermes-contacts.env -- /usr/bin/env -u OP_SERVICE_ACCOUNT_TOKEN /absolute/path/to/original-gateway <original-arguments>
 ```
 
-Replace the final executable and arguments with the existing unit's values;
-the example is not a working command. The mode-0600 `hermes-contacts.env`
+Replace the final executable and arguments with the existing unit's values,
+and set the `op` path to its installed location; user services may not inherit
+the interactive shell's PATH. The example is not a working command. The
+`env -u` removes the service-account token from the gateway child while
+preserving the contact token resolved by `op run`. The `op` launcher itself
+still holds the service-account token, so OS process permissions and account
+isolation remain necessary. The mode-0600 `hermes-contacts.env`
 contains only `BUD_CONTACTS_MCP_TOKEN` as a 1Password reference to the same
 token used by the worker. It must not contain CardDAV credentials. The
 service-account environment file supplies `OP_SERVICE_ACCOUNT_TOKEN` to

@@ -64,6 +64,7 @@ The tool map (Suite D72-D79, D81, D85-D87, JGA-358) reaches each runtime through
 | `.gateway` | `true` reaches it at `<gateway>/<name>/mcp` with the header. It takes no headers or env, since the gateway adds the key. |
 | `.url`, `.headers` | A remote server reached directly. |
 | `.command`, `.env` | A local server over stdio, its arguments after it. |
+| `.hermes_only` | A P0-only MCP server reached directly over a literal loopback URL. Only the private Hermes profile gets its entry. Use the private overlay, for example the [contacts worker](../../server/contacts-mcp/README.md). |
 | `.privacy` | The session tiers that may use it. The private agent is denied every server that leaves out `P0`. |
 | `.disabled` | Leaves it out, such as to turn off a public server from the overlay. |
 | `hermes` | Laid over Hermes's config as it is: `platform_toolsets`, `web`, `secrets.onepassword.env`, and extras for a server's entry under `mcp_servers.<name>` (such as `trust: untrusted`). It may not set what bud renders for the registry and the D48 changes (see "Hermes" below). |

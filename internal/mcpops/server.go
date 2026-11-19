@@ -39,6 +39,8 @@ type Tool struct {
 	Description string
 	// Schema is the JSON Schema of the arguments, an object
 	Schema map[string]any
+	// OpenWorld says whether the tool reaches an external service.
+	OpenWorld bool
 	// Run returns the value to report as JSON. An error becomes a tool
 	// result with isError set; a *ArgError becomes JSON-RPC -32602
 	Run func(ctx context.Context, args json.RawMessage) (any, error)
@@ -51,7 +53,8 @@ func (e *ArgError) Error() string { return e.Msg }
 
 // Server answers MCP requests at /mcp
 type Server struct {
-	tools []Tool
+	tools              []Tool
+	name, instructions string
 	// mu runs one call at a time: doctor and sync_status both take the sync
 	// lock, and would see each other as a running sync
 	mu  sync.Mutex
@@ -60,7 +63,12 @@ type Server struct {
 
 // New serves tools, listed in the order given
 func New(tools []Tool) *Server {
-	s := &Server{tools: tools, mux: http.NewServeMux()}
+	return NewReadOnly("bud-ops", "Read-only reports on Bud itself: doctor for health, sync_status for the content and overlay in use and any drift. spend, approvals and reviews aren't built yet and say so.", tools)
+}
+
+// NewReadOnly serves read-only tools with the same loopback-only MCP transport.
+func NewReadOnly(name, instructions string, tools []Tool) *Server {
+	s := &Server{name: name, instructions: instructions, tools: tools, mux: http.NewServeMux()}
 	s.mux.HandleFunc("/mcp", s.serve)
 	return s
 }
@@ -69,21 +77,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.Serve
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if !loopbackPeer(r.RemoteAddr) {
-		http.Error(w, "mcp-ops: only loopback clients are served; devices come through the MCP gateway", http.StatusForbidden)
+		http.Error(w, s.name+": only loopback clients are served", http.StatusForbidden)
 		return
 	}
 	if r.Header.Get("Origin") != "" || !loopbackHost(r.Host) {
-		http.Error(w, "mcp-ops: requests from web pages are refused; reach it at its loopback IP address", http.StatusForbidden)
+		http.Error(w, s.name+": requests from web pages are refused; reach it at its loopback IP address", http.StatusForbidden)
 		return
 	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
-		http.Error(w, "mcp-ops: only POST; there's no event stream or session", http.StatusMethodNotAllowed)
+		http.Error(w, s.name+": only POST; there's no event stream or session", http.StatusMethodNotAllowed)
 		return
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
-		http.Error(w, "mcp-ops: request body too large or unreadable", http.StatusRequestEntityTooLarge)
+		http.Error(w, s.name+": request body too large or unreadable", http.StatusRequestEntityTooLarge)
 		return
 	}
 
@@ -179,8 +187,8 @@ func (s *Server) handle(ctx context.Context, m message) response {
 		return success(m.ID, map[string]any{
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "bud-ops", "version": version.String()},
-			"instructions":    "Read-only reports on Bud itself: doctor for health, sync_status for the content and overlay in use and any drift. spend, approvals and reviews aren't built yet and say so.",
+			"serverInfo":      map[string]any{"name": s.name, "version": version.String()},
+			"instructions":    s.instructions,
 		})
 	case "ping":
 		return success(m.ID, map[string]any{})
@@ -189,7 +197,7 @@ func (s *Server) handle(ctx context.Context, m message) response {
 	case "tools/call":
 		return s.call(ctx, m)
 	default:
-		return failure(m.ID, -32601, fmt.Sprintf("mcp-ops has no method %q", m.Method))
+		return failure(m.ID, -32601, fmt.Sprintf("%s has no method %q", s.name, m.Method))
 	}
 }
 
@@ -204,7 +212,7 @@ func (s *Server) list() []map[string]any {
 			"name":        t.Name,
 			"description": t.Description,
 			"inputSchema": schema,
-			"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+			"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": t.OpenWorld},
 		})
 	}
 	return out
@@ -220,7 +228,7 @@ func (s *Server) call(ctx context.Context, m message) response {
 	}
 	i := slices.IndexFunc(s.tools, func(t Tool) bool { return t.Name == p.Name })
 	if i < 0 {
-		return failure(m.ID, -32602, fmt.Sprintf("mcp-ops has no tool %q; tools/list names them", p.Name))
+		return failure(m.ID, -32602, fmt.Sprintf("%s has no tool %q; tools/list names them", s.name, p.Name))
 	}
 
 	s.mu.Lock()

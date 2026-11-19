@@ -204,6 +204,11 @@ func Render(in Input) (*Output, error) {
 			if err := tools.CheckExtras("mcp.servers", servers, transportKeys); err != nil {
 				return nil, err
 			}
+			for _, name := range tools.Names() {
+				if tools.Servers[name].HermesOnly {
+					delete(servers, name)
+				}
+			}
 		}
 	}
 	// the private agent is the P0 tool rule, so no fragment may change its
@@ -264,6 +269,9 @@ func mcpServers(tools *env.Resolved) map[string]any {
 	servers := map[string]any{}
 	for _, name := range tools.Names() {
 		s := tools.Servers[name]
+		if s.HermesOnly {
+			continue
+		}
 		var entry map[string]any
 		if s.Remote() {
 			entry = map[string]any{"type": "remote", "url": s.URL, "oauth": false}

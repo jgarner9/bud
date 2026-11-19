@@ -177,3 +177,25 @@ func TestTiersTakeKnownEffectsAndToolNamesOrPatterns(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestHermesOnlyServersRequirePrivateLoopback(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		server Server
+		valid  bool
+	}{
+		{"literal loopback", Server{HermesOnly: true, URL: "http://127.0.0.1:8794/mcp", Privacy: []string{"P0"}}, true},
+		{"not yet configured", Server{HermesOnly: true, Privacy: []string{"P0"}}, true},
+		{"gateway", Server{HermesOnly: true, Gateway: true, Privacy: []string{"P0"}}, false},
+		{"external URL", Server{HermesOnly: true, URL: "https://example.invalid/mcp", Privacy: []string{"P0"}}, false},
+		{"substituted host", Server{HermesOnly: true, URL: "http://{env:HOST}:8794/mcp", Privacy: []string{"P0"}}, false},
+		{"cloud tier", Server{HermesOnly: true, URL: "http://127.0.0.1:8794/mcp", Privacy: []string{"P0", "P1"}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := Bud{MCP: map[string]Server{"contacts": tc.server}}
+			if _, err := b.Resolve(); (err == nil) != tc.valid {
+				t.Errorf("Resolve = %v, want validity %t", err, tc.valid)
+			}
+		})
+	}
+}

@@ -1,0 +1,15 @@
+[Unit]
+Description=Bud contacts MCP server (read-only CardDAV)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/contacts-mcp.env -- %h/.local/bin/bud contacts-mcp --listen 127.0.0.1:8794
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

@@ -148,6 +148,9 @@ type Server struct {
 	// none of a server that leaves P0 out (Suite D81)
 	Privacy  []string `json:"privacy"`
 	Disabled bool     `json:"disabled,omitempty"`
+	// HermesOnly exposes a loopback server to the P0 Hermes profile only.
+	// Leave URL unset until the worker is installed.
+	HermesOnly bool `json:"hermes_only,omitempty"`
 }
 
 // Remote says whether the resolved server is reached over HTTP
@@ -254,6 +257,10 @@ func (b *Bud) Resolve() (*Resolved, error) {
 			add("%s: set one of gateway, url and command", at)
 			continue
 		}
+		if s.HermesOnly && (!slices.Equal(s.Privacy, []string{"P0"}) || s.Gateway || len(s.Command) > 0 || (s.URL != "" && !loopbackService(s.URL))) {
+			add("%s: hermes_only requires P0 and a direct loopback URL, or no URL until configured", at)
+			continue
+		}
 		if s.Gateway && (len(s.Headers) > 0 || len(s.Env) > 0) {
 			add("%s: a gateway server takes no headers or env; the gateway adds its key", at)
 			continue
@@ -285,6 +292,17 @@ func (b *Bud) Resolve() (*Resolved, error) {
 	}
 
 	return r, nil
+}
+
+// loopbackService keeps an internal-only server literal, so an environment
+// substitution cannot send its Authorization header outside this host.
+func loopbackService(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	ip, err := netip.ParseAddr(u.Hostname())
+	return err == nil && ip.Unmap().IsLoopback()
 }
 
 // validURL accepts an http(s) URL. {env:VAR} references are filled at

@@ -498,3 +498,44 @@ func TestHermesConfigKeepsRuntimeStateAcrossSync(t *testing.T) {
 		})
 	}
 }
+
+func TestContactsRenderOnlyIntoPrivateHermes(t *testing.T) {
+	s := newServer(t)
+	content := tree(t)
+	content["env/server.jsonc"] = &fstest.MapFile{Data: repoFile(t, "server.jsonc")}
+	content["env/contacts.jsonc"] = &fstest.MapFile{Data: []byte(`{
+		"mcp": {"servers": {"contacts": {"enabled": true}}},
+		"bud": {
+			"mcp": {"contacts": {
+				"hermes_only": true, "url": "http://127.0.0.1:8794/mcp", "privacy": ["P0"],
+				"headers": {"Authorization": "Bearer {env:BUD_CONTACTS_MCP_TOKEN}"}
+			}},
+			"hermes": {"mcp_servers": {"contacts": {"trust": "untrusted"}}}
+		}
+	}`)}
+	s.publish("2026.11.17.1", "edge", content)
+	o := options(t, s)
+	o.Device = "home"
+	examples := o.Profiles
+	o.Profiles = func() []profile.Dir {
+		return append(examples(), profile.Dir{Name: "home", FS: fstest.MapFS{
+			"home.json": {Data: []byte(`{"name": "home", "components": ["server"], "channel": "edge", "content": {"env": ["base", "server", "contacts"]}}`)},
+		}})
+	}
+	run(t, o)
+	private := read(t, o.Paths.HermesConfig())
+	if !strings.Contains(private, "  contacts:\n") || !strings.Contains(private, "Bearer ${BUD_CONTACTS_MCP_TOKEN}") {
+		t.Errorf("private config is missing the contacts server or token reference:\n%s", private)
+	}
+	for _, path := range []string{
+		filepath.Join(o.Paths.HermesCloud(), "config.yaml"),
+		filepath.Join(o.Paths.OpenCodeConfig(), "opencode.jsonc"),
+	} {
+		if output := read(t, path); strings.Contains(output, "contacts") || strings.Contains(output, "BUD_CONTACTS_MCP_TOKEN") {
+			t.Errorf("contacts reached %s:\n%s", path, output)
+		}
+	}
+	if tiers := read(t, o.Paths.HermesTiers()); !strings.Contains(tiers, "mcp__contacts__*") {
+		t.Errorf("the tier gate must deny contacts to other profiles:\n%s", tiers)
+	}
+}

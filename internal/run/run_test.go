@@ -314,17 +314,26 @@ func TestTailContextAndFailuresAreClamped(t *testing.T) {
 func TestHangupAndQuitAreForwardedToTheCommand(t *testing.T) {
 	for _, sig := range []syscall.Signal{syscall.SIGHUP, syscall.SIGQUIT} {
 		ready := filepath.Join(t.TempDir(), "ready")
+		done := make(chan struct{})
 		go func() {
 			for i := 0; i < 500; i++ {
 				if _, err := os.Stat(ready); err == nil {
 					syscall.Kill(os.Getpid(), sig)
 					return
 				}
-				time.Sleep(10 * time.Millisecond)
+				select {
+				case <-done:
+					return
+				case <-time.After(10 * time.Millisecond):
+				}
 			}
 		}()
 		name := strings.TrimPrefix(sig.String(), "SIG")
-		res := sh(t, `trap 'echo caught; exit 5' `+map[syscall.Signal]string{syscall.SIGHUP: "HUP", syscall.SIGQUIT: "QUIT"}[sig]+`; touch `+ready+`; while :; do sleep 0.05; done`)
+		res := sh(t, `trap 'echo caught; exit 5' `+map[syscall.Signal]string{syscall.SIGHUP: "HUP", syscall.SIGQUIT: "QUIT"}[sig]+`; : > "`+ready+`"; while :; do :; done`, func(o *Options) {
+			o.Grace = 5 * time.Second
+			o.Timeout = 10 * time.Second
+		})
+		close(done)
 		if res.Exit != 5 || len(res.Tail) == 0 || res.Tail[len(res.Tail)-1].Text != "caught" {
 			t.Errorf("%s (%s): got exit %d tail %+v", name, sig, res.Exit, res.Tail)
 		}

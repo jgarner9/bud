@@ -182,3 +182,6 @@ func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway
 // MCPAudit is where the MCP gateway logs every tool call until the shared
 // audit log (JGA-348) exists
 func (p *Paths) MCPAudit() string { return filepath.Join(p.State, "mcp-audit.jsonl") }
+
+// RunLogs holds private logs from bud run.
+func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }

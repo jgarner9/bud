@@ -24,7 +24,7 @@ import (
 var Components = []string{
 	"ide",     // the Neovim IDE (ide/)
 	"harness", // OpenCode, the local coding harness (Suite D15)
-	"app",     // the Tauri chat app (Suite D6)
+	"app",     // the planned Herdr workspace integration
 	"server",  // the home-server units: Hermes, planning OpenCode, router, curator, KB site (Suite D48, D49)
 	"qwen",    // llama.cpp and the pinned local models (Suite D25)
 }

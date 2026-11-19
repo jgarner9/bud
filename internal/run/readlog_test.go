@@ -65,7 +65,7 @@ func TestReadLogTailAndCap(t *testing.T) {
 }
 
 func TestReadLogMissingFileSaysWhatToDo(t *testing.T) {
-	if _, err := ReadLog(filepath.Join(t.TempDir(), "nope.log"), nil, 5); err == nil || !strings.Contains(err.Error(), "brain run") {
+	if _, err := ReadLog(filepath.Join(t.TempDir(), "nope.log"), nil, 5); err == nil || !strings.Contains(err.Error(), "bud run") {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -78,5 +78,9 @@ func TestReadLogTailAboveTheLimitSaysItWasCapped(t *testing.T) {
 	}
 	if s, _ = ReadLog(p, nil, 5); s.Capped {
 		t.Error("a small tail is not capped")
+	}
+	p = writeLog(t, 10)
+	if s, _ = ReadLog(p, nil, MaxRead+1); s.Capped {
+		t.Error("a tail request above the limit is not capped when no lines are discarded")
 	}
 }

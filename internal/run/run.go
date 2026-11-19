@@ -1,4 +1,4 @@
-// Package run runs a long command for `brain run`: the full combined output
+// Package run runs a long command for `bud run`: the full combined output
 // streams to a log file on disk, while only the failure lines and a tail are
 // kept in memory. Memory use does not grow with the size of the output.
 package run
@@ -27,7 +27,7 @@ const (
 )
 
 // Upper limits on what a caller may ask to keep, so a typo cannot allocate
-// gigabytes. Run clamps to them; `brain run` rejects larger values.
+// gigabytes. Run clamps to them; `bud run` rejects larger values.
 const (
 	MaxTail     = 1000
 	MaxContext  = 20
@@ -75,9 +75,9 @@ type Result struct {
 func (r Result) Failed() bool { return r.Exit != 0 }
 
 // pattern is the language-agnostic set of failure markers, documented in
-// docs/run.md. Case matters: it keeps "0 errors" and "error-free" quiet while
-// catching "FAIL", "--- FAIL", "FAILED", "panic:", "error:", "TypeError",
-// "Traceback", "fatal:" and "Exception".
+// docs/commands.md#running-commands. Case matters: it keeps "0 errors" and
+// "error-free" quiet while catching "FAIL", "--- FAIL", "FAILED", "panic:",
+// "error:", "TypeError", "Traceback", "fatal:" and "Exception".
 var pattern = regexp.MustCompile(`FAIL|panic:|error:|Error|Traceback|fatal:|Exception`)
 
 // Pattern returns the failure regexp's source, for documentation and tests.
@@ -121,7 +121,11 @@ func Run(o Options) (Result, error) {
 	}
 	group := cmd.Process.Pid // Setpgid makes the child its own group leader
 	done := make(chan struct{})
-	go func() { cmd.Wait(); close(done) }()
+	waitResult := make(chan error, 1)
+	go func() {
+		waitResult <- cmd.Wait()
+		close(done)
+	}()
 
 	var timeout <-chan time.Time
 	if o.Timeout > 0 {
@@ -135,6 +139,11 @@ wait:
 	for {
 		select {
 		case <-done:
+			if errors.Is(<-waitResult, exec.ErrWaitDelay) {
+				// WaitDelay closes the pipes, but does not stop descendants
+				// that still hold them open.
+				syscall.Kill(-group, syscall.SIGKILL)
+			}
 			break wait
 		case <-timeout:
 			timeout, timedOut = nil, true
@@ -202,7 +211,7 @@ var logName = regexp.MustCompile(`^\d{8}T\d{6}-\d+\.log$`)
 // since output can hold secrets. Names sort by start time.
 func newLog(dir string) (*os.File, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("create the log directory: %w; set BRAIN_STATE_DIR to a writable directory", err)
+		return nil, fmt.Errorf("create the log directory: %w; set XDG_STATE_HOME to a writable directory", err)
 	}
 	f, err := os.CreateTemp(dir, time.Now().UTC().Format("20060102T150405")+"-*.log")
 	if err != nil {

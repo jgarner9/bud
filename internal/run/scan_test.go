@@ -2,6 +2,7 @@ package run
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -48,5 +49,28 @@ func TestSplitterDropsABrokenRuneAtTheCut(t *testing.T) {
 	got := splitAll(strings.Repeat("x", maxLine-1) + "é" + "\n") // é straddles the cut
 	if len(got) != 1 || !strings.HasSuffix(got[0], strings.Repeat("x", maxLine-1)+"…") {
 		t.Errorf("got %q", got[0][len(got[0])-10:])
+	}
+}
+
+func TestScannerSerializesConcurrentWrites(t *testing.T) {
+	var log strings.Builder
+	s := newScanner(&log, Options{Tail: 10, MaxFailures: 10})
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 1000 {
+				if _, err := s.Write([]byte("FAIL line\n")); err != nil {
+					t.Errorf("Write: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	s.finish()
+	if s.lines != 2000 || s.matches != 2000 || len(s.tail.lines()) != 10 {
+		t.Errorf("lines %d, matches %d, tail %d", s.lines, s.matches, len(s.tail.lines()))
 	}
 }

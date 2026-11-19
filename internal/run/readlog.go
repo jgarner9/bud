@@ -52,13 +52,12 @@ type Slice struct {
 func ReadLog(path string, r *Range, tail int) (Slice, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return Slice{}, fmt.Errorf("open the log: %w; run `brain run` first, or pass a log path it printed", err)
+		return Slice{}, fmt.Errorf("open the log: %w; run `bud run` first, or pass a log path it printed", err)
 	}
 	defer f.Close()
 
 	out := Slice{Log: path}
 	last := newRing(min(tail, MaxRead))
-	out.Capped = r == nil && tail > MaxRead
 	sp := &splitter{}
 	sp.emit = func(text string) {
 		out.Total++
@@ -81,6 +80,7 @@ func ReadLog(path string, r *Range, tail int) (Slice, error) {
 	sp.flush()
 	if r == nil {
 		out.Lines = last.lines()
+		out.Capped = tail > MaxRead && out.Total > MaxRead
 	}
 	return out, nil
 }

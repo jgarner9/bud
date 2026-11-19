@@ -3,6 +3,7 @@ package run
 import (
 	"io"
 	"strings"
+	"sync"
 )
 
 // splitter turns a byte stream into lines without holding more than maxLine
@@ -128,6 +129,7 @@ func (r *ring) lines() []Line {
 // the log and watches the lines for failures.
 type scanner struct {
 	splitter
+	mu     sync.Mutex
 	log    io.Writer
 	logErr error // the first log write error; output keeps being read
 
@@ -150,6 +152,8 @@ func newScanner(log io.Writer, o Options) *scanner {
 }
 
 func (s *scanner) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.logErr == nil {
 		if _, err := s.log.Write(p); err != nil {
 			s.logErr = err // keep draining the pipe so the command isn't blocked
@@ -158,7 +162,11 @@ func (s *scanner) Write(p []byte) (int, error) {
 	return s.splitter.Write(p)
 }
 
-func (s *scanner) finish() { s.flush() }
+func (s *scanner) finish() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.flush()
+}
 
 func (s *scanner) line(text string) {
 	s.lines++

@@ -199,10 +199,15 @@ func TestSignalDeathIsReported(t *testing.T) {
 }
 
 func TestBackgroundChildHoldingThePipeDoesNotHangTheRun(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "child-survived")
 	start := time.Now()
-	res := sh(t, `sleep 5 & echo done; exit 0`)
+	res := sh(t, `(sleep 3; echo survived > `+marker+`) & echo done; exit 0`)
 	if res.Exit != 0 || time.Since(start) > 4*time.Second {
-		t.Errorf("exit %d after %v", res.Exit, time.Since(start))
+		t.Fatalf("exit %d after %v", res.Exit, time.Since(start))
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Errorf("background child survived WaitDelay: stat error %v", err)
 	}
 }
 
@@ -344,7 +349,7 @@ func TestUnwritableLogDirIsAnError(t *testing.T) {
 	blocker := filepath.Join(t.TempDir(), "file")
 	os.WriteFile(blocker, nil, 0o600)
 	_, err := Run(Options{Argv: []string{"true"}, LogDir: filepath.Join(blocker, "runs")})
-	if err == nil || !strings.Contains(err.Error(), "BRAIN_STATE_DIR") {
+	if err == nil || !strings.Contains(err.Error(), "XDG_STATE_HOME") {
 		t.Errorf("err = %v", err)
 	}
 }

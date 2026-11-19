@@ -157,3 +157,20 @@ func TestProfileFormatNullVersionFailsParsing(t *testing.T) {
 		t.Fatalf("Parse() error = %v, want explicit null version rejected", err)
 	}
 }
+
+func TestProfileVersionCaseAndDuplicates(t *testing.T) {
+	for _, input := range []string{
+		`{"Version":null}`,
+		`{"version":1,"VERSION":null}`,
+		`{"version":null,"version":1}`,
+		`{"version":1,"version":1}`,
+	} {
+		if _, err := Parse([]byte(input)); err == nil {
+			t.Errorf("Parse(%s) succeeded, want error", input)
+		}
+	}
+	p, err := Parse([]byte(`{"VERSION":1}`))
+	if err != nil || p.Version == nil || *p.Version != 1 {
+		t.Fatalf("case-insensitive version: got %+v, %v", p, err)
+	}
+}

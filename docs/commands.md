@@ -131,3 +131,9 @@ How the pieces fit together is in [Claude Code in bud](claude-code.md).
 | --- | --- |
 | `bud dev link [path]` | Points `~/.config/bud` at a checkout with symlinks, so edits show up on the next start. |
 | `bud dev unlink` | Goes back to the config this bud ships. |
+
+## Search and fetch
+
+`bud search [--max N] [--time-range day|week|month|year] [--lang code] [--categories list] [--json] [--max-chars N] <query>` queries a SearXNG instance configured by `BUD_SEARXNG_URL` and returns compact, deduplicated results.
+
+`bud fetch [--raw] [--no-cache] [--allow-private] [--json] [--max-chars N] <url>` extracts readable text, with a 15-minute local cache. Private network addresses are blocked by default, including on redirects and at connection time. Use `--allow-private` only when the target is trusted.

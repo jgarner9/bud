@@ -60,12 +60,19 @@ func parseCard(raw, query string) (Contact, bool) {
 				addValue(&out.Nicknames, nickname)
 			}
 		case "EMAIL":
-			addValue(&out.Emails, strings.TrimPrefix(clean(value), "mailto:"))
+			addValue(&out.Emails, stripURIPrefix(clean(value), "mailto:"))
 		case "TEL":
-			addValue(&out.Phones, strings.TrimPrefix(clean(value), "tel:"))
+			addValue(&out.Phones, stripURIPrefix(clean(value), "tel:"))
 		}
 	}
 	return Contact{}, false
+}
+
+func stripURIPrefix(value, prefix string) string {
+	if len(value) >= len(prefix) && strings.EqualFold(value[:len(prefix)], prefix) {
+		return value[len(prefix):]
+	}
+	return value
 }
 
 func addValue(values *[]string, value string) {

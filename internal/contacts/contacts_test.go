@@ -36,7 +36,7 @@ func TestCardDAVSearch(t *testing.T) {
 				t.Errorf("invalid query %q", body)
 			}
 			href = "/dav/addressbooks/book/id.vcf"
-			property = "<c:address-data><![CDATA[BEGIN:VCARD\nVERSION:3.0\nFN:Jane Doe\nN:Doe;Jane;;;\nNICKNAME:Mom & Dad\nitem1.EMAIL;TYPE=INTERNET:jane@example.invalid\nTEL;VALUE=uri:tel:+15550123456\nNOTE:out-of-scope\nEND:VCARD\n]]></c:address-data>"
+			property = "<c:address-data><![CDATA[BEGIN:VCARD\nVERSION:3.0\nFN:Jane Doe\nN:Doe;Jane;;;\nNICKNAME:Mom & Dad\nitem1.EMAIL;TYPE=INTERNET:MAILTO:jane@example.invalid\nTEL;VALUE=uri:TEL:+15550123456\nNOTE:out-of-scope\nEND:VCARD\n]]></c:address-data>"
 		default:
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}

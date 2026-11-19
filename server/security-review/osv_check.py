@@ -12,6 +12,8 @@ MAX_RESPONSE = 2 * 1024 * 1024
 
 def check_package(item, opener=urllib.request.urlopen):
     """Return affected, no_known_advisories, or unknown for one package."""
+    if not isinstance(item, dict):
+        return {"package": item, "status": "unknown", "error": "package must be an object"}
     name, ecosystem, version = (item.get(k) for k in ("name", "ecosystem", "version"))
     if not all(isinstance(v, str) and v.strip() for v in (name, ecosystem, version)):
         return {"package": item, "status": "unknown", "error": "name, ecosystem and version are required"}

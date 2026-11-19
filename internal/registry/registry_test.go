@@ -247,3 +247,30 @@ func TestLoadNamesTheFile(t *testing.T) {
 		t.Fatalf("want the path in the error, got %v", err)
 	}
 }
+
+func TestProviderKeyVariableCollisions(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		keys      map[string]string
+		wantError bool
+	}{
+		{"normalized names collide", map[string]string{"one-two": "op://vault/one/key", "one_two": "op://vault/two/key"}, true},
+		{"generated name collides with env", map[string]string{"one-two": "op://vault/one/key", "other": "{env:BUD_ONE_TWO_API_KEY}"}, true},
+		{"same reference can be shared", map[string]string{"one-two": "op://vault/one/key", "one_two": "op://vault/one/key"}, false},
+		{"distinct generated names", map[string]string{"one": "op://vault/one/key", "two": "op://vault/two/key"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := valid()
+			for id, key := range tc.keys {
+				r.Providers[id] = Provider{API: "openai", Endpoint: "https://example.invalid/v1", Key: key}
+			}
+			err := r.Validate()
+			if tc.wantError && (err == nil || !strings.Contains(err.Error(), "conflicting key sources")) {
+				t.Fatalf("Validate() = %v, want key collision", err)
+			}
+			if !tc.wantError && err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

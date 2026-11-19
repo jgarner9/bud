@@ -256,22 +256,22 @@
     },
     {
       "action": "shell",
-      "effect": "allow",
+      "effect": "ask",
       "resource": "hyperfine"
     },
     {
       "action": "shell",
-      "effect": "allow",
+      "effect": "ask",
       "resource": "hyperfine *"
     },
     {
       "action": "shell",
-      "effect": "allow",
+      "effect": "ask",
       "resource": "bud run"
     },
     {
       "action": "shell",
-      "effect": "allow",
+      "effect": "ask",
       "resource": "bud run *"
     },
     {

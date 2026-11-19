@@ -65,8 +65,8 @@ type Verdict struct {
 
 // Reply is the JSON Hermes reads back: nothing for a call that runs alone,
 // an approve directive that sends it to Hermes's human-approval gate, or a
-// block. No rule_key is sent, so an approval covers the one call and never
-// becomes a standing one
+// block. No rule_key is sent; Hermes may substitute the tool name and allow
+// broader standing approvals. This hook does not enforce one-call scope.
 func (v Verdict) Reply() []byte {
 	var out map[string]string
 	switch v.Effect {

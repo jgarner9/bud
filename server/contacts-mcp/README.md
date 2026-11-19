@@ -1,5 +1,12 @@
 # Private Hermes contacts
 
+> **Isolation work in progress:** Do not enable this worker using the launch
+> instructions below. They do not isolate credentials from other processes
+> running as the same Unix user. In particular, such a process can read the
+> gateway's bearer token or the `op run` launcher's service-account token
+> through `/proc`. A separate host security identity and restricted 1Password
+> access must be implemented and verified before enabling contacts.
+
 The home-server worker reads iCloud contacts over CardDAV (Suite D88).
 Hermes can use the name, nicknames, email and phone fields to prepare a
 private draft. Sending still follows the existing approval policy.

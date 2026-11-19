@@ -2,7 +2,7 @@
 description: Run the Go project's tests and summarize the result
 ---
 
-Check for a go.mod at the project root. If one is present, run this fixed command through the normal shell permission flow:
+Check for a go.mod at the project root. If one is present, run this fixed command through the normal shell permission flow (approval is required):
 
 `bud run -- go test ./...`
 

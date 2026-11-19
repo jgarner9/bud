@@ -216,16 +216,11 @@ func search(run Runner, o Options, sym bool, res *Result) ([]Hit, string, error)
 	case o.Tools.Grep != "":
 		name, tool = o.Tools.Grep, "grep"
 		res.Notes = append(res.Notes, "ripgrep not found; using grep -rn, which also searches ignored files; install ripgrep (brew install ripgrep)")
-		args = []string{"-rnIF", "--null", "--exclude-dir=.git", "--exclude-dir=node_modules"}
+		args = []string{"-rnIFH"}
 		if sym {
 			args = append(args, "-w")
 		} else if q := o.Query; q == strings.ToLower(q) {
 			args = append(args, "-i") // smart case, as ripgrep does
-		}
-		if lang != nil {
-			for _, e := range lang.exts {
-				args = append(args, "--include=*"+e)
-			}
 		}
 		args = append(args, "--", o.Query)
 		if len(o.Paths) == 0 {
@@ -261,9 +256,21 @@ func search(run Runner, o Options, sym bool, res *Result) ([]Hit, string, error)
 		if len(bytes.TrimSpace(ln)) > 0 {
 			nonEmpty++
 		}
-		h, ok := parseHit(ln)
+		var h Hit
+		var ok bool
+		if tool == "grep" {
+			h, ok = parseGrepHit(ln)
+		} else {
+			h, ok = parseHit(ln)
+		}
 		if !ok {
 			continue
+		}
+		if tool == "grep" && lang != nil {
+			fileLang := langOfFile(h.File)
+			if fileLang == nil || fileLang.name != lang.name {
+				continue
+			}
 		}
 		if len(hits) == maxHits {
 			out.Truncated = true
@@ -272,7 +279,7 @@ func search(run Runner, o Options, sym bool, res *Result) ([]Hit, string, error)
 		hits = append(hits, h)
 	}
 	if nonEmpty > 0 && len(hits) == 0 {
-		return nil, tool, fmt.Errorf("%s printed output bud could not read (expected path, NUL, line:text); check that %s is a standard ripgrep or grep that supports --null", tool, name)
+		return nil, tool, fmt.Errorf("%s printed output bud could not read; check that %s is a standard ripgrep or grep", tool, name)
 	}
 	if out.Truncated {
 		res.Notes = append(res.Notes, fmt.Sprintf("stopped reading at %d matches; narrow with a path, --lang or a longer query", len(hits)))
@@ -300,6 +307,32 @@ func parseHit(ln []byte) (Hit, bool) {
 		raw = raw[:2000]
 	}
 	return Hit{File: filepath.Clean(string(ln[:nul])), Line: n, Text: oneLine(raw), raw: raw}, true
+}
+
+// parseGrepHit reads the portable grep format "path:line:text".
+func parseGrepHit(ln []byte) (Hit, bool) {
+	for i, b := range ln {
+		if b != ':' {
+			continue
+		}
+		end := i + 1
+		for end < len(ln) && ln[end] >= '0' && ln[end] <= '9' {
+			end++
+		}
+		if end == i+1 || end >= len(ln) || ln[end] != ':' {
+			continue
+		}
+		n, err := strconv.Atoi(string(ln[i+1 : end]))
+		if err != nil {
+			return Hit{}, false
+		}
+		raw := strings.TrimRight(string(ln[end+1:]), "\r")
+		if len(raw) > 2000 {
+			raw = raw[:2000]
+		}
+		return Hit{File: filepath.Clean(string(ln[:i])), Line: n, Text: oneLine(raw), raw: raw}, true
+	}
+	return Hit{}, false
 }
 
 // oneLine trims a line of context and cuts it at maxText characters.
@@ -343,6 +376,8 @@ func findDefs(run Runner, o Options, hits []Hit, res *Result) map[string]bool {
 				switch {
 				case err != nil:
 					failed = err.Error()
+				case out.Truncated:
+					failed = "output truncated"
 				case out.Exit != 0:
 					failed = strings.TrimSpace(strings.SplitN(out.Stderr, "\n", 2)[0])
 					if failed == "" {

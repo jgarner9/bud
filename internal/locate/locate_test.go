@@ -250,7 +250,7 @@ func TestRepomapRanksTheFilesForAPhrase(t *testing.T) {
 }
 
 func TestGrepIsTheFallbackAndSaysSo(t *testing.T) {
-	f := &fakeTools{out: map[string]Output{"grep": rgOut("./a/b.go:3:func Foo() {")}}
+	f := &fakeTools{out: map[string]Output{"grep": {Stdout: []byte("./a/b.go:3:func Foo() {\n")}}}
 	res, err := Run(Options{Query: "Foo", Tools: Tools{Grep: "grep"}, Run: f.run})
 	if err != nil {
 		t.Fatal(err)
@@ -437,6 +437,15 @@ func TestGrepFallbackWorksForReal(t *testing.T) {
 			t.Errorf("hit %+v", h)
 		}
 	}
+
+	file := filepath.Join(dir, "pkg", "parse.go")
+	res, err = Run(Options{Query: "Parse", Paths: []string{file}, Lang: "go", Tools: Tools{Grep: grep}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Hits) != 2 || res.Hits[0].File != file {
+		t.Errorf("single-file scope: %+v", res.Hits)
+	}
 }
 
 func TestAstGrepFindsDeclarationsInEveryLanguage(t *testing.T) {
@@ -469,20 +478,42 @@ func TestAstGrepFindsDeclarationsInEveryLanguage(t *testing.T) {
 	}
 }
 
-func TestGrepUsesNullNotDashZAndUnreadableOutputFailsLoudly(t *testing.T) {
-	f := &fakeTools{out: map[string]Output{"grep": rgOut("a.go:1:func Foo() {")}}
+func TestGrepUsesPortableFilenameOutputAndUnreadableOutputFailsLoudly(t *testing.T) {
+	f := &fakeTools{out: map[string]Output{"grep": {Stdout: []byte("a.go:1:func Foo() {\n")}}}
 	if _, err := Run(Options{Query: "Foo", Tools: Tools{Grep: "grep"}, Run: f.run}); err != nil {
 		t.Fatal(err)
 	}
 	args := strings.Join(f.called("grep"), " ")
-	if !strings.Contains(args, "--null") || strings.Contains(args, "-rnIFZ") {
-		t.Errorf("BSD grep's -Z means decompress; args %q", args)
+	if !strings.Contains(args, "-rnIFH") || strings.Contains(args, "--exclude-dir") ||
+		strings.Contains(args, "--include=") || strings.Contains(args, "--null") {
+		t.Errorf("grep args must use portable filename output and no GNU-only options: %q", args)
 	}
-	// BSD grep -Z would print ordinary path:line:text lines, which cannot parse.
-	f.out["grep"] = Output{Stdout: []byte("a.go:1:func Foo() {\n")}
+	f.out["grep"] = Output{Stdout: []byte("not grep output\n")}
 	_, err := Run(Options{Query: "Foo", Tools: Tools{Grep: "grep"}, Run: f.run})
 	if err == nil || !strings.Contains(err.Error(), "could not read") {
 		t.Errorf("unparsable output must be an error, not 'no matches': %v", err)
+	}
+}
+
+func TestTruncatedAstGrepOutputFallsBackToRegexes(t *testing.T) {
+	f := &fakeTools{out: map[string]Output{
+		"rg": rgOut("s.go:1:func Foo() {", "s.go:3:) Foo(x int) {"),
+		"ast-grep": {
+			Stdout:    []byte(`{"file":"s.go","range":{"start":{"line":2}}}` + "\n"),
+			Truncated: true,
+		},
+	}}
+	o := rgOpts(f, "Foo")
+	o.Tools.AstGrep = "ast-grep"
+	res, err := Run(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Hits[0].Kind != KindDef || res.Hits[1].Kind != KindUse {
+		t.Errorf("partial ast-grep output was used: %+v", res.Hits)
+	}
+	if strings.Join(res.Tools, ",") != "rg" || len(res.Notes) != 1 || !strings.Contains(res.Notes[0], "output truncated") {
+		t.Errorf("truncated scan not reported: tools %v notes %v", res.Tools, res.Notes)
 	}
 }
 

@@ -51,6 +51,21 @@ jobs:
         env:
           BUD_LEAK_PATTERNS: ${{ secrets.BUD_LEAK_PATTERNS }}
 
+  memory-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build pinned sqlite-vec
+        run: sh scripts/build-memory-vec.sh "$RUNNER_TEMP/bud-memory-vec"
+      - name: Test memory service
+        env:
+          VEC_EXTENSION: ${{ runner.temp }}/bud-memory-vec/vec0.so
+          BUD_TEST_SQLITE_VEC: ${{ runner.temp }}/bud-memory-vec/vec0.so
+        run: python3 -m unittest discover -s server/memory -v
+
   lua:
     runs-on: ubuntu-latest
     env:

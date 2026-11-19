@@ -12,6 +12,7 @@ from service import MemoryServer
 AGENT = "a" * 32
 REVIEWER = "r" * 32
 CLOUD = "c" * 32
+BACKUP = "b" * 32
 
 
 class UnixHTTP(http.client.HTTPConnection):
@@ -33,10 +34,15 @@ class ServiceTest(unittest.TestCase):
 
             def serve():
                 server = MemoryServer(path, str(Path(tmp) / "memory.db"), {
-                    AGENT: {"actions": ["stage", "search"], "tiers": ["P0"]},
+                    AGENT: {"actions": ["stage", "search", "vector_put", "vector_search", "reference"], "tiers": ["P0"]},
                     REVIEWER: {"actions": ["approve", "search"], "tiers": ["P0"]},
-                    CLOUD: {"actions": ["search"], "tiers": ["P1", "P2"]},
+                    CLOUD: {"actions": ["search", "export", "reference"], "tiers": ["P1", "P2"]},
+                    BACKUP: {"actions": ["backup", "restore"], "tiers": ["P0", "P1", "P2"]},
                 })
+                if os.environ.get("VEC_EXTENSION"):
+                    server.store.db.enable_load_extension(True)
+                    server.store.db.load_extension(os.environ["VEC_EXTENSION"])
+                    server.store.db.enable_load_extension(False)
                 holder.append(server)
                 ready.set()
                 try:
@@ -75,6 +81,19 @@ class ServiceTest(unittest.TestCase):
             self.assertEqual([], request(CLOUD, "/search", {"query": "orchard"})[1]["records"])
             self.assertEqual(400, request(CLOUD, "/search", {"query": "orchard", "privacy": ["P0"]})[0])
             self.assertEqual(403, request(CLOUD, "/stage", record)[0])
+            self.assertEqual(200, request(AGENT, "/reference", {"id": data["id"], "source": "synthetic", "reference_key": "ref"})[0])
+            if os.environ.get("VEC_EXTENSION"):
+                self.assertEqual(200, request(AGENT, "/vector_put", {"id": data["id"], "model": "synthetic", "values": [0.1, 0.2]})[0])
+                status, hits = request(AGENT, "/vector_search", {"model": "synthetic", "values": [0.1, 0.2]})
+                self.assertEqual(200, status)
+                self.assertEqual(data["id"], hits["records"][0]["id"])
+            self.assertEqual(404, request(CLOUD, "/reference", {"id": data["id"], "source": "test", "reference_key": "1"})[0])
+            self.assertEqual([], request(CLOUD, "/export", {})[1]["records"])
+            self.assertEqual(403, request(CLOUD, "/backup", {})[0])
+            status, snapshot = request(BACKUP, "/backup", {})
+            self.assertEqual(200, status)
+            self.assertEqual("private orchard", snapshot["records"][0]["body"])
+            self.assertEqual(400, request(BACKUP, "/restore", {"snapshot": snapshot})[0])
 
     def test_invalid_policy_and_existing_socket_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -84,6 +103,10 @@ class ServiceTest(unittest.TestCase):
                 MemoryServer(path, db, {})
             with self.assertRaises(ValueError):
                 MemoryServer(path, db, {AGENT: {"actions": ["stage", "approve"], "tiers": ["P0"]}})
+            with self.assertRaises(ValueError):
+                MemoryServer(path, db, {AGENT: {"actions": ["backup"], "tiers": ["P0"]}})
+            with self.assertRaises(ValueError):
+                MemoryServer(path, db, {AGENT: {"actions": ["restore", "stage"], "tiers": ["P0", "P1", "P2"]}})
             Path(path).write_text("keep")
             with self.assertRaises(OSError):
                 MemoryServer(path, db, {AGENT: {"actions": ["search"], "tiers": ["P0"]}})

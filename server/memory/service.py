@@ -7,8 +7,11 @@ import socketserver
 from http.server import BaseHTTPRequestHandler
 
 from store import Store
+from history import ensure_history, record_reference, export_approved, export_recovery, restore_recovery
+from vectors import VectorIndex
 
 MAX_REQUEST = 65536
+MAX_RESTORE = 32 * 1024 * 1024
 
 
 class MemoryServer(socketserver.UnixStreamServer):
@@ -23,13 +26,15 @@ class MemoryServer(socketserver.UnixStreamServer):
             or not policy["tiers"]
             or any(tier not in ("P0", "P1", "P2") for tier in policy["tiers"])
             or not isinstance(policy.get("actions"), list)
-            or any(action not in ("stage", "search", "approve") for action in policy["actions"])
-            or ("approve" in policy["actions"] and "stage" in policy["actions"])
+            or any(action not in ("stage", "search", "approve", "vector_put", "vector_search", "reference", "export", "backup", "restore") for action in policy["actions"])
+            or (any(action in policy["actions"] for action in ("approve", "backup", "restore")) and "stage" in policy["actions"])
+            or (any(action in policy["actions"] for action in ("backup", "restore")) and set(policy["tiers"]) != {"P0", "P1", "P2"})
             for token, policy in clients.items()
         ):
             raise ValueError("invalid client policy")
         self.clients = clients
         self.store = Store(database)
+        ensure_history(self.store.db)
         # Fail if the path already exists. Never remove another service's socket.
         old_mask = os.umask(0o177)
         try:
@@ -78,7 +83,7 @@ class MemoryHandler(BaseHTTPRequestHandler):
         if policy is None:
             self.reply(401, {"error": "unauthorized"})
             return
-        if self.path not in ("/stage", "/search", "/approve"):
+        if self.path not in ("/stage", "/search", "/approve", "/vector_put", "/vector_search", "/reference", "/export", "/backup", "/restore"):
             self.reply(404, {"error": "unknown endpoint"})
             return
         action = self.path[1:]
@@ -87,7 +92,7 @@ class MemoryHandler(BaseHTTPRequestHandler):
             return
         try:
             size = int(self.headers.get("Content-Length", ""))
-            if size < 0 or size > MAX_REQUEST or self.headers.get("Transfer-Encoding"):
+            if size < 0 or size > (MAX_RESTORE if action == "restore" else MAX_REQUEST) or self.headers.get("Transfer-Encoding"):
                 raise ValueError()
             payload = json.loads(self.rfile.read(size))
             if not isinstance(payload, dict):
@@ -113,6 +118,41 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     dict(zip(("id", "source", "kind", "privacy", "body", "created_at"), row))
                     for row in rows
                 ]}
+            elif action in ("vector_put", "reference"):
+                expected = {"id", "model", "values"} if action == "vector_put" else {"id", "source", "reference_key"}
+                if set(payload) != expected or type(payload["id"]) is not int:
+                    raise ValueError()
+                row = self.server.store.db.execute(
+                    "SELECT privacy, state FROM records WHERE id = ?", (payload["id"],)
+                ).fetchone()
+                if row is None or row[0] not in policy["tiers"] or (action == "reference" and row[1] != "approved"):
+                    self.reply(404, {"error": "record unavailable"})
+                    return
+                if action == "vector_put":
+                    VectorIndex(self.server.store.db).put(payload["id"], payload["model"], payload["values"])
+                    result = {"stored": True}
+                else:
+                    result = {"id": record_reference(self.server.store.db, payload["id"], payload["source"], payload["reference_key"])}
+            elif action == "vector_search":
+                if set(payload) - {"model", "values", "limit"} or not {"model", "values"} <= set(payload):
+                    raise ValueError()
+                rows = VectorIndex(self.server.store.db).search(
+                    payload["model"], payload["values"], policy["tiers"], payload.get("limit", 20)
+                )
+                result = {"records": [dict(zip(("id", "source", "kind", "privacy", "body", "created_at", "distance"), row)) for row in rows]}
+            elif action == "export":
+                if payload:
+                    raise ValueError()
+                result = json.loads(export_approved(self.server.store.db, policy["tiers"]))
+            elif action == "backup":
+                if payload:
+                    raise ValueError()
+                result = json.loads(export_recovery(self.server.store.db))
+            elif action == "restore":
+                if set(payload) != {"snapshot"} or not isinstance(payload["snapshot"], dict):
+                    raise ValueError()
+                restore_recovery(self.server.store.db, json.dumps(payload["snapshot"]))
+                result = {"restored": True}
             else:
                 # Approval privileges are assigned to the dedicated reviewer
                 # identity and still constrained to that identity's tiers.

@@ -46,7 +46,9 @@ def retrieve(db, query, model, values, tiers, source=None, since=None, until=Non
     where = " AND ".join(filters)
     phrase = '"' + query.replace('"', '""') + '"'
     fields = "r.id, r.source, r.kind, r.privacy, r.body, r.created_at"
-    # Bound the candidate work independently of the requested output size.\n    candidate_limit = 1000\n    text_rows = db.execute(
+    # Bound the candidate work independently of the requested output size.
+    candidate_limit = 1000
+    text_rows = db.execute(
         f"SELECT {fields} FROM records_fts f JOIN records r ON r.id=f.rowid "
         f"WHERE records_fts MATCH ? AND {where} ORDER BY bm25(records_fts), r.id LIMIT ?",
         (phrase, *args, candidate_limit),

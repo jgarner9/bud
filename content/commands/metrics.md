@@ -2,7 +2,7 @@
 description: Summarize project code size with scc
 ---
 
-Run this fixed command from the project root through the normal shell permission flow:
+Run this fixed command from the project root through the normal shell permission flow (approval is required):
 
 `bud run --tail 20 -- scc .`
 

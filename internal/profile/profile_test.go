@@ -126,3 +126,51 @@ func TestFindExplainsWhatIsWrong(t *testing.T) {
 		t.Errorf("the error should list what there is: %v", err)
 	}
 }
+
+func TestProfileFormatVersion(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+		valid bool
+	}{
+		{"legacy", `{"name":"home","components":["server"],"channel":"edge"}`, true},
+		{"current", `{"version":1,"name":"home","components":["server"],"channel":"edge"}`, true},
+		{"zero", `{"version":0,"name":"home","components":["server"],"channel":"edge"}`, false},
+		{"future", `{"version":2,"name":"home","components":["server"],"channel":"edge"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := Parse([]byte(tc.input))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = p.Validate()
+			if (err == nil) != tc.valid {
+				t.Fatalf("Validate() = %v, valid = %v", err, tc.valid)
+			}
+		})
+	}
+}
+
+func TestProfileFormatNullVersionFailsParsing(t *testing.T) {
+	_, err := Parse([]byte(`{"version":null,"name":"home","components":["server"],"channel":"edge"}`))
+	if err == nil || !strings.Contains(err.Error(), "version: null is invalid") {
+		t.Fatalf("Parse() error = %v, want explicit null version rejected", err)
+	}
+}
+
+func TestProfileVersionCaseAndDuplicates(t *testing.T) {
+	for _, input := range []string{
+		`{"Version":null}`,
+		`{"version":1,"VERSION":null}`,
+		`{"version":null,"version":1}`,
+		`{"version":1,"version":1}`,
+	} {
+		if _, err := Parse([]byte(input)); err == nil {
+			t.Errorf("Parse(%s) succeeded, want error", input)
+		}
+	}
+	p, err := Parse([]byte(`{"VERSION":1}`))
+	if err != nil || p.Version == nil || *p.Version != 1 {
+		t.Fatalf("case-insensitive version: got %+v, %v", p, err)
+	}
+}

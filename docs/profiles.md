@@ -10,6 +10,7 @@ JSON, one file per profile, named after it (`profiles/<name>.json`). A field bud
 
 ```json
 {
+  "version": 1,
   "name": "dev-machine",
   "components": ["ide", "harness"],
   "channel": "edge",
@@ -22,6 +23,7 @@ JSON, one file per profile, named after it (`profiles/<name>.json`). A field bud
 
 | Field | Meaning |
 | --- | --- |
+| `version` | Profile format version. Omitted means version 1; unknown versions are refused. |
 | `name` | Lowercase letters, digits and `-`, and the same as the file's name. |
 | `components` | What the device runs, at least one: `ide` (the Neovim IDE), `harness` (OpenCode, the local coding harness), `app` (the chat app), `server` (the home-server units: Hermes, the planning OpenCode, the router, the curator and the KB site), `qwen` (llama.cpp and the local models). |
 | `channel` | `stable` or `edge`. Edge gets every content version and nightly code, while stable gets tagged releases and the content you promote. The laptop runs edge and the home server runs stable, so you try a change before the 24/7 manager gets it. |

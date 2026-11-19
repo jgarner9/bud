@@ -279,6 +279,9 @@ class LauncherRecoveryTest(unittest.TestCase):
                     self.assertEqual(200, self.request(target_path, BACKUP, "restore", {"snapshot": snapshot})[0])
 
             with self.launch(target, clients) as target_path:
+                self.assertEqual(401, self.request(target_path, REVIEWER, "approve", record_id)[0])
+                self.assertEqual(403, self.request(target_path, AGENT, "approve", record_id)[0])
+                self.assertEqual(403, self.request(target_path, AGENT, "restore", {"snapshot": snapshot})[0])
                 self.assertEqual((200, snapshot), self.request(target_path, BACKUP, "backup", {}))
                 for action, payload in (("search", search), ("vector_search", vector)):
                     with self.subTest(action=action):

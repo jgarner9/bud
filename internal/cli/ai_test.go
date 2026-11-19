@@ -176,3 +176,28 @@ func TestAISetupClaude(t *testing.T) {
 		t.Errorf("no hand-over: %q", out)
 	}
 }
+
+func TestAISetupInstallsPinnedOpenCode(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	dir := filepath.Join(state, "bud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"ai":{"backend":"opencode"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withAICheck(t, backend.Status{Backend: "opencode", Argv: []string{"opencode", "acp"}})
+	var installed string
+	orig := npmInstall
+	t.Cleanup(func() { npmInstall = orig })
+	npmInstall = func(pkg string) error { installed = pkg; return nil }
+	captureStdout(t, func() {
+		if err := aiSetup(nil, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if installed != "@opencode/cli@2.3.2" {
+		t.Errorf("installed %q, want @opencode/cli@2.3.2", installed)
+	}
+}

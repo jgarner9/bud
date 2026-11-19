@@ -3,6 +3,7 @@ package approval
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -70,5 +71,57 @@ func TestStoreRejectsChangedArgumentsAndPersistsExpiry(t *testing.T) {
 	got, err := s.Get(r.ID)
 	if err != nil || got.State != Expired {
 		t.Fatalf("expired: %+v, %v", got, err)
+	}
+}
+
+func TestStoreConsumesOnceAcrossProcesses(t *testing.T) {
+	if file := os.Getenv("BUD_APPROVAL_TEST_STORE"); file != "" {
+		err := (Store{Path: file}).Consume("one", "s", "send", "t", []byte("body"), time.Now())
+		if err == nil {
+			os.Exit(0)
+		}
+		if errors.Is(err, ErrTransition) {
+			os.Exit(10)
+		}
+		os.Exit(11)
+	}
+
+	store := Store{Path: filepath.Join(t.TempDir(), "approvals.json")}
+	now := time.Now()
+	request, err := New("one", "s", "send", "t", []byte("body"), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Create(request); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Decide(request.ID, Approved, now); err != nil {
+		t.Fatal(err)
+	}
+	const count = 12
+	children := make([]*exec.Cmd, 0, count)
+	for i := 0; i < count; i++ {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestStoreConsumesOnceAcrossProcesses$")
+		cmd.Env = append(os.Environ(), "BUD_APPROVAL_TEST_STORE="+store.Path)
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		children = append(children, cmd)
+	}
+	successes := 0
+	for _, cmd := range children {
+		err := cmd.Wait()
+		if err == nil {
+			successes++
+		} else if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 10 {
+			t.Errorf("consumer failed unexpectedly: %v", err)
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successful process consumptions = %d, want 1", successes)
+	}
+	got, err := store.Get("one")
+	if err != nil || got.State != Executed {
+		t.Fatalf("persisted request = %+v, %v", got, err)
 	}
 }

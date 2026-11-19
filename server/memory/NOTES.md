@@ -11,8 +11,8 @@ the dedicated service account. Any process able to read the reviewer's token
 can approve its allowed tiers. Socket permissions and secret isolation must
 enforce the separation in deployment.
 
-This is a library and test fixture, not yet a runnable deployment. Startup
-must load a reference-only 1Password policy, arrange a restricted socket
+The launcher accepts policy through its environment and verifies the extension digest. Deployment
+must supply credentials through 1Password, arrange a restricted socket
 directory and database permissions, provision unique reviewer and agent tokens,
 and clean up only the socket created by the same process. The current socket
 mode 0600 permits a same-UID client or a process explicitly passed the socket.

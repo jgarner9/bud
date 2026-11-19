@@ -5,6 +5,7 @@ from store import Store
 from vectors import VectorIndex
 
 
+@unittest.skipUnless(os.environ.get("VEC_EXTENSION"), "sqlite-vec extension not configured")
 class VectorTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

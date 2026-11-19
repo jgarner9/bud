@@ -46,10 +46,10 @@ def retrieve(db, query, model, values, tiers, source=None, since=None, until=Non
     where = " AND ".join(filters)
     phrase = '"' + query.replace('"', '""') + '"'
     fields = "r.id, r.source, r.kind, r.privacy, r.body, r.created_at"
-    text_rows = db.execute(
+    # Bound the candidate work independently of the requested output size.\n    candidate_limit = 1000\n    text_rows = db.execute(
         f"SELECT {fields} FROM records_fts f JOIN records r ON r.id=f.rowid "
         f"WHERE records_fts MATCH ? AND {where} ORDER BY bm25(records_fts), r.id LIMIT ?",
-        (phrase, *args, limit),
+        (phrase, *args, candidate_limit),
     ).fetchall()
     entry = db.execute("SELECT dimensions, table_name FROM embedding_models WHERE model = ?", (model,)).fetchone()
     vector_rows = []
@@ -63,7 +63,7 @@ def retrieve(db, query, model, values, tiers, source=None, since=None, until=Non
             f'JOIN "{table}" v ON v.rowid = r.id '
             f'WHERE p.model = ? AND p.body_hash = r.body_hash AND {where} '
             'ORDER BY distance, r.id LIMIT ?',
-            (packed, model, *args, limit),
+            (packed, model, *args, candidate_limit),
         ).fetchall()
 
     # Reciprocal-rank fusion combines unlike FTS and distance scores.

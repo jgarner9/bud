@@ -23,7 +23,7 @@ import (
 var Install = map[string]string{
 	"openclaw": "npm install -g openclaw",
 	"codex":    "npm install -g @zed-industries/codex-acp",
-	"opencode": "npm install -g @opencode/cli",
+	"opencode": "npm install -g @opencode/cli@2.3.2",
 }
 
 // Argv is the command line that starts the backend s names as an ACP agent

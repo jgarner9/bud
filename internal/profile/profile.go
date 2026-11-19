@@ -38,7 +38,11 @@ var Kinds = []string{"skills", "agents", "commands", "plugins", "env"}
 // DefaultEnv is the env fragment a profile takes when it names none
 var DefaultEnv = []string{"base"}
 
+// Version is the newest device profile format this bud understands.
+const Version = 1
+
 type Profile struct {
+	Version    *int     `json:"version,omitempty"`
 	Name       string   `json:"name"`
 	Components []string `json:"components"`
 	Channel    string   `json:"channel"`
@@ -79,6 +83,9 @@ func (p *Profile) Validate() error {
 	var errs []string
 	add := func(format string, args ...any) { errs = append(errs, fmt.Sprintf(format, args...)) }
 
+	if p.Version != nil && *p.Version != Version {
+		add("version: %d is unsupported; this bud reads profile format %d", *p.Version, Version)
+	}
 	if !nameRe.MatchString(p.Name) {
 		add("name: %q must be lowercase letters, digits and '-'", p.Name)
 	}

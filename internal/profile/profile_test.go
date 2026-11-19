@@ -126,3 +126,27 @@ func TestFindExplainsWhatIsWrong(t *testing.T) {
 		t.Errorf("the error should list what there is: %v", err)
 	}
 }
+
+func TestProfileFormatVersion(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+		valid bool
+	}{
+		{"legacy", `{"name":"home","components":["server"],"channel":"edge"}`, true},
+		{"current", `{"version":1,"name":"home","components":["server"],"channel":"edge"}`, true},
+		{"zero", `{"version":0,"name":"home","components":["server"],"channel":"edge"}`, false},
+		{"future", `{"version":2,"name":"home","components":["server"],"channel":"edge"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := Parse([]byte(tc.input))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = p.Validate()
+			if (err == nil) != tc.valid {
+				t.Fatalf("Validate() = %v, valid = %v", err, tc.valid)
+			}
+		})
+	}
+}

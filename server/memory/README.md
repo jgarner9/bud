@@ -69,3 +69,10 @@ python3 -m unittest discover -s server/memory -v
 The fixtures use synthetic data. The home-server setup, real process
 isolation, pinned runtime, and restore on a separate instance are tracked in
 JGA-368.
+
+## Hybrid retrieval
+
+Give a client the `retrieve` action to search approved records by text and a supplied embedding. `POST /retrieve` takes `query`, `model` and `values`, with optional `source`, `since`, `until` (inclusive YYYY-MM-DD) and `limit` (1–100). Allowed privacy tiers come from the client's server-side policy. Text and vector ranks are combined, and each result includes its source, privacy, creation time and matching methods. Embedding generation and the MCP integration are separate work (JGA-310).
+
+Fusion considers up to 1,000 candidates from each ranked source before applying
+the requested result limit. Results are approximate beyond that window.

@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler
 from store import KINDS, PRIVACY_TIERS, Store
 from history import ensure_history, record_reference, export_approved, export_recovery, restore_recovery
 from vectors import VectorIndex
+from retrieval import retrieve
 
 MAX_REQUEST = 65536
 MAX_RESTORE = 32 * 1024 * 1024
@@ -27,7 +28,7 @@ class MemoryServer(socketserver.UnixStreamServer):
             or not policy["tiers"]
             or any(tier not in ("P0", "P1", "P2") for tier in policy["tiers"])
             or not isinstance(policy.get("actions"), list)
-            or any(action not in ("stage", "search", "approve", "vector_put", "vector_search", "reference", "export", "backup", "restore") for action in policy["actions"])
+            or any(action not in ("stage", "search", "approve", "vector_put", "vector_search", "retrieve", "reference", "export", "backup", "restore") for action in policy["actions"])
             or (any(action in policy["actions"] for action in ("approve", "backup", "restore")) and "stage" in policy["actions"])
             or (any(action in policy["actions"] for action in ("backup", "restore")) and set(policy["tiers"]) != {"P0", "P1", "P2"})
             for token, policy in clients.items()
@@ -102,7 +103,7 @@ class MemoryHandler(BaseHTTPRequestHandler):
         if policy is None:
             self.reply(401, {"error": "unauthorized"})
             return
-        if self.path not in ("/stage", "/search", "/approve", "/vector_put", "/vector_search", "/reference", "/export", "/backup", "/restore"):
+        if self.path not in ("/stage", "/search", "/approve", "/vector_put", "/vector_search", "/retrieve", "/reference", "/export", "/backup", "/restore"):
             self.reply(404, {"error": "unknown endpoint"})
             return
         action = self.path[1:]
@@ -154,6 +155,15 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     result = {"stored": True}
                 else:
                     result = {"id": record_reference(self.server.store.db, payload["id"], payload["source"], payload["reference_key"])}
+            elif action == "retrieve":
+                allowed = {"query", "model", "values", "source", "since", "until", "limit"}
+                if set(payload) - allowed or not {"query", "model", "values"} <= set(payload):
+                    raise ValueError()
+                result = {"records": retrieve(
+                    self.server.store.db, payload["query"], payload["model"], payload["values"],
+                    policy["tiers"], payload.get("source"), payload.get("since"),
+                    payload.get("until"), payload.get("limit", 20),
+                )}
             elif action == "vector_search":
                 if set(payload) - {"model", "values", "limit"} or not {"model", "values"} <= set(payload):
                     raise ValueError()

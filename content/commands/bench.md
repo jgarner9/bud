@@ -2,7 +2,7 @@
 description: Benchmark the Go project's uncached tests
 ---
 
-Check for a go.mod at the project root. If one is present, run this fixed command through the normal shell permission flow:
+Check for a go.mod at the project root. If one is present, run this fixed command through the normal shell permission flow (approval is required):
 
 `bud run --tail 20 -- hyperfine --warmup 1 'go test -count=1 ./...'`
 

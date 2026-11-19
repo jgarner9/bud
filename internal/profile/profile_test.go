@@ -150,3 +150,10 @@ func TestProfileFormatVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestProfileFormatNullVersionFailsParsing(t *testing.T) {
+	_, err := Parse([]byte(`{"version":null,"name":"home","components":["server"],"channel":"edge"}`))
+	if err == nil || !strings.Contains(err.Error(), "version: null is invalid") {
+		t.Fatalf("Parse() error = %v, want explicit null version rejected", err)
+	}
+}

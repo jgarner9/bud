@@ -73,6 +73,13 @@ func Parse(b []byte) (*Profile, error) {
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return nil, errors.New("there is more after the profile's closing }")
 	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b, &fields); err != nil {
+		return nil, err
+	}
+	if version, ok := fields["version"]; ok && bytes.Equal(bytes.TrimSpace(version), []byte("null")) {
+		return nil, errors.New("version: null is invalid; omit the field to use profile format 1")
+	}
 
 	return &p, nil
 }

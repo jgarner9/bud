@@ -49,5 +49,33 @@ class RetrievalTests(unittest.TestCase):
                 retrieve(self.store.db, "word", "embed", [0, 0], **kwargs)
 
 
+class FusionWindowTests(unittest.TestCase):
+    def test_shared_second_place_can_win_a_single_result(self):
+        # A wins text only, B wins vector only, C is second in both.
+        def row(record):
+            return (record, "source", "fact", "P0", "synthetic", "2026-01-01")
+
+        class Result:
+            def __init__(self, rows):
+                self.rows = rows
+            def fetchall(self):
+                return self.rows
+            def fetchone(self):
+                return self.rows[0]
+
+        class DB:
+            def execute(self, sql, args):
+                if "embedding_models" in sql:
+                    return Result([(2, "vec_" + "a" * 64)])
+                self_test.assertEqual(args[-1], 1000)
+                rows = [row(1), row(3)] if "records_fts MATCH" in sql else [row(2), row(3)]
+                return Result(rows[:args[-1]])
+
+        self_test = self
+        results = retrieve(DB(), "word", "embed", [0, 0], ["P0"], limit=1)
+        self.assertEqual([r["id"] for r in results], [3])
+        self.assertEqual(results[0]["matches"], ["text", "vector"])
+
+
 if __name__ == "__main__":
     unittest.main()

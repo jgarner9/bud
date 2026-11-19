@@ -71,8 +71,8 @@ func New(c *Config, audit *Audit, getenv func(string) string) (*Gateway, error) 
 			Rewrite:       up.rewrite,
 			FlushInterval: -1, // server-sent events go out as they arrive
 			ErrorLog:      log.New(io.Discard, "", 0),
-			ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
-				http.Error(w, fmt.Sprintf("mcp-gateway: %s didn't answer: %v", name, err), http.StatusBadGateway)
+			ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) {
+				http.Error(w, fmt.Sprintf("mcp-gateway: %s didn't answer; check the upstream service", name), http.StatusBadGateway)
 			},
 		}
 		g.servers[name] = up

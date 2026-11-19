@@ -48,6 +48,16 @@ bud [global flags] <command> [command flags] [args]
 | `bud content channel --edge V [--stable V] [--out dir]` | Writes `channel.json` naming each channel's content version, for the content release workflow to sign and publish; stable can't be ahead of edge. You don't normally run it. |
 | `bud content offered [--channel edge] <channel.json>` | Prints the content version a published `channel.json` offers on one channel, refusing it unless `<file>.sig` verifies. The workflow reads it before promoting. You don't normally run it. |
 
+## Finding code
+
+`bud locate [--kind any|def|use] [--lang <language>] [--max <hits>] [--json] [--max-chars <chars>] [--] <query> [path ...]` finds a symbol or literal phrase in local files. Paths default to the working directory. Put `--` before a query that starts with a dash.
+
+A single identifier is a case-sensitive symbol. Definitions rank first, and `--kind def` or `--kind use` filters them. Other queries use literal smart-case matching. The result groups hits by file and includes a line number and a short excerpt for each hit. `--lang` can narrow a search to Go, Lua, Python, TypeScript, JavaScript, Rust or shell.
+
+The default is 20 hits and 6,000 text characters. Set either limit to 0 to disable that display cap. JSON output includes counts, tool notes and hits, and is unaffected by the character cap. No matches is a successful result.
+
+Locate uses ripgrep if installed and falls back to grep, which can also search ignored files. Optional ast-grep improves definition detection, and repomap can rank phrase hits. Locate needs no network or model.
+
 ## Languages, layouts and projects
 
 | Command | What it does |

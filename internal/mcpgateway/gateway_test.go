@@ -3,6 +3,7 @@ package mcpgateway
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -342,5 +343,30 @@ func TestAnExistingAuditLogIsMadePrivate(t *testing.T) {
 	defer a.Close()
 	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o600 {
 		t.Errorf("mode %v", fi.Mode().Perm())
+	}
+}
+
+type failingTransport struct{}
+
+func (failingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("transport failure with canary lin_secret")
+}
+
+func TestUpstreamTransportErrorDoesNotExposeCredentials(t *testing.T) {
+	g, auditPath := newGateway(t, "http://127.0.0.1:1234", "P1")
+	g.servers["linear"].proxy.Transport = failingTransport{}
+	w := call(g, "P1", toolCall)
+	if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "linear didn't answer") {
+		t.Fatalf("unexpected response: %d %s", w.Code, w.Body)
+	}
+	if strings.Contains(w.Body.String(), "lin_secret") {
+		t.Fatal("transport error exposed the upstream credential")
+	}
+	b, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "lin_secret") {
+		t.Fatal("audit log exposed the upstream credential")
 	}
 }

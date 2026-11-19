@@ -289,6 +289,38 @@ func (r *Registry) Validate() error {
 		}
 	}
 
+	// Generated provider key names normalize punctuation to underscores.
+	// Refuse two different sources for the same environment variable.
+	keySources := map[string]string{}
+	for id, provider := range r.Providers {
+		if provider.Key == "" {
+			continue
+		}
+		name := ""
+		if strings.HasPrefix(provider.Key, "{env:") && strings.HasSuffix(provider.Key, "}") {
+			name = strings.TrimSuffix(strings.TrimPrefix(provider.Key, "{env:"), "}")
+		} else if strings.HasPrefix(provider.Key, "op://") {
+			normalized := strings.Map(func(r rune) rune {
+				if r >= 'a' && r <= 'z' {
+					return r - 'a' + 'A'
+				}
+				if r >= '0' && r <= '9' {
+					return r
+				}
+				return '_'
+			}, id)
+			name = "BUD_" + normalized + "_API_KEY"
+		}
+		if name == "" {
+			continue
+		}
+		if previous, ok := keySources[name]; ok && previous != provider.Key {
+			add("providers: conflicting key sources for %s; rename a provider or use distinct environment variables", name)
+		} else {
+			keySources[name] = provider.Key
+		}
+	}
+
 	if len(r.Models) == 0 {
 		add("models: none listed; add at least one")
 	}

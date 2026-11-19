@@ -3,11 +3,25 @@
 import hashlib
 import json
 import os
+import signal
 from pathlib import Path
 
 from service import MemoryServer
 from vectors import VectorIndex
 from history import ensure_history
+
+
+def serve(server):
+    # Raising in the serving thread unwinds through main's finally block;
+    # socketserver.shutdown() would deadlock when called from that thread.
+    def terminate(signum, frame):
+        raise SystemExit(0)
+
+    previous = signal.signal(signal.SIGTERM, terminate)
+    try:
+        server.serve_forever()
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def main():
@@ -29,7 +43,7 @@ def main():
             server.store.db.enable_load_extension(False)
         VectorIndex(server.store.db)
         ensure_history(server.store.db)
-        server.serve_forever()
+        serve(server)
     finally:
         server.server_close()
 

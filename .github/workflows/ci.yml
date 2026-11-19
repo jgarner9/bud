@@ -38,6 +38,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s server/hermes/plugins/tests -v
+      - run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s server/security-review -v
 
   # Suite D21, D59: nothing personal in this public repo. The shape checks
   # always run; your own strings come from the BUD_LEAK_PATTERNS secret (one

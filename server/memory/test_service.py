@@ -2,8 +2,11 @@ import http.client
 import json
 import os
 import socket
+import subprocess
+import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -127,6 +130,56 @@ class ServiceTest(unittest.TestCase):
             self.assertFalse(Path(path).exists())
             restarted = MemoryServer(path, db, clients)
             restarted.server_close()
+
+    def test_sigterm_cleans_socket_and_allows_process_restart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "memory.sock")
+            db = str(Path(tmp) / "memory.db")
+            script = """
+import sys
+from main import serve
+from service import MemoryServer
+server = MemoryServer(sys.argv[1], sys.argv[2], {'a' * 32: {'actions': ['search'], 'tiers': ['P0']}})
+try:
+    serve(server)
+finally:
+    server.server_close()
+"""
+            for _ in range(2):
+                process = subprocess.Popen([sys.executable, "-c", script, path, db],
+                                           cwd=Path(__file__).resolve().parent)
+                try:
+                    deadline = time.monotonic() + 5
+                    while not Path(path).exists() and process.poll() is None and time.monotonic() < deadline:
+                        time.sleep(0.01)
+                    self.assertTrue(Path(path).exists(), "service failed to start")
+                    # A successful request proves the signal handler is installed.
+                    conn = UnixHTTP(path)
+                    conn.request("POST", "/search", '{"query":"synthetic"}', {"Authorization": "Bearer " + AGENT})
+                    self.assertEqual(200, conn.getresponse().status)
+                    conn.close()
+                    process.terminate()
+                    self.assertEqual(0, process.wait(timeout=5))
+                    self.assertFalse(Path(path).exists())
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait()
+
+    def test_close_preserves_replacement_socket(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "memory.sock")
+            server = MemoryServer(path, str(Path(tmp) / "memory.db"),
+                                  {AGENT: {"actions": ["search"], "tiers": ["P0"]}})
+            os.unlink(path)
+            replacement = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                replacement.bind(path)
+                identity = os.lstat(path).st_ino
+                server.server_close()
+                self.assertEqual(identity, os.lstat(path).st_ino)
+            finally:
+                replacement.close()
 
 
 if __name__ == "__main__":

@@ -73,12 +73,31 @@ func Parse(b []byte) (*Profile, error) {
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return nil, errors.New("there is more after the profile's closing }")
 	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(b, &fields); err != nil {
+	// Inspect every occurrence: encoding/json matches field names without regard
+	// to case and otherwise accepts duplicates, so a map would lose information.
+	fields := json.NewDecoder(bytes.NewReader(b))
+	if _, err := fields.Token(); err != nil {
 		return nil, err
 	}
-	if version, ok := fields["version"]; ok && bytes.Equal(bytes.TrimSpace(version), []byte("null")) {
-		return nil, errors.New("version: null is invalid; omit the field to use profile format 1")
+	seenVersion := false
+	for fields.More() {
+		key, err := fields.Token()
+		if err != nil {
+			return nil, err
+		}
+		var value json.RawMessage
+		if err := fields.Decode(&value); err != nil {
+			return nil, err
+		}
+		if strings.EqualFold(key.(string), "version") {
+			if seenVersion {
+				return nil, errors.New("version: duplicate field")
+			}
+			seenVersion = true
+			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+				return nil, errors.New("version: null is invalid; omit the field to use profile format 1")
+			}
+		}
 	}
 
 	return &p, nil

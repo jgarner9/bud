@@ -34,17 +34,4 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 ## Starting over
 
-`bud uninstall` lists everything bud put on the machine and removes it after asking (`--keep-config` keeps `config.json` and your tools). Claude Code itself stays installed (`~/.local/bin/claude`, `~/.local/share/claude`, `~/.claude`, `~/.claude.json`): `bud install` set it up through Anthropic's installer, but it's a separate product, and `~/.claude` may hold your own sessions, so remove it with Anthropic's instructions if you want it gone. A `~/clod` checkout left by a bud before 2.0 stays too; bud no longer reads it, so delete it when you like (its own `install.sh uninstall` first, if you want its setup out of Claude Code). Then reinstall with the one-liner from the README.
-
-## If you ran `bud kit sync` before 2.0
-
-bud 2.0 no longer installs plugins into Claude Code, so it can't take out what an older `bud kit sync` added, and `bud uninstall` leaves it too. Everything it installed is ordinary Claude Code plugins and a plugin marketplace, so Claude Code can show and remove them:
-
-```sh
-claude plugin list                                  # what's installed, as name@marketplace
-claude plugin uninstall --scope user NAME@MARKETPLACE
-claude plugin marketplace list
-claude plugin marketplace remove MARKETPLACE        # once none of its plugins are in use
-```
-
-`bud uninstall` no longer removes any of this. The old bud also left three files in `~/.local/state/bud/`: `kit-ledger.json`, `kit-declined` and `core-pasted.json`. Nothing reads them, so they are safe to delete. Nothing there is needed for bud to work, and the `bud-ide` plugin that the editor uses now comes inside bud. If an old `bud-ide@...` copy is installed, uninstall it so Claude Code doesn't load it twice. An old `kit` entry in `config.json` is ignored and can stay or go.
+`bud uninstall` lists everything bud put on the machine and removes it after asking (`--keep-config` keeps `config.json` and your tools). Claude Code itself stays installed (`~/.local/bin/claude`, `~/.local/share/claude`, `~/.claude`, `~/.claude.json`): `bud install` set it up through Anthropic's installer, but it's a separate product, and `~/.claude` may hold your own sessions, so remove it with Anthropic's instructions if you want it gone. Then reinstall with the one-liner from the README.

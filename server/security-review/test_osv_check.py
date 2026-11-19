@@ -31,6 +31,8 @@ class CheckTests(unittest.TestCase):
         for opener in (fail, lambda *_a, **_k: Response(b'not-json'), lambda *_a, **_k: Response(b'{"vulns":{}}')):
             self.assertEqual(check_package(self.item, opener)["status"], "unknown")
         self.assertEqual(check_package({"name": "example"})["status"], "unknown")
+        for item in (None, [], "example"):
+            self.assertEqual(check_package(item)["status"], "unknown")
 
 
 if __name__ == "__main__":

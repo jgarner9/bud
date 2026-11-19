@@ -9,7 +9,7 @@ class Store:
         self.db = sqlite3.connect(path)
         self.db.execute("PRAGMA foreign_keys = ON")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version not in (0, 1):
+        if version not in (0, 1, 2):
             raise ValueError("unsupported memory schema version")
         if version == 0:
             with self.db:
@@ -26,6 +26,40 @@ class Store:
                     UNIQUE(source, dedupe_key)
                 )""")
                 self.db.execute("PRAGMA user_version = 1")
+
+        if version < 2:
+            with self.db:
+                self.db.execute("CREATE VIRTUAL TABLE records_fts USING fts5(body, content='records', content_rowid='id')")
+                self.db.execute("INSERT INTO records_fts(records_fts) VALUES ('rebuild')")
+                self.db.execute("""CREATE TRIGGER records_fts_insert AFTER INSERT ON records BEGIN
+                    INSERT INTO records_fts(rowid, body) VALUES (new.id, new.body);
+                END""")
+                self.db.execute("""CREATE TRIGGER records_fts_delete AFTER DELETE ON records BEGIN
+                    INSERT INTO records_fts(records_fts, rowid, body) VALUES ('delete', old.id, old.body);
+                END""")
+                self.db.execute("""CREATE TRIGGER records_fts_update AFTER UPDATE OF body ON records BEGIN
+                    INSERT INTO records_fts(records_fts, rowid, body) VALUES ('delete', old.id, old.body);
+                    INSERT INTO records_fts(rowid, body) VALUES (new.id, new.body);
+                END""")
+                self.db.execute("PRAGMA user_version = 2")
+
+    def search(self, query, privacy, limit=20):
+        """Search approved records. Treat the supplied query as a literal phrase."""
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be a non-empty string")
+        if not privacy or any(p not in ("P0", "P1", "P2") for p in privacy):
+            raise ValueError("privacy must specify allowed tiers")
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        phrase = '"' + query.replace('"', '""') + '"'
+        marks = ",".join("?" for _ in privacy)
+        return self.db.execute(
+            f"""SELECT r.id, r.source, r.kind, r.privacy, r.body, r.created_at
+                FROM records_fts f JOIN records r ON r.id = f.rowid
+                WHERE records_fts MATCH ? AND r.state = 'approved' AND r.privacy IN ({marks})
+                ORDER BY bm25(records_fts), r.id LIMIT ?""",
+            (phrase, *privacy, limit),
+        ).fetchall()
 
     def stage(self, source, dedupe_key, kind, privacy, body):
         if not all(isinstance(v, str) and v.strip() for v in (source, dedupe_key, kind, privacy, body)):

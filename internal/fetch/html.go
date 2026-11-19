@@ -155,8 +155,11 @@ func rawTextLen(s, name string) int {
 			break
 		}
 		i += lt
-		if end := i + 2 + len(name); end <= len(s) && s[i+1] == '/' && strings.EqualFold(s[i+2:end], name) {
-			return i
+		if end := i + 2 + len(name); end < len(s) && s[i+1] == '/' && strings.EqualFold(s[i+2:end], name) {
+			switch s[end] {
+			case ' ', '\t', '\n', '\r', '\f', '/', '>':
+				return i
+			}
 		}
 		i++
 	}
@@ -200,7 +203,16 @@ func ExtractHTML(src string) (title, text string) {
 	// everything in one <form>
 	attempts = append(attempts, attempt{toks, false}, attempt{toks, true})
 	for _, a := range attempts {
-		if text = walk(a.toks, a.keepForms); text != "" {
+		recoverAt := -1
+		for {
+			var unmatched int
+			text, unmatched = walk(a.toks, a.keepForms, recoverAt)
+			if text != "" || unmatched < 0 {
+				break
+			}
+			recoverAt = unmatched
+		}
+		if text != "" {
 			break
 		}
 	}
@@ -260,6 +272,7 @@ type walker struct {
 
 	skip      string // name of the dropped element being skipped
 	skipDepth int
+	skipAt    int
 
 	lists  []listState
 	inPre  bool
@@ -269,9 +282,9 @@ type walker struct {
 	cells  []string
 }
 
-func walk(toks []token, keepForms bool) string {
+func walk(toks []token, keepForms bool, recoverAt int) (string, int) {
 	w := &walker{}
-	for _, t := range toks {
+	for i, t := range toks {
 		if w.skip != "" {
 			switch {
 			case t.kind == tokStart && t.name == w.skip:
@@ -287,10 +300,11 @@ func walk(toks []token, keepForms bool) string {
 		case tokText:
 			w.text(t.data)
 		case tokStart:
-			if dropped[t.name] && !(keepForms && t.name == "form") {
+			if dropped[t.name] && !(keepForms && t.name == "form") && i != recoverAt {
 				w.flush()
 				if !void[t.name] { // a "/" does not close a dropped element in HTML
 					w.skip, w.skipDepth = t.name, 1
+					w.skipAt = i
 				}
 				continue
 			}
@@ -302,7 +316,10 @@ func walk(toks []token, keepForms bool) string {
 	w.closePre()
 	w.rowEnd()
 	w.flush()
-	return strings.Join(w.lines, "\n")
+	if w.skip != "" {
+		return strings.Join(w.lines, "\n"), w.skipAt
+	}
+	return strings.Join(w.lines, "\n"), -1
 }
 
 func headingLevel(name string) int {

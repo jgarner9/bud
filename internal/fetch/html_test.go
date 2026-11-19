@@ -88,6 +88,9 @@ func TestExtractSurvivesMalformedHTML(t *testing.T) {
 	if _, text := ExtractHTML("<![CDATA[x]]><?php echo 1 ?><p>after</p>"); text != "after" {
 		t.Errorf("got %q", text)
 	}
+	if _, text := ExtractHTML("<nav>menu<div>content</div>"); text != "menu\ncontent" {
+		t.Errorf("unclosed nav swallowed the page: %q", text)
+	}
 }
 
 func TestExtractIsCaseInsensitiveAndKeepsInlineSpacing(t *testing.T) {
@@ -104,6 +107,9 @@ func TestTokenizerEdgeCases(t *testing.T) {
 	}
 	if _, text := ExtractHTML("<SCRIPT>x</ScRiPt><p>after</p>"); text != "after" {
 		t.Errorf("mixed-case script end: %q", text)
+	}
+	if _, text := ExtractHTML("<script></scriptx><p>hidden</p></script><p>after</p>"); text != "after" {
+		t.Errorf("scriptx was treated as a script end tag: %q", text)
 	}
 	// an unterminated quote ends the tag at the first '>' instead of dropping the page
 	if _, text := ExtractHTML(`<p>one</p><a href="broken>link</a><p>two</p>`); !strings.Contains(text, "two") {

@@ -21,6 +21,6 @@ Cross-UID operation needs an intentional owner/group deployment policy.
 Each service is single-threaded and supports bounded JSON requests and
 responses from the storage API. Store startup and migration happen in the
 server thread. Deployment must handle availability, retries, database backup,
-and safe privilege separation before connecting a runtime. The API currently
-covers stage, literal FTS search, and reviewer approval. It does not implement
-vector search, export, references, or an audit log.
+and safe privilege separation before connecting a runtime. The API covers
+stage, literal FTS search, reviewer approval, vector search, export, references,
+and recovery backup/restore. It does not yet provide an audit log.

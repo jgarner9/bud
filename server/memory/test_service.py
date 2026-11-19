@@ -74,6 +74,10 @@ class ServiceTest(unittest.TestCase):
             self.assertEqual(401, request("invalid", "/stage", record)[0])
             status, data = request(AGENT, "/stage", record)
             self.assertEqual(200, status)
+            for field, value in (("kind", "invalid"), ("privacy", "private")):
+                with self.subTest(field=field):
+                    invalid_record = {**record, field: value, "dedupe_key": field}
+                    self.assertEqual(400, request(AGENT, "/stage", invalid_record)[0])
             self.assertEqual(403, request(AGENT, "/approve", {"id": data["id"]})[0])
             self.assertEqual([], request(AGENT, "/search", {"query": "orchard"})[1]["records"])
             self.assertEqual(200, request(REVIEWER, "/approve", {"id": data["id"]})[0])
@@ -111,6 +115,18 @@ class ServiceTest(unittest.TestCase):
             with self.assertRaises(OSError):
                 MemoryServer(path, db, {AGENT: {"actions": ["search"], "tiers": ["P0"]}})
             self.assertEqual("keep", Path(path).read_text())
+
+    def test_server_close_removes_owned_socket_and_allows_restart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "memory.sock")
+            db = str(Path(tmp) / "memory.db")
+            clients = {AGENT: {"actions": ["search"], "tiers": ["P0"]}}
+            server = MemoryServer(path, db, clients)
+            self.assertTrue(Path(path).exists())
+            server.server_close()
+            self.assertFalse(Path(path).exists())
+            restarted = MemoryServer(path, db, clients)
+            restarted.server_close()
 
 
 if __name__ == "__main__":

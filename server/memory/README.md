@@ -51,8 +51,10 @@ resolved value has this shape, with real tokens held only in 1Password.
 }
 ```
 
-The unit uses `op run --env-file` to resolve the reference at startup.
-Run it as a dedicated service account with access limited to the required
+The unit reads `OP_SERVICE_ACCOUNT_TOKEN` from
+`~/.config/bud-server/op-service-account.env` and uses `op run --env-file` to
+resolve the reference at startup. Create that file with mode 0600. Run the
+unit as a dedicated service account with access limited to the required
 1Password item. Use separate credentials and least-privilege policies for
 each client. The current service socket is mode 0600.
 

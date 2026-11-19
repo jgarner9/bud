@@ -3,6 +3,9 @@
 import hashlib
 import sqlite3
 
+KINDS = ("observation", "fact", "summary")
+PRIVACY_TIERS = ("P0", "P1", "P2")
+
 
 class Store:
     def __init__(self, path):
@@ -64,6 +67,10 @@ class Store:
     def stage(self, source, dedupe_key, kind, privacy, body):
         if not all(isinstance(v, str) and v.strip() for v in (source, dedupe_key, kind, privacy, body)):
             raise ValueError("all fields must be non-empty strings")
+        if kind not in KINDS:
+            raise ValueError("kind must be observation, fact, or summary")
+        if privacy not in PRIVACY_TIERS:
+            raise ValueError("privacy must be P0, P1, or P2")
         digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
         with self.db:
             existing = self.db.execute(

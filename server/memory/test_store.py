@@ -53,6 +53,15 @@ class StoreTest(unittest.TestCase):
             self.assertEqual("example", store.approved(["P0"])[0][4])
             store.close()
 
+    def test_stage_rejects_invalid_kind_and_privacy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Store(str(Path(tmp) / "memory.db"))
+            for kind, privacy in (("invalid", "P0"), ("fact", "private")):
+                with self.subTest(kind=kind, privacy=privacy):
+                    with self.assertRaises(ValueError):
+                        store.stage("session", "event-1", kind, privacy, "example")
+            store.close()
+
 
 if __name__ == "__main__":
     unittest.main()

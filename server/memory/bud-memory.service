@@ -11,6 +11,7 @@ StateDirectory=bud-memory
 StateDirectoryMode=0700
 Environment=BUD_MEMORY_SOCKET=%t/bud-memory/memory.sock
 Environment=BUD_MEMORY_DATABASE=%S/bud-memory/memory.sqlite
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
 ExecStart=/usr/bin/env op run --env-file %h/.config/bud/memory.env -- /usr/bin/python3 %h/.local/lib/bud/memory/main.py
 Restart=on-failure
 NoNewPrivileges=true

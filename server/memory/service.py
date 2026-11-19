@@ -4,9 +4,10 @@ import hmac
 import json
 import os
 import socketserver
+import stat
 from http.server import BaseHTTPRequestHandler
 
-from store import Store
+from store import KINDS, PRIVACY_TIERS, Store
 from history import ensure_history, record_reference, export_approved, export_recovery, restore_recovery
 from vectors import VectorIndex
 
@@ -35,10 +36,15 @@ class MemoryServer(socketserver.UnixStreamServer):
         self.clients = clients
         self.store = Store(database)
         ensure_history(self.store.db)
+        self.socket_path = None
+        self.socket_identity = None
         # Fail if the path already exists. Never remove another service's socket.
         old_mask = os.umask(0o177)
         try:
             super().__init__(socket_path, MemoryHandler)
+            self.socket_path = os.fspath(socket_path)
+            socket_info = os.lstat(self.socket_path)
+            self.socket_identity = (socket_info.st_dev, socket_info.st_ino)
         except BaseException:
             self.store.close()
             raise
@@ -51,8 +57,21 @@ class MemoryServer(socketserver.UnixStreamServer):
         return conn, address
 
     def server_close(self):
-        super().server_close()
-        self.store.close()
+        try:
+            super().server_close()
+        finally:
+            self.store.close()
+            if self.socket_path is not None and self.socket_identity is not None:
+                try:
+                    socket_info = os.lstat(self.socket_path)
+                except FileNotFoundError:
+                    pass
+                else:
+                    if (
+                        stat.S_ISSOCK(socket_info.st_mode)
+                        and (socket_info.st_dev, socket_info.st_ino) == self.socket_identity
+                    ):
+                        os.unlink(self.socket_path)
 
 
 class MemoryHandler(BaseHTTPRequestHandler):
@@ -104,6 +123,8 @@ class MemoryHandler(BaseHTTPRequestHandler):
         try:
             if action == "stage":
                 if set(payload) != {"source", "dedupe_key", "kind", "privacy", "body"}:
+                    raise ValueError()
+                if payload["kind"] not in KINDS or payload["privacy"] not in PRIVACY_TIERS:
                     raise ValueError()
                 if payload["privacy"] not in policy["tiers"]:
                     self.reply(403, {"error": "forbidden"})

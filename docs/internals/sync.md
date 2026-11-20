@@ -150,6 +150,7 @@ A file the ledger has that the sync no longer wants is deleted when it's still w
 | Check | OK | Warn | Fail |
 | --- | --- | --- | --- |
 | device profile | found and valid (overlay's `profiles/` first, `syncer.ProfileDirs`) | | not found or invalid |
+| OpenCode harness | executable on PATH reports the pinned version | missing or different version | |
 | sync ledger | `current` points at the ledger's version, its dir is there, every file matches its hash (`Ledger.Drift`) | never synced; a file missing or changed by hand | unreadable ledger; `current` gone or pointing elsewhere; the version dir gone |
 | registry | the content's, with the overlay's over it, validates (`syncer.LoadRegistry`) | | doesn't validate |
 | content layers | names every item the profile takes and its layer: the overlay's (marking each that replaces a public one), the public ones, and the files the sync rendered (`overlay.Layer` over the overlay on disk; a device with no OpenCode lists only skills and plugins) | the overlay is set but not cloned, or the content can't be layered | |
@@ -157,11 +158,10 @@ A file the ledger has that the sync no longer wants is deleted when it's still w
 | content channel (`--net`) | the newest on the channel, or held there by a rollback | newer content is out; nothing offered; the channel offers an older version; the host can't be reached | |
 | model endpoints (`--net`) | every provider a role uses answers `GET <endpoint>/models` | one doesn't answer, or its model list lacks a name the registry uses | |
 
-The ledger check stops there when it fails or the device hasn't synced, the layers check needs a profile, and the render check needs a profile and registry that validate. `syncer.Check` is a dry run of steps 6 to 8 on the version in use with the overlay as it is on disk, so it catches what a hand edit can't: an overlay pull that changed what's rendered, or a `bud update` whose adapter renders differently. It leaves out files the ledger check already named. Drift only warns, since `bud update` rolls back on a check that newly fails, and a hand edit is never the new release's fault; a broken render does fail, since a new release can cause that.
+The OpenCode harness check runs for device profiles with the `harness` component in a full doctor run. The ledger check stops there when it fails or the device hasn't synced, the layers check needs a profile, and the render check needs a profile and registry that validate. `syncer.Check` is a dry run of steps 6 to 8 on the version in use with the overlay as it is on disk, so it catches what a hand edit can't: an overlay pull that changed what's rendered, or a `bud update` whose adapter renders differently. It leaves out files the ledger check already named. Drift only warns, since `bud update` rolls back on a check that newly fails, and a hand edit is never the new release's fault; a broken render does fail, since a new release can cause that.
 
 Endpoints get a key only when theirs is an `{env:VAR}` that's set; an `op://` key is never read (Suite D7), so those providers show only that they answer (any HTTP status counts), and a model list is checked only when one comes back (an empty list lacks every name). Down only warns, since the Qwen box sleeps when idle (Suite D26). Tests swap `syncCheck`, `fetchChannel` and `netClient`.
 
 ## Not done yet
 
 - Whether OpenCode reloads its config when `current` moves is unchecked; if not, a sync will have to restart the harness.
-- Doctor doesn't check OpenCode's version yet: the pinned OpenCode install (the rest of task 1.7) isn't built, so there's no pin to check against.

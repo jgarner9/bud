@@ -1,3 +1,4 @@
+import hashlib
 import http.client
 import json
 import os
@@ -8,6 +9,7 @@ import tempfile
 import threading
 import time
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
 from service import MemoryServer
@@ -20,12 +22,31 @@ BACKUP = "b" * 32
 
 class UnixHTTP(http.client.HTTPConnection):
     def __init__(self, path):
-        super().__init__("localhost")
-        self.path = path
+        super().__init__("localhost", timeout=2)
+        self.path = os.fspath(path)
 
     def connect(self):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
         self.sock.connect(self.path)
+
+    def post(self, endpoint, token, payload):
+        body = json.dumps(payload).encode()
+        headers = (
+            f"POST {endpoint} HTTP/1.1\r\nHost: localhost\r\n"
+            f"Authorization: Bearer {token}\r\nContent-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\n\r\n"
+        ).encode()
+        try:
+            # Send the small fixture in one write. The handler can reject it
+            # based on the headers and close without reading its body.
+            self.connect()
+            self.sock.sendall(headers + body)
+            with http.client.HTTPResponse(self.sock) as response:
+                response.begin()
+                return response.status, json.loads(response.read())
+        finally:
+            self.close()
 
 
 class ServiceTest(unittest.TestCase):
@@ -62,15 +83,7 @@ class ServiceTest(unittest.TestCase):
             self.assertEqual(0o600, os.stat(path).st_mode & 0o777)
 
             def request(token, endpoint, payload):
-                conn = UnixHTTP(path)
-                conn.request("POST", endpoint, json.dumps(payload), {
-                    "Authorization": "Bearer " + token,
-                    "Content-Type": "application/json",
-                })
-                response = conn.getresponse()
-                result = response.status, json.loads(response.read())
-                conn.close()
-                return result
+                return UnixHTTP(path).post(endpoint, token, payload)
 
             record = {"source": "synthetic", "dedupe_key": "1", "kind": "fact",
                       "privacy": "P0", "body": "private orchard"}
@@ -185,6 +198,98 @@ finally:
                 self.assertEqual(identity, os.lstat(path).st_ino)
             finally:
                 replacement.close()
+
+
+@unittest.skipUnless(os.environ.get("VEC_EXTENSION"), "sqlite-vec extension not configured")
+class LauncherRecoveryTest(unittest.TestCase):
+    def request(self, path, token, action, payload):
+        return UnixHTTP(path).post("/" + action, token, payload)
+
+    @contextmanager
+    def launch(self, directory, clients):
+        extension = Path(os.environ["VEC_EXTENSION"]).resolve()
+        path = directory / "memory.sock"
+        process = subprocess.Popen(
+            [sys.executable, str(Path(__file__).with_name("main.py"))],
+            env={
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "BUD_MEMORY_SOCKET": str(path),
+                "BUD_MEMORY_DATABASE": str(directory / "memory.db"),
+                "BUD_MEMORY_VEC_EXTENSION": str(extension),
+                "BUD_MEMORY_VEC_SHA256": hashlib.sha256(extension.read_bytes()).hexdigest(),
+                "BUD_MEMORY_CLIENTS": json.dumps(clients),
+            },
+            umask=0o077,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while process.poll() is None and time.monotonic() < deadline:
+                try:
+                    status, _ = self.request(path, AGENT, "search", {"query": "orchard"})
+                except OSError:
+                    time.sleep(0.01)
+                    continue
+                self.assertEqual(200, status)
+                break
+            else:
+                self.fail("memory launcher did not become ready")
+
+            self.assertEqual(0o600, path.stat().st_mode & 0o777)
+            self.assertEqual(0o600, (directory / "memory.db").stat().st_mode & 0o777)
+            yield path
+            process.terminate()
+            self.assertEqual(0, process.wait(timeout=5))
+            self.assertFalse(path.exists())
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
+
+    def test_recovery_through_two_launchers_preserves_privacy_after_restart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            target = Path(tmp) / "target"
+            source.mkdir(mode=0o700)
+            target.mkdir(mode=0o700)
+            clients = {
+                AGENT: {"actions": ["stage", "search", "vector_put", "vector_search", "reference"], "tiers": ["P0"]},
+                CLOUD: {"actions": ["search", "vector_search", "export"], "tiers": ["P2"]},
+                BACKUP: {"actions": ["backup", "restore"], "tiers": ["P0", "P1", "P2"]},
+            }
+            source_clients = {**clients, REVIEWER: {"actions": ["approve"], "tiers": ["P0"]}}
+            search = {"query": "orchard"}
+            vector = {"model": "synthetic", "values": [0.25, 0.5]}
+            record = {"source": "synthetic-session", "kind": "fact", "privacy": "P0", "body": "orchard"}
+
+            with self.launch(source, source_clients) as source_path:
+                status, staged = self.request(source_path, AGENT, "stage", {**record, "dedupe_key": "approved"})
+                self.assertEqual(200, status)
+                record_id = {"id": staged["id"]}
+                self.assertEqual(200, self.request(source_path, REVIEWER, "approve", record_id)[0])
+                self.assertEqual(200, self.request(source_path, AGENT, "vector_put", {**record_id, **vector})[0])
+                reference = {**record_id, "source": "synthetic-session", "reference_key": "turn-1"}
+                self.assertEqual(200, self.request(source_path, AGENT, "reference", reference)[0])
+                self.assertEqual(200, self.request(source_path, AGENT, "stage", {**record, "dedupe_key": "pending"})[0])
+                status, snapshot = self.request(source_path, BACKUP, "backup", {})
+                self.assertEqual(200, status)
+
+                with self.launch(target, clients) as target_path:
+                    self.assertEqual(401, self.request(target_path, REVIEWER, "approve", record_id)[0])
+                    self.assertEqual(403, self.request(target_path, AGENT, "restore", {"snapshot": snapshot})[0])
+                    self.assertEqual(200, self.request(target_path, BACKUP, "restore", {"snapshot": snapshot})[0])
+
+            with self.launch(target, clients) as target_path:
+                self.assertEqual(401, self.request(target_path, REVIEWER, "approve", record_id)[0])
+                self.assertEqual(403, self.request(target_path, AGENT, "approve", record_id)[0])
+                self.assertEqual(403, self.request(target_path, AGENT, "restore", {"snapshot": snapshot})[0])
+                self.assertEqual((200, snapshot), self.request(target_path, BACKUP, "backup", {}))
+                for action, payload in (("search", search), ("vector_search", vector)):
+                    with self.subTest(action=action):
+                        status, result = self.request(target_path, AGENT, action, payload)
+                        self.assertEqual(200, status)
+                        self.assertEqual([staged["id"]], [hit["id"] for hit in result["records"]])
+                        self.assertEqual("synthetic-session", result["records"][0]["source"])
+                        self.assertEqual((200, {"records": []}), self.request(target_path, CLOUD, action, payload))
 
 
 if __name__ == "__main__":

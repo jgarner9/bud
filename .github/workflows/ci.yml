@@ -109,6 +109,11 @@ jobs:
       - name: go tests that need nvim
         run: go test ./internal/lang
       - run: sh scripts/smoke.sh
+      - name: Upgrade IDE configuration from Bud v1.1.0
+        if: matrix.nvim == 'v0.12.6'
+        run: |
+          XDG_STATE_HOME="$RUNNER_TEMP/bud-baseline-state" sh install.sh --version v1.1.0 --bin-dir "$RUNNER_TEMP/bud-baseline" --no-install
+          sh scripts/smoke.sh "$RUNNER_TEMP/bud-baseline/bud"
 
   goreleaser-check:
     runs-on: ubuntu-latest

@@ -2,6 +2,7 @@ package approval
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,110 @@ import (
 	"testing"
 	"time"
 )
+
+func TestStoreRestoresPrivateFileModesOnRead(t *testing.T) {
+	s := Store{Path: filepath.Join(t.TempDir(), "approvals.json")}
+	r, _ := New("one", "s", "send", "t", []byte("body"), time.Now())
+	if err := s.Create(r); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{s.Path, s.Path + ".lock"} {
+		if err := os.Chmod(name, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.Get(r.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{s.Path, s.Path + ".lock"} {
+		info, err := os.Stat(name)
+		if err != nil || info.Mode().Perm() != 0600 {
+			t.Fatalf("%s mode: %v, %v", name, info, err)
+		}
+	}
+}
+
+func TestStoreRejectsSymlinkFiles(t *testing.T) {
+	for _, suffix := range []string{"", ".lock"} {
+		t.Run(suffix, func(t *testing.T) {
+			dir := t.TempDir()
+			target := filepath.Join(dir, "target")
+			if err := os.WriteFile(target, []byte("untouched"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(target, 0644); err != nil {
+				t.Fatal(err)
+			}
+			s := Store{Path: filepath.Join(dir, "store")}
+			if err := os.Symlink(target, s.Path+suffix); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Get("any"); err == nil {
+				t.Fatal("accepted symlink")
+			}
+			info, err := os.Stat(target)
+			if err != nil || info.Mode().Perm() != 0644 {
+				t.Fatalf("symlink target mode: %v, %v", info, err)
+			}
+		})
+	}
+}
+
+func TestStoreRejectsOversizedFile(t *testing.T) {
+	s := Store{Path: filepath.Join(t.TempDir(), "approvals.json")}
+	file, err := os.Create(s.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(maxStoreBytes + 1); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Get("any"); !errors.Is(err, ErrStoreFull) {
+		t.Fatalf("oversized store = %v", err)
+	}
+}
+
+func TestStorePrunesExpiredAndRefusesToEvictLiveRequests(t *testing.T) {
+	s := Store{Path: filepath.Join(t.TempDir(), "approvals.json")}
+	now := time.Now()
+	if err := s.transact(func(requests map[string]Request) error {
+		for i := 0; i < maxStoreRequests; i++ {
+			r, _ := New(fmt.Sprint(i), "s", "send", "t", nil, now)
+			r.State = Executed
+			if i == 0 {
+				r.ExpiresAt = now.Add(-time.Second)
+			}
+			requests[r.ID] = r
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r, _ := New("new", "s", "send", "t", nil, now)
+	if err := s.Create(r); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Get("0"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expired record retained: %v", err)
+	}
+	if got, err := s.Get("1"); err != nil || got.State != Executed {
+		t.Fatalf("unexpired terminal record lost: %+v, %v", got, err)
+	}
+	if got, err := s.Get(r.ID); err != nil || got.State != Pending {
+		t.Fatalf("unexpired pending record lost: %+v, %v", got, err)
+	}
+	second, _ := New("second", "s", "send", "t", nil, now)
+	if err := s.Create(second); !errors.Is(err, ErrStoreFull) {
+		t.Fatalf("full store = %v", err)
+	}
+	if err := s.Create(r); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("duplicate at capacity = %v", err)
+	}
+}
 
 func TestStorePersistsAndConsumesOnceConcurrently(t *testing.T) {
 	s := Store{Path: filepath.Join(t.TempDir(), "approvals.json")}
@@ -132,17 +237,19 @@ func TestStoreRejectsStaleTransitionTime(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			r.ExpiresAt = time.Now().Add(time.Hour)
 			if err := s.Create(r); err != nil {
 				t.Fatal(err)
 			}
+			r.ExpiresAt = start.Add(time.Hour)
+			r.State = state
+			if err := s.transact(func(requests map[string]Request) error {
+				requests[r.ID] = r
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
 			if state == Approved {
-				if err := s.transact(func(requests map[string]Request) error {
-					r.State = Approved
-					requests[r.ID] = r
-					return nil
-				}); err != nil {
-					t.Fatal(err)
-				}
 				err = s.Consume(r.ID, r.Session, r.Action, r.Target, []byte("reviewed"), start)
 			} else {
 				err = s.Decide(r.ID, Approved, start)

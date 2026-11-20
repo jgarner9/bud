@@ -5,18 +5,29 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"syscall"
 	"time"
 )
 
-// Store persists approvals in one private JSON file. Callers must authenticate
-// requests and enforce action policy before invoking these methods.
+// Store persists approvals in one private JSON file. Expired records are
+// pruned on Create; unexpired records are retained until their deadlines.
+// Create fails closed at the request or byte limit. Callers must authenticate
+// requests, enforce policy and isolate the store from agent tools; file mode
+// alone does not isolate processes running as the same user.
 type Store struct{ Path string }
 
 var ErrNotFound = errors.New("approval request not found")
 var ErrDuplicate = errors.New("approval request ID already exists")
+var ErrStoreFull = errors.New("approval store has reached its request limit")
+
+// Keep unexpired requests (including terminal ones) until their deadlines, so
+// retries cannot reuse an ID while a reply might still be valid. Refuse new
+// requests at the limit instead of evicting a live record.
+const maxStoreRequests = 4096
+const maxStoreBytes = 16 << 20
 
 // transact holds a separate lock file across read, modify and atomic replacement.
 // The lock is shared by every process using the same path.
@@ -27,21 +38,40 @@ func (s Store) transact(fn func(map[string]Request) error) error {
 	if err := os.MkdirAll(filepath.Dir(s.Path), 0700); err != nil {
 		return err
 	}
-	lock, err := os.OpenFile(s.Path+".lock", os.O_CREATE|os.O_RDWR, 0600)
+	lock, err := os.OpenFile(s.Path+".lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)
 	if err != nil {
 		return err
 	}
 	defer lock.Close()
+	if err := makePrivateRegular(lock); err != nil {
+		return err
+	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
 		return err
 	}
 	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 	requests := map[string]Request{}
-	original, err := os.ReadFile(s.Path)
+	file, err := os.OpenFile(s.Path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	var original []byte
 	if err == nil {
+		if err := makePrivateRegular(file); err != nil {
+			file.Close()
+			return err
+		}
+		original, err = io.ReadAll(io.LimitReader(file, maxStoreBytes+1))
+		closeErr := file.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if len(original) > maxStoreBytes {
+			return ErrStoreFull
+		}
 		if err := json.Unmarshal(original, &requests); err != nil || requests == nil {
 			return fmt.Errorf("invalid approval store")
 		}
@@ -56,6 +86,9 @@ func (s Store) transact(fn func(map[string]Request) error) error {
 		return err
 	}
 	data = append(data, '\n')
+	if len(data) > maxStoreBytes {
+		return ErrStoreFull
+	}
 	if bytes.Equal(original, data) {
 		return transitionErr
 	}
@@ -87,13 +120,39 @@ func (s Store) transact(fn func(map[string]Request) error) error {
 	return transitionErr
 }
 
+func makePrivateRegular(file *os.File) error {
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("approval store file is not regular")
+	}
+	if info.Mode().Perm() != 0600 || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
+		return file.Chmod(0600)
+	}
+	return nil
+}
+
 func (s Store) Create(r Request) error {
-	if r.ID == "" || r.Session == "" || r.Action == "" || r.Target == "" || r.State != Pending || r.ExpiresAt.IsZero() || len(r.ArgumentsHash) != 64 {
+	if r.ID == "" || r.Session == "" || r.Action == "" || r.Target == "" || len(r.ID) > 16384 || len(r.Session) > 16384 || len(r.Action) > 16384 || len(r.Target) > 16384 || r.State != Pending || r.ExpiresAt.IsZero() || len(r.ArgumentsHash) != 64 {
 		return errors.New("invalid pending approval request")
 	}
 	return s.transact(func(requests map[string]Request) error {
+		now := time.Now()
+		for id, existing := range requests {
+			if !now.Before(existing.ExpiresAt) {
+				delete(requests, id)
+			}
+		}
 		if _, ok := requests[r.ID]; ok {
 			return ErrDuplicate
+		}
+		if len(requests) >= maxStoreRequests {
+			return ErrStoreFull
+		}
+		if !now.Before(r.ExpiresAt) {
+			return errors.New("approval request already expired")
 		}
 		requests[r.ID] = r
 		return nil

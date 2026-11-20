@@ -1,12 +1,36 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from store import Store
 
 
 class StoreTest(unittest.TestCase):
+    def test_sqlite_wal_backup_contains_only_committed_memory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "source.db"
+            backup_path = Path(tmp) / "backup.db"
+            with closing(Store(source_path)) as writer:
+                self.assertEqual(("wal",), writer.db.execute("PRAGMA journal_mode=WAL").fetchone())
+                record = writer.stage("synthetic", "1", "fact", "P0", "orchard")
+                writer.approve(record)
+                with closing(Store(source_path)) as reader, closing(sqlite3.connect(backup_path)) as backup:
+                    # Read the committed snapshot while the writer holds an
+                    # open transaction.
+                    writer.db.execute("BEGIN")
+                    writer.db.execute("UPDATE records SET body = ? WHERE id = ?", ("fixture's replacement", record))
+                    self.assertEqual(record, writer.search("replacement", ["P0"])[0][0])
+                    self.assertEqual([], reader.search("replacement", ["P0"]))
+                    reader.db.backup(backup)
+                    writer.db.rollback()
+                    self.assertEqual([], writer.search("replacement", ["P0"]))
+
+            with closing(Store(backup_path)) as restored:
+                self.assertEqual(record, restored.search("orchard", ["P0"])[0][0])
+                self.assertEqual([], restored.search("replacement", ["P0"]))
+
     def test_search_migrates_existing_records_and_filters_visibility(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "memory.db")

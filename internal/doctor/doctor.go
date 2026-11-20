@@ -98,10 +98,25 @@ type Options struct {
 	// endpoints answer. The ai backend check's gateway probe follows Quick,
 	// as it did before
 	Net bool
+
+	// netDeadline is the one deadline every --net check shares, set by Run
+	netDeadline time.Time
+}
+
+// netContext bounds a --net check by the run's shared deadline, or by
+// netTimeout when none is set (a check called on its own, as in tests)
+func (o Options) netContext() (context.Context, context.CancelFunc) {
+	if o.netDeadline.IsZero() {
+		return context.WithTimeout(context.Background(), netTimeout)
+	}
+	return context.WithDeadline(context.Background(), o.netDeadline)
 }
 
 // Run runs every check, in the order they're worth reading
 func Run(opts Options) []Result {
+	if opts.Net {
+		opts.netDeadline = time.Now().Add(netTimeout)
+	}
 	p, err := paths.Resolve()
 	if err != nil {
 		return []Result{{Name: "paths", Status: Fail, Detail: err.Error()}}
@@ -146,7 +161,7 @@ func Run(opts Options) []Result {
 	results = append(results, checkSync(p, cfg, opts)...)
 
 	if opts.Net {
-		ctx, cancel := context.WithTimeout(context.Background(), netTimeout)
+		ctx, cancel := opts.netContext()
 		if r, ok := checkSearch(ctx); ok {
 			results = append(results, r)
 		}

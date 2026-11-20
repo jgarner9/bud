@@ -79,7 +79,7 @@ func checkSync(p *paths.Paths, cfg config.Settings, opts Options) []Result {
 		return results
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), netTimeout)
+	ctx, cancel := opts.netContext()
 	defer cancel()
 	if prof != nil {
 		results = append(results, checkChannel(ctx, cfg.Content.Mirror, prof, led))

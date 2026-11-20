@@ -23,7 +23,7 @@ func Doctor() *Command {
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&quick, "quick", false, "skip the checks that take a while (startup timing)")
 			fs.BoolVar(&asJSON, "json", false, "print the results as JSON, for the dashboard")
-			fs.BoolVar(&net, "net", false, "also check the network: newer content on the channel, and that the model endpoints answer")
+			fs.BoolVar(&net, "net", false, "also check the network: newer content on the channel, and that the model and search endpoints answer")
 		},
 		Run: func(g *Globals, args []string) error {
 			return runDoctor(args, doctor.Options{Quick: quick, Net: net}, asJSON)

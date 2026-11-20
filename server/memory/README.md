@@ -58,17 +58,46 @@ unit as a dedicated service account with access limited to the required
 1Password item. Use separate credentials and least-privilege policies for
 each client. The current service socket is mode 0600.
 
+## Packaging decision
+
+Use the CPython launcher under systemd. The service owns SQLite, FTS5,
+sqlite-vec, migrations and the database. Clients use its Unix-socket HTTP API.
+The Bud Go module stays standard-library-only.
+
+| Option | Consequences |
+| --- | --- |
+| Pinned distro CPython and SQLite packages | Recommended for the Linux host if its package source can retain the tested builds. Systemd keeps socket and state ownership explicit. |
+| Container pinned by image digest | Pins the runtime and its SQLite together. The service still needs a persistent database and a Unix socket accessible to the right host identity. |
+| Separately built runtime | Can pin CPython and SQLite independently of the distro. Bud would own the builds and security updates. |
+
+A Python virtual environment inherits its interpreter and SQLite library.
+For the production package, record the exact CPython and SQLite package builds
+and repository snapshot, the interpreter path used by the unit, and the
+sqlite-vec artifact SHA-256 for the target architecture. The build script
+checks sqlite-vec v0.1.6 source and uses SQLite 3.46.1 headers when compiling.
+The linked runtime can be a different SQLite version. Check its actual
+capabilities with the commands below. The launcher verifies the extension
+artifact digest before loading it. JGA-368 tracks adopting the production pins,
+verifying socket/credential access on the host, and checking service recovery
+after an interrupted startup or hard kill.
+
 ## Tests
 
 ```sh
-VEC_EXTENSION=/absolute/path/to/vec0.so \
-BUD_TEST_SQLITE_VEC=/absolute/path/to/vec0.so \
+vec_build=$(mktemp -d)
+sh scripts/build-memory-vec.sh "$vec_build"
+python3 -c 'import platform, sqlite3; print("CPython", platform.python_version(), "SQLite", sqlite3.sqlite_version)'
+VEC_EXTENSION="$vec_build/vec0.so" \
+BUD_TEST_SQLITE_VEC="$vec_build/vec0.so" \
 python3 -m unittest discover -s server/memory -v
 ```
 
-The fixtures use synthetic data. The home-server setup, real process
-isolation, pinned runtime, and restore on a separate instance are tracked in
-JGA-368.
+The fixtures use synthetic data. They check parameter binding and transaction
+isolation, an online SQLite backup during an uncommitted write, and full-text
+and vector queries after restoring a portable backup into a separate running
+instance. This exercises SQLite's backup capability in WAL mode. The service
+recovery API uses its portable snapshot format. End-to-end recall is tracked in
+JGA-310, and the runtime clients in JGA-313.
 
 ## Hybrid retrieval
 

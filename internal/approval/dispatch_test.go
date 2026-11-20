@@ -119,6 +119,49 @@ func TestDispatchFailsClosed(t *testing.T) {
 	}
 }
 
+func TestDispatchExecutorReceivesReviewDeadlineAndCancellation(t *testing.T) {
+	scope := Scope{Runtime: "hermes", Profile: "private", Session: "s1", Surface: "signal", Actor: "reviewer"}
+	call := Invocation{Action: "edit", Target: "example.txt"}
+	for _, cancelParent := range []bool{false, true} {
+		name := "review deadline"
+		if cancelParent {
+			name = "parent cancellation"
+		}
+		t.Run(name, func(t *testing.T) {
+			store := Store{Path: filepath.Join(t.TempDir(), "approvals.json")}
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			deadline := time.Now().Add(500 * time.Millisecond)
+			var id string
+			err := store.Dispatch(parent, scope, call, deadline, func(_ context.Context, p Prompt) (Reply, error) {
+				id = p.ID
+				return Reply{ID: p.ID, Scope: scope, Choice: AllowOnce}, nil
+			}, func(ctx context.Context, _ Invocation) error {
+				got, ok := ctx.Deadline()
+				if !ok || !got.Equal(deadline) {
+					t.Fatalf("executor deadline = %v, %v; want %v", got, ok, deadline)
+				}
+				if cancelParent {
+					cancel()
+				}
+				<-ctx.Done()
+				return ctx.Err()
+			})
+			want := context.DeadlineExceeded
+			if cancelParent {
+				want = context.Canceled
+			}
+			if !errors.Is(err, want) {
+				t.Fatalf("dispatch = %v, want %v", err, want)
+			}
+			request, err := store.Get(id)
+			if err != nil || request.State != Executed {
+				t.Fatalf("request = %+v, %v; want spent approval", request, err)
+			}
+		})
+	}
+}
+
 func unexpectedExecutor(t *testing.T) func(context.Context, Invocation) error {
 	t.Helper()
 	return func(context.Context, Invocation) error {

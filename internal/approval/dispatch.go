@@ -60,7 +60,9 @@ type Review func(ctx context.Context, prompt Prompt) (Reply, error)
 // Dispatch requires a matching decision and consumes it before passing the
 // frozen invocation to execute. The trusted runtime calls this only after
 // native checks and Bud policy select review. Agent tools must not be able to
-// reach the store or impersonate the reviewer.
+// reach the store or impersonate the reviewer. The executor must honor the
+// supplied context and check it at the effectful leaf; cancellation cannot
+// undo an effect or stop code that ignores the context.
 func (s Store) Dispatch(ctx context.Context, scope Scope, call Invocation, deadline time.Time, review Review, execute func(context.Context, Invocation) error) error {
 	if scope.Runtime == "" || scope.Profile == "" || scope.Session == "" || scope.Surface == "" || scope.Actor == "" || review == nil {
 		return ErrReviewUnavailable
@@ -144,5 +146,5 @@ func (s Store) Dispatch(ctx context.Context, scope Scope, call Invocation, deadl
 	if !time.Now().Before(request.ExpiresAt) {
 		return context.DeadlineExceeded
 	}
-	return execute(ctx, call)
+	return execute(reviewCtx, call)
 }

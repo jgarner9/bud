@@ -78,13 +78,13 @@ See [all commands](docs/commands.md) and [how sync works](docs/internals/sync.md
 | [`content/`](content/) | Shared instructions, skills, agents, commands and model configuration |
 | [`profiles/`](profiles/) | Example device profiles |
 | [`server/`](server/) | Home-server service units and setup |
-| [`app/`](app/) | Plans for the Tauri chat app |
+| [`app/`](app/) | Plans for Herdr desktop and mobile integration |
 | [`docs/`](docs/) | User guides and internals |
 | [`scripts/`](scripts/) | Build, release and test scripts |
 
 ## Status
 
-The IDE, signed device sync, Hermes integration and home-server MCP services are in the tree today. The Suite work ahead includes shared memory, switching IDE chat between local coding and server-side planning, and the Tauri chat app. See [GitHub Releases](https://github.com/jgarner9/bud/releases) for published builds.
+The IDE, signed device sync, Hermes integration and home-server MCP services are in the tree today. The Suite work ahead includes connecting the runtimes to shared memory, switching IDE chat between local coding and server-side planning, and integrating the Herdr desktop and mobile workspaces. See [GitHub Releases](https://github.com/jgarner9/bud/releases) for published builds.
 
 ## Hacking on Bud
 

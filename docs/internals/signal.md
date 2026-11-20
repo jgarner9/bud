@@ -26,7 +26,7 @@ The plugin calls the Signal adapter's private methods, so `plugin.yaml` sets `re
 
 ## Not built yet
 
-The approval service (D28, JGA-348) that sends every approval, whatever surface raised it, to the Tauri app first and to Signal after 5 minutes. Until then an approval shows where its turn came from: on Signal for Signal turns, in the CLI for CLI turns. Cron turns can't ask (`approvals.cron_mode: deny`). A doctor check for the daemon and the plugin's load state isn't there either.
+Today an approval appears on the surface that started its turn, on Signal or in the CLI. Cron turns cannot ask (`approvals.cron_mode: deny`). Keep the Signal flow while proving that Herdr can use the same authenticated, action-bound and expiring decisions. The [Suite architecture](suite.md#build-time-validation) tracks that work. A doctor check for the daemon and plugin load state is also pending.
 
 ## Tests
 

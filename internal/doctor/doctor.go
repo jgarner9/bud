@@ -4,6 +4,7 @@
 package doctor
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -143,6 +144,14 @@ func Run(opts Options) []Result {
 	}
 
 	results = append(results, checkSync(p, cfg, opts)...)
+
+	if opts.Net {
+		ctx, cancel := context.WithTimeout(context.Background(), netTimeout)
+		if r, ok := checkSearch(ctx); ok {
+			results = append(results, r)
+		}
+		cancel()
+	}
 
 	return append(results, cfgResult, checkProjects(p))
 }

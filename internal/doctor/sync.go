@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/content"
 	"jgarner.dev/bud/internal/overlay"
@@ -37,7 +38,7 @@ var (
 // netTimeout bounds every --net check together
 const netTimeout = 30 * time.Second
 
-func checkSync(p *paths.Paths, cfg config.Settings, net bool) []Result {
+func checkSync(p *paths.Paths, cfg config.Settings, opts Options) []Result {
 	if cfg.Device == "" {
 		return nil
 	}
@@ -57,6 +58,9 @@ func checkSync(p *paths.Paths, cfg config.Settings, net bool) []Result {
 
 	prof, profResult := checkDevice(p, cfg.Device)
 	results := []Result{profResult}
+	if !opts.Quick && prof != nil && slices.Contains(prof.Components, "harness") {
+		results = append(results, checkOpenCodeHarness())
+	}
 	led, ledResult := checkLedger(p)
 	results = append(results, ledResult)
 	if led == nil || led.Content == "" || ledResult.Status == Fail {
@@ -71,7 +75,7 @@ func checkSync(p *paths.Paths, cfg config.Settings, net bool) []Result {
 	if prof != nil && reg != nil {
 		results = append(results, checkRender(p, cfg, repo, led))
 	}
-	if !net {
+	if !opts.Net {
 		return results
 	}
 
@@ -85,6 +89,15 @@ func checkSync(p *paths.Paths, cfg config.Settings, net bool) []Result {
 	}
 
 	return results
+}
+
+func checkOpenCodeHarness() Result {
+	status := agent.CheckOpenCodeHarness()
+	if len(status.Problems) != 0 {
+		problem := status.Problems[0]
+		return Result{Name: "OpenCode harness", Status: Warn, Detail: problem.What, Fix: problem.Fix}
+	}
+	return Result{Name: "OpenCode harness", Detail: status.Version}
 }
 
 // checkDevice finds and validates the device's profile, the overlay's first

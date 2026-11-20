@@ -142,7 +142,7 @@ func Run(opts Options) []Result {
 		results = append(results, r)
 	}
 
-	results = append(results, checkSync(p, cfg, opts.Net)...)
+	results = append(results, checkSync(p, cfg, opts)...)
 
 	return append(results, cfgResult, checkProjects(p))
 }

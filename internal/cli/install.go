@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	backend "jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/doctor"
 	"jgarner.dev/bud/internal/installer"
@@ -48,15 +49,43 @@ var (
 )
 
 // installComponents sets up each component a device profile can name, in
-// the order profile.Components lists them; swappable in tests. Only ide is
-// built so far, and the rest say which phase of the build plan brings them
-// rather than exiting 0 having done nothing
+// the order profile.Components lists them; swappable in tests. Components
+// still planned name their build phase and return an error.
 var installComponents = map[string]func(g *Globals, yes bool) error{
 	"ide":     installIDE,
-	"harness": notBuilt("OpenCode's pinned install", 1),
+	"harness": installHarness,
 	"app":     notBuilt("the desktop app", 7),
 	"server":  notBuilt("the home-server units", 2),
 	"qwen":    notBuilt("the Qwen box", 3),
+}
+
+func installHarness(_ *Globals, yes bool) error {
+	status := backend.CheckOpenCodeHarness()
+	if status.Bin == "" {
+		if pr := terminalPrompter(yes); pr != nil {
+			ok, err := pr.confirmYes("Install the OpenCode harness with " + backend.Install["opencode"] + "?")
+			if err != nil {
+				return err
+			}
+			yes = ok
+		}
+		if !yes {
+			return fmt.Errorf("OpenCode installation requires consent; rerun bud install --yes to install %s", backend.OpenCodePackage)
+		}
+		if err := npmInstall(backend.OpenCodePackage); err != nil {
+			return err
+		}
+		status = backend.CheckOpenCodeHarness()
+		if status.Bin == "" {
+			return fmt.Errorf("npm finished but opencode isn't on PATH; add npm's global bin directory and rerun bud install")
+		}
+	}
+	if len(status.Problems) != 0 {
+		problem := status.Problems[0]
+		return fmt.Errorf("%s; %s", problem.What, problem.Fix)
+	}
+	fmt.Printf("OpenCode %s is ready.\n", status.Version)
+	return nil
 }
 
 func notBuilt(what string, phase int) func(*Globals, bool) error {

@@ -25,8 +25,10 @@ JSON, one file per profile, named after it (`profiles/<name>.json`). A field bud
 | --- | --- |
 | `version` | Profile format version. Omitted means version 1; unknown versions are refused. |
 | `name` | Lowercase letters, digits and `-`, and the same as the file's name. |
-| `components` | What the device runs, at least one: `ide` (the Neovim IDE), `harness` (OpenCode, the local coding harness), `app` (the chat app), `server` (the home-server units: Hermes, the planning OpenCode, the router, the curator and the KB site), `qwen` (llama.cpp and the local models). |
+| `components` | What the device runs, at least one: `ide` (the Neovim IDE), `harness` (pinned OpenCode), `app` (the chat app), `server` (the home-server units: Hermes, the planning OpenCode, the router, the curator and the KB site), `qwen` (llama.cpp and the local models). |
 | `channel` | `stable` or `edge`. Edge gets every content version and nightly code, while stable gets tagged releases and the content you promote. The laptop runs edge and the home server runs stable, so you try a change before the 24/7 manager gets it. |
 | `content` | One list of globs per kind: `skills`, `agents`, `commands`, `plugins` and `env`. A glob matches IDs, like `"*"`, `"plan-*"` or `"learn"`. A kind left out takes everything, because skills cost only a name and a description until they're used. `env` is the exception: env fragments are per device, so leaving it out takes only `base`. An empty list takes nothing. |
 
 The `model-box` example has no `content`, since nothing on it runs OpenCode or Hermes.
+
+For profiles with `harness`, `bud install --device <name>` verifies the OpenCode executable on PATH. If OpenCode is missing, the installer offers to install the pinned npm package. If a different version is already installed, the error names the required version and leaves the executable in place. A full `bud doctor` reports the same version requirement.

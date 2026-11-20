@@ -163,6 +163,9 @@ func CheckOpenCodeHarness() Status {
 	var settings config.Settings
 	settings.AI.Backend = "opencode"
 	st := Check(settings, false)
+	if st.Version == "opencode v"+openCodeVersion {
+		st.Version = openCodeVersion
+	}
 	if st.Bin == "" || st.Version == openCodeVersion {
 		return st
 	}

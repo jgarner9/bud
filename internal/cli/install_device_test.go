@@ -186,6 +186,8 @@ func TestInstallDeviceOpenCodeHarness(t *testing.T) {
 		wantInstall                       bool
 	}{
 		{name: "already pinned", installed: "2.3.2"},
+		{name: "actual version output", installed: "opencode v2.3.2"},
+		{name: "different prefixed version", installed: "opencode v2.3.20", wantError: "want 2.3.2"},
 		{name: "different version", installed: "2.3.1", wantError: "want 2.3.2"},
 		{name: "unreadable version", installed: "unknown", wantError: "reports version unknown"},
 		{name: "install the pin", after: "2.3.2", wantInstall: true},

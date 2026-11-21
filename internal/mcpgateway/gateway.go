@@ -18,12 +18,13 @@ import (
 	"strings"
 	"time"
 
+	"jgarner.dev/bud/internal/registry"
 	"jgarner.dev/bud/internal/tailnet"
 )
 
 // PrivacyHeader carries the session's privacy tier. A request without it is
 // treated as P0, so a client nobody configured fails closed (Suite D81)
-const PrivacyHeader = "X-Bud-Privacy"
+const PrivacyHeader = registry.PrivacyHeader
 
 // maxBody caps a request body; MCP requests are small, and the gateway has
 // to read each one whole to find its tool calls
@@ -118,11 +119,8 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mcp-gateway: requests from web pages are refused; reach the gateway by its IP address", http.StatusForbidden)
 		return
 	}
-	tier := r.Header.Get(PrivacyHeader)
-	if tier == "" {
-		tier = "P0"
-	}
-	if !slices.Contains([]string{"P0", "P1", "P2"}, tier) {
+	tier, valid := registry.RequestTier(r.Header.Get(PrivacyHeader))
+	if !valid {
 		http.Error(w, fmt.Sprintf("mcp-gateway: %s is %q; use P0, P1 or P2", PrivacyHeader, tier), http.StatusBadRequest)
 		return
 	}

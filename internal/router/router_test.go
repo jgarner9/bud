@@ -17,8 +17,8 @@ func testRegistry(endpoint, key string) *registry.Registry {
 	return &registry.Registry{
 		Providers: map[string]registry.Provider{"go": {API: "openai", Endpoint: endpoint, Key: key}},
 		Models: map[string]registry.Model{
-			"glm-5.3": {Provider: "go", Name: "glm-upstream"},
-			"other":   {Provider: "go", Name: "other-upstream"},
+			"glm-5.3": {Provider: "go", Name: "glm-upstream", Privacy: []string{"P0", "P1", "P2"}},
+			"other":   {Provider: "go", Name: "other-upstream", Privacy: []string{"P0", "P1", "P2"}},
 		},
 		Roles: map[string]registry.Role{
 			"coding": {Pool: []string{"glm-5.3", "other"}},
@@ -232,5 +232,134 @@ func TestEndpointQueryStaysAQuery(t *testing.T) {
 	do(t, rt, "POST", "/v1/chat/completions", `{"model":"glm-5.3"}`, nil)
 	if path != "/v1/chat/completions" || query != "tenant=home" {
 		t.Errorf("path %q query %q, want /v1/chat/completions and tenant=home", path, query)
+	}
+}
+
+// tierRegistry has one model per tier ceiling, so each rule has a model to hit
+func tierRegistry(endpoint string) *registry.Registry {
+	return &registry.Registry{
+		Providers: map[string]registry.Provider{"go": {API: "openai", Endpoint: endpoint}},
+		Models: map[string]registry.Model{
+			"local":  {Provider: "go", Name: "local-up", Privacy: []string{"P0", "P1", "P2"}},
+			"p1":     {Provider: "go", Name: "p1-up", Privacy: []string{"P1", "P2"}},
+			"cloud":  {Provider: "go", Name: "cloud-up", Privacy: []string{"P2"}},
+			"cloud2": {Provider: "go", Name: "cloud2-up", Privacy: []string{"P2"}},
+		},
+		Roles: map[string]registry.Role{
+			"pinned": {Pool: []string{"p1", "local"}, Pin: "cloud"},
+			"cloudy": {Pool: []string{"cloud", "cloud2"}},
+		},
+	}
+}
+
+func tierServer(t *testing.T) (*Router, *http.Header, *string) {
+	t.Helper()
+	var hdr http.Header
+	var body string
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hdr = r.Header.Clone()
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		w.Header().Set("X-Bud-Model", "liar")
+		io.WriteString(w, "{}")
+	}))
+	t.Cleanup(up.Close)
+	rt, err := New(tierRegistry(up.URL), env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rt, &hdr, &body
+}
+
+func chat(model string) string { return `{"model":"` + model + `","messages":[]}` }
+
+func TestNoPrivacyHeaderMeansP0(t *testing.T) {
+	rt, _, _ := tierServer(t)
+	if w := do(t, rt, "POST", "/v1/chat/completions", chat("p1"), nil); w.Code != 403 {
+		t.Fatalf("p1 without header = %d, want 403", w.Code)
+	}
+	if w := do(t, rt, "POST", "/v1/chat/completions", chat("local"), nil); w.Code != 200 {
+		t.Fatalf("local without header = %d, want 200", w.Code)
+	}
+}
+
+func TestP1HeaderLetsAP1ModelAnswer(t *testing.T) {
+	rt, _, body := tierServer(t)
+	w := do(t, rt, "POST", "/v1/chat/completions", chat("p1"), map[string]string{"X-Bud-Privacy": "P1"})
+	if w.Code != 200 || !strings.Contains(*body, "p1-up") {
+		t.Fatalf("code %d body %q", w.Code, *body)
+	}
+}
+
+func TestExplicitModelOfTheWrongTierIs403PointingAtTheList(t *testing.T) {
+	rt, _, _ := tierServer(t)
+	w := do(t, rt, "POST", "/v1/chat/completions", chat("cloud"), map[string]string{"X-Bud-Privacy": "P1"})
+	if w.Code != 403 || !strings.Contains(w.Body.String(), "can't take P1 requests") || !strings.Contains(w.Body.String(), "GET /v1/models") {
+		t.Fatalf("code %d body %s", w.Code, w.Body)
+	}
+}
+
+func TestRoleFallsThroughAnIneligiblePinToTheFirstEligiblePoolMember(t *testing.T) {
+	rt, _, body := tierServer(t)
+	w := do(t, rt, "POST", "/v1/chat/completions", chat("bud/pinned"), map[string]string{"X-Bud-Privacy": "P1"})
+	if w.Code != 200 || !strings.Contains(*body, "p1-up") || w.Header().Get("X-Bud-Model") != "p1" {
+		t.Fatalf("code %d model %q body %q", w.Code, w.Header().Get("X-Bud-Model"), *body)
+	}
+	w = do(t, rt, "POST", "/v1/chat/completions", chat("bud/pinned"), map[string]string{"X-Bud-Privacy": "P2"})
+	if w.Header().Get("X-Bud-Model") != "cloud" {
+		t.Fatalf("an eligible pin should win, got %q", w.Header().Get("X-Bud-Model"))
+	}
+}
+
+func TestRoleWithNoEligibleMemberIs403(t *testing.T) {
+	rt, _, _ := tierServer(t)
+	w := do(t, rt, "POST", "/v1/chat/completions", chat("bud/cloudy"), map[string]string{"X-Bud-Privacy": "P1"})
+	if w.Code != 403 || !strings.Contains(w.Body.String(), "no model in role cloudy takes P1 requests") {
+		t.Fatalf("code %d body %s", w.Code, w.Body)
+	}
+}
+
+func TestInvalidPrivacyHeaderIs400NamingTheValidValues(t *testing.T) {
+	rt, _, _ := tierServer(t)
+	w := do(t, rt, "POST", "/v1/chat/completions", chat("local"), map[string]string{"X-Bud-Privacy": "P9"})
+	if w.Code != 400 || !strings.Contains(w.Body.String(), "P0, P1 or P2") {
+		t.Fatalf("code %d body %s", w.Code, w.Body)
+	}
+}
+
+func TestModelsListIsFilteredByTier(t *testing.T) {
+	rt, _, _ := tierServer(t)
+	ids := func(tier string) string {
+		hdr := map[string]string{}
+		if tier != "" {
+			hdr["X-Bud-Privacy"] = tier
+		}
+		var out struct{ Data []struct{ ID string } }
+		json.Unmarshal(do(t, rt, "GET", "/v1/models", "", hdr).Body.Bytes(), &out)
+		var s []string
+		for _, d := range out.Data {
+			s = append(s, d.ID)
+		}
+		return strings.Join(s, ",")
+	}
+	if got := ids(""); got != "bud/pinned,local" {
+		t.Errorf("P0 = %s", got)
+	}
+	if got := ids("P1"); got != "bud/pinned,local,p1" {
+		t.Errorf("P1 = %s", got)
+	}
+	if got := ids("P2"); got != "bud/cloudy,bud/pinned,cloud,cloud2,local,p1" {
+		t.Errorf("P2 = %s", got)
+	}
+}
+
+func TestPrivacyHeaderIsNotForwardedAndTheAnsweringModelIsNamed(t *testing.T) {
+	rt, hdr, _ := tierServer(t)
+	w := do(t, rt, "POST", "/v1/chat/completions", chat("p1"), map[string]string{"X-Bud-Privacy": "P1"})
+	if v := (*hdr).Get("X-Bud-Privacy"); v != "" {
+		t.Errorf("upstream saw X-Bud-Privacy %q", v)
+	}
+	if got := w.Result().Header.Values("X-Bud-Model"); len(got) != 1 || got[0] != "p1" {
+		t.Errorf("X-Bud-Model = %v, want [p1]", got)
 	}
 }

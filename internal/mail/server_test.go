@@ -136,9 +136,9 @@ func (f *fakeAcct) Send(_ context.Context, m Outgoing) (string, error) {
 	return "<new@example.com>", f.err
 }
 
-func (f *fakeAcct) Reply(_ context.Context, folder string, uid uint32, to, cc []*netmail.Address, body string) (string, error) {
+func (f *fakeAcct) Reply(_ context.Context, folder string, uid uint32, to, cc []*netmail.Address, subject, body string) (string, error) {
 	f.gotFolder, f.gotUID = folder, uid
-	f.sent = &Outgoing{To: to, Cc: cc, Body: body}
+	f.sent = &Outgoing{To: to, Cc: cc, Subject: subject, Body: body}
 	return "<re@example.com>", f.err
 }
 

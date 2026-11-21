@@ -37,6 +37,11 @@ func NewLog(path string) (*Log, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("make the mail action log's directory: %w", err)
 	}
+	// a log from before, or one made by hand, is private from the start,
+	// not only once something is appended
+	if err := os.Chmod(path, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("set the mail action log to 0600: %w", err)
+	}
 	return &Log{path: path, now: time.Now}, nil
 }
 

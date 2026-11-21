@@ -186,7 +186,7 @@ var titles = map[string]struct {
 	},
 	"mcp:mail/reply_message": {
 		title: func(string) string { return "Send this reply from Jason's iCloud?" },
-		whole: []string{"to", "cc", "body"},
+		whole: []string{"to", "cc", "subject", "body"},
 	},
 	"router:p0-fallback": {
 		title: func(t string) string {

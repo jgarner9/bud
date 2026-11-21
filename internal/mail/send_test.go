@@ -269,12 +269,35 @@ func TestMoveToTrashChecksItsArguments(t *testing.T) {
 	}
 }
 
+func TestAMoveIsLoggedWhenTheLogoutFails(t *testing.T) {
+	a := newTestAccount(t, replay(t, "trash_dropped"))
+	if _, _, err := a.MoveToTrash(context.Background(), "INBOX", []uint32{7, 8}); err != nil {
+		t.Fatal(err)
+	}
+	if acts, _ := a.Log.Read(); len(acts) != 1 || acts[0].MessageID != "<sale@example.net>" {
+		t.Fatalf("log %+v", acts)
+	}
+}
+
+func TestNewLogMakesAnOldLogPrivate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mail-actions.jsonl")
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewLog(path); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("log %v, %v", info, err)
+	}
+}
+
 func TestAReplyGoesOnlyToPeopleOnTheOriginalAndThreads(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeSMTP(t)
 	a := newTestAccount(t, replay(t, "reply"))
 	a.Sender = newTestSender(t, f.addr)
-	id, err := a.Reply(ctx, "INBOX", 7, addrs(t, "sam@example.com", "pat@example.com"), addrs(t, "lee@example.com"), "Noon works.")
+	id, err := a.Reply(ctx, "INBOX", 7, addrs(t, "sam@example.com", "pat@example.com"), addrs(t, "lee@example.com"), "Re: Lunch?", "Noon works.")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,14 +324,32 @@ func TestAReplyToSomeoneNotOnTheOriginalIsRefused(t *testing.T) {
 	ctx := context.Background()
 	a := newTestAccount(t, replay(t, "reply"))
 	a.Sender = newTestSender(t, "127.0.0.1:1")
-	_, err := a.Reply(ctx, "INBOX", 7, addrs(t, "sam@example.com", "attacker@evil.example"), nil, "hi")
+	_, err := a.Reply(ctx, "INBOX", 7, addrs(t, "sam@example.com", "attacker@evil.example"), nil, "Re: Lunch?", "hi")
 	if err == nil || !strings.Contains(err.Error(), "attacker@evil.example isn't on the message") {
 		t.Fatalf("got %v", err)
 	}
 	b := newTestAccount(t, replay(t, "reply"))
 	b.Sender = a.Sender
-	if _, err := b.Reply(ctx, "INBOX", 7, addrs(t, "pat@example.com"), nil, "hi"); err == nil || !strings.Contains(err.Error(), "who sent the message") {
+	if _, err := b.Reply(ctx, "INBOX", 7, addrs(t, "pat@example.com"), nil, "Re: Lunch?", "hi"); err == nil || !strings.Contains(err.Error(), "who sent the message") {
 		t.Fatalf("a reply that leaves out the sender: %v", err)
+	}
+	c := newTestAccount(t, replay(t, "reply"))
+	c.Sender = a.Sender
+	if _, err := c.Reply(ctx, "INBOX", 7, addrs(t, "sam@example.com"), nil, "Lunch?", "hi"); err == nil || !strings.Contains(err.Error(), `"Re: Lunch?"`) {
+		t.Fatalf("a reply under another subject: %v", err)
+	}
+}
+
+func TestReplySubject(t *testing.T) {
+	for in, want := range map[string]string{
+		"Lunch?":               "Re: Lunch?",
+		"RE: Lunch?":           "RE: Lunch?",
+		"  Lunch\r\n  at noon": "Re: Lunch at noon",
+		"":                     "Re: ",
+	} {
+		if got := ReplySubject(in); got != want {
+			t.Errorf("ReplySubject(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 
@@ -340,15 +381,18 @@ func TestTheSendToolsTakeListsAndOnlyTheirOwnArguments(t *testing.T) {
 			t.Errorf("%s: %q, want %q", args, e, want)
 		}
 	}
-	if e := errorText(callTool(t, s, "reply_message", `{"uid":7,"to":["sam@example.com"],"subject":"x","body":"ok"}`)); !strings.Contains(e, `no "subject"`) {
-		t.Errorf("a subject on a reply: %q", e)
+	if e := errorText(callTool(t, s, "reply_message", `{"uid":7,"to":["sam@example.com"],"body":"ok"}`)); !strings.Contains(e, "subject") {
+		t.Errorf("a reply without a subject: %q", e)
+	}
+	if e := errorText(callTool(t, s, "move_to_trash", `{"uids":[7],"to":["sam@example.com"]}`)); !strings.Contains(e, `no "to"`) {
+		t.Errorf("a list of recipients on move_to_trash: %q", e)
 	}
 	f.sent = nil
-	r = callTool(t, s, "reply_message", `{"uid":7,"to":["sam@example.com"],"body":"ok"}`)
-	if e := errorText(r); e != "" || f.gotUID != 7 || f.gotFolder != "INBOX" || f.sent == nil {
+	r = callTool(t, s, "reply_message", `{"uid":7,"to":["sam@example.com"],"subject":"Re: Hi","body":"ok"}`)
+	if e := errorText(r); e != "" || f.gotUID != 7 || f.gotFolder != "INBOX" || f.sent == nil || f.sent.Subject != "Re: Hi" {
 		t.Errorf("reply: %q, uid %d, %+v", e, f.gotUID, f.sent)
 	}
-	if e := errorText(callTool(t, s, "reply_message", `{"uid":7,"to":["sam@example.com"],"body":"`+strings.Repeat("x", MaxBody+1)+`"}`)); !strings.Contains(e, "4000") {
+	if e := errorText(callTool(t, s, "reply_message", `{"uid":7,"to":["sam@example.com"],"subject":"Re: Hi","body":"`+strings.Repeat("x", MaxBody+1)+`"}`)); !strings.Contains(e, "4000") {
 		t.Errorf("a long reply: %q", e)
 	}
 }

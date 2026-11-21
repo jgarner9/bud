@@ -269,9 +269,9 @@ func TestAMailSendShowsTheWholeMessage(t *testing.T) {
 	if got != want {
 		t.Errorf("summary:\n%s\nwant:\n%s", got, want)
 	}
-	args, _ = json.Marshal(map[string]any{"folder": "INBOX", "uid": 7, "to": []string{"sam@example.com"}, "cc": []string{"lee@example.com"}, "body": "ok"})
+	args, _ = json.Marshal(map[string]any{"folder": "INBOX", "uid": 7, "to": []string{"sam@example.com"}, "cc": []string{"lee@example.com"}, "subject": "Re: Lunch?", "body": "ok"})
 	got = summarize(Prompt{Invocation: Invocation{Action: "mcp:mail/reply_message", Target: "mail", Arguments: args}})
-	want = "Send this reply from Jason's iCloud?\nto: sam@example.com\ncc: lee@example.com\nbody: ok\nfolder: INBOX\nuid: 7"
+	want = "Send this reply from Jason's iCloud?\nto: sam@example.com\ncc: lee@example.com\nsubject: Re: Lunch?\nbody: ok\nfolder: INBOX\nuid: 7"
 	if got != want {
 		t.Errorf("reply summary:\n%s\nwant:\n%s", got, want)
 	}

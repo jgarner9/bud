@@ -16,7 +16,8 @@ import (
 
 // replay serves the transcript testdata/<name>.imap on loopback: it sends
 // each S: line, and fails the test on any line the client sends that
-// isn't the next C: line, or on lines left over when the client hangs up
+// isn't the next C: line, or on lines left over when the client hangs up.
+// An X: line drops the connection there
 func replay(t *testing.T, name string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join("testdata", name+".imap"))
@@ -83,6 +84,9 @@ func replay(t *testing.T, name string) string {
 					t.Errorf("%s: the client sent\n\t%q\nwhere the transcript expects\n\t%q", name, got, text)
 					return
 				}
+			case "X":
+				// the server drops the connection here
+				return
 			default:
 				t.Errorf("%s: bad transcript line %q", name, lines[i])
 				return

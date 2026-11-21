@@ -23,7 +23,7 @@ type Backend interface {
 	Restore(ctx context.Context, messageID string) (Action, error)
 	Digest(since time.Time) ([]Action, error)
 	Send(ctx context.Context, m Outgoing) (string, error)
-	Reply(ctx context.Context, folder string, uid uint32, to, cc []*netmail.Address, body string) (string, error)
+	Reply(ctx context.Context, folder string, uid uint32, to, cc []*netmail.Address, subject, body string) (string, error)
 }
 
 // Server answers MCP over Streamable HTTP, one JSON answer per POST and no
@@ -302,13 +302,14 @@ var toolList = []tool{
 	{
 		Name:        "reply_message",
 		Title:       "Reply to an email",
-		Description: "Replies to one message by folder and uid, threaded under it with Re: on its subject. Name the recipients: to must hold whoever it came from (Reply-To, else From), and every recipient must be on the original. It waits for Jason's approval on his phone, which shows the recipients and whole body.",
-		InputSchema: object([]string{"uid", "to", "body"}, map[string]any{
-			"folder": strProp("The folder the message is in. Default INBOX."),
-			"uid":    map[string]any{"type": "integer", "minimum": 1, "description": "The message's uid from search_messages."},
-			"to":     addrList("Who the reply goes to: the sender, and for reply-all the others on To."),
-			"cc":     addrList("Others on the original to copy."),
-			"body":   bodyProp,
+		Description: "Replies to one message by folder and uid, threaded under it. Name the recipients and the subject, so Jason's approval shows them: to must hold whoever it came from (Reply-To, else From), every recipient must be on the original, and subject must be the original's with Re: in front (one Re:, not two). It waits for Jason's approval on his phone, which shows the recipients, subject and whole body.",
+		InputSchema: object([]string{"uid", "to", "subject", "body"}, map[string]any{
+			"folder":  strProp("The folder the message is in. Default INBOX."),
+			"uid":     map[string]any{"type": "integer", "minimum": 1, "description": "The message's uid from search_messages."},
+			"to":      addrList("Who the reply goes to: the sender, and for reply-all the others on To."),
+			"cc":      addrList("Others on the original to copy."),
+			"subject": strProp("The original's subject with Re: in front, such as Re: Lunch?, unless it already starts with Re:."),
+			"body":    bodyProp,
 		}),
 		Annotations: sends,
 	},
@@ -355,20 +356,21 @@ func (s *Server) call(ctx context.Context, name string, raw json.RawMessage) (an
 		if err := json.Unmarshal(raw, &rest); err != nil {
 			return nil, fmt.Errorf("the arguments don't fit %s: %w", name, err)
 		}
-		if len(to.To) > 0 && name != "search_messages" {
+		if len(to.To) > 0 && (name == "send_message" || name == "reply_message") {
 			if err := json.Unmarshal(to.To, &a.ToList); err != nil {
 				return nil, fmt.Errorf("to: give a list of addresses")
 			}
 			delete(rest, "to")
+		}
+		// another tool's argument is named before its type is checked
+		if err := allowedArgs(name, rest); err != nil {
+			return nil, err
 		}
 		clean, _ := json.Marshal(rest)
 		dec := json.NewDecoder(strings.NewReader(string(clean)))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&a); err != nil {
 			return nil, fmt.Errorf("the arguments don't fit %s: %w", name, err)
-		}
-		if err := allowedArgs(name, rest); err != nil {
-			return nil, err
 		}
 	}
 	if a.Folder == "" {
@@ -493,10 +495,10 @@ func (s *Server) call(ctx context.Context, name string, raw json.RawMessage) (an
 			if a.UID == nil || *a.UID == 0 {
 				return nil, errors.New("uid: give the uid of the message being answered, from search_messages")
 			}
-			if err := (Outgoing{To: to, Cc: cc, Subject: "x", Body: a.Body}).Check(); err != nil {
+			if err := (Outgoing{To: to, Cc: cc, Subject: a.Subject, Body: a.Body}).Check(); err != nil {
 				return nil, err
 			}
-			id, err = s.acct.Reply(ctx, a.Folder, *a.UID, to, cc, a.Body)
+			id, err = s.acct.Reply(ctx, a.Folder, *a.UID, to, cc, a.Subject, a.Body)
 		}
 		if err != nil {
 			return nil, err

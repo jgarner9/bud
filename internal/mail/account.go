@@ -20,7 +20,10 @@ type Account struct {
 	tls  *tls.Config // nil for a plain connection to loopback (tests)
 	user string
 	pass string
-	mu   sync.Mutex
+	mu   sync.Mutex // one IMAP session at a time
+	// writes holds a move, restore or send together with its log entry,
+	// so a restore or the digest never sees a move that isn't logged yet
+	writes sync.Mutex
 
 	// Trash is the folder cleanup moves to when no folder has the \Trash
 	// special-use flag
@@ -63,7 +66,11 @@ func (a *Account) session(ctx context.Context, fn func(*Client) error) error {
 		_ = c.Close()
 		return err
 	}
-	return c.Logout(ctx)
+	// the work is done once fn returns: a LOGOUT that fails (a dropped
+	// connection, say) mustn't turn a move that happened into a failure,
+	// which would skip its log entry
+	_ = c.Logout(ctx)
+	return nil
 }
 
 // FolderInfo is a folder with its counts

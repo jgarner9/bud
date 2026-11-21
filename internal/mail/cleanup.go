@@ -58,6 +58,8 @@ func (a *Account) MoveToTrash(ctx context.Context, folder string, uids []uint32)
 	if len(uids) == 0 || len(uids) > MaxMove {
 		return nil, "", fmt.Errorf("uids: give 1 to %d", MaxMove)
 	}
+	a.writes.Lock()
+	defer a.writes.Unlock()
 	var moved []Moved
 	var trash string
 	err := a.session(ctx, func(c *Client) error {
@@ -105,6 +107,8 @@ func (a *Account) Restore(ctx context.Context, messageID string) (Action, error)
 	if a.Log == nil {
 		return Action{}, ErrNoLog
 	}
+	a.writes.Lock()
+	defer a.writes.Unlock()
 	acts, err := a.Log.Read()
 	if err != nil {
 		return Action{}, err
@@ -150,6 +154,8 @@ func (a *Account) Digest(since time.Time) ([]Action, error) {
 	if a.Log == nil {
 		return nil, ErrNoLog
 	}
+	a.writes.Lock()
+	defer a.writes.Unlock()
 	acts, err := a.Log.Read()
 	if err != nil {
 		return nil, err
@@ -165,6 +171,12 @@ func (a *Account) Digest(since time.Time) ([]Action, error) {
 
 // Send sends a new message and logs it
 func (a *Account) Send(ctx context.Context, m Outgoing) (string, error) {
+	a.writes.Lock()
+	defer a.writes.Unlock()
+	return a.send(ctx, m)
+}
+
+func (a *Account) send(ctx context.Context, m Outgoing) (string, error) {
 	if a.Sender == nil {
 		return "", errors.New("sending isn't set up: set BUD_MAIL_FROM and restart bud mail-mcp")
 	}
@@ -174,8 +186,6 @@ func (a *Account) Send(ctx context.Context, m Outgoing) (string, error) {
 	if err := m.Check(); err != nil {
 		return "", err
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	id, err := a.Sender.Send(ctx, m)
 	if err != nil {
 		return "", err
@@ -193,8 +203,12 @@ func (a *Account) Send(ctx context.Context, m Outgoing) (string, error) {
 // Reply sends a reply to the message at folder and uid. Every recipient
 // must be on the original (its Reply-To or From, To and Cc, less this
 // account's own addresses), and the one it came from (Reply-To, else From)
-// must be in to, so the approval shows who it really goes to (D107)
-func (a *Account) Reply(ctx context.Context, folder string, uid uint32, to, cc []*netmail.Address, body string) (string, error) {
+// must be in to, so the approval shows who it really goes to (D107). The
+// subject must be the one the reply gets, "Re: " and the original's, for
+// the same reason
+func (a *Account) Reply(ctx context.Context, folder string, uid uint32, to, cc []*netmail.Address, subject, body string) (string, error) {
+	a.writes.Lock()
+	defer a.writes.Unlock()
 	var orig Header
 	err := a.session(ctx, func(c *Client) error {
 		if _, err := c.Examine(ctx, folder); err != nil {
@@ -239,13 +253,22 @@ func (a *Account) Reply(ctx context.Context, folder string, uid uint32, to, cc [
 	if !hasPrimary {
 		return "", fmt.Errorf("to: a reply goes to %s, who sent the message", strings.Join(primary, ", "))
 	}
-	subject := orig.Subject
-	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
-		subject = "Re: " + subject
+	want := ReplySubject(orig.Subject)
+	if subject != want {
+		return "", fmt.Errorf("subject: a reply to this message has the subject %q; give exactly that", want)
 	}
-	subject = strings.Join(strings.Fields(subject), " ")
 	refs := strings.TrimSpace(orig.References + " " + orig.MessageID)
-	return a.Send(ctx, Outgoing{To: to, Cc: cc, Subject: subject, Body: body, InReplyTo: orig.MessageID, References: refs})
+	return a.send(ctx, Outgoing{To: to, Cc: cc, Subject: want, Body: body, InReplyTo: orig.MessageID, References: refs})
+}
+
+// ReplySubject is the subject a reply gets: the original's on one line,
+// with "Re: " in front unless it has one
+func ReplySubject(orig string) string {
+	s := strings.Join(strings.Fields(orig), " ")
+	if !strings.HasPrefix(strings.ToLower(s), "re:") {
+		s = "Re: " + s
+	}
+	return s
 }
 
 // addrOf is the lower-cased address in "Name <address>" or a bare address

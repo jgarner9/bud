@@ -111,6 +111,7 @@ class ServiceTest(unittest.TestCase):
                 self.assertEqual(400, request(AGENT, "/vector_put", {**stale, "body_hash": 1})[0])
                 self.assertEqual(403, request(CLOUD, "/vector_pending", {"model": "synthetic"})[0])
                 self.assertEqual(400, request(AGENT, "/vector_pending", {"model": "synthetic", "privacy": ["P2"]})[0])
+                self.assertEqual([], request(AGENT, "/vector_pending", {"model": "synthetic", "after": data["id"]})[1]["records"])
                 self.assertEqual(200, request(AGENT, "/vector_put", {**stale, "body_hash": body_hash})[0])
                 self.assertEqual([], request(AGENT, "/vector_pending", {"model": "synthetic"})[1]["records"])
                 status, hits = request(AGENT, "/vector_search", {"model": "synthetic", "values": [0.1, 0.2]})
@@ -120,6 +121,8 @@ class ServiceTest(unittest.TestCase):
                 self.assertEqual(data["id"], request(AGENT, "/retrieve", req)[1]["records"][0]["id"])
                 self.assertEqual([], request(CLOUD, "/retrieve", req)[1]["records"])
                 self.assertEqual(400, request(CLOUD, "/retrieve", {**req, "privacy": ["P0"]})[0])
+                self.assertEqual(data["id"], request(AGENT, "/retrieve", {"query": "orchard"})[1]["records"][0]["id"])
+                self.assertEqual(400, request(AGENT, "/retrieve", {"query": "orchard", "model": "synthetic"})[0])
 
             self.assertEqual(404, request(CLOUD, "/reference", {"id": data["id"], "source": "test", "reference_key": "1"})[0])
             self.assertEqual([], request(CLOUD, "/export", {})[1]["records"])

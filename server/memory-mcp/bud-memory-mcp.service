@@ -1,0 +1,29 @@
+# The home server's memory MCP server (Suite D102, D108), as a systemd user
+# unit:
+#
+#   cp bud-memory-mcp.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-memory-mcp
+#
+# op run resolves the five memory-service tokens in the env file through
+# the Bud vault's service account, whose token the first EnvironmentFile
+# holds; they reach the server's environment and never touch disk. It
+# listens on loopback only: every runtime reaches it through the MCP
+# gateway, which tells it each session's tier. It must run as the user
+# that owns the memory service's socket (mode 0600), and it embeds on the
+# registry's embedding server, so it starts after both.
+[Unit]
+Description=Bud memory MCP server
+After=network-online.target bud-memory.service bud-embed.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/memory-mcp.env -- %h/.local/bin/bud memory-mcp --listen 127.0.0.1:8793
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

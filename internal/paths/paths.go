@@ -222,6 +222,18 @@ func (p *Paths) ReviewSocket() string {
 	return filepath.Join(p.Runtime, "review.sock")
 }
 
+// MemorySocket is the working-memory service's socket, which its unit
+// (server/memory/bud-memory.service) makes as %t/bud-memory/memory.sock: a
+// sibling of Runtime, since that service owns its own runtime dir. It is
+// empty when there is no runtime dir
+func (p *Paths) MemorySocket() string {
+	if p.Runtime == "" {
+		return ""
+	}
+
+	return filepath.Join(filepath.Dir(p.Runtime), "bud-memory", "memory.sock")
+}
+
 // ReviewSecret is the 0600 file holding the reviewer secret, defense in depth on top of
 // the socket's permissions. It lives in state so it survives a reboot
 func (p *Paths) ReviewSecret() string { return filepath.Join(p.State, "review.secret") }

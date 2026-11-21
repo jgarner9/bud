@@ -8,6 +8,9 @@ from vectors import VectorIndex
 
 
 def retrieve(db, query, model, values, tiers, source=None, since=None, until=None, limit=20):
+    """Approved records in tiers matching query, ranked by text and, when
+    model and values are given, by vector too. Without them it ranks by
+    text alone, with the same filters, for when the embedder is down."""
     if not isinstance(query, str) or not query.strip() or len(query) > 4096:
         raise ValueError("query must be a non-empty string up to 4096 characters")
     if not isinstance(tiers, (list, tuple)) or not tiers or any(t not in PRIVACY_TIERS for t in tiers):
@@ -29,9 +32,12 @@ def retrieve(db, query, model, values, tiers, source=None, since=None, until=Non
     if since and until and since > until:
         raise ValueError("since must not be after until")
 
-    packed = VectorIndex._packed(values)
-    if not isinstance(model, str) or not model.strip():
-        raise ValueError("model is required")
+    if (model is None) != (values is None):
+        raise ValueError("give model and values together, or neither")
+    if model is not None:
+        packed = VectorIndex._packed(values)
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("model is required")
     filters = ["r.state = 'approved'", "r.privacy IN (" + ",".join("?" for _ in tiers) + ")"]
     args = list(tiers)
     if source is not None:
@@ -53,7 +59,9 @@ def retrieve(db, query, model, values, tiers, source=None, since=None, until=Non
         f"WHERE records_fts MATCH ? AND {where} ORDER BY bm25(records_fts), r.id LIMIT ?",
         (phrase, *args, candidate_limit),
     ).fetchall()
-    entry = db.execute("SELECT dimensions, table_name FROM embedding_models WHERE model = ?", (model,)).fetchone()
+    entry = None
+    if model is not None:
+        entry = db.execute("SELECT dimensions, table_name FROM embedding_models WHERE model = ?", (model,)).fetchone()
     vector_rows = []
     if entry:
         dimensions, table = entry

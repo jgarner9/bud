@@ -205,3 +205,40 @@ func TestP0RequestsPastTheHeldLimitAreRefusedAtOnce(t *testing.T) {
 		t.Error("asked, or went upstream")
 	}
 }
+
+func TestOneApprovalCoversTheRestOfItsTurnAndTheNextMessageAsksAgain(t *testing.T) {
+	asked := 0
+	rig := newP0Rig(t, time.Minute, func(ctx context.Context, p approval.Prompt) (approval.Choice, error) {
+		asked++
+		return approval.AllowOnce, nil
+	})
+	conv := map[string]string{"x-opencode-session": "hermes-conv-1"}
+	turn1 := `{"model":"bud/coding","messages":[{"role":"user","content":"plan my day"}]}`
+	// the tool loop's next call: the same message, then the tool's answer
+	turn1b := `{"model":"bud/coding","messages":[{"role":"user","content":"plan my day"},{"role":"assistant","content":"","tool_calls":[]},{"role":"tool","content":"3 events"}]}`
+	turn2 := `{"model":"bud/coding","messages":[{"role":"user","content":"plan my day"},{"role":"assistant","content":"done"},{"role":"user","content":"and tomorrow"}]}`
+	send := func(body string, h map[string]string) {
+		t.Helper()
+		if w := do(t, rig.rt, "POST", "/v1/chat/completions", body, h); w.Code != 200 {
+			t.Fatalf("status %d: %s", w.Code, w.Body)
+		}
+	}
+	send(turn1, conv)
+	send(turn1b, conv)
+	if asked != 1 {
+		t.Errorf("one turn asked %d times, want once", asked)
+	}
+	send(turn2, conv)
+	if asked != 2 {
+		t.Errorf("the next message asked %d times in all, want 2", asked)
+	}
+	// another conversation, or none named, never rides on this approval
+	send(turn1b, map[string]string{"x-opencode-session": "hermes-conv-2"})
+	send(turn1b, nil)
+	if asked != 4 {
+		t.Errorf("other conversations asked %d times in all, want 4", asked)
+	}
+	if got := rig.cloud.hits.Load(); got != 5 {
+		t.Errorf("upstream got %d requests, want 5", got)
+	}
+}

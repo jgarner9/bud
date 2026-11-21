@@ -69,6 +69,10 @@ type Router struct {
 	// bodies (up to 10 MiB each) can't pile up while the local model is down
 	p0Held chan struct{}
 	p0Wait time.Duration
+	// p0Turns holds the turns whose fallback Jason approved, until when
+	// (see turnKey), so the rest of one turn doesn't ask him again
+	p0Mu    sync.Mutex
+	p0Turns map[string]time.Time
 
 	noteMu sync.Mutex
 	noted  map[string]bool
@@ -115,6 +119,7 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 	}
 	rt.approvals, rt.p0Wait = opts.Approvals, opts.P0Wait
 	rt.p0Held = make(chan struct{}, maxP0Held)
+	rt.p0Turns = map[string]time.Time{}
 	if rt.p0Wait <= 0 {
 		rt.p0Wait = 10 * time.Minute
 	}

@@ -230,3 +230,27 @@ func TestSocketReviewRefusesASymlinkedOrFIFOSecret(t *testing.T) {
 		t.Fatal("a FIFO secret blocked the review")
 	}
 }
+
+func TestTheSummaryIsPlainTextWithTheFieldsWorthReading(t *testing.T) {
+	exp := time.Date(2026, 11, 21, 5, 59, 0, 0, time.Local)
+	got := summarize(Prompt{ExpiresAt: exp, Invocation: Invocation{
+		Action: "router:p0-fallback", Target: "glm-5.3-flash",
+		Arguments: json.RawMessage(`{"role":"manager","endpoint":"/v1/chat/completions","body_sha256":"abc123"}`),
+	}})
+	want := "The local model is down. Send this private (P0) chat to glm-5.3-flash instead?\nrole: manager\nExpires at 05:59."
+	if got != want {
+		t.Errorf("summary:\n%s\nwant:\n%s", got, want)
+	}
+
+	got = summarize(Prompt{Invocation: Invocation{
+		Action: "mcp:linear/save_issue", Target: "linear",
+		Arguments: json.RawMessage(`{"title":"Fix \"it\"","labels":["a","b"],"team":"JGA"}`),
+	}})
+	want = "mcp:linear/save_issue on linear\nlabels: [\"a\",\"b\"]\nteam: JGA\ntitle: Fix \"it\""
+	if got != want {
+		t.Errorf("summary:\n%s\nwant:\n%s", got, want)
+	}
+	if strings.Contains(summarize(Prompt{Invocation: Invocation{Action: "x", Target: "y", Arguments: json.RawMessage(`{"note":"` + strings.Repeat("z", 500) + `"}`)}}), strings.Repeat("z", maxSummaryValue+1)) {
+		t.Errorf("a long value isn't cut to %d characters", maxSummaryValue)
+	}
+}

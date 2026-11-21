@@ -93,6 +93,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | `bud mcp-gateway` (`internal/mcpgateway`): the home server's MCP gateway and its unit in `server/mcp-gateway/` | `docs/internals/mcp-gateway.md` |
 | `bud router` (`internal/router`): the home server's OpenAI-compatible router over the registry's providers and its unit in `server/router/` | `docs/internals/router.md` |
 | `bud calendar-mcp` (`internal/calendar`): the calendar MCP server over CalDAV and its unit in `server/calendar-mcp/` | `docs/internals/calendar.md` |
+| `bud mail-mcp` (`internal/mail`): the iCloud mail MCP server over IMAP, with its own IMAP client | `docs/internals/mail.md` |
 | `bud mcp-ops` (`internal/mcpops`): the Bud ops MCP server and its unit in `server/mcp-ops/` | `docs/internals/mcp-ops.md` |
 | Signal for Hermes: the `bud-signal` plugin in `server/hermes/plugins/`, approvals by reaction or code, signal-cli's unit in `server/signal-cli/` | `docs/internals/signal.md` |
 | `internal/content`: content bundles, `content.json`, `channel.json` and their signatures | `docs/internals/content.md` |

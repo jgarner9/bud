@@ -1,0 +1,19 @@
+# Account.Folders: one connection, LIST, then STATUS for each folder that
+# can hold mail. Hand-written (see login_list.imap for the format)
+S: * OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] IMAP4 service ready
+C: a1 LOGIN "someone@example.com" "app-pass"
+S: a1 OK [CAPABILITY IMAP4rev1 UIDPLUS MOVE] user logged in
+C: a2 LIST "" "*"
+S: * LIST (\HasNoChildren \Trash) "/" "Deleted Messages"
+S: * LIST (\Noselect \HasChildren) "/" Notes
+S: * LIST (\HasNoChildren) "/" "INBOX"
+S: a2 OK LIST completed
+C: a3 STATUS "INBOX" (MESSAGES UNSEEN UIDNEXT UIDVALIDITY)
+S: * STATUS "INBOX" (MESSAGES 3 UNSEEN 1 UIDNEXT 42 UIDVALIDITY 1700000000)
+S: a3 OK STATUS completed
+C: a4 STATUS "Deleted Messages" (MESSAGES UNSEEN UIDNEXT UIDVALIDITY)
+S: * STATUS "Deleted Messages" (MESSAGES 12 UNSEEN 0 UIDNEXT 300 UIDVALIDITY 1700000001)
+S: a4 OK STATUS completed
+C: a5 LOGOUT
+S: * BYE logging out
+S: a5 OK LOGOUT completed

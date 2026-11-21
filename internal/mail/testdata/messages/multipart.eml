@@ -1,0 +1,30 @@
+From: =?UTF-8?Q?Ren=C3=A9e?= <renee@example.com>
+To: someone@example.com, "Sam Lee" <sam@example.com>
+Subject: =?ISO-8859-1?Q?Caf=E9?= plans
+Date: Tue, 3 Nov 2026 09:15:00 -0600
+Message-ID: <m1@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="outer"
+
+--outer
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+See you at the caf=C3=A9 at noon.=
+ Bring the map.
+--alt
+Content-Type: text/html; charset=utf-8
+
+<p>See you <b>at noon</b></p>
+--alt--
+--outer
+Content-Type: application/pdf; name="map.pdf"
+Content-Disposition: attachment; filename="map.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0x
+LjQK
+--outer--

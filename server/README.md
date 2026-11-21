@@ -8,5 +8,6 @@ Home-server setup and service units for Hermes, the Bud MCP servers and Signal. 
 | `calendar-mcp/` | The calendar MCP server's unit, over iCloud CalDAV (Suite D82) |
 | `contacts-mcp/` | Read-only iCloud contacts unit for private Hermes (Suite D88) |
 | `mcp-ops/` | The Bud ops MCP server's unit (Suite D83) |
+| `embed/` | The embedding server's unit: llama.cpp with Qwen3-Embedding-0.6B on the CPU, for working memory (Suite D52, JGA-294) |
 | `hermes/` | How Hermes, the manager, is set up; bud renders its config and Hermes installs its own unit (Suite D48). `hermes/plugins/bud-signal/` is the Hermes plugin that lets Signal reactions answer approvals (D30) |
 | `signal-cli/` | signal-cli's daemon unit, Signal for Hermes on the bot number (Suite D30) |

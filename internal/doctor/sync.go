@@ -90,6 +90,7 @@ func checkSync(p *paths.Paths, cfg config.Settings, opts Options) []Result {
 	}
 	if reg != nil {
 		results = append(results, checkEndpoints(ctx, reg))
+		results = append(results, checkEmbeddings(ctx, reg)...)
 	}
 
 	return results

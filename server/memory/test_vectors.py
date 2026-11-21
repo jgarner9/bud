@@ -44,5 +44,28 @@ class VectorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.index.search("model", [1], ["P0"])
 
+    def test_pending_lists_what_a_model_still_has_to_embed(self):
+        done = self.store.stage("a", "1", "fact", "P0", "embedded")
+        edited = self.store.stage("a", "2", "fact", "P0", "edited later")
+        fresh = self.store.stage("a", "3", "fact", "P0", "never embedded")
+        hidden = self.store.stage("a", "4", "fact", "P2", "another tier")
+        staged = self.store.stage("a", "5", "fact", "P0", "not approved")
+        for rid in (done, edited, fresh, hidden):
+            self.store.approve(rid)
+        self.index.put(done, "old", [1, 0])
+        self.index.put(edited, "old", [1, 0])
+        self.store.db.execute("UPDATE records SET body = ?, body_hash = ? WHERE id = ?", ("changed", "new", edited))
+        self.assertEqual([r[0] for r in self.index.pending("old", ["P0"])], [edited, fresh])
+        # a new model starts with every approved record pending, then drains
+        self.assertEqual([r[0] for r in self.index.pending("new", ["P0"])], [done, edited, fresh])
+        self.assertEqual(self.index.pending("new", ["P0"], limit=1), [(done, "P0", "embedded")])
+        for rid, _, _ in self.index.pending("new", ["P0"]):
+            self.index.put(rid, "new", [0, 1, 0])
+        self.assertEqual(self.index.pending("new", ["P0"]), [])
+        self.assertNotIn(staged, [r[0] for r in self.index.pending("new", ["P0", "P2"])])
+        for bad in ((" ", ["P0"], 20), ("m", [], 20), ("m", ["P3"], 20), ("m", ["P0"], 0), ("m", ["P0"], True)):
+            with self.assertRaises(ValueError):
+                self.index.pending(*bad)
+
 if __name__ == "__main__":
     unittest.main()

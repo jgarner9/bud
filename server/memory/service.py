@@ -28,7 +28,7 @@ class MemoryServer(socketserver.UnixStreamServer):
             or not policy["tiers"]
             or any(tier not in ("P0", "P1", "P2") for tier in policy["tiers"])
             or not isinstance(policy.get("actions"), list)
-            or any(action not in ("stage", "search", "approve", "vector_put", "vector_search", "retrieve", "reference", "export", "backup", "restore") for action in policy["actions"])
+            or any(action not in ("stage", "search", "approve", "vector_put", "vector_search", "vector_pending", "retrieve", "reference", "export", "backup", "restore") for action in policy["actions"])
             or (any(action in policy["actions"] for action in ("approve", "backup", "restore")) and "stage" in policy["actions"])
             or (any(action in policy["actions"] for action in ("backup", "restore")) and set(policy["tiers"]) != {"P0", "P1", "P2"})
             for token, policy in clients.items()
@@ -103,7 +103,7 @@ class MemoryHandler(BaseHTTPRequestHandler):
         if policy is None:
             self.reply(401, {"error": "unauthorized"})
             return
-        if self.path not in ("/stage", "/search", "/approve", "/vector_put", "/vector_search", "/retrieve", "/reference", "/export", "/backup", "/restore"):
+        if self.path not in ("/stage", "/search", "/approve", "/vector_put", "/vector_search", "/vector_pending", "/retrieve", "/reference", "/export", "/backup", "/restore"):
             self.reply(404, {"error": "unknown endpoint"})
             return
         action = self.path[1:]
@@ -171,6 +171,13 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     payload["model"], payload["values"], policy["tiers"], payload.get("limit", 20)
                 )
                 result = {"records": [dict(zip(("id", "source", "kind", "privacy", "body", "created_at", "distance"), row)) for row in rows]}
+            elif action == "vector_pending":
+                if set(payload) - {"model", "limit"} or "model" not in payload:
+                    raise ValueError()
+                rows = VectorIndex(self.server.store.db).pending(
+                    payload["model"], policy["tiers"], payload.get("limit", 20)
+                )
+                result = {"records": [dict(zip(("id", "privacy", "body"), row)) for row in rows]}
             elif action == "export":
                 if payload:
                     raise ValueError()

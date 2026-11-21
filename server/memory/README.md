@@ -105,3 +105,7 @@ Give a client the `retrieve` action to search approved records by text and a sup
 
 Fusion considers up to 1,000 candidates from each ranked source before applying
 the requested result limit. Results are approximate beyond that window.
+
+## Re-embedding
+
+Each vector is stored under the model that made it, with the hash of the record body it was made from, and only vectors whose hash still matches are searched. A client with the `vector_pending` action asks `POST /vector_pending` with `model` and an optional `limit` (1–100, default 20) for the approved records in its tiers that have no current vector for that model: never embedded by it, or edited since. It embeds those bodies on the home server's embedding server (`server/embed/`), stores each with `/vector_put`, and asks again until the list is empty. That is the whole re-embed path: a new model (a new registry `name`, and new `dims` if they change) starts with every approved record pending and drains it, while queries against the old model keep working until clients switch. Re-embedding 10,000 short records takes about 40 minutes on four cores (`server/embed/README.md`).

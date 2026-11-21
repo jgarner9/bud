@@ -83,8 +83,9 @@ vim.cmd.cd(proj)
 eq(term.available(), true, "available with openclaw")
 local win = term.open({ root = proj, focus = false })
 assert(win, "a pane")
+-- the fake writes argv.log before token.log, so wait for both
 wait(function()
-  return vim.fn.filereadable(tmp .. "/bin/argv.log") == 1
+  return vim.fn.filereadable(tmp .. "/bin/argv.log") == 1 and vim.fn.filereadable(tmp .. "/bin/token.log") == 1
 end, "the TUI to start")
 eq(
   vim.fn.readfile(tmp .. "/bin/argv.log")[1],

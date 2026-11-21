@@ -1,6 +1,6 @@
 # The MCP gateway
 
-`bud mcp-gateway` (`internal/mcpgateway`) is the home server's MCP gateway (Suite D72). Devices reach the keyed MCP servers (Linear, Exa) and the Bud ops MCP (`docs/internals/mcp-ops.md`) only through it, so a laptop holds no MCP key. It does five things: it listens on the tailnet only, forwards each MCP request to its upstream server with that server's key added, writes every tool call to an audit log, raises a call's tier when a privacy rule matches its arguments (Suite D112), and refuses cloud tools to P0 sessions (the P0 tool rule, Suite D81). It runs as the user unit in `server/mcp-gateway/`, under `op run`, so the keys reach it as environment variables and never sit in a file (Suite D7, D73).
+`bud mcp-gateway` (`internal/mcpgateway`) is the home server's MCP gateway (Suite D72). Devices reach the keyed MCP servers (Linear, Exa) and the Bud ops MCP (`docs/internals/mcp-ops.md`) only through it, so a laptop holds no MCP key. It does five things: it listens on the tailnet only, forwards each MCP request to its upstream server with that server's key added, writes every tool call to an audit log, raises a call's tier when a privacy rule matches its arguments (Suite D112), and refuses cloud tools to P0 sessions (the P0 tool rule, Suite D81). It runs as the user unit in `server/mcp-gateway/`, under `op run`, so the keys reach it as environment variables and never sit in a file (Suite D7, D73). The model router (`docs/internals/router.md`, port 8795) has its own listener, and `bud memory-mcp` (`docs/internals/memory-mcp.md`) is an upstream behind this one.
 
 ## Config
 
@@ -73,5 +73,3 @@ The `ops` server is the exception: `approval` on a server named `ops` is a confi
 ## Not yet
 
 - The audit log is a JSONL file until the one approval and audit log (JGA-348) exists; its writer then takes these records.
-- The gateway doesn't share a listener with the model gateway (D70) or the memory server (D51), since neither is built yet.
-- Rendering each device's MCP config to point at the gateway, with its `X-Bud-Privacy` header, is JGA-358.

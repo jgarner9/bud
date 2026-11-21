@@ -101,7 +101,12 @@ func TestApprovalToolNeverRunsWhenNotApproved(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newWriteFixture(t, storePath(t), tt.decide)
-			f.s.appr.Timeout = 50 * time.Millisecond
+			// only the expiry case waits out the timeout; the others get room
+			// to finish on a slow runner, where 50 ms raced the store's write
+			f.s.appr.Timeout = 5 * time.Second
+			if tt.name == "expiry" {
+				f.s.appr.Timeout = 50 * time.Millisecond
+			}
 			_, out := post(t, f.s, call("write", `{}`))
 			text, isErr := toolText(t, out)
 			if !isErr || !strings.Contains(text, tt.want) {

@@ -23,14 +23,14 @@ local opened, toggled, sessions = 0, 0, 0
 vim.api.nvim_create_user_command("Opencode", function()
   opened = opened + 1
 end, { nargs = "*" })
-local toggle, ensure = term.toggle, agent.ensure
+-- agent.session is the ACP entry point; counting it catches a key that
+-- starts `opencode acp` behind opencode.nvim's back
+local toggle, session = term.toggle, agent.session
 term.toggle = function()
   toggled = toggled + 1
 end
-if ensure then
-  agent.ensure = function()
-    sessions = sessions + 1
-  end
+agent.session = function()
+  sessions = sessions + 1
 end
 
 backend("opencode")
@@ -41,5 +41,5 @@ backend("claude")
 term.chat_key()
 eq({ opened, toggled, sessions }, { 1, 1, 0 }, "claude toggles the pane")
 
-term.toggle, agent.ensure = toggle, ensure
+term.toggle, agent.session = toggle, session
 print("ok")

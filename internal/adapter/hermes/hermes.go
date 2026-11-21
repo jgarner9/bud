@@ -154,6 +154,12 @@ func Render(in Input) (*Output, error) {
 	if err != nil {
 		return nil, err
 	}
+	if tools.Router != "" && !in.Cloud {
+		// the router serves a P0 request only from a local model, and moves
+		// it to a P1 one only once Jason approves (Suite D104), so the
+		// private profile keeps its boundary while gaining the fallback
+		cfg, notes = routed(in.Registry, tools.Router), []string{fmt.Sprintf("Hermes's private profile asks the router at %s for %s, which falls back when a local model is down", tools.Router, RouterModel)}
+	}
 	out.Notes = append(out.Notes, notes...)
 
 	var shell []Rule
@@ -370,6 +376,56 @@ func models(r *registry.Registry, all bool) (map[string]any, []string, error) {
 	}
 
 	return cfg, notes, nil
+}
+
+// RouterProvider and RouterModel are what the private profile names when it
+// goes through the router: one provider, the router, and the manager role
+const (
+	RouterProvider = "bud"
+	RouterModel    = "bud/manager"
+)
+
+// routed renders the private profile's model settings for the router at
+// base: the manager role as its one model, with no fallbacks of Hermes's
+// own, since the router does the falling back. Hermes sends no privacy
+// header, which the router takes as P0. The context is the smallest of the
+// manager members the router may pick for it (P0, or P1 once approved), so
+// Hermes never packs more than the fallback can take
+func routed(r *registry.Registry, base string) map[string]any {
+	entry := map[string]any{}
+	if c := managerContext(r); c > 0 {
+		entry["context_length"] = c
+	}
+	return map[string]any{
+		"model": map[string]any{"default": RouterModel, "provider": "custom:" + RouterProvider},
+		"providers": map[string]any{RouterProvider: map[string]any{
+			"api":       base + "/v1",
+			"transport": "chat_completions",
+			"models":    map[string]any{RouterModel: entry},
+		}},
+		"fallback_providers": []any{},
+	}
+}
+
+// managerContext is the smallest context of the manager role's chat models
+// allowed P0 or P1, 0 when none states one
+func managerContext(r *registry.Registry) int {
+	role := r.Roles["manager"]
+	ids := role.Members()
+	if role.Pin != "" {
+		ids = append([]string{role.Pin}, ids...)
+	}
+	least := 0
+	for _, id := range ids {
+		m, ok := r.Models[id]
+		if !ok || m.Dims > 0 || m.Has("fim") || m.Context == 0 || !(m.Allows("P0") || m.Allows("P1")) {
+			continue
+		}
+		if least == 0 || m.Context < least {
+			least = m.Context
+		}
+	}
+	return least
 }
 
 // p0Chain is the manager role's models allowed P0, then the fallback role's,

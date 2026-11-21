@@ -39,7 +39,7 @@ The synthetic stock-runtime probes in `scripts/opencode-approval-probe.sh` and `
 
 ### Where approvals are enforced (Suite D97)
 
-Bud enforces final-dispatch approvals only at leaves it owns: the MCP gateway and its servers, the ops server, Bud's own commands and the Signal plugin. It ships no patched Hermes or OpenCode, so the runtime-patch requirements above apply only if that changes. An approval-tier action through a runtime's native shell or tools is refused by that runtime's permission config rather than approved. The probes above are why: a stock runtime can rewrite the call after its hooks, and has dispatch paths a plugin can't cover, so a gate inside it can't bind the final invocation.
+This is the intended boundary; none of it is wired yet. The `internal/approval` helper isn't connected to the gateway, ops, Bud's commands or the Signal plugin, and the ops `approvals` tool is still a placeholder. Bud will enforce final-dispatch approvals only at leaves it owns: the MCP gateway and its servers, the ops server, Bud's own commands and the Signal plugin. It ships no patched Hermes or OpenCode, so the runtime-patch requirements above apply only if that changes. An approval-tier action through a runtime's native shell or tools is to be refused by that runtime's permission config rather than approved (not rendered yet). The probes above are why: a stock runtime can rewrite the call after its hooks, and has dispatch paths a plugin can't cover, so a gate inside it can't bind the final invocation.
 
 ## Build-time validation
 

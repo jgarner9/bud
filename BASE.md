@@ -168,7 +168,7 @@ One GitHub repo (`jgarner9/bud`) holds everything: a small **Go CLI** (`bud`) th
 | D147 | **v2.0.0 is the release that carries D142-D144.** | 2026-11-14 | Breaking: `bud kit sync`, `bud claude` setup and `clod.repo` go. The owner cuts it with the release skill after a code review and a security review (task 46). Nothing in D141-D146 changes `VERSION` or ships on its own. |
 | D148 | **The embedded `bud-ide` plugin reaches a session as `--plugin-dir <data>/plugins/bud-ide-<content hash>`, nothing is installed into Claude Code.** | 2026-11-14 | How D142 is built. `bud plugin path` extracts atomically (temp dir, rename) and prints the dir; the editor asks it once and `bud agent`/`bud chat` call the same code. A content hash, not the bud version, names the dir, so a release that doesn't touch the plugin keeps it. `bud-ide@bud-plugins` left the kit; `bud kit sync` uninstalls bud's earlier copy (the ledger), and CLAUDE.md's "changed in bud-plugins" rule now covers only the `bud` plugin (D145). |
 | D149 | **Nothing cleans up after an older `bud kit sync`.** | 2026-11-14 | Removing the kit (D144) also removes the code that knew what it had written (the ledger, `removeLegacy`, the output-style clean-up), so bud 2.0 neither unsyncs on update nor lists those things in `bud uninstall`. What an older sync added is ordinary Claude Code plugins and a marketplace, so docs/troubleshooting.md shows `claude plugin list`, `claude plugin uninstall` and `claude plugin marketplace remove` instead, without naming any marketplace. Keeping the ledger code for a one-time clean-up was the alternative; it would have kept a kit-sized package for something the user can do in two commands. The doctor no longer checks the user's MCP servers or a `core.md` rule either, on purpose: they are the user's own Claude Code setup (D144). Supersedes the "`bud kit sync` uninstalls bud's earlier copy" sentence of D148. |
-| D150 | **The IDE chat is the pinned sudo-tee/opencode.nvim talking to local OpenCode (Suite D44/D45, D96). Supersedes D131, D132 and D138 to D140.** | 2026-11-21 | Jason: "Yes I want opencode." OpenCode is already the device harness (Suite D15), so one runtime serves the IDE and the terminal. The `bud.ai.acp` and `bud.ai.claude` code stays until opencode.nvim lands (JGA-350); removing it is a separate change he reviews. |
+| D150 | **The IDE chat is the pinned sudo-tee/opencode.nvim talking to local OpenCode (Suite D44/D45, D96). Supersedes D131, D132 and D138 to D140, so D141's note that D140 stands no longer applies.** | 2026-11-21 | Jason: "Yes I want opencode." OpenCode is already the device harness (Suite D15), so one runtime serves the IDE and the terminal. The `bud.ai.acp` and `bud.ai.claude` code stays until opencode.nvim lands (JGA-350); removing it is a separate change he reviews. |
 
 ---
 
@@ -577,6 +577,8 @@ Three things make it deterministic rather than merely convenient. The commands d
 
 ### 4.4 A backend-agnostic agent, OpenClaw by default (plan)
 
+> **Historical (D150, 2026-11-21).** This section describes the superseded ACP/OpenClaw plan. The IDE chat is moving to opencode.nvim with local OpenCode (JGA-350); read it as the record of what was planned, not as current work.
+
 > Not built; this is the 1.1 release (D131-D138). It replaces the OpenCode plan (D124, D126), which got as far as checking OpenCode 2.2.7's API and was stopped before any code. The build order is in section 6 and what's still open is in section 7. Checked against the ACP v1 schema (`@agentclientprotocol/sdk` 2.6.0) and OpenClaw 2026.11.3's docs and packages.
 
 The aim is that everything in 4 and 4.2 works as it does now with any ACP agent where Claude Code was, and that the default agent is an OpenClaw Gateway on Jason's home server, so the editor, the OpenClaw apps, its web UI and its TUI all talk to the same sessions with the same models (D131, D132).
@@ -766,6 +768,8 @@ These were the ideas; most are built now, each a `dashboard.*` toggle in config 
 
 ### 5.5 Chat mode
 
+> **Historical (D150, 2026-11-21).** This section describes the superseded ACP/OpenClaw plan. The IDE chat is moving to opencode.nvim with local OpenCode (JGA-350); read it as the record of what was planned, not as current work.
+
 A general-purpose chat that isn't tied to code, for bouncing ideas around. On the `claude` backend it's Claude Code's own TUI, run as bud-ide's `chat` agent (D81); on the others it's the backend's TUI on a chat session of its own (`agent:main:bud:chat` on OpenClaw), or bud's own chat full screen with `ai.agent.chat_ui = "bud"` (D138).
 
 - **Opening it:** `c` from the dashboard, `<leader>ch` from anywhere, `:BudChat`, or `bud chat` from the shell. It opens in its own tab, so your editor layout is left exactly as it was; `<leader>ch` goes back and forth, and quitting Claude Code closes the tab.
@@ -838,6 +842,8 @@ All eight steps are built; this is the order they were planned in. Step 7's chat
 
 ### 1.1: a backend-agnostic agent, OpenClaw by default (4.4, D131-D138): in progress
 
+> **Historical (D150, 2026-11-21).** This section describes the superseded ACP/OpenClaw plan. The IDE chat is moving to opencode.nvim with local OpenCode (JGA-350); read it as the record of what was planned, not as current work.
+
 One task is one commit with its own check, and `just check` passes after each. Blockers are in brackets. Lane A is `nvim/` and `tests/lua/`, lane B is `internal/` and `docs/config.md`. The OpenCode issues filed for the old plan (JGA-262 to JGA-276) are re-aimed or closed when Linear is reachable again.
 
 **Lane A: the editor (Lua).**
@@ -865,6 +871,8 @@ One task is one commit with its own check, and `just check` passes after each. B
 15. **Release 1.1.0** with `bud:release`. [14]
 
 ### 1.2: bud's own chat, the kit on OpenClaw, delegation, a planning schema and docs mapped to code (D127, D138): not planned in detail
+
+> **Historical (D150, 2026-11-21).** This section describes the superseded ACP/OpenClaw plan. The IDE chat is moving to opencode.nvim with local OpenCode (JGA-350); read it as the record of what was planned, not as current work.
 
 - bud's own chat drawn from ACP events, in bud's colours and keys, in the pane and full screen (D138). Built as a first version: `bud.ai.view` (`<leader>av`, or `<leader>ac` with `ai.agent.chat_ui = "bud"`), a markdown conversation with streamed replies, a line per tool call with its state, OpenClaw's after-the-fact patch as a diff, and a prompt line. Since then: thoughts as one line, plans as a checklist, the history `session/load` replays, and completion of the backend's slash commands. Its colours are highlight groups (`BudChatYou`, `BudChatAgent`, `BudChatTool`, `BudChatToolDone`, `BudChatToolFailed`, `BudChatThinking`, `BudChatPrompt`) linked by default to standard ones. Still to come: images, and choosing a model or mode from it.
 - The kit teaches OpenClaw. Checked in OpenClaw 2026.11.3's docs: its skills follow the AgentSkills `SKILL.md` format Claude Code uses, and it loads extra skill roots from `skills.load.extraDirs` (lowest precedence) besides `<state-dir>/skills` and the workspace's. So `bud kit sync` on a machine with a Gateway can add the bud-plugins skill dirs to `skills.load.extraDirs` (`openclaw config set`), recorded in the ledger, with nothing copied or converted. Skills are named by folder there (`code-style`, not `bud:code-style`), which is section 7's old plugin-names question again.

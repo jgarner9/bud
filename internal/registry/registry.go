@@ -462,3 +462,26 @@ func plural(n int, word string) string {
 
 	return word + "s"
 }
+
+// KeyVar is the environment variable a provider's key comes from: the one
+// an {env:VAR} names, or BUD_<PROVIDER>_API_KEY for an op:// reference. It
+// is empty for a provider with no key. The OpenCode adapter and the router
+// both use it, so a unit's env file feeds either
+func KeyVar(provider, key string) string {
+	switch {
+	case key == "":
+		return ""
+	case strings.HasPrefix(key, "{env:"):
+		return strings.TrimSuffix(strings.TrimPrefix(key, "{env:"), "}")
+	}
+	up := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r - 'a' + 'A'
+		case (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9'):
+			return r
+		}
+		return '_'
+	}, provider)
+	return "BUD_" + up + "_API_KEY"
+}

@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/netip"
 	"net/url"
 	"os"
 	"regexp"
@@ -20,6 +19,7 @@ import (
 	"strings"
 
 	models "jgarner.dev/bud/internal/registry"
+	"jgarner.dev/bud/internal/tailnet"
 )
 
 // Config is mcp-gateway.json
@@ -47,13 +47,6 @@ type Key struct {
 var (
 	nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 	envRe  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-
-	// tailnet holds Tailscale's address ranges: the CGNAT block it gives
-	// IPv4 addresses from, and its IPv6 ULA prefix
-	tailnet = []netip.Prefix{
-		netip.MustParsePrefix("100.64.0.0/10"),
-		netip.MustParsePrefix("fd7a:115c:a1e0::/48"),
-	}
 )
 
 // Read loads and validates a config file
@@ -84,7 +77,7 @@ func (c *Config) Validate() error {
 
 	if host, _, err := net.SplitHostPort(c.Listen); err != nil {
 		add("listen: %q isn't host:port", c.Listen)
-	} else if !insideHost(host) || host == "localhost" {
+	} else if !tailnet.Inside(host) || host == "localhost" {
 		add("listen: %q must be a loopback or tailnet IP address, so the gateway is never reachable from outside the tailnet (Suite D72)", host)
 	}
 	if len(c.Servers) == 0 {
@@ -102,8 +95,8 @@ func (c *Config) Validate() error {
 		case err != nil || u.Host == "":
 			add("%s.url: %q isn't a URL", at, s.URL)
 		case u.Scheme == "https":
-			inside = insideHost(u.Hostname())
-		case u.Scheme == "http" && insideHost(u.Hostname()):
+			inside = tailnet.Inside(u.Hostname())
+		case u.Scheme == "http" && tailnet.Inside(u.Hostname()):
 			inside = true
 		default:
 			add("%s.url: use https, or http only to a loopback or tailnet host", at)
@@ -150,33 +143,6 @@ func (c *Config) keys(getenv func(string) string) (map[string]string, error) {
 		out[name] = k.Prefix + v
 	}
 	return out, nil
-}
-
-// insideHost says whether host is an IP address on loopback or the tailnet.
-// "localhost" counts for an upstream URL, though not for listen, where a
-// resolver could map it elsewhere
-func insideHost(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	a, err := netip.ParseAddr(host)
-	if err != nil {
-		return false
-	}
-	return insideAddr(a)
-}
-
-func insideAddr(a netip.Addr) bool {
-	a = a.Unmap()
-	if a.IsLoopback() {
-		return true
-	}
-	for _, p := range tailnet {
-		if p.Contains(a) {
-			return true
-		}
-	}
-	return false
 }
 
 func sortedNames(m map[string]Server) []string {

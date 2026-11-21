@@ -43,6 +43,7 @@ func TestValidateNamesEachProblem(t *testing.T) {
 		{"unknown tier", "127.0.0.1:1", Server{URL: "https://mcp.linear.app/mcp", Privacy: []string{"P4"}}, "linear", `"P4" isn't a tier`},
 		{"no tiers", "127.0.0.1:1", Server{URL: "https://mcp.linear.app/mcp"}, "linear", "list the session tiers"},
 		{"bad env", "127.0.0.1:1", Server{URL: "https://mcp.linear.app/mcp", Privacy: []string{"P1"}, Key: &Key{Header: "Authorization", Env: "op://vault/x/y"}}, "linear", "environment variable"},
+		{"privacy header", "127.0.0.1:1", Server{URL: "https://mcp.linear.app/mcp", Privacy: []string{"P1"}, Key: &Key{Header: "x-bud-privacy", Env: "K"}}, "linear", "gateway's own"},
 		{"no header", "127.0.0.1:1", Server{URL: "https://mcp.linear.app/mcp", Privacy: []string{"P1"}, Key: &Key{Env: "K"}}, "linear", "key.header"},
 	}
 	for _, tt := range tests {

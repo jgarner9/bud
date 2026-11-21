@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -227,6 +228,8 @@ func (c *Config) Validate() error {
 		if k := s.Key; k != nil {
 			if k.Header == "" {
 				add("%s.key.header: name the header the server reads its key from", at)
+			} else if http.CanonicalHeaderKey(k.Header) == PrivacyHeader {
+				add("%s.key.header: %s is the gateway's own; name another header for the key", at, PrivacyHeader)
 			}
 			if !envRe.MatchString(k.Env) {
 				add("%s.key.env: %q isn't an environment variable name", at, k.Env)

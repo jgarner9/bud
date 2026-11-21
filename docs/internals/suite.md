@@ -37,6 +37,10 @@ Bud currently installs upstream OpenCode and does not install a patched Hermes r
 
 The synthetic stock-runtime probes in `scripts/opencode-approval-probe.sh` and `server/hermes/tests/test_pinned_dispatch.py` record the rewrite and dispatch gaps above; passing them is not evidence that the approval contract is enforced. They require trusted, disposable source checkouts and dependencies, not credentials or a live service. The OpenCode probe takes its v2.3.2 checkout as an argument and requires Bun 1.4.4; its README explains the test isolation limits. The Hermes probe's docstring gives a sanitized invocation using its v0.23.2 checkout's editable environment. Both probes pin the upstream commit and reject tracked modifications, but do not authenticate untracked files or dependencies. The normal `just hermes-plugin-test` separately checks the Signal plugin without Hermes.
 
+### Where approvals are enforced (Suite D97)
+
+Bud enforces final-dispatch approvals only at leaves it owns: the MCP gateway and its servers, the ops server, Bud's own commands and the Signal plugin. It ships no patched Hermes or OpenCode, so the runtime-patch requirements above apply only if that changes. An approval-tier action through a runtime's native shell or tools is refused by that runtime's permission config rather than approved. The probes above are why: a stock runtime can rewrite the call after its hooks, and has dispatch paths a plugin can't cover, so a gate inside it can't bind the final invocation.
+
 ## Build-time validation
 
 | Area | Evidence to collect | Work item |

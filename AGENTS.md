@@ -22,7 +22,7 @@ Nothing personal goes in this public repo: no hostnames, tailnet names, home pat
 
 Bud's IDE is a Neovim-based editor driven by a small Go CLI (`bud`). The CLI installs, launches, updates and syncs an isolated Neovim config (`NVIM_APPNAME=bud`, so it never touches `~/.config/nvim`). `BASE.md` is the full plan plus a numbered decision log (D1, D2, ...). Nearly all of it is built, but a few parts are still marked as later, so check the code before assuming a planned feature exists. When a decision changes, update `BASE.md` too.
 
-AI is **backend-agnostic over ACP** (D131, superseding D124/D26), with OpenClaw as the planned default backend (D132; `claude` stays the default until the move is done, D140), and the move is in progress: 1.1 replaces Claude Code's stream-json transport with an ACP client (BASE.md 4.4 and the 1.1 build order in section 6). Until those tasks land, the tree still holds the Claude Code version: one session per project, started and owned by Neovim (D25, BASE.md 4.2), with Neovim TUIs built on the `bud.ai.claude` Lua module. New AI code talks ACP through `bud.ai.acp`; don't add a second protocol, a model provider or an API client unless asked.
+The IDE chat is moving to the pinned sudo-tee/opencode.nvim talking to local OpenCode (D150, superseding the ACP plan in D131/D132 and D138-D140; Suite D96). Until JGA-350 lands, the tree still holds the older chat: the `bud.ai.claude` Claude Code session (D25, BASE.md 4.2) and the `bud.ai.acp` client. Don't extend either; new chat work goes through opencode.nvim, and removing the old code is a separate change Jason reviews. Don't add a model provider or an API client unless asked.
 
 ## Docs
 

@@ -24,10 +24,22 @@ An approval nobody answers is denied after `approvals.timeout`, an hour (D42). T
 
 The plugin calls the Signal adapter's private methods, so `plugin.yaml` sets `requires_hermes: "==0.23.2"`: on another Hermes it doesn't load, the bundled adapter is used, and approvals take a typed `/approve` until the plugin is checked against the new release and the pin raised.
 
+## The reviewer socket
+
+Bud's own processes (the MCP gateway and ops, once they enforce approvals; Suite D97, D101, D103) ask Jason through the plugin, so Go never reads Signal. `reviewer.py` serves a unix socket from the Signal adapter: it starts in the adapter's `connect` (after Hermes's own connect succeeded) and stops in `disconnect`, using only public adapter methods, and a start that fails is logged and leaves Hermes running with reviews off. The Go client is `approval.SocketReview` (`internal/approval/socket.go`).
+
+- **Paths.** `BUD_REVIEW_SOCKET` and `BUD_REVIEW_SECRET_FILE` in Hermes's environment, else the defaults `paths.ReviewSocket` and `paths.ReviewSecret` use: `$XDG_RUNTIME_DIR/bud/review.sock` and `$XDG_STATE_HOME/bud/review.secret` (`~/.local/state` when unset). With no absolute runtime dir and no override, reviews stay off; there is no fallback to `/tmp`.
+- **Start conditions.** The socket dir is created 0700 and the socket chmod 0600. The plugin refuses to start when the dir isn't ours with mode 0700, or the secret is missing, empty, not a regular file or not mode 0600. The secret file is opened with `O_NOFOLLOW|O_NONBLOCK` and checked on the open descriptor, as `readSecret` does in Go: a symlink, a FIFO, a non-regular file, a group or other bit, or more than 4096 bytes is refused. It is re-read the same way on every request.
+- **Protocol.** Newline-delimited JSON, lines up to 64 KiB. The client sends exactly `{id, summary, expires_at, secret}` (any other key set is refused with an error before the secret is checked or anything is sent) and holds the connection open; the plugin replies `{id, choice}` with `once` or `deny`, or `{id, error}` to refuse (bad secret checked with `hmac.compare_digest`, malformed or oversized line, Signal send failed). The client closing first withdraws the prompt.
+- **Prompt.** Sent to the one number `SIGNAL_ALLOWED_USERS` names (more or fewer than one refuses). It takes its code from the same `Prompts` registry as Hermes's approval cards, so a code never names two waiting prompts. 👍 or `yes <code>` answers `once`, 👎 or `no <code>` answers `deny`, from the same allowlisted, authorized senders and the same reaction checks as a card; the settle step sets the request's future instead of calling Hermes.
+- **End.** Withdrawal drops the prompt, so a later reaction does nothing and a later code is told none is waiting, and posts a short note. Without an answer the plugin replies `deny` at `expires_at` or after an hour, whichever is first; the wait is recomputed after the Signal send, so a slow send that outlasts `expires_at` withdraws the prompt and denies at once. Stopping the server withdraws every pending prompt, cancels the in-flight handlers (each replies `deny` if its connection is still writable) and waits for the server to close.
+
+The secret is defense in depth: a same-user process that can read it can ask. The boundary is that agent tools can't reach the socket or the file.
+
 ## Not built yet
 
 Today an approval appears on the surface that started its turn, on Signal or in the CLI. Cron turns cannot ask (`approvals.cron_mode: deny`). Keep the Signal flow while proving that Herdr can use the same authenticated, action-bound and expiring decisions. The [Suite architecture](suite.md#build-time-validation) tracks that work. A doctor check for the daemon and plugin load state is also pending.
 
 ## Tests
 
-`just hermes-plugin-test` runs the plugin's Python tests (standard library `unittest`, no Hermes needed): `test_approvals.py` covers parsing and the prompt registry, and `test_adapter.py` drives the adapter against stand-ins for the Hermes parts it calls, shaped after v0.23.2's. They don't replace the end-to-end check on the home server in the README's last step.
+`just hermes-plugin-test` runs the plugin's Python tests (standard library `unittest`, no Hermes needed): `test_approvals.py` covers parsing and the prompt registry, and `test_adapter.py` drives the adapter against stand-ins for the Hermes parts it calls, shaped after v0.23.2's, and `test_reviewer.py` drives the reviewer socket over a real unix socket in a temp dir. They don't replace the end-to-end check on the home server in the README's last step.

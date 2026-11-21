@@ -199,8 +199,8 @@ func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }
 // RouterSpend is the router's spend ledger (Suite D24, D64)
 func (p *Paths) RouterSpend() string { return filepath.Join(p.State, "router-spend.json") }
 
-// Approvals is the approval store (internal/approval), private to the trusted processes
-func (p *Paths) Approvals() string { return filepath.Join(p.State, "approvals.json") }
+// ApprovalStore is the approval store (internal/approval), private to the trusted processes
+func (p *Paths) ApprovalStore() string { return filepath.Join(p.State, "approvals.json") }
 
 // ReviewSocket is the unix socket the Signal plugin's reviewer listens on. It is
 // empty when there is no runtime dir, and callers must treat that as unavailable

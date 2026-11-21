@@ -84,8 +84,8 @@ func TestReviewPathsFailClosedWithoutRuntimeDir(t *testing.T) {
 	if p.ReviewSocket() != "" {
 		t.Errorf("socket = %q, want empty without XDG_RUNTIME_DIR", p.ReviewSocket())
 	}
-	if want := filepath.FromSlash("/home/me/.local/state/bud/approvals.json"); p.Approvals() != want {
-		t.Errorf("approvals = %q, want %q", p.Approvals(), want)
+	if want := filepath.FromSlash("/home/me/.local/state/bud/approvals.json"); p.ApprovalStore() != want {
+		t.Errorf("approvals = %q, want %q", p.ApprovalStore(), want)
 	}
 
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")

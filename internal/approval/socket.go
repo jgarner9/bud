@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"syscall"
 )
 
 // maxReviewLine bounds the reply line so a misbehaving peer can't grow memory
@@ -28,7 +29,8 @@ type reviewRequest struct {
 type reviewReply struct {
 	ID     string `json:"id"`
 	Choice string `json:"choice"`
-	Error  string `json:"error"`
+	// Error is raw so that any error key, even "" or null, refuses
+	Error json.RawMessage `json:"error,omitempty"`
 }
 
 // SocketReview returns a Review that asks the reviewer listening on the unix
@@ -77,7 +79,7 @@ func SocketReview(socket, secretFile string, scope Scope) Review {
 		if err := json.Unmarshal(raw, &r); err != nil {
 			return Reply{}, fmt.Errorf("decode approval reply: %w", ErrReviewMismatch)
 		}
-		if r.Error != "" {
+		if r.Error != nil {
 			return Reply{}, fmt.Errorf("approval reviewer refused: %w", ErrReviewUnavailable)
 		}
 		if r.ID != p.ID {
@@ -122,17 +124,30 @@ func readLine(r *bufio.Reader) ([]byte, error) {
 	}
 }
 
+// maxSecret bounds the secret file read
+const maxSecret = 4096
+
 func readSecret(path string) (string, error) {
-	info, err := os.Stat(path)
+	// no-follow so a symlink is refused, non-blocking so a FIFO can't hang
+	// the review, and the checks run on the opened file, not the path
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return "", fmt.Errorf("read approval secret %s (it must be a regular file, not a symlink): %w", path, ErrReviewUnavailable)
+	}
+	defer f.Close()
+	info, err := f.Stat()
 	if err != nil {
 		return "", fmt.Errorf("read approval secret: %w", err)
 	}
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
 		return "", fmt.Errorf("approval secret %s must be a regular file with mode 0600: %w", path, ErrReviewUnavailable)
 	}
-	b, err := os.ReadFile(path)
+	b, err := io.ReadAll(io.LimitReader(f, maxSecret+1))
 	if err != nil {
 		return "", fmt.Errorf("read approval secret: %w", err)
+	}
+	if len(b) > maxSecret {
+		return "", fmt.Errorf("approval secret %s is over %d bytes: %w", path, maxSecret, ErrReviewUnavailable)
 	}
 	s := strings.TrimSpace(string(b))
 	if s == "" {

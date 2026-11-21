@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -103,7 +104,13 @@ func TestSocketReviewFailsClosed(t *testing.T) {
 		"bad json":            func(c net.Conn, _ reviewRequest) { c.Write([]byte("nope\n")) },
 		"server rejects":      func(c net.Conn, _ reviewRequest) { c.Write([]byte(`{"error":"bad secret"}` + "\n")) },
 		"oversized line":      func(c net.Conn, _ reviewRequest) { c.Write([]byte(strings.Repeat("x", maxReviewLine+10) + "\n")) },
-		"no newline":          func(c net.Conn, req reviewRequest) { c.Write([]byte(`{"id":"abc","choice":"once"}`)) },
+		"empty error": func(c net.Conn, req reviewRequest) {
+			c.Write([]byte(`{"id":"` + req.ID + `","choice":"once","error":""}` + "\n"))
+		},
+		"null error": func(c net.Conn, req reviewRequest) {
+			c.Write([]byte(`{"id":"` + req.ID + `","choice":"once","error":null}` + "\n"))
+		},
+		"no newline": func(c net.Conn, req reviewRequest) { c.Write([]byte(`{"id":"abc","choice":"once"}`)) },
 	}
 	for name, h := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -192,5 +199,34 @@ func TestSocketReviewThroughDispatch(t *testing.T) {
 	})
 	if err == nil || ran {
 		t.Fatalf("dispatch = %v, ran = %v; want a refusal", err, ran)
+	}
+}
+
+func TestSocketReviewRefusesASymlinkedOrFIFOSecret(t *testing.T) {
+	f := newFakeReviewer(t, func(c net.Conn, _ *bufio.Reader, req reviewRequest) { reply(c, req.ID, "once") })
+	dir := filepath.Dir(f.secret)
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(f.secret, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SocketReview(f.socket, link, Scope{})(context.Background(), testPrompt()); !errors.Is(err, ErrReviewUnavailable) {
+		t.Fatalf("symlinked secret = %v", err)
+	}
+	fifo := filepath.Join(dir, "fifo")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Skip("no mkfifo:", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := SocketReview(f.socket, fifo, Scope{})(context.Background(), testPrompt())
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrReviewUnavailable) {
+			t.Fatalf("fifo secret = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a FIFO secret blocked the review")
 	}
 }

@@ -965,7 +965,7 @@ function M.setup()
     end,
   })
   vim.keymap.set("n", "<leader>ac", function()
-    require("bud.ai.term").toggle()
+    require("bud.ai.term").chat_key()
   end, { desc = "Claude Code (its own TUI)" })
   vim.keymap.set("n", "<leader>aF", function()
     require("bud.ai.term").full()

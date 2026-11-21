@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"reflect"
 	"slices"
@@ -110,6 +111,18 @@ type AI struct {
 	Claude   Claude   `json:"claude"`
 	Issues   Issues   `json:"issues"`
 	Work     Work     `json:"work"`
+	Planning Planning `json:"planning"`
+}
+
+// Planning is the home server's planning OpenCode (Suite D49, D110), which
+// <leader>aP and :BudPlan attach OpenCode's TUI to
+type Planning struct {
+	// the server's base URL, such as http://100.x.y.z:8797; empty means
+	// home planning isn't set up on this machine
+	URL string `json:"url"`
+	// a file holding the server's Basic auth password, mode 0600, so it
+	// stays out of config.json and process listings
+	PasswordFile string `json:"password_file"`
 }
 
 // Agent is how the agent shows in the editor, whatever the backend
@@ -205,7 +218,8 @@ func Defaults() Settings {
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
 		AI: AI{Backend: "claude", Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
 			Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
-			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"}},
+			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"},
+			Planning: Planning{PasswordFile: "~/.config/bud/planning-password"}},
 	}
 }
 
@@ -229,6 +243,12 @@ func (s Settings) Validate() error {
 	for _, c := range checks {
 		if !slices.Contains(c.allowed, c.value) {
 			return fmt.Errorf("%s: %q is not one of %s", c.key, c.value, strings.Join(c.allowed, ", "))
+		}
+	}
+	if u := s.AI.Planning.URL; u != "" {
+		pu, err := url.Parse(u)
+		if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") || pu.Host == "" || pu.User != nil || strings.Trim(pu.Path, "/") != "" || pu.RawQuery != "" {
+			return fmt.Errorf("ai.planning.url: %q isn't a server URL such as http://<tailnet IP>:8797 (no path, no password: that goes in ai.planning.password_file)", u)
 		}
 	}
 	if s.AI.Backend == "custom" && len(s.AI.Custom.Command) == 0 {

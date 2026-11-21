@@ -33,6 +33,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
       -- after the first screen, like the panes (BASE.md 4.2)
       vim.schedule(function()
         require("bud.ai.claude").setup()
+        require("bud.ai.planning").setup()
         require("bud.tools").setup()
         require("bud.settings").setup()
         require("bud.gen").setup()

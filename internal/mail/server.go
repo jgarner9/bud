@@ -267,6 +267,11 @@ func (s *Server) call(ctx context.Context, name string, raw json.RawMessage) (an
 		if err := dec.Decode(&a); err != nil {
 			return nil, fmt.Errorf("the arguments don't fit %s: %w", name, err)
 		}
+		var given map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &given)
+		if err := allowedArgs(name, given); err != nil {
+			return nil, err
+		}
 	}
 	if a.Folder == "" {
 		a.Folder = "INBOX"
@@ -332,6 +337,28 @@ func (s *Server) call(ctx context.Context, name string, raw json.RawMessage) (an
 		}, nil
 	}
 	return nil, fmt.Errorf("no tool is named %q", name)
+}
+
+// toolArgs lists each tool's arguments from its schema, so a tool refuses
+// another's (a uid on list_folders, say) instead of ignoring it
+var toolArgs = map[string][]string{}
+
+func init() {
+	for _, t := range toolList {
+		props, _ := t.InputSchema["properties"].(map[string]any)
+		for k := range props {
+			toolArgs[t.Name] = append(toolArgs[t.Name], k)
+		}
+	}
+}
+
+func allowedArgs(name string, given map[string]json.RawMessage) error {
+	for k := range given {
+		if !slices.Contains(toolArgs[name], k) {
+			return fmt.Errorf("the arguments don't fit %s: it takes no %q", name, k)
+		}
+	}
+	return nil
 }
 
 func parseDay(field, v string) (time.Time, error) {

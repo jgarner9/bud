@@ -1,6 +1,6 @@
 # The mail MCP server
 
-`bud mail-mcp` (`internal/mail`) gives Hermes, the home server's manager, Jason's iCloud mail (Suite D31, D54, D106). It is a small MCP server in standard-library Go (D1), listening on loopback only, behind the MCP gateway (`docs/internals/mcp-gateway.md`), which lists it for P0 sessions alone, so mail stays with Qwen (D23). It runs under `op run`, so the Apple ID and its app-specific password reach it as `BUD_MAIL_USER` and `BUD_MAIL_PASSWORD` and never sit in a file (D7). The design and the build order are in the R7 mail design note; this page says what is built.
+`bud mail-mcp` (`internal/mail`) gives Hermes, the home server's manager, Jason's iCloud mail (Suite D31, D54, D106). It is a small MCP server in standard-library Go (D1), listening on loopback only. It is meant to sit behind the MCP gateway (`docs/internals/mcp-gateway.md`), listed for P0 sessions alone so mail stays with Qwen (D23); that gateway entry and its tiers are the next slice, so for now nothing reaches it but loopback. It runs under `op run`, so the Apple ID and its app-specific password reach it as `BUD_MAIL_USER` and `BUD_MAIL_PASSWORD` and never sit in a file (D7). The design and the build order are in the R7 mail design note; this page says what is built.
 
 So far it reads. Moving mail to Deleted Messages, the cleanup digest and approved sends over SMTP are the next slices.
 

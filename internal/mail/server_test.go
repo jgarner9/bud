@@ -164,6 +164,7 @@ func TestSearchRefusesBadArguments(t *testing.T) {
 		`{"since":"Nov 1"}`: "since",
 		`{"limit":500}`:     "limit",
 		`{"sender":"x"}`:    "don't fit",
+		`{"uid":3}`:         `no "uid"`,
 	} {
 		if e := errorText(callTool(t, s, "search_messages", args)); !strings.Contains(e, want) {
 			t.Errorf("%s: error %q, want it to mention %q", args, e, want)
@@ -191,6 +192,16 @@ func TestReadKeepsAnInjectionAttemptAsData(t *testing.T) {
 		if k != "source" && k != "notice" && k != "untrusted" {
 			t.Errorf("unexpected top-level key %q", k)
 		}
+	}
+}
+
+func TestEachToolRefusesAnotherToolsArguments(t *testing.T) {
+	s := NewServer(&fakeAcct{})
+	if e := errorText(callTool(t, s, "list_folders", `{"uid":1}`)); !strings.Contains(e, `no "uid"`) {
+		t.Errorf("list_folders with a uid: %q", e)
+	}
+	if e := errorText(callTool(t, s, "read_message", `{"uid":1,"from":"sam"}`)); !strings.Contains(e, `no "from"`) {
+		t.Errorf("read_message with from: %q", e)
 	}
 }
 

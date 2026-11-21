@@ -167,6 +167,10 @@ func (rt *Router) rewrite(pr *httputil.ProxyRequest) {
 	pr.Out.Header.Del("Cookie")
 	// the tier was this router's business; providers never see it
 	pr.Out.Header.Del(registry.PrivacyHeader)
+	// the meter reads usage from the body, so it must be plain: without the
+	// client's Accept-Encoding the transport asks for gzip itself and hands
+	// back the body decoded
+	pr.Out.Header.Del("Accept-Encoding")
 	if t.key != "" {
 		pr.Out.Header.Set("Authorization", "Bearer "+t.key)
 	}

@@ -1,6 +1,7 @@
 package router
 
 import (
+	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -231,5 +232,31 @@ func TestACorruptLedgerFileIsAnErrorNamingThePath(t *testing.T) {
 	_, err := NewLedger(path, nil)
 	if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "move it aside") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestAGzipAskingClientIsStillCharged(t *testing.T) {
+	// an upstream that compresses whenever it's asked to, as providers do
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"choices":[],"usage":{"prompt_tokens":1000000,"completion_tokens":500000}}`
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			zw := gzip.NewWriter(w)
+			io.WriteString(zw, body)
+			zw.Close()
+			return
+		}
+		io.WriteString(w, body)
+	}))
+	defer up.Close()
+	c := &clock{time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)}
+	rt, l := newSpendRouter(t, up.URL, "", 10, c)
+	w := do(t, rt, "POST", "/v1/chat/completions", chatBody("inc1"), map[string]string{"Accept-Encoding": "gzip"})
+	if w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if got := l.TopUp(); got < 0.999 || got > 1.001 {
+		t.Errorf("topup = %v, want 1: the meter didn't see the usage", got)
 	}
 }

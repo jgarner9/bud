@@ -285,6 +285,16 @@ function M.toggle()
   end
 end
 
+-- chat_key is <leader>ac: opencode.nvim's window on the opencode backend
+-- (D150), else toggle. :Opencode with no argument toggles, and its lazy stub
+-- loads the plugin on first use, so nothing is on the runtimepath at startup.
+function M.chat_key()
+  if require("bud.ai.agent").backend() == "opencode" then
+    return vim.cmd("Opencode")
+  end
+  return M.toggle()
+end
+
 -- _closed cleans up after the TUI exits and hands the session back
 function M._closed(root)
   local t = terms[root]

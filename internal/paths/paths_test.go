@@ -81,8 +81,8 @@ func TestReviewPathsFailClosedWithoutRuntimeDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.ReviewSocket() != "" {
-		t.Errorf("socket = %q, want empty without XDG_RUNTIME_DIR", p.ReviewSocket())
+	if p.ReviewSocket() != "" || p.MemorySocket() != "" {
+		t.Errorf("sockets = %q, %q, want empty without XDG_RUNTIME_DIR", p.ReviewSocket(), p.MemorySocket())
 	}
 	if want := filepath.FromSlash("/home/me/.local/state/bud/approvals.json"); p.ApprovalStore() != want {
 		t.Errorf("approvals = %q, want %q", p.ApprovalStore(), want)
@@ -92,6 +92,9 @@ func TestReviewPathsFailClosedWithoutRuntimeDir(t *testing.T) {
 	p, _ = Resolve()
 	if want := filepath.FromSlash("/run/user/1000/bud/review.sock"); p.ReviewSocket() != want {
 		t.Errorf("socket = %q, want %q", p.ReviewSocket(), want)
+	}
+	if want := filepath.FromSlash("/run/user/1000/bud-memory/memory.sock"); p.MemorySocket() != want {
+		t.Errorf("memory socket = %q, want %q", p.MemorySocket(), want)
 	}
 	if want := filepath.FromSlash("/home/me/.local/state/bud/review.secret"); p.ReviewSecret() != want {
 		t.Errorf("secret = %q, want %q", p.ReviewSecret(), want)

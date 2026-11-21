@@ -1,0 +1,21 @@
+# Hand-written from RFC 9051 until a recorded iCloud session replaces it
+# (bud mail-mcp --record, R7 slice 4). C: is what bud must send, S: what
+# the server answers; {#} in an S: line is a literal made of the L: lines
+# after it, each ending in CRLF, and the next S: line finishes the response
+S: * OK [CAPABILITY IMAP4rev1 SASL-IR AUTH=PLAIN] IMAP4 service ready
+C: a1 LOGIN "someone@example.com" "app-pass"
+S: a1 OK [CAPABILITY IMAP4rev1 UIDPLUS MOVE IDLE ESEARCH] user logged in
+C: a2 LIST "" "*"
+S: * LIST (\HasNoChildren) "/" "Sent Messages"
+S: * LIST (\HasNoChildren \Trash) "/" "Deleted Messages"
+S: * LIST (\HasChildren) "/" Archive
+S: * LIST (\HasNoChildren) "/" "Archive/Caf&AOk-"
+S: * LIST (\Noselect \HasChildren) "/" Notes
+S: * LIST (\HasNoChildren) "/" "INBOX"
+S: a2 OK LIST completed
+C: a3 STATUS "INBOX" (MESSAGES UNSEEN UIDNEXT UIDVALIDITY)
+S: * STATUS "INBOX" (MESSAGES 3 UNSEEN 1 UIDNEXT 42 UIDVALIDITY 1700000000)
+S: a3 OK STATUS completed
+C: a4 LOGOUT
+S: * BYE IMAP4 server logging out
+S: a4 OK LOGOUT completed

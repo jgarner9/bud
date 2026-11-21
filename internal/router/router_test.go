@@ -363,3 +363,32 @@ func TestPrivacyHeaderIsNotForwardedAndTheAnsweringModelIsNamed(t *testing.T) {
 		t.Errorf("X-Bud-Model = %v, want [p1]", got)
 	}
 }
+
+func TestTheClientsSessionIDGoesUpstreamAndAMissingOneIsAOneShot(t *testing.T) {
+	var got []string
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Header.Get(SessionHeader))
+		io.WriteString(w, `{"ok":true}`)
+	}))
+	defer up.Close()
+	rt, err := New(testRegistry(up.URL+"/v1/", "{env:GO_KEY}"), env(map[string]string{"GO_KEY": "sekret"}), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const body = `{"model":"bud/coding","messages":[{"role":"user","content":"plan my day"}]}`
+	for _, h := range []map[string]string{{"x-opencode-session": "hermes-conv-1"}, nil, nil} {
+		if w := do(t, rt, "POST", "/v1/chat/completions", body, h); w.Code != 200 {
+			t.Fatalf("status %d: %s", w.Code, w.Body)
+		}
+	}
+	if len(got) != 3 {
+		t.Fatalf("upstream saw %d requests, want 3", len(got))
+	}
+	if got[0] != "hermes-conv-1" {
+		t.Errorf("the client's own id became %q", got[0])
+	}
+	// two chats that open with the same words are still two conversations
+	if !strings.HasPrefix(got[1], "oneshot-") || !strings.HasPrefix(got[2], "oneshot-") || got[1] == got[2] {
+		t.Errorf("requests with no id got %q and %q, want two different oneshot- ids", got[1], got[2])
+	}
+}

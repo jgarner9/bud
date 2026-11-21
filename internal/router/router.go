@@ -8,6 +8,8 @@ package router
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -228,9 +230,30 @@ func (rt *Router) rewrite(pr *httputil.ProxyRequest) {
 	if t.key != "" {
 		pr.Out.Header.Set("Authorization", "Bearer "+t.key)
 	}
+	if pr.Out.Header.Get(SessionHeader) == "" {
+		pr.Out.Header.Set(SessionHeader, oneshotID())
+	}
 	pr.Out.Header.Set("Content-Length", strconv.Itoa(len(t.body)))
 	pr.Out.ContentLength = int64(len(t.body))
 	pr.Out.Body = io.NopCloser(bytes.NewReader(t.body))
+}
+
+// SessionHeader carries a conversation's id upstream. OpenCode Go refuses a
+// request without one (400 MissingSessionID) and uses it for routing and
+// prompt caching; other providers ignore it. The client's own value is kept:
+// only the client knows which conversation a request belongs to (Hermes
+// sends it when its provider entry sets session_affinity_header)
+const SessionHeader = "X-Opencode-Session"
+
+// oneshotID is the id for a request whose client sent none: random, so
+// unrelated requests are never taken for one conversation, as Hermes does
+// for its own one-shot calls
+func oneshotID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "oneshot-bud"
+	}
+	return "oneshot-" + hex.EncodeToString(b)
 }
 
 type resolved struct {

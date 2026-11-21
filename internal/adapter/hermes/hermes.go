@@ -388,7 +388,8 @@ const (
 // routed renders the private profile's model settings for the router at
 // base: the manager role as its one model, with no fallbacks of Hermes's
 // own, since the router does the falling back. Hermes sends no privacy
-// header, which the router takes as P0. The context is the smallest of the
+// header, which the router takes as P0, and sends its conversation id as
+// x-opencode-session, which the router passes on to OpenCode Go. The context is the smallest of the
 // manager members the router may pick for it (P0, or P1 once approved), so
 // Hermes never packs more than the fallback can take
 func routed(r *registry.Registry, base string) map[string]any {
@@ -402,6 +403,9 @@ func routed(r *registry.Registry, base string) map[string]any {
 			"api":       base + "/v1",
 			"transport": "chat_completions",
 			"models":    map[string]any{RouterModel: entry},
+			// Hermes sends its conversation id under this name, which the
+			// router passes on: OpenCode Go refuses a request without one
+			"session_affinity_header": "x-opencode-session",
 		}},
 		"fallback_providers": []any{},
 	}

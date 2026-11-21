@@ -148,6 +148,11 @@ func (c *Config) Validate() error {
 		if slices.Contains(s.Privacy, "P0") && !inside {
 			add("%s.privacy: allows P0, but %s is outside the house; P0 sessions may use only tools that never leave it (Suite D81)", at, s.URL)
 		}
+		if s.Approval != nil && name == "ops" {
+			// ops reviews its own approval-tier tools at the leaf, outside its
+			// mutex (r6b design decision 5); a gateway review as well would ask twice
+			add("%s.approval: the ops server enforces approvals itself; remove this block so calls aren't reviewed twice", at)
+		}
 		if a := s.Approval; a != nil {
 			for _, glob := range sortedKeys(a.Tools) {
 				if _, err := path.Match(glob, ""); err != nil {

@@ -41,6 +41,8 @@ type Tool struct {
 	Schema map[string]any
 	// OpenWorld says whether the tool reaches an external service.
 	OpenWorld bool
+	// Tier is ReadOnly unless the tool has an effect Jason must approve
+	Tier Tier
 	// Run returns the value to report as JSON. An error becomes a tool
 	// result with isError set; a *ArgError becomes JSON-RPC -32602
 	Run func(ctx context.Context, args json.RawMessage) (any, error)
@@ -57,8 +59,9 @@ type Server struct {
 	name, instructions string
 	// mu runs one call at a time: doctor and sync_status both take the sync
 	// lock, and would see each other as a running sync
-	mu  sync.Mutex
-	mux *http.ServeMux
+	mu   sync.Mutex
+	mux  *http.ServeMux
+	appr Approvals
 }
 
 // New serves tools, listed in the order given
@@ -212,7 +215,7 @@ func (s *Server) list() []map[string]any {
 			"name":        t.Name,
 			"description": t.Description,
 			"inputSchema": schema,
-			"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": t.OpenWorld},
+			"annotations": map[string]any{"readOnlyHint": t.Tier == ReadOnly, "destructiveHint": t.Tier == ApprovalTier, "idempotentHint": t.Tier == ReadOnly, "openWorldHint": t.OpenWorld},
 		})
 	}
 	return out
@@ -231,9 +234,7 @@ func (s *Server) call(ctx context.Context, m message) response {
 		return failure(m.ID, -32602, fmt.Sprintf("%s has no tool %q; tools/list names them", s.name, p.Name))
 	}
 
-	s.mu.Lock()
-	v, err := s.tools[i].Run(ctx, p.Arguments)
-	s.mu.Unlock()
+	v, err := s.run(ctx, s.tools[i], p.Arguments)
 	if ae := (*ArgError)(nil); errors.As(err, &ae) {
 		return failure(m.ID, -32602, ae.Msg)
 	}

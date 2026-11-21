@@ -12,16 +12,18 @@ import (
 // Record is one line of the audit log. Argument values are left out, since
 // they can hold private text or keys; their names say what was asked
 type Record struct {
-	Time     time.Time `json:"time"`
-	Server   string    `json:"server"`
-	Tier     string    `json:"tier"`
-	Client   string    `json:"client"`
-	Method   string    `json:"method"`
-	Tool     string    `json:"tool,omitempty"`
-	Args     []string  `json:"args,omitempty"`
-	Decision string    `json:"decision"`
-	Status   int       `json:"status"`
-	Millis   int64     `json:"ms"`
+	Time   time.Time `json:"time"`
+	Server string    `json:"server"`
+	Tier   string    `json:"tier"`
+	// Raised names the privacy rule that raised Tier, if one did
+	Raised   string   `json:"raised,omitempty"`
+	Client   string   `json:"client"`
+	Method   string   `json:"method"`
+	Tool     string   `json:"tool,omitempty"`
+	Args     []string `json:"args,omitempty"`
+	Decision string   `json:"decision"`
+	Status   int      `json:"status"`
+	Millis   int64    `json:"ms"`
 }
 
 // Audit appends records to a JSONL file, one write per line, so lines from

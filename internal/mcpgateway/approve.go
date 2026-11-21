@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"jgarner.dev/bud/internal/approval"
@@ -22,6 +23,16 @@ const canceledStatus = 499
 // the request itself and returns true. Every failure denies: nothing goes
 // upstream unless Dispatch consumed an approval for these exact bytes
 func (g *Gateway) holdForApproval(w http.ResponseWriter, r *http.Request, up *upstream, body []byte, msgs []message, batch bool, base Record, start time.Time) bool {
+	if reason := unreadable(body); reason != "" {
+		// the typed parse drops what it can't read, so a call it dropped would
+		// go upstream unreviewed; refuse instead
+		rec := base
+		rec.Method, rec.Decision, rec.Status, rec.Millis = "tools/call", "refused", http.StatusOK, g.now().Sub(start).Milliseconds()
+		g.log(rec)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(toolResult(firstID(body), reason))
+		return true
+	}
 	var asked []message
 	for _, m := range msgs {
 		if m.Method == "tools/call" && up.approval.Asks(m.Params.Name) {
@@ -133,10 +144,69 @@ func toolResult(id json.RawMessage, reason string) []byte {
 	return b
 }
 
-// publicURL is the upstream URL without userinfo, so nothing secret reaches a
-// prompt or the store
+// publicURL is scheme://host/path only: userinfo, query and fragment can carry
+// credentials, and this reaches the prompt and the store
 func (u *upstream) publicURL() string {
-	c := *u.url
-	c.User = nil
+	c := url.URL{Scheme: u.url.Scheme, Host: u.url.Host, Path: u.url.Path}
 	return c.String()
+}
+
+// unreadable returns why a body must not be forwarded, or "" when every
+// message in it can be classified. It reads raw JSON: a tools/call needs
+// readable params and name, and arguments, when present, must be an object
+func unreadable(body []byte) string {
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return ""
+	}
+	items := []json.RawMessage{body}
+	if body[0] == '[' {
+		items = nil
+		if json.Unmarshal(body, &items) != nil {
+			return "the request couldn't be read, so the call was not made"
+		}
+	}
+	for _, it := range items {
+		var m struct {
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+		}
+		if json.Unmarshal(it, &m) != nil {
+			return "the request couldn't be read, so the call was not made"
+		}
+		if m.Method != "tools/call" {
+			continue
+		}
+		var p struct {
+			Name      string          `json:"name"`
+			Arguments json.RawMessage `json:"arguments"`
+		}
+		if json.Unmarshal(m.Params, &p) != nil || p.Name == "" {
+			return "the tool call's params or name couldn't be read, so the call was not made"
+		}
+		if len(p.Arguments) > 0 && !bytes.HasPrefix(bytes.TrimSpace(p.Arguments), []byte("{")) {
+			return "the tool call's arguments aren't a JSON object, so the call was not made"
+		}
+	}
+	return ""
+}
+
+// firstID is the id of the first message that has one, or null
+func firstID(body []byte) json.RawMessage {
+	body = bytes.TrimSpace(body)
+	var items []json.RawMessage
+	if len(body) > 0 && body[0] == '[' {
+		_ = json.Unmarshal(body, &items)
+	} else {
+		items = []json.RawMessage{body}
+	}
+	for _, it := range items {
+		var m struct {
+			ID json.RawMessage `json:"id"`
+		}
+		if json.Unmarshal(it, &m) == nil && len(m.ID) > 0 {
+			return m.ID
+		}
+	}
+	return json.RawMessage("null")
 }

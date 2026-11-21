@@ -79,3 +79,19 @@ func TestReadRefusesUnknownKeysAndSaysWhereTheFileGoes(t *testing.T) {
 		t.Errorf("unknown key: %v", err)
 	}
 }
+
+func TestApprovalServerURLWithAQueryIsRefused(t *testing.T) {
+	c := &Config{Listen: "127.0.0.1:0", Servers: map[string]Server{
+		"linear": {URL: "http://127.0.0.1:1/mcp?key=abc", Privacy: []string{"P1"}, Approval: &Approval{}},
+	}}
+	err := c.Validate()
+	if err == nil || !strings.Contains(err.Error(), "key header") {
+		t.Errorf("got %v, want a query-string error naming the key header", err)
+	}
+	s := c.Servers["linear"]
+	s.Approval = nil
+	c.Servers["linear"] = s
+	if err := c.Validate(); err != nil {
+		t.Errorf("without approval: %v", err)
+	}
+}

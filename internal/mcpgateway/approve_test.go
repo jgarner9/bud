@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -266,5 +267,36 @@ func TestApprovalGlobsFailClosedAndAskWins(t *testing.T) {
 	err := c.Validate()
 	if err == nil || !strings.Contains(err.Error(), "valid tool-name glob") || !strings.Contains(err.Error(), "isn't allow or ask") {
 		t.Errorf("Validate: %v", err)
+	}
+}
+
+func TestToolCallsWithOddArgumentsOrUnparsableMessagesAreRefused(t *testing.T) {
+	up, got := fakeUpstream(t)
+	g, logPath, _ := approvalGateway(t, up.URL, choose(approval.AllowOnce))
+	for _, body := range []string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_issue","arguments":[1]}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"save_issue","arguments":"x"}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"save_issue","arguments":7}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":5}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":[]}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call"`,
+		`[{"jsonrpc":"2.0","id":1,"method":7}]`,
+	} {
+		w := call(g, "P1", body)
+		wantRefusal(t, w, "not made")
+		noUpstream(t, got)
+		if d := lastDecision(t, logPath); d != "refused" {
+			t.Errorf("%s: decision %q", body, d)
+		}
+	}
+}
+
+func TestReviewTargetExcludesUserinfoQueryAndFragment(t *testing.T) {
+	u, err := url.Parse("https://user:pw@example.com/mcp?token=s3cret#frag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := (&upstream{url: u}).publicURL(), "https://example.com/mcp"; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

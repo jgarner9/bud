@@ -158,6 +158,9 @@ func (c *Config) Validate() error {
 				}
 			}
 		}
+		if u != nil && u.RawQuery != "" && s.Approval != nil {
+			add("%s.url: has a query string, which an approval review would show; put credentials in the key header (key.header, key.env) instead", at)
+		}
 		if k := s.Key; k != nil {
 			if k.Header == "" {
 				add("%s.key.header: name the header the server reads its key from", at)

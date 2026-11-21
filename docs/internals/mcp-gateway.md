@@ -54,11 +54,11 @@ A server with an `approval` block holds its approval-tier `tools/call` requests 
 
 An asking call goes through `approval.Store.Dispatch` with `approval.SocketReview` (`paths.ReviewSocket`, `paths.ReviewSecret`, the store at `paths.ApprovalStore`), and the HTTP request stays open until Jason answers. The binding is:
 
-- Action `mcp:<server>/<tool>`; target the server name and its upstream URL (no key, no userinfo).
+- Action `mcp:<server>/<tool>`; target the server name and its upstream URL as scheme://host/path only (no userinfo, query or fragment). Config validation refuses a query string on a server with an `approval` block; put credentials in the `key` header.
 - Arguments: the exact bytes of `params.arguments`. On approval the gateway forwards the body it already read, byte for byte, so the digest covers what is sent.
 - Scope: runtime `mcp-gateway`, profile the privacy tier, surface the server name, actor the client address, session the `Mcp-Session-Id` header, else the client address and tier. A retry on a new MCP session asks again.
 
-Every failure denies and sends nothing upstream: a denial, expiry (one hour at most), a reviewer that is down or refuses, a reply that doesn't match, or a store that can't be written. The client gets HTTP 200 with a JSON-RPC result whose `isError` is true and a short reason, so the model can tell the user. A client that disconnects cancels the review and gets nothing. A batch holding an approval-tier call is refused whole, with an `isError` result per request. Reads and `allow` tools pass through byte for byte.
+Every failure denies and sends nothing upstream: a denial, expiry (one hour at most), a reviewer that is down or refuses, a reply that doesn't match, or a store that can't be written. The client gets HTTP 200 with a JSON-RPC result whose `isError` is true and a short reason, so the model can tell the user. A client that disconnects cancels the review and gets nothing. A batch holding an approval-tier call is refused whole, with an `isError` result per request. The gate reads raw JSON, and fails closed on an approval-enabled server: a message it can't parse, or a `tools/call` whose params or name can't be read or whose `arguments` is present and not an object, is refused with an `isError` result and audited as `refused`. Reads and `allow` tools pass through byte for byte.
 
 The audit log records the decision for each asking call: `approved` (forwarded; the status is the upstream's), `denied`, `expired`, `unavailable`, `failed`, `canceled` (status 499, client left) or `refused` (batch). Argument values are never logged. Whether MCP clients tolerate a long hold is still unmeasured (design open question 2).
 

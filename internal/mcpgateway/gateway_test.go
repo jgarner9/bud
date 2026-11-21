@@ -7,11 +7,15 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"jgarner.dev/bud/internal/tailnet"
 )
 
 // seen is what the fake upstream was sent
@@ -117,7 +121,8 @@ func TestAllowedCallGetsTheKeyAndIsLogged(t *testing.T) {
 		t.Errorf("session header not passed back: %q", w.Header().Get("Mcp-Session-Id"))
 	}
 	s := <-got
-	if s.path != "/mcp" || s.auth != "Bearer lin_secret" || s.privacy != "" || s.cookie != "" || s.session != "s-client" || s.body != toolCall {
+	// the fake upstream is on loopback, so it is told the checked tier (D108)
+	if s.path != "/mcp" || s.auth != "Bearer lin_secret" || s.privacy != "P1" || s.cookie != "" || s.session != "s-client" || s.body != toolCall {
 		t.Errorf("upstream saw %+v", s)
 	}
 
@@ -368,5 +373,38 @@ func TestUpstreamTransportErrorDoesNotExposeCredentials(t *testing.T) {
 	}
 	if strings.Contains(string(b), "lin_secret") {
 		t.Fatal("audit log exposed the upstream credential")
+	}
+}
+
+func TestTierReachesOnlyUpstreamsInsideTheHouse(t *testing.T) {
+	up, got := fakeUpstream(t)
+	g, _ := newGateway(t, up.URL, "P0", "P1")
+	// no header is P0, and the upstream is told so rather than nothing
+	if w := call(g, "", toolCall); w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	if s := <-got; s.privacy != "P0" {
+		t.Errorf("a request with no tier reached a loopback upstream as %q, want P0", s.privacy)
+	}
+
+	for _, tt := range []struct {
+		url  string
+		want string
+	}{
+		{"http://127.0.0.1:8793/mcp", "P2"},
+		{"http://100.70.1.2:8793/mcp", "P2"},
+		{"https://mcp.linear.app/mcp", ""},
+	} {
+		u, err := url.Parse(tt.url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in := httptest.NewRequest(http.MethodPost, "/x/mcp", nil)
+		in.Header.Set(PrivacyHeader, "P2")
+		pr := &httputil.ProxyRequest{In: in, Out: in.Clone(in.Context())}
+		(&upstream{url: u, inside: tailnet.Inside(u.Hostname())}).rewrite(pr)
+		if got := pr.Out.Header.Get(PrivacyHeader); got != tt.want {
+			t.Errorf("%s was sent tier %q, want %q", tt.url, got, tt.want)
+		}
 	}
 }

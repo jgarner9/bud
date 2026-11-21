@@ -184,7 +184,12 @@ func TestEveryFailureSendsNothingUpstreamAndReturnsIsError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			up, got := fakeUpstream(t)
 			g, logPath, _ := approvalGateway(t, up.URL, tc.review)
-			g.appr.Timeout = 100 * time.Millisecond
+			// only the expiry case waits out the timeout; the others get room
+			// to finish on a slow runner, where 100 ms raced the store's write
+			g.appr.Timeout = 5 * time.Second
+			if tc.decision == "expired" {
+				g.appr.Timeout = 100 * time.Millisecond
+			}
 			if tc.breakDir {
 				// a file where the dir should be, so Create can't succeed
 				g.appr.Store = approval.Store{Path: filepath.Join(logPath, "approvals.json")}

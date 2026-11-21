@@ -1,0 +1,18 @@
+# server/mail-mcp/
+
+The home server's mail MCP server (Suite D106): `bud mail-mcp` behind a systemd user unit. It reads Jason's iCloud mail for Hermes over IMAP, moves mail to Deleted Messages and back, and sends over SMTP. It sits behind the MCP gateway, which lets only P0 sessions use it and asks Jason on Signal before every send or reply, showing the whole message (D107). Hermes's private profile, which lists only P0 models, is the one client, so mail stays with Qwen (Suite D95). How it works is in [docs/internals/mail.md](https://github.com/jgarner9/bud/blob/main/docs/internals/mail.md).
+
+| File | What it is |
+| --- | --- |
+| `bud-mail-mcp.service` | The user unit. It runs the server under `op run`, so the credentials reach it as environment variables, on `127.0.0.1:8796`. |
+| `mail-mcp.env.example` | The `op://` references `op run` resolves, with placeholder vault paths. |
+
+## Setting it up
+
+1. Make an app-specific password for the Apple ID (appleid.apple.com, Sign-In and Security, App-Specific Passwords), named for Bud's mail, and save it in the Bud vault with the Apple ID's email as the username and the address mail should go out from as a `from` field.
+2. Put the env file at `~/.config/bud-server/mail-mcp.env`, mode 0600, with the item's `op://` paths. The service account's token file is the one the gateway already uses.
+3. Record one read-only session, which checks the login and what iCloud supports: `op run --env-file ~/.config/bud-server/mail-mcp.env -- bud mail-mcp --record /tmp/icloud.imap`. It prints whether the server has `MOVE` and `UIDPLUS` and which folder is the trash. The file has the login, every literal and every address redacted; read it before sharing it.
+4. Install and start the unit with the commands at the top of `bud-mail-mcp.service`.
+5. Run `bud sync`, which adds the `mail` tiers to the gateway's approvals file, add the `mail` entry from `server/mcp-gateway/mcp-gateway.example.json` to the gateway's config, and restart the gateway.
+6. Check it through the gateway: `curl -s -H 'X-Bud-Privacy: P0' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_folders","arguments":{}}}' http://<listen>/mail/mcp` lists the folders, and the same request with `X-Bud-Privacy: P1` is refused.
+7. From Hermes, send one email to yourself and approve it on Signal; check that the prompt shows the whole message, that it arrives, and whether a copy shows up in Sent Messages. Then move a message to the trash and restore it.

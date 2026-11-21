@@ -417,3 +417,34 @@ func TestCleanupToolsPassTheirArguments(t *testing.T) {
 		t.Errorf("since a date: %v", f.gotSince)
 	}
 }
+
+func TestARecordingRedactsTheLoginLiteralsAndAddresses(t *testing.T) {
+	a, err := NewAccount(replay(t, "record"), "someone@example.com", "app-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	f, err := a.Record(context.Background(), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.Move || !f.UIDPlus || f.Trash != "Deleted Messages" || len(f.Folders) != 2 {
+		t.Errorf("findings %+v", f)
+	}
+	got := out.String()
+	for _, secret := range []string{"app-pass", "private", "secret body"} {
+		if strings.Contains(got, secret) {
+			t.Errorf("the recording holds %q:\n%s", secret, got)
+		}
+	}
+	for _, want := range []string{
+		"C: a1 LOGIN <redacted>\n",
+		"S: * CAPABILITY IMAP4rev1 MOVE UIDPLUS\n",
+		"REPLY-TO)] {#}\nL: [redacted]\nS: )\n",
+		"C: a9 LOGOUT\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the recording lacks %q:\n%s", want, got)
+		}
+	}
+}

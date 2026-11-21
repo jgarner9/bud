@@ -31,12 +31,28 @@ const (
 	maxLine    = 64 << 10 // the longest atom, quoted string or text line
 	maxLiteral = 1 << 20  // the biggest literal, matching read_message's fetch cap
 	maxDepth   = 16       // how deeply lists may nest
+	// maxResp caps one whole response, literals included, so a server
+	// can't grow one line without end out of many short values
+	maxResp = maxLiteral + 4*maxLine
 )
 
 var errLong = errors.New("the IMAP server sent a line or literal longer than bud accepts")
 
 type reader struct {
-	r *bufio.Reader
+	r    *bufio.Reader
+	used int // bytes of the current response read so far
+}
+
+// readByte reads one byte of the current response, within maxResp
+func (p *reader) readByte() (byte, error) {
+	if p.used >= maxResp {
+		return 0, errLong
+	}
+	c, err := p.r.ReadByte()
+	if err == nil {
+		p.used++
+	}
+	return c, err
 }
 
 func (p *reader) peek() (byte, error) {
@@ -56,7 +72,9 @@ func (p *reader) skipSP() error {
 		if c != ' ' {
 			return nil
 		}
-		_, _ = p.r.ReadByte()
+		if _, err := p.readByte(); err != nil {
+			return err
+		}
 	}
 }
 
@@ -67,12 +85,12 @@ func (p *reader) atEOL() (bool, error) {
 
 // eol consumes CRLF, or a bare LF from a sloppy server
 func (p *reader) eol() error {
-	c, err := p.r.ReadByte()
+	c, err := p.readByte()
 	if err != nil {
 		return err
 	}
 	if c == '\r' {
-		if c, err = p.r.ReadByte(); err != nil {
+		if c, err = p.readByte(); err != nil {
 			return err
 		}
 	}
@@ -86,7 +104,7 @@ func (p *reader) eol() error {
 func (p *reader) restOfLine() (string, error) {
 	var b strings.Builder
 	for {
-		c, err := p.r.ReadByte()
+		c, err := p.readByte()
 		if err != nil {
 			return "", err
 		}
@@ -126,7 +144,9 @@ func (p *reader) atom() (string, error) {
 		if b.Len() >= maxLine {
 			return "", errLong
 		}
-		_, _ = p.r.ReadByte()
+		if _, err := p.readByte(); err != nil {
+			return "", err
+		}
 		b.WriteByte(c)
 	}
 	return b.String(), nil
@@ -142,7 +162,9 @@ func (p *reader) value(depth int) (any, error) {
 		if depth >= maxDepth {
 			return nil, errors.New("the IMAP server sent lists nested too deeply")
 		}
-		_, _ = p.r.ReadByte()
+		if _, err := p.readByte(); err != nil {
+			return nil, err
+		}
 		list := []any{}
 		for {
 			if err := p.skipSP(); err != nil {
@@ -153,7 +175,9 @@ func (p *reader) value(depth int) (any, error) {
 				return nil, err
 			}
 			if c == ')' {
-				_, _ = p.r.ReadByte()
+				if _, err := p.readByte(); err != nil {
+					return nil, err
+				}
 				return list, nil
 			}
 			if c == '\r' || c == '\n' {
@@ -166,10 +190,12 @@ func (p *reader) value(depth int) (any, error) {
 			list = append(list, v)
 		}
 	case '"':
-		_, _ = p.r.ReadByte()
+		if _, err := p.readByte(); err != nil {
+			return nil, err
+		}
 		var b strings.Builder
 		for {
-			c, err := p.r.ReadByte()
+			c, err := p.readByte()
 			if err != nil {
 				return nil, err
 			}
@@ -177,7 +203,7 @@ func (p *reader) value(depth int) (any, error) {
 			case '"':
 				return b.String(), nil
 			case '\\':
-				if c, err = p.r.ReadByte(); err != nil {
+				if c, err = p.readByte(); err != nil {
 					return nil, err
 				}
 			case '\r', '\n':
@@ -189,16 +215,28 @@ func (p *reader) value(depth int) (any, error) {
 			b.WriteByte(c)
 		}
 	case '{':
-		_, _ = p.r.ReadByte()
-		digits, err := p.r.ReadString('}')
-		if err != nil {
+		if _, err := p.readByte(); err != nil {
 			return nil, err
 		}
-		n, err := strconv.ParseInt(strings.TrimSuffix(digits, "}"), 10, 64)
-		if err != nil || n < 0 {
-			return nil, fmt.Errorf("the IMAP server sent a bad literal length {%s", digits)
+		var digits []byte
+		for {
+			c, err := p.readByte()
+			if err != nil {
+				return nil, err
+			}
+			if c == '}' {
+				break
+			}
+			if c < '0' || c > '9' || len(digits) >= 10 {
+				return nil, fmt.Errorf("the IMAP server sent a bad literal length {%s%c", digits, c)
+			}
+			digits = append(digits, c)
 		}
-		if n > maxLiteral {
+		n, err := strconv.ParseInt(string(digits), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("the IMAP server sent a bad literal length {%s}", digits)
+		}
+		if n > maxLiteral || p.used+int(n) > maxResp {
 			return nil, errLong
 		}
 		if err := p.eol(); err != nil {
@@ -208,6 +246,7 @@ func (p *reader) value(depth int) (any, error) {
 		if _, err := io.ReadFull(p.r, buf); err != nil {
 			return nil, err
 		}
+		p.used += int(n)
 		return string(buf), nil
 	}
 	a, err := p.atom()
@@ -224,6 +263,7 @@ func (p *reader) value(depth int) (any, error) {
 }
 
 func (p *reader) readResp() (*resp, error) {
+	p.used = 0
 	tag, err := p.atom()
 	if err != nil {
 		return nil, err

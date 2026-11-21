@@ -376,3 +376,32 @@ func TestUIDSetsAreSortedWithRanges(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestParserRefusesAnEndlessLiteralLength(t *testing.T) {
+	p := &reader{r: bufio.NewReader(strings.NewReader("* 1 FETCH (BODY[] {" + strings.Repeat("9", 100) + "}\r\n"))}
+	if _, err := p.readResp(); err == nil || !strings.Contains(err.Error(), "literal length") {
+		t.Fatalf("got %v, want a bad literal length", err)
+	}
+}
+
+func TestParserCapsAWholeResponseNotJustEachValue(t *testing.T) {
+	line := "* SEARCH" + strings.Repeat(" 1", maxResp) + "\r\n"
+	p := &reader{r: bufio.NewReader(strings.NewReader(line))}
+	if _, err := p.readResp(); !errors.Is(err, errLong) {
+		t.Fatalf("got %v, want errLong", err)
+	}
+	list := "* 1 FETCH (" + strings.Repeat("()", maxResp) + ")\r\n"
+	p = &reader{r: bufio.NewReader(strings.NewReader(list))}
+	if _, err := p.readResp(); !errors.Is(err, errLong) {
+		t.Fatalf("lists: got %v, want errLong", err)
+	}
+}
+
+func TestAPreauthGreetingIsRefused(t *testing.T) {
+	server, client := net.Pipe()
+	t.Cleanup(func() { _ = server.Close(); _ = client.Close() })
+	go func() { _, _ = server.Write([]byte("* PREAUTH [CAPABILITY IMAP4rev1] logged in as someone\r\n")) }()
+	if _, err := NewClient(context.Background(), client); err == nil || !strings.Contains(err.Error(), "PREAUTH") {
+		t.Fatalf("got %v, want PREAUTH refused", err)
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -87,7 +88,12 @@ func NewClient(ctx context.Context, conn net.Conn) (*Client, error) {
 	if err != nil {
 		return nil, c.wrap(ctx, "read the IMAP greeting", err)
 	}
-	if g.tag != "*" || (g.kind != "OK" && g.kind != "PREAUTH") {
+	if g.tag == "*" && g.kind == "PREAUTH" {
+		// bud always logs in itself; a connection authenticated some other
+		// way isn't the account it was given
+		return nil, errors.New("the IMAP server sent PREAUTH, an already logged-in connection: bud only uses connections it logs in itself")
+	}
+	if g.tag != "*" || g.kind != "OK" {
 		return nil, fmt.Errorf("the IMAP server refused the connection: %s %s", g.kind, g.text)
 	}
 	c.noteCaps(g)
@@ -109,6 +115,9 @@ func (c *Client) deadline(ctx context.Context) func() {
 func (c *Client) wrap(ctx context.Context, doing string, err error) error {
 	if ctx.Err() != nil {
 		err = ctx.Err()
+	} else if _, ok := ctx.Deadline(); ok && errors.Is(err, os.ErrDeadlineExceeded) {
+		// the connection's deadline is ctx's, and can fire a moment first
+		err = context.DeadlineExceeded
 	}
 	return fmt.Errorf("%s: %w", doing, err)
 }

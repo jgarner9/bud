@@ -9,7 +9,7 @@ The home server's mail MCP server (Suite D106): `bud mail-mcp` behind a systemd 
 
 ## Setting it up
 
-1. Make an app-specific password for the Apple ID (appleid.apple.com, Sign-In and Security, App-Specific Passwords), named for Bud's mail, and save it in the Bud vault with the Apple ID's email as the username and the address mail should go out from as a `from` field.
+1. Use the Bud vault's `iCloud` item, which the calendar server already reads: its username is the Apple ID, its password the app-specific password made for Bud (appleid.apple.com, Sign-In and Security, App-Specific Passwords), and its `email` field the address mail goes out from. Without that item yet, make it as the calendar README says and add the `email` field.
 2. Put the env file at `~/.config/bud-server/mail-mcp.env`, mode 0600, with the item's `op://` paths. The service account's token file is the one the gateway already uses.
 3. Record one read-only session, which checks the login and what iCloud supports: `op run --env-file ~/.config/bud-server/mail-mcp.env -- bud mail-mcp --record /tmp/icloud.imap`. It prints whether the server has `MOVE` and `UIDPLUS` and which folder is the trash. The file has the login, every literal and every address redacted; read it before sharing it.
 4. Install and start the unit with the commands at the top of `bud-mail-mcp.service`.

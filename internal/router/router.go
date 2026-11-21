@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"jgarner.dev/bud/internal/registry"
 )
@@ -43,6 +44,8 @@ type target struct {
 	base *url.URL
 	name string
 	key  string
+	// provider is the registry provider id, for health
+	provider string
 }
 
 // Router serves the OpenAI API over a registry's providers
@@ -53,6 +56,14 @@ type Router struct {
 	ledger  *Ledger
 	cap     float64
 	logf    func(string, ...any)
+
+	health       *health
+	probeEvery   time.Duration
+	probeTimeout time.Duration
+	provURL      map[string]*url.URL // by provider id
+	provKey      map[string]string
+	approvals    *Approvals
+	p0Wait       time.Duration
 
 	noteMu sync.Mutex
 	noted  map[string]bool
@@ -66,6 +77,15 @@ type Options struct {
 	TopUpCap float64
 	// Logf writes to the router's log; nil uses the standard logger
 	Logf func(string, ...any)
+	// Approvals reviews a P0 request that only a non-local model can serve
+	// (Suite D104); nil refuses such a request at once
+	Approvals *Approvals
+	// P0Wait is how long a held P0 request waits for Jason; zero means 10 minutes
+	P0Wait time.Duration
+	// ProbeInterval and ProbeTimeout time the health probes; zero means 10 s and 2 s
+	ProbeInterval, ProbeTimeout time.Duration
+	// Now is the clock; nil means time.Now
+	Now func() time.Time
 }
 
 type ctxKey struct{}
@@ -88,6 +108,23 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 	if rt.logf == nil {
 		rt.logf = log.Printf
 	}
+	rt.approvals, rt.p0Wait = opts.Approvals, opts.P0Wait
+	if rt.p0Wait <= 0 {
+		rt.p0Wait = 10 * time.Minute
+	}
+	rt.probeEvery, rt.probeTimeout = opts.ProbeInterval, opts.ProbeTimeout
+	if rt.probeEvery <= 0 {
+		rt.probeEvery = defaultProbeInterval
+	}
+	if rt.probeTimeout <= 0 {
+		rt.probeTimeout = defaultProbeTimeout
+	}
+	now := opts.Now
+	if now == nil {
+		now = time.Now
+	}
+	rt.provURL, rt.provKey = map[string]*url.URL{}, keys
+	probed := map[string]bool{}
 	if rt.ledger == nil {
 		rt.ledger, _ = NewLedger("", reg.Models)
 	}
@@ -100,14 +137,23 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 		if err != nil || base.Host == "" {
 			return nil, fmt.Errorf("provider %s: endpoint isn't a URL", m.Provider)
 		}
-		rt.targets[id] = target{base: base, name: m.Name, key: keys[m.Provider]}
+		rt.targets[id] = target{base: base, name: m.Name, key: keys[m.Provider], provider: m.Provider}
+		rt.provURL[m.Provider] = base
+		// the local providers are the ones that serve P0, and the only ones probed
+		if m.Allows("P0") {
+			probed[m.Provider] = true
+		}
 	}
+	rt.health = newHealth(now, rt.logf, probed)
 	rt.proxy = &httputil.ReverseProxy{
 		// Set replaces any upstream X-Bud-Model, so only the router says
 		// which model answered
 		ModifyResponse: func(resp *http.Response) error {
 			id := resp.Request.Context().Value(ctxKey{}).(*resolved).id
 			resp.Header.Set("X-Bud-Model", id)
+			if f := resp.Request.Context().Value(ctxKey{}).(*resolved).fallback; f != "" {
+				resp.Header.Set("X-Bud-Fallback", f)
+			}
 			// set before the body is charged, so it's the total before this request
 			resp.Header.Set("X-Bud-Spend", fmt.Sprintf("topup=%.2f/%.2f", rt.ledger.TopUp(), rt.cap))
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
@@ -122,10 +168,14 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 		// the proxy's own log line names the upstream and the dial error,
 		// which shouldn't reach the journal any more than the client
 		ErrorLog: log.New(io.Discard, "", 0),
-		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			// the transport error names the upstream's address, which isn't
-			// the client's business
-			writeError(w, http.StatusBadGateway, "api_error", "the model's provider didn't answer; check the router's provider")
+		// nothing is written here: this runs only before any response bytes,
+		// so ServeHTTP can retry with another member or write the 502 itself.
+		// The error names the upstream's address, which isn't the client's
+		// business, so it's kept only as a fact
+		ErrorHandler: func(_ http.ResponseWriter, r *http.Request, err error) {
+			res := r.Context().Value(ctxKey{}).(*resolved)
+			// a client that went away isn't a provider that did
+			res.failed = r.Context().Err() == nil
 		},
 	}
 	return rt, nil
@@ -184,6 +234,10 @@ type resolved struct {
 	url  *url.URL
 	key  string
 	body []byte
+	// fallback is the X-Bud-Fallback value to add to the response
+	fallback string
+	// failed is set by the proxy's error handler on a transport error
+	failed bool
 }
 
 func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +254,7 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.models(w, tier)
 		return
 	}
-	suffix, ok := endpoints[r.URL.Path]
+	_, ok := endpoints[r.URL.Path]
 	if !ok {
 		writeError(w, http.StatusNotFound, "invalid_request_error", "no such endpoint; the router serves GET /v1/models, POST /v1/chat/completions, /v1/completions and /v1/embeddings")
 		return
@@ -231,31 +285,73 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "the request needs a model; GET /v1/models lists them")
 		return
 	}
-	id := model
-	if role, ok := strings.CutPrefix(model, RolePrefix); ok {
-		ro, known := rt.reg.Roles[role]
-		if !known || ro.Default() == "" {
+	if _, isRole := strings.CutPrefix(model, RolePrefix); !isRole {
+		t, ok := rt.targets[model]
+		if !ok {
 			writeError(w, http.StatusNotFound, "invalid_request_error", fmt.Sprintf("no model %q; GET /v1/models lists them", model))
 			return
 		}
-		if rt.pick(ro, tier) == "" {
-			writeError(w, http.StatusForbidden, "invalid_request_error", fmt.Sprintf("no model in role %s takes %s requests; GET /v1/models with %s: %s lists what does", role, tier, registry.PrivacyHeader, tier))
+		if !rt.reg.Models[model].Allows(tier) {
+			writeError(w, http.StatusForbidden, "invalid_request_error", fmt.Sprintf("model %s can't take %s requests; GET /v1/models with %s: %s lists the ones that can", model, tier, registry.PrivacyHeader, tier))
 			return
 		}
-		if id = rt.pickSpend(ro, tier); id == "" {
-			rt.capReached(w)
+		if rt.health.isDown(t.provider) {
+			writeError(w, http.StatusServiceUnavailable, "api_error", fmt.Sprintf("model %s's provider is down; use %s<role> to fall back", model, RolePrefix))
 			return
 		}
+		if rt.forward(w, r, fields, model, "") {
+			rt.badGateway(w)
+		}
+		return
 	}
-	t, ok := rt.targets[id]
-	if !ok {
+
+	role := strings.TrimPrefix(model, RolePrefix)
+	ro, known := rt.reg.Roles[role]
+	if !known || ro.Default() == "" {
 		writeError(w, http.StatusNotFound, "invalid_request_error", fmt.Sprintf("no model %q; GET /v1/models lists them", model))
 		return
 	}
-	if !rt.reg.Models[id].Allows(tier) {
-		writeError(w, http.StatusForbidden, "invalid_request_error", fmt.Sprintf("model %s can't take %s requests; GET /v1/models with %s: %s lists the ones that can", id, tier, registry.PrivacyHeader, tier))
+	if rt.pick(ro, tier) == "" {
+		writeError(w, http.StatusForbidden, "invalid_request_error", fmt.Sprintf("no model in role %s takes %s requests; GET /v1/models with %s: %s lists what does", role, tier, registry.PrivacyHeader, tier))
 		return
 	}
+	// a request is tried on at most two members: the first that is up, and
+	// after a transport error the next
+	tried := map[string]bool{}
+	for attempt := 0; attempt < 2; attempt++ {
+		id := rt.pickSpend(ro, tier, tried)
+		if id == "" {
+			switch {
+			case attempt > 0:
+				rt.badGateway(w)
+			case rt.anyUp(ro, tier, nil):
+				rt.capReached(w)
+			case tier == "P0":
+				rt.p0Down(w, r, raw, fields, role, ro)
+			default:
+				writeError(w, http.StatusServiceUnavailable, "api_error", fmt.Sprintf("every model in role %s that takes %s requests is down", role, tier))
+			}
+			return
+		}
+		if !rt.forward(w, r, fields, id, "") {
+			return
+		}
+		tried[id] = true
+	}
+	rt.badGateway(w)
+}
+
+func (rt *Router) badGateway(w http.ResponseWriter) {
+	writeError(w, http.StatusBadGateway, "api_error", "the model's provider didn't answer; check the router's provider")
+}
+
+// forward sends the request to model id and reports whether the provider
+// failed before any response bytes, so the caller may try another. Every
+// other outcome, an error answer included, has been written to w. The cap
+// check, the charge and the release of the top-up slot belong to one attempt,
+// so a retry never charges twice: only a 2xx body is charged
+func (rt *Router) forward(w http.ResponseWriter, r *http.Request, fields map[string]json.RawMessage, id, fallback string) (failed bool) {
+	t := rt.targets[id]
 	if rt.ledger.spendsTopUp(id) {
 		release, err := rt.ledger.admitTopUp(r.Context().Done(), rt.cap)
 		if err != nil {
@@ -264,7 +360,7 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else {
 				rt.capReached(w)
 			}
-			return
+			return false
 		}
 		// the proxy returns once the body is copied and charged
 		defer release()
@@ -284,22 +380,53 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
-	err = enc.Encode(fields)
-	body := bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
-	if err != nil {
+	if err := enc.Encode(fields); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "the request body couldn't be re-encoded")
-		return
+		return false
 	}
+	body := bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
 	// joined onto the path, so an endpoint's query string stays a query
 	u := *t.base
-	u.Path = strings.TrimSuffix(u.Path, "/") + suffix
+	u.Path = strings.TrimSuffix(u.Path, "/") + endpoints[r.URL.Path]
 	u.RawPath = ""
-	res := &resolved{id: id, url: &u, key: t.key, body: body}
+	res := &resolved{id: id, url: &u, key: t.key, body: body, fallback: fallback}
 	rt.proxy.ServeHTTP(w, r.WithContext(contextWith(r, res)))
+	if res.failed {
+		rt.health.markDown(t.provider)
+	}
+	return res.failed
+}
+
+// eligible lists the members that take the tier, the pin first
+func (rt *Router) eligible(ro registry.Role, tier string) []string {
+	var ids []string
+	seen := map[string]bool{}
+	add := func(id string) {
+		if m, ok := rt.reg.Models[id]; ok && id != "" && m.Allows(tier) && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	add(ro.Pin)
+	for _, id := range ro.Members() {
+		add(id)
+	}
+	return ids
+}
+
+// anyUp reports whether an eligible member outside skip has a provider that isn't down
+func (rt *Router) anyUp(ro registry.Role, tier string, skip map[string]bool) bool {
+	for _, id := range rt.eligible(ro, tier) {
+		if !skip[id] && !rt.health.isDown(rt.targets[id].provider) {
+			return true
+		}
+	}
+	return false
 }
 
 // pick chooses a role's model for a tier: the pin if it may see the tier,
-// else the first member that may. "" means none can.
+// else the first member that may. "" means none can. It ignores health, so
+// listings and the 403 don't change when a provider is down.
 func (rt *Router) pick(ro registry.Role, tier string) string {
 	if m, ok := rt.reg.Models[ro.Pin]; ok && ro.Pin != "" && m.Allows(tier) {
 		return ro.Pin
@@ -312,16 +439,14 @@ func (rt *Router) pick(ro registry.Role, tier string) string {
 	return ""
 }
 
-// pickSpend picks among the tier's eligible members, first one that spends no
-// top-up, then one that does while the month's top-up is under the cap. ""
-// means the cap stops every eligible member.
-func (rt *Router) pickSpend(ro registry.Role, tier string) string {
+// pickSpend picks among the tier's eligible members whose provider is up and
+// that aren't in skip: the first one that spends no top-up, then one that
+// does while the month's top-up is under the cap. "" means none is left or the
+// cap stops every one.
+func (rt *Router) pickSpend(ro registry.Role, tier string, skip map[string]bool) string {
 	var ids []string
-	if m, ok := rt.reg.Models[ro.Pin]; ok && ro.Pin != "" && m.Allows(tier) {
-		ids = append(ids, ro.Pin)
-	}
-	for _, id := range ro.Members() {
-		if m, ok := rt.reg.Models[id]; ok && m.Allows(tier) {
+	for _, id := range rt.eligible(ro, tier) {
+		if !skip[id] && !rt.health.isDown(rt.targets[id].provider) {
 			ids = append(ids, id)
 		}
 	}
@@ -330,10 +455,8 @@ func (rt *Router) pickSpend(ro registry.Role, tier string) string {
 			return id
 		}
 	}
-	if rt.ledger.TopUp() < rt.cap {
-		for _, id := range ids {
-			return id
-		}
+	if rt.ledger.TopUp() < rt.cap && len(ids) > 0 {
+		return ids[0]
 	}
 	return ""
 }

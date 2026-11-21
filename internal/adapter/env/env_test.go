@@ -297,3 +297,20 @@ func TestAnEmptyApprovalBlockRendersAsAskEverything(t *testing.T) {
 		t.Errorf("rendered %s, want linear's empty tools kept", b)
 	}
 }
+
+func TestOpenCodeSecretsTakeVariableNamesAndOpReferences(t *testing.T) {
+	r, err := resolve(t,
+		`{"bud": {"opencode_secrets": {"EXA_API_KEY": "op://vault/exa/old", "GITHUB_PERSONAL_ACCESS_TOKEN": "op://vault/github/pat"}}}`,
+		`{"bud": {"opencode_secrets": {"EXA_API_KEY": "op://vault/exa/key"}}}`,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.OpenCodeSecrets["EXA_API_KEY"] != "op://vault/exa/key" || r.OpenCodeSecrets["GITHUB_PERSONAL_ACCESS_TOKEN"] != "op://vault/github/pat" {
+		t.Errorf("a later fragment sets a variable over an earlier one's: %v", r.OpenCodeSecrets)
+	}
+	_, err = resolve(t, `{"bud": {"opencode_secrets": {"exa key": "op://vault/exa/key", "EXA_API_KEY": "sk-plain", "GH_PAT": "op://vault/item"}}}`)
+	if err == nil || !strings.Contains(err.Error(), "bud.opencode_secrets.exa key") || !strings.Contains(err.Error(), "bud.opencode_secrets.EXA_API_KEY: the value must be an op://vault/item/field reference") || !strings.Contains(err.Error(), "bud.opencode_secrets.GH_PAT") {
+		t.Fatalf("got %v", err)
+	}
+}

@@ -278,6 +278,9 @@ var (
 	errorSep = "\n  "
 )
 
+// IsOpRef says whether s is a whole op://vault/item/field reference
+func IsOpRef(s string) bool { return opRefRe.MatchString(s) }
+
 // Validate checks that the registry is complete and consistent. It reports
 // every problem at once, sorted, each saying what to fix
 func (r *Registry) Validate() error {

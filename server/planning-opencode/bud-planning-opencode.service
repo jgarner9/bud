@@ -1,0 +1,43 @@
+# The home server's planning OpenCode (Suite D49, D109), as a system unit
+# that runs as its own user, bud-planning, rather than as Jason:
+#
+#   sudo cp bud-planning-opencode.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bud-planning-opencode
+#
+# Its own user can't open the approval socket or read the review secret in
+# Jason's runtime dir, and the sandbox below hides /home and /run/user, so a
+# planning session's tools can write only under /var/lib/bud-planning. op run resolves the
+# op:// references bud sync wrote to opencode.env (provider keys, EXA_API_KEY,
+# GITHUB_PERSONAL_ACCESS_TOKEN) through bud-planning's own service account,
+# whose token the first EnvironmentFile holds; the second holds
+# OPENCODE_PASSWORD, the server's Basic auth password (username opencode).
+# Edit --hostname to the server's tailnet IP (tailscale ip -4) before
+# enabling. %h would be root's home in a system unit, so paths are spelled out.
+[Unit]
+Description=Bud planning OpenCode
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=bud-planning
+Group=bud-planning
+WorkingDirectory=/var/lib/bud-planning
+EnvironmentFile=/var/lib/bud-planning/.config/bud-server/op-service-account.env
+EnvironmentFile=/var/lib/bud-planning/.config/bud-server/planning-opencode.env
+Environment=PATH=/var/lib/bud-planning/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env op run --env-file=/var/lib/bud-planning/.local/state/bud/opencode.env -- /var/lib/bud-planning/.local/bin/opencode serve --hostname 127.0.0.1 --port 8797
+Restart=on-failure
+RestartSec=5
+# the tailnet address may not be up yet at boot; the restart covers it
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/bud-planning
+InaccessiblePaths=-/run/user
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target

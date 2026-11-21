@@ -14,7 +14,7 @@ import re
 import secrets
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 APPROVE = "once"  # Hermes's word for approving one call; a reaction never approves more
 DENY = "deny"
@@ -194,6 +194,7 @@ class Prompt:
     deny_only: bool
     created: float
     timestamp: Optional[int] = None  # the Signal message's sent timestamp, once it is sent
+    review: Any = None  # a reviewer-socket prompt's future; None for a Hermes approval card
 
 
 @dataclass

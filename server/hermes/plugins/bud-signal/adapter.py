@@ -21,6 +21,7 @@ plugin's register), so plugin.yaml pins the Hermes version it was checked agains
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Optional
 
@@ -29,7 +30,8 @@ from gateway.platforms.base import SendResult
 from plugins.platforms.signal.register import register as bundled_register
 from plugins.platforms.signal.adapter import SignalAdapter
 
-from .approvals import (APPROVE, APPROVED_MARK, DENIED_MARK, GRACE_SECONDS, PreApprovals, Prompts, command_of,
+from .reviewer import ReviewServer, default_paths
+from .approvals import (APPROVE, Prompt, APPROVED_MARK, DENIED_MARK, GRACE_SECONDS, PreApprovals, Prompts, command_of,
                         footer, may_answer, parse_code, reaction_choice, reaction_of, text_of)
 
 logger = logging.getLogger(__name__)
@@ -50,6 +52,44 @@ class BudSignalAdapter(SignalAdapter):
         if not any(may_answer(u, self.dm_allow_from) for u in self.dm_allow_from):
             logger.warning("bud-signal: SIGNAL_ALLOWED_USERS names nobody, so no Signal reaction or code "
                            "can answer an approval; set it to your own number")
+        self._reviewer: Optional[ReviewServer] = None
+
+    async def connect(self, *args, **kwargs):
+        ok = await super().connect(*args, **kwargs)
+        if ok and self._reviewer is None:
+            self._reviewer = ReviewServer(*default_paths(), self)
+            await self._reviewer.start()  # logs and returns False rather than raising
+        return ok
+
+    async def disconnect(self, *args, **kwargs):
+        reviewer, self._reviewer = self._reviewer, None
+        if reviewer is not None:
+            await reviewer.stop()
+        return await super().disconnect(*args, **kwargs)
+
+    async def open_review(self, summary: str) -> Prompt:
+        """Post a reviewer-socket prompt to Jason and keep it for his answer. Its code comes from the same
+        space as Hermes's approval cards, so a code never names two waiting prompts."""
+        owners = sorted(u for u in self.dm_allow_from if may_answer(u, self.dm_allow_from))
+        if len(owners) != 1:
+            raise RuntimeError("SIGNAL_ALLOWED_USERS must name exactly one number to ask")
+        p = self._prompts.reserve("", "", owners[0], False)
+        p.review = asyncio.get_running_loop().create_future()
+        result = await self.send(p.chat_id, f"Bud asks for approval:\n{summary}\n\n{footer(p.code, False)}")
+        if not result.success:
+            self._prompts.drop(p)
+            raise RuntimeError(result.error or "send failed")
+        raw = result.raw_response if isinstance(result.raw_response, dict) else {}
+        ts = raw.get("timestamp")
+        if isinstance(ts, int) and ts > 0:
+            self._prompts.bind(p, ts)
+        return p
+
+    async def close_review(self, p: Prompt, note: Optional[str]) -> None:
+        """Forget a reviewer prompt so a later reaction or code does nothing, and say why when given."""
+        self._prompts.drop(p)
+        if note:
+            await self.send(p.chat_id, note)
 
     async def _send_exec_approval_prompt(self, prompt) -> SendResult:
         if not prompt.request_id:
@@ -136,6 +176,14 @@ class BudSignalAdapter(SignalAdapter):
         from tools.approval import list_gateway_approvals, resolve_gateway_approval_card
         if p.chat_id != sender:
             # a prompt sent to one chat is answered from that chat only
+            return
+        if p.review is not None:
+            # a reviewer-socket prompt: the socket handler replies and forgets it
+            if not p.review.done():
+                p.review.set_result(choice)
+                if p.timestamp:
+                    await self.send_reaction(p.chat_id, APPROVED_MARK if choice == APPROVE else DENIED_MARK,
+                                             self.account, p.timestamp)
             return
         if choice == APPROVE and p.deny_only:
             await self.send(p.chat_id, "That one can only be denied, because the whole command couldn't be shown.")

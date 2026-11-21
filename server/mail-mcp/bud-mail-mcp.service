@@ -1,0 +1,27 @@
+# The home server's mail MCP server (Suite D106), as a systemd user unit:
+#
+#   cp bud-mail-mcp.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-mail-mcp
+#
+# op run resolves the Apple ID, the app-specific password and the From
+# address in the env file through the Bud vault's service account, whose
+# token the first EnvironmentFile holds. They reach the server's
+# environment and never touch disk. It listens on loopback only; the MCP
+# gateway is what Hermes reaches, and the gateway lets only P0 sessions
+# through and asks Jason on Signal before every send.
+[Unit]
+Description=Bud mail MCP server (iCloud IMAP and SMTP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/mail-mcp.env -- %h/.local/bin/bud mail-mcp --listen 127.0.0.1:8796
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

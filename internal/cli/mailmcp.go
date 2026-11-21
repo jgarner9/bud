@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"jgarner.dev/bud/internal/mail"
 	"jgarner.dev/bud/internal/paths"
@@ -20,6 +22,7 @@ func init() {
 // mailFlags are bud mail-mcp's flags
 type mailFlags struct {
 	listen, imap, smtp, trash, log string
+	record                         string
 }
 
 // MailMCP runs the home server's mail MCP server over IMAP and SMTP (Suite
@@ -35,9 +38,41 @@ func MailMCP() *Command {
 			fs.StringVar(&f.smtp, "smtp", "smtp.mail.me.com:587", "the SMTP server, with STARTTLS")
 			fs.StringVar(&f.trash, "trash", "Deleted Messages", "the folder cleanup moves to when none has the \\Trash flag")
 			fs.StringVar(&f.log, "log", "", "the action log of moves, restores and sends (default ~/.local/state/bud/mail-actions.jsonl)")
+			fs.StringVar(&f.record, "record", "", "instead of serving, record one read-only IMAP session to this file, redacted, and print what it found")
 		},
 		Run: func(g *Globals, args []string) error { return runMailMCP(g, args, f) },
 	}
+}
+
+// recordMail writes a redacted transcript of one read-only session and
+// prints what the live check needs: MOVE, UIDPLUS and the trash folder
+func recordMail(g *Globals, acct *mail.Account, path string) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return fmt.Errorf("create the recording (it must not exist yet): %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	found, err := acct.Record(ctx, file)
+	if cerr := file.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return fmt.Errorf("record a mail session (what was recorded is in %s): %w", path, err)
+	}
+	w := g.stdout
+	if w == nil {
+		w = os.Stdout
+	}
+	trash := found.Trash
+	if trash == "" {
+		trash = "none has the \\Trash flag; cleanup uses --trash"
+	}
+	fmt.Fprintf(w, "recorded to %s\nMOVE: %v\nUIDPLUS: %v\ntrash folder: %s\nfolders: %s\n", path, found.Move, found.UIDPlus, trash, strings.Join(found.Folders, ", "))
+	if !found.Move && !found.UIDPlus {
+		fmt.Fprintln(w, "warning: without MOVE or UIDPLUS, bud won't move mail to the trash")
+	}
+	return nil
 }
 
 // serveMail is swappable so tests stop before listening
@@ -56,6 +91,9 @@ func runMailMCP(g *Globals, args []string, f mailFlags) error {
 		return err
 	}
 	acct.Trash = f.trash
+	if f.record != "" {
+		return recordMail(g, acct, f.record)
+	}
 	if f.log == "" {
 		p, err := paths.Resolve()
 		if err != nil {

@@ -10,6 +10,7 @@
 | `--imap` | `imap.mail.me.com:993` | The IMAP server, with implicit TLS. A loopback host is dialed in the clear, for tests; the client refuses to log in over a plain connection anywhere else. |
 | `--smtp` | `smtp.mail.me.com:587` | The SMTP server. STARTTLS is required, except to a loopback host (tests); a server that doesn't offer it is refused before the password is sent. |
 | `--trash` | `Deleted Messages` | Where cleanup moves mail when no folder has the `\Trash` special-use flag. |
+| `--record` | | Instead of serving, run one scripted read-only session (login, capabilities, `LIST`, `STATUS`, `EXAMINE`, `SEARCH`, a summary and a body fetch, logout) and write it to this file in the transcript format, with the login, every literal and every address redacted, then print whether the server has `MOVE` and `UIDPLUS` and which folder is the trash. The file must not exist yet. |
 | `--log` | `~/.local/state/bud/mail-actions.jsonl` | The action log (`paths.MailActions`), mode 0600: one JSON line per move to the trash, restore and send, naming the message by Message-ID with its sender and subject, or for a send its recipients and subject. Never a body. |
 
 ## The tools
@@ -55,9 +56,9 @@ Nothing a tool does marks mail read: folders are opened with `EXAMINE` and messa
 
 ## Tests
 
-The client tests replay IMAP transcripts in `testdata/*.imap` against a fake server on loopback that fails on any line bud sends that the transcript doesn't expect (the format is at the top of `testdata/login_list.imap`; an `X:` line drops the connection, as `trash_dropped.imap` does in place of the LOGOUT answer). They are hand-written from the RFCs for now; a recorder run once on the home server will replace them with redacted iCloud sessions. `testdata/messages/` holds sample messages, among them one that tries to approve an action from inside the mail. The send tests run against a fake SMTP server on loopback and check the exact message, that a refused recipient sends nothing, that a server without STARTTLS never gets the password, and that header injection and over-long bodies are refused.
+The client tests replay IMAP transcripts in `testdata/*.imap` against a fake server on loopback that fails on any line bud sends that the transcript doesn't expect (the format is at the top of `testdata/login_list.imap`; an `X:` line drops the connection, as `trash_dropped.imap` does in place of the LOGOUT answer). They are hand-written from the RFCs for now; `--record` (`record.go`) captures a redacted iCloud session to check them against. The login is redacted from its command to the server's answer, so a credential sent as a literal can't show on the line after it; every literal form (`{n}`, `{n+}`, `~{n}`) is a placeholder, and a literal whose length can't be read stops the trace rather than write its bytes as lines. The trace is written however the session ends, so a failed login is on file too. A recorded literal is a placeholder, so a recording shows the commands and responses as iCloud sends them but has to be filled in by hand before it replays. `testdata/messages/` holds sample messages, among them one that tries to approve an action from inside the mail. The send tests run against a fake SMTP server on loopback and check the exact message, that a refused recipient sends nothing, that a server without STARTTLS never gets the password, and that header injection and over-long bodies are refused.
 
 ## Not yet
 
-- The unit in `server/mail-mcp/` and the recorder, and the first live run on the home server, which settles Sent Messages, the trash's retention and whether iCloud has `MOVE` and `UIDPLUS`.
+- The first live run on the home server (`server/mail-mcp/README.md`), which settles Sent Messages, the trash's retention and whether iCloud has `MOVE` and `UIDPLUS`, and then recorded transcripts in place of the hand-written ones.
 - JGA-317's isolated ingestion.

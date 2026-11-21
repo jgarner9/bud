@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 )
@@ -52,5 +53,22 @@ func TestMailMCPChecksItsSetup(t *testing.T) {
 	}
 	if err := runMailMCP(&Globals{}, []string{"x"}, mf("127.0.0.1:8796", "imap.example.com:993")); err == nil {
 		t.Error("an argument was accepted")
+	}
+}
+
+// a recording never overwrites a file, since it may be an earlier one
+func TestMailMCPRecordRefusesAnExistingFile(t *testing.T) {
+	t.Setenv("BUD_MAIL_USER", "u")
+	t.Setenv("BUD_MAIL_PASSWORD", "p")
+	path := t.TempDir() + "/session.imap"
+	if err := os.WriteFile(path, []byte("earlier"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := runMailMCP(&Globals{}, nil, mailFlags{listen: "127.0.0.1:8796", imap: "127.0.0.1:1", record: path})
+	if err == nil || !strings.Contains(err.Error(), "must not exist") {
+		t.Fatalf("got %v", err)
+	}
+	if b, _ := os.ReadFile(path); string(b) != "earlier" {
+		t.Errorf("the file was changed to %q", b)
 	}
 }

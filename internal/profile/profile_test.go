@@ -15,7 +15,7 @@ func TestTheExampleProfilesAreValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"dev-machine", "model-box", "server"}; !slices.Equal(names, want) {
+	if want := []string{"dev-machine", "model-box", "server", "server-planning"}; !slices.Equal(names, want) {
 		t.Fatalf("examples = %v, want %v", names, want)
 	}
 	for _, name := range names {
@@ -103,7 +103,7 @@ func TestTheOverlayProfileWins(t *testing.T) {
 		t.Fatalf("got %s %+v", file, p)
 	}
 	names, _ := List(OS(overlay), OS(examples))
-	if len(names) != 3 {
+	if len(names) != 4 {
 		t.Fatalf("a name in both dirs is listed once: %v", names)
 	}
 }

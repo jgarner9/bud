@@ -127,6 +127,30 @@ func TestAnOpReferenceBecomesASecretForOpRun(t *testing.T) {
 	}
 }
 
+func TestFragmentSecretsJoinTheProviderKeysForOpRun(t *testing.T) {
+	in := shipped(t)
+	in.Env = append(in.Env, Fragment{Name: "overlay/personal", Src: []byte(`{"bud": {"opencode_secrets": {"EXA_API_KEY": "op://vault/exa/key"}}}`)})
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Secrets["EXA_API_KEY"] != "op://vault/exa/key" {
+		t.Fatalf("secrets = %v", out.Secrets)
+	}
+	if strings.Contains(string(out.Config), "op://") || strings.Contains(string(out.Config), "opencode_secrets") {
+		t.Fatal("the reference belongs in the env file, not the config")
+	}
+
+	// a fragment can't point a provider's key variable somewhere else
+	p := in.Registry.Providers["go"]
+	p.Key = "op://vault/opencode-go/credential"
+	in.Registry.Providers["go"] = p
+	in.Env = append(in.Env, Fragment{Name: "overlay/other", Src: []byte(`{"bud": {"opencode_secrets": {"BUD_GO_API_KEY": "op://vault/elsewhere/key"}}}`)})
+	if _, err := Render(in); err == nil || !strings.Contains(err.Error(), "bud.opencode_secrets.BUD_GO_API_KEY") {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestFragmentsMergeInOrderAndRulesAppend(t *testing.T) {
 	in := shipped(t)
 	in.Env = append(in.Env, Fragment{Name: "overlay/laptop", Src: []byte(`{

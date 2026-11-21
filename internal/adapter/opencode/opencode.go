@@ -190,6 +190,13 @@ func Render(in Input) (*Output, error) {
 		return nil, err
 	}
 	out.Notes = tools.Notes()
+	for _, v := range sortedKeys(tools.OpenCodeSecrets) {
+		ref := tools.OpenCodeSecrets[v]
+		if have, ok := out.Secrets[v]; ok && have != ref {
+			return nil, fmt.Errorf("bud.opencode_secrets.%s: a registry provider already reads its key from %s; drop it from the fragment or change the provider's key", v, v)
+		}
+		out.Secrets[v] = ref
+	}
 	if servers := mcpServers(tools); len(servers) > 0 {
 		cfg["mcp"] = map[string]any{"servers": servers}
 	}

@@ -118,7 +118,7 @@ func TestEachExampleProfileRendersItsGoldenConfigs(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("needs git")
 	}
-	for _, name := range []string{"dev-machine", "server", "model-box"} {
+	for _, name := range []string{"dev-machine", "server", "server-planning", "model-box"} {
 		t.Run(name, func(t *testing.T) {
 			s := newServer(t)
 			o := options(t, s)

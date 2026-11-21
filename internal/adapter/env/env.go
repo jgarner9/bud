@@ -135,6 +135,13 @@ type Bud struct {
 	// then "*". A later fragment sets a key over an earlier one's. Terminal
 	// commands are tiered by the shell permission rules instead
 	Tiers map[string]string `json:"tiers,omitempty"`
+	// OpenCodeSecrets are environment variables op run fills for OpenCode,
+	// each an op:// reference, written to opencode.env beside the registry's
+	// provider keys: the fragments' own keys, such as EXA_API_KEY for
+	// websearch or GITHUB_PERSONAL_ACCESS_TOKEN for GitHub's MCP server. They
+	// name the vault, so they belong in the overlay. A later fragment sets a
+	// variable over an earlier one's
+	OpenCodeSecrets map[string]string `json:"opencode_secrets,omitempty"`
 }
 
 // Server is one MCP server. Exactly one of Gateway, URL and Command says how
@@ -191,6 +198,8 @@ type Resolved struct {
 	Tiers  map[string]string
 	// Router is the model router's base URL, empty when none is set
 	Router string
+	// OpenCodeSecrets are the op:// references OpenCode's env file adds
+	OpenCodeSecrets map[string]string
 	// Gateway holds each enabled gateway server's approval settings, by
 	// name, including servers left out of this device's runtimes, since the
 	// gateway still serves them
@@ -236,6 +245,8 @@ func (r *Resolved) Notes() []string {
 var nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 var toolRe = regexp.MustCompile(`^[a-z0-9_*?-]+$`)
+
+var envVarRe = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 
 // Take removes the bud block from merged fragments and resolves it
 func Take(merged map[string]any) (*Resolved, error) {
@@ -286,7 +297,16 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
-	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, Router: strings.TrimSuffix(b.Router, "/")}
+	for _, v := range sortedKeys(b.OpenCodeSecrets) {
+		if !envVarRe.MatchString(v) {
+			add("bud.opencode_secrets.%s: a variable name is uppercase letters, digits and '_', not starting with a digit", v)
+		}
+		if !strings.HasPrefix(b.OpenCodeSecrets[v], "op://") {
+			add("bud.opencode_secrets.%s: the value must be an op:// reference, never the secret itself", v)
+		}
+	}
+
+	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, Router: strings.TrimSuffix(b.Router, "/"), OpenCodeSecrets: b.OpenCodeSecrets}
 	for _, name := range sortedKeys(b.MCP) {
 		s := b.MCP[name]
 		at := "bud.mcp." + name

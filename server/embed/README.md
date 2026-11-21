@@ -5,7 +5,7 @@ The home server's embedding server (JGA-294, Suite D52): llama.cpp's `llama-serv
 | File | What it is |
 | --- | --- |
 | `bud-embed.service` | The user unit. It checks the binary's and the model's SHA-256 before starting, and serves `POST /v1/embeddings` and `GET /v1/models`. |
-| `embed.env.example` | The digests the unit checks and the thread count. |
+| `embed.env.example` | The digests the unit checks, the tailnet address it listens on and the thread count. |
 | `../../scripts/build-embed-server.sh` | Builds `llama-server` at the pinned llama.cpp tag (CPU only, static, no web UI) and fetches the pinned GGUF, checking both. |
 
 ## Pins
@@ -22,7 +22,7 @@ The build script checks that the tag still points at the pinned commit and that 
 1. Install the build tools: git, cmake, a C++ compiler and curl.
 2. Build into the unit's directory: `sh scripts/build-embed-server.sh ~/.local/lib/bud/embed`. It takes a few minutes and prints two `BUD_EMBED_*_SHA256=` lines.
 3. Copy `embed.env.example` to `~/.config/bud-server/embed.env` (mode 0600), paste the two printed lines over the placeholders, and set `BUD_EMBED_THREADS` to the server's physical core count.
-4. Set `--host` in the unit to the server's tailnet IP (`tailscale ip -4`). The server has no key of its own; the tailnet is the access control, as with the router (Suite D100).
+4. Set `BUD_EMBED_HOST` in the same file to the server's tailnet IP (`tailscale ip -4`). The server has no key of its own; the tailnet is the access control, as with the router (Suite D100).
 5. Install and start the unit with the commands at the top of `bud-embed.service`, then `loginctl enable-linger` if the server doesn't already have it.
 6. Point the overlay's registry at it: its `embed` provider's endpoint is `http://<tailnet IP>:8082/v1`. Then `bud sync`.
 7. Check it: `bud doctor --net` shows `embeddings: qwen3-embedding-0.6b (1024 dims) answered`, and

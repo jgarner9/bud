@@ -132,6 +132,12 @@ func TestDispatchExecutorReceivesReviewDeadlineAndCancellation(t *testing.T) {
 			parent, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			deadline := time.Now().Add(500 * time.Millisecond)
+			if cancelParent {
+				// the cancel must land before the deadline, and the store's
+				// writes before the executor can take over half a second on
+				// a slow CI runner
+				deadline = time.Now().Add(time.Minute)
+			}
 			var id string
 			err := store.Dispatch(parent, scope, call, deadline, func(_ context.Context, p Prompt) (Reply, error) {
 				id = p.ID

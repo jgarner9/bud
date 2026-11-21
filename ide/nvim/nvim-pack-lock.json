@@ -104,6 +104,11 @@
       "src": "https://github.com/stevearc/oil.nvim",
       "version": "2.0.0 - 3.0.0"
     },
+    "opencode.nvim": {
+      "rev": "636ac6214dcb6770f6966c8132d73e6abaf7595c",
+      "src": "https://github.com/sudo-tee/opencode.nvim",
+      "version": "'636ac6214dcb6770f6966c8132d73e6abaf7595c'"
+    },
     "plenary.nvim": {
       "rev": "74b06c6c75e4eeb3108ec01852001636d85a932b",
       "src": "https://github.com/nvim-lua/plenary.nvim"

@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 
 	"jgarner.dev/bud/internal/approval"
@@ -61,16 +63,19 @@ func turnKey(r *http.Request, raw []byte, role, fb string) string {
 		return ""
 	}
 	var last json.RawMessage
+	turn := 0
 	for _, m := range req.Messages {
 		if m.Role == "user" {
-			last = m.Content
+			last, turn = m.Content, turn+1
 		}
 	}
 	if last == nil {
 		return ""
 	}
+	// the count of user messages tells a repeated message from the one it
+	// repeats: the same words sent again later are a new turn
 	h := sha256.New()
-	for _, part := range [][]byte{[]byte(conv), []byte(role), []byte(fb), last} {
+	for _, part := range [][]byte{[]byte(conv), []byte(role), []byte(fb), []byte(strconv.Itoa(turn)), last} {
 		h.Write(part)
 		h.Write([]byte{0})
 	}
@@ -89,6 +94,29 @@ func (rt *Router) turnApproved(key string, now time.Time) bool {
 	}
 	_, ok := rt.p0Turns[key]
 	return key != "" && ok
+}
+
+// claimTurn makes the caller the one request of key's turn that asks Jason:
+// it returns a release func for the asker, or the channel that closes when
+// the asker is done, so a request that overlaps it (a retry, a parallel
+// tool call) waits for that answer instead of sending a second prompt
+func (rt *Router) claimTurn(key string) (release func(), done <-chan struct{}) {
+	rt.p0Mu.Lock()
+	defer rt.p0Mu.Unlock()
+	if ch, ok := rt.p0Asking[key]; ok {
+		return nil, ch
+	}
+	ch := make(chan struct{})
+	rt.p0Asking[key] = ch
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			rt.p0Mu.Lock()
+			delete(rt.p0Asking, key)
+			rt.p0Mu.Unlock()
+			close(ch)
+		})
+	}, nil
 }
 
 func (rt *Router) approveTurn(key string, now time.Time) {
@@ -142,6 +170,28 @@ func (rt *Router) p0Down(w http.ResponseWriter, r *http.Request, raw []byte, fie
 		refuse(fmt.Sprintf("; %d sensitive requests are already waiting for Jason's approval, so this one wasn't held", maxP0Held))
 		return
 	}
+	release := func() {}
+	for key != "" {
+		rel, done := rt.claimTurn(key)
+		if rel != nil {
+			release = rel
+			defer release()
+			break
+		}
+		select {
+		case <-done:
+		case <-r.Context().Done():
+			refuse(fmt.Sprintf("; Jason didn't approve sending it to %s (the request ended first)", fb))
+			return
+		}
+		if rt.turnApproved(key, time.Now()) {
+			if rt.forward(w, r, fields, fb, p0Fallback) {
+				rt.badGateway(w)
+			}
+			return
+		}
+		// the other request wasn't approved: this one asks for itself
+	}
 	sum := sha256.Sum256(raw)
 	args, _ := json.Marshal(map[string]string{"role": role, "endpoint": r.URL.Path, "body_sha256": hex.EncodeToString(sum[:])})
 	scope := p0Scope()
@@ -155,13 +205,18 @@ func (rt *Router) p0Down(w http.ResponseWriter, r *http.Request, raw []byte, fie
 			return err
 		}
 		ran = true
+		// the window runs from Jason's answer, not from the end of a long
+		// answer upstream
+		rt.approveTurn(key, time.Now())
+		// requests of this turn that waited on this answer go now, not
+		// after this one's whole answer has streamed
+		release()
 		// the request's own context carries the forward: the review's ends
 		// with the wait for Jason, which a long stream would outlive
 		failed = rt.forward(w, r, fields, fb, p0Fallback)
 		return nil
 	})
 	if ran {
-		rt.approveTurn(key, time.Now())
 		if failed {
 			rt.badGateway(w)
 		}

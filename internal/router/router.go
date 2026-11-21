@@ -73,6 +73,8 @@ type Router struct {
 	// (see turnKey), so the rest of one turn doesn't ask him again
 	p0Mu    sync.Mutex
 	p0Turns map[string]time.Time
+	// p0Asking holds the turns a request is asking Jason about right now
+	p0Asking map[string]chan struct{}
 
 	noteMu sync.Mutex
 	noted  map[string]bool
@@ -120,6 +122,7 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 	rt.approvals, rt.p0Wait = opts.Approvals, opts.P0Wait
 	rt.p0Held = make(chan struct{}, maxP0Held)
 	rt.p0Turns = map[string]time.Time{}
+	rt.p0Asking = map[string]chan struct{}{}
 	if rt.p0Wait <= 0 {
 		rt.p0Wait = 10 * time.Minute
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -240,5 +241,61 @@ func TestOneApprovalCoversTheRestOfItsTurnAndTheNextMessageAsksAgain(t *testing.
 	}
 	if got := rig.cloud.hits.Load(); got != 5 {
 		t.Errorf("upstream got %d requests, want 5", got)
+	}
+}
+
+func TestTheSameWordsSentAgainLaterAreANewTurn(t *testing.T) {
+	asked := 0
+	rig := newP0Rig(t, time.Minute, func(context.Context, approval.Prompt) (approval.Choice, error) {
+		asked++
+		return approval.AllowOnce, nil
+	})
+	conv := map[string]string{"x-opencode-session": "hermes-conv-1"}
+	for _, body := range []string{
+		`{"model":"bud/coding","messages":[{"role":"user","content":"yes"}]}`,
+		`{"model":"bud/coding","messages":[{"role":"user","content":"yes"},{"role":"assistant","content":"ok"},{"role":"user","content":"yes"}]}`,
+	} {
+		if w := do(t, rig.rt, "POST", "/v1/chat/completions", body, conv); w.Code != 200 {
+			t.Fatalf("status %d: %s", w.Code, w.Body)
+		}
+	}
+	if asked != 2 {
+		t.Errorf("a repeated message asked %d times in all, want 2", asked)
+	}
+}
+
+func TestRequestsOfOneTurnArrivingTogetherAskOnce(t *testing.T) {
+	var mu sync.Mutex
+	asked := 0
+	gate := make(chan struct{})
+	rig := newP0Rig(t, time.Minute, func(context.Context, approval.Prompt) (approval.Choice, error) {
+		mu.Lock()
+		asked++
+		mu.Unlock()
+		<-gate
+		return approval.AllowOnce, nil
+	})
+	conv := map[string]string{"x-opencode-session": "hermes-conv-1"}
+	body := `{"model":"bud/coding","messages":[{"role":"user","content":"plan my day"}]}`
+	var wg sync.WaitGroup
+	codes := make([]int, 3)
+	for i := range codes {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			codes[i] = do(t, rig.rt, "POST", "/v1/chat/completions", body, conv).Code
+		}(i)
+	}
+	<-rig.prompt
+	time.Sleep(50 * time.Millisecond) // let the others reach the wait
+	close(gate)
+	wg.Wait()
+	if asked != 1 {
+		t.Errorf("three requests of one turn asked %d times, want once", asked)
+	}
+	for i, c := range codes {
+		if c != 200 {
+			t.Errorf("request %d: status %d", i, c)
+		}
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"unicode"
 )
 
 // maxReviewLine bounds the reply line so a misbehaving peer can't grow memory
@@ -237,11 +238,18 @@ func summarize(p Prompt) string {
 }
 
 // plain is a JSON value as a phone should show it: a string without its
-// quotes and escapes, anything else compact
+// quotes and escapes and on one line, anything else compact
 func plain(v json.RawMessage) string {
 	var s string
 	if json.Unmarshal(v, &s) == nil {
-		return s
+		// one value is one line: a newline in an argument mustn't pass
+		// for another field, or for words of bud's own, in the prompt
+		return strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+				return ' '
+			}
+			return r
+		}, s)
 	}
 	var buf bytes.Buffer
 	if json.Compact(&buf, v) == nil {

@@ -95,3 +95,13 @@ func TestApprovalServerURLWithAQueryIsRefused(t *testing.T) {
 		t.Errorf("without approval: %v", err)
 	}
 }
+
+func TestApprovalOnTheOpsServerIsRefused(t *testing.T) {
+	// ops reviews its own approval-tier tools, so a gateway review would ask twice
+	c := &Config{Listen: "127.0.0.1:1", Servers: map[string]Server{
+		"ops": {URL: "http://127.0.0.1:8792/mcp", Privacy: []string{"P1"}, Approval: &Approval{Tools: map[string]string{"*": "ask"}}},
+	}}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "reviewed twice") {
+		t.Errorf("err = %v, want it to say ops enforces approvals itself", err)
+	}
+}

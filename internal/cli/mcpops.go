@@ -3,12 +3,15 @@ package cli
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/mcpops"
+	"jgarner.dev/bud/internal/paths"
 )
 
 func init() {
@@ -38,7 +41,18 @@ func runMCPOps(g *Globals, args []string, listen string) error {
 	if err := mcpops.CheckListen(listen); err != nil {
 		return usageErrorf("%v", err)
 	}
-	var h http.Handler = mcpops.New(mcpops.Tools(mcpops.Defaults()))
+	p, err := paths.Resolve()
+	if err != nil {
+		return fmt.Errorf("resolve bud paths: %w", err)
+	}
+	srv := mcpops.New(mcpops.Tools(mcpops.Defaults()))
+	srv.SetApprovals(mcpops.Approvals{
+		Store: approval.Store{Path: p.ApprovalStore()},
+		Review: func(s approval.Scope) approval.Review {
+			return approval.SocketReview(p.ReviewSocket(), p.ReviewSecret(), s)
+		},
+	})
+	var h http.Handler = srv
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

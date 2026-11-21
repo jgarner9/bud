@@ -62,6 +62,8 @@ Every failure denies and sends nothing upstream: a denial, expiry (one hour at m
 
 The audit log records the decision for each asking call: `approved` (forwarded; the status is the upstream's), `denied`, `expired`, `unavailable`, `failed`, `canceled` (status 499, client left) or `refused` (batch). Argument values are never logged. Whether MCP clients tolerate a long hold is still unmeasured (design open question 2).
 
+The `ops` server is the exception: `approval` on a server named `ops` is a config error. Ops enforces approvals at its own leaf, outside its mutex (see `mcp-ops.md`), so a gateway review as well would ask twice. Calls to `ops` pass through unreviewed here.
+
 ## Not yet
 
 - The audit log is a JSONL file until the one approval and audit log (JGA-348) exists; its writer then takes these records.

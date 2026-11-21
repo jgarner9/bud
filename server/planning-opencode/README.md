@@ -2,7 +2,7 @@
 
 The home server's planning OpenCode (Suite D49, D109): `opencode serve` on the server, which the IDE attaches to for planning chats over the tailnet. It runs the planning role on OpenCode's `plan` agent with the server's tools (Exa search, Linear through the gateway, GitHub's hosted MCP, Context7, memory and the ops MCP; calendar and mail are denied, since they're Hermes's alone). It plans; it doesn't edit Jason's code, which lives on the laptop.
 
-It runs as its own system user, `bud-planning`, not as Jason. Then a planning session can't open the approval socket or read the review secret in Jason's `XDG_RUNTIME_DIR`, and the unit's sandbox (`ProtectHome=tmpfs` with only `/home/bud-planning` bound back, `/run/user` hidden) means its file and shell tools see no other home. That is the planning OpenCode's edit scope (D49), enforced by the OS rather than by permission rules.
+It runs as its own system user, `bud-planning`, not as Jason. Then a planning session can't open the approval socket or read the review secret in Jason's `XDG_RUNTIME_DIR`, and the unit's sandbox (`ProtectHome=yes` and `/run/user` hidden, with `ProtectSystem=strict` leaving only its own home, `/var/lib/bud-planning`, writable) means its file and shell tools see no one's home. That is the planning OpenCode's edit scope (D49), enforced by the OS rather than by permission rules.
 
 | File | What it is |
 | --- | --- |
@@ -13,7 +13,7 @@ It runs as its own system user, `bud-planning`, not as Jason. Then a planning se
 
 `bud-planning` gets its own bud, OpenCode, synced config and 1Password service account, so nothing it reads or writes is Jason's. Run the steps as root where they say `sudo`, and as `bud-planning` (`sudo -iu bud-planning`) otherwise.
 
-1. Create the user: `sudo useradd --system --create-home --home-dir /home/bud-planning --shell /bin/bash bud-planning`. Node and `op` must be installed system-wide (`/usr/bin/node`, `/usr/bin/op`), since the user's PATH has only its own `~/.local/bin` beside the system dirs.
+1. Create the user: `sudo useradd --system --create-home --home-dir /var/lib/bud-planning --shell /bin/bash bud-planning`. Node and `op` must be installed system-wide (`/usr/bin/node`, `/usr/bin/op`), since the user's PATH has only its own `~/.local/bin` beside the system dirs.
 2. Make a 1Password service account for it, scoped to the items it needs: the registry's keyed providers (none once providers go through the router, Suite D98), Exa and the GitHub PAT. As `bud-planning`, put `OP_SERVICE_ACCOUNT_TOKEN=...` in `~/.config/bud-server/op-service-account.env`, mode 0600.
 3. As `bud-planning`, install bud with `install.sh` (to `~/.local/bin`), set npm's prefix so OpenCode lands there too (`npm config set prefix ~/.local`), then run `bud install --yes --device server-planning` and `bud sync`. `bud sync` pulls the private overlay over SSH, so give `bud-planning` its own read-only deploy key for the overlay repo. The `server-planning` example profile is the harness alone with the `base` and `server` env fragments, so its `opencode.jsonc` is the server profile's, and its overlay replaces it like any other profile.
 4. In the overlay's env fragment for this device, set `bud.gateway`, `bud.mcp.memory.url` and the fragments' secrets in `bud.opencode_secrets`, which `bud sync` writes to `~/.local/state/bud/opencode.env` beside the providers' keys:

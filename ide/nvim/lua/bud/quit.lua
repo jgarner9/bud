@@ -56,14 +56,14 @@ function M.busy(job)
   return proc and proc.name or "a program"
 end
 
--- ending stops bud's terminals that can go: Claude Code's panes and chat
--- always, the shell when it's idle. It returns the jobs it stopped
+-- ending stops bud's terminals that can go: Claude Code's panes, chat and
+-- the home planning pane always, the shell when it's idle. It returns the jobs it stopped
 function M.ending()
   if #M.unsaved() > 0 and not M.settles() then
     return {}
   end
   local jobs = {}
-  for _, name in ipairs({ "bud.ai.term", "bud.ai.chat" }) do
+  for _, name in ipairs({ "bud.ai.term", "bud.ai.chat", "bud.ai.planning" }) do
     local mod = package.loaded[name]
     if mod then
       vim.list_extend(jobs, mod.stop_all())

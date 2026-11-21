@@ -323,3 +323,20 @@ func TestBackendValidate(t *testing.T) {
 		t.Errorf("unknown chat layout: %v", err)
 	}
 }
+
+func TestPlanningURLIsAServerURL(t *testing.T) {
+	for _, u := range []string{"", "http://100.64.0.1:8797", "https://100.64.0.1:8797/"} {
+		s := Defaults()
+		s.AI.Planning.URL = u
+		if err := s.Validate(); err != nil {
+			t.Errorf("%q: %v", u, err)
+		}
+	}
+	for _, u := range []string{"100.64.0.1:8797", "http://opencode:pw@100.64.0.1:8797", "http://100.64.0.1:8797/api", "ws://100.64.0.1:8797", "http://100.64.0.1:8797#x", "http://100.64.0.1:8797?a=b"} {
+		s := Defaults()
+		s.AI.Planning.URL = u
+		if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "ai.planning.url") {
+			t.Errorf("%q: got %v", u, err)
+		}
+	}
+}

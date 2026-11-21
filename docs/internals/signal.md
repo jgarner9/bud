@@ -38,7 +38,7 @@ The secret is defense in depth: a same-user process that can read it can ask. Th
 
 ## Not built yet
 
-Today an approval appears on the surface that started its turn, on Signal or in the CLI. Cron turns cannot ask (`approvals.cron_mode: deny`). Keep the Signal flow while proving that Herdr can use the same authenticated, action-bound and expiring decisions. The [Suite architecture](suite.md#build-time-validation) tracks that work. A doctor check for the daemon and plugin load state is also pending.
+Today an approval appears on the surface that started its turn, on Signal or in the CLI. Cron turns cannot ask (`approvals.cron_mode: deny`). Keep the Signal flow while proving that Herdr can use the same authenticated, action-bound and expiring decisions. The [Suite architecture](suite.md#build-time-validation) tracks that work. `bud doctor` on a server checks the daemon answers and that Hermes is the release the plugin is pinned to, so the plugin can load (`docs/internals/sync.md`, the doctor table); it can't see inside Hermes whether the plugin actually loaded, but the approval reviewer check's socket only exists once it has.
 
 ## Tests
 

@@ -60,7 +60,10 @@ func checkSync(p *paths.Paths, cfg config.Settings, opts Options) []Result {
 	prof, profResult := checkDevice(p, cfg.Device)
 	results := []Result{profResult}
 	if prof != nil && prof.Has("server") {
-		results = append(results, checkReviewChannel(p))
+		results = append(results, checkReviewChannel(p), checkSignalDaemon())
+		if !opts.Quick {
+			results = append(results, checkHermesVersion())
+		}
 	}
 	if !opts.Quick && prof != nil && slices.Contains(prof.Components, "harness") {
 		results = append(results, checkOpenCodeHarness())

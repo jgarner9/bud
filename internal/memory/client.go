@@ -95,7 +95,7 @@ func (c *Client) Retrieve(ctx context.Context, q Query) ([]Record, error) {
 }
 
 // Search searches approved records by text alone, for when no query
-// embedding can be made
+// embedding can be made; a limit of 0 takes the service's default
 func (c *Client) Search(ctx context.Context, query string, limit int) ([]Record, error) {
 	req := map[string]any{"query": query}
 	if limit > 0 {
@@ -146,12 +146,17 @@ type Unembedded struct {
 // stays pending, so the next round embeds the new body
 var ErrStale = errors.New("the record changed since it was read")
 
-// Pending lists up to limit approved records that model still has to embed
+// Pending lists up to limit approved records that model still has to
+// embed; a limit of 0 takes the service's default of 20
 func (c *Client) Pending(ctx context.Context, model string, limit int) ([]Unembedded, error) {
+	req := map[string]any{"model": model}
+	if limit > 0 {
+		req["limit"] = limit
+	}
 	var reply struct {
 		Records []Unembedded `json:"records"`
 	}
-	err := c.post(ctx, "vector_pending", map[string]any{"model": model, "limit": limit}, &reply)
+	err := c.post(ctx, "vector_pending", req, &reply)
 	return reply.Records, err
 }
 

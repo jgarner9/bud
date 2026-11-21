@@ -99,6 +99,15 @@ func TestClientActions(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(pend, []Unembedded{{ID: 1, Privacy: "P2", Body: "x", BodyHash: "h"}}) {
 		t.Errorf("Pending = %+v, %v", pend, err)
 	}
+	if got := f.got["vector_pending"]; got["limit"] != 16.0 {
+		t.Errorf("vector_pending sent %v", got)
+	}
+	if _, err := c.Pending(ctx, "m", 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.got["vector_pending"]; !reflect.DeepEqual(got, map[string]any{"model": "m"}) {
+		t.Errorf("vector_pending sent %v; a zero limit should be left out", got)
+	}
 	if err := c.PutVector(ctx, 1, "m", []float64{0.1, 0.2}, "h"); err != nil {
 		t.Fatal(err)
 	}

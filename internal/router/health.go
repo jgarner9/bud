@@ -61,17 +61,18 @@ func (h *health) markUp(provider string)   { h.set(provider, false) }
 // marked down
 func (h *health) isDown(provider string) bool {
 	h.mu.Lock()
+	defer h.mu.Unlock()
 	st := h.state[provider]
 	if st == nil || !st.down {
-		h.mu.Unlock()
 		return false
 	}
 	if h.probed[provider] || h.now().Sub(st.since) < recoverAfter {
-		h.mu.Unlock()
 		return true
 	}
-	h.mu.Unlock()
-	h.markUp(provider)
+	// the expiry flips the state under the same lock, so a failure marked
+	// meanwhile can't be undone by a stale check
+	st.down, st.since = false, h.now()
+	h.logf("router: provider %s is up again", provider)
 	return false
 }
 

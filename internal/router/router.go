@@ -63,7 +63,10 @@ type Router struct {
 	provURL      map[string]*url.URL // by provider id
 	provKey      map[string]string
 	approvals    *Approvals
-	p0Wait       time.Duration
+	// p0Held bounds the P0 requests held for approval at once, so held
+	// bodies (up to 10 MiB each) can't pile up while the local model is down
+	p0Held chan struct{}
+	p0Wait time.Duration
 
 	noteMu sync.Mutex
 	noted  map[string]bool
@@ -109,6 +112,7 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 		rt.logf = log.Printf
 	}
 	rt.approvals, rt.p0Wait = opts.Approvals, opts.P0Wait
+	rt.p0Held = make(chan struct{}, maxP0Held)
 	if rt.p0Wait <= 0 {
 		rt.p0Wait = 10 * time.Minute
 	}

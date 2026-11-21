@@ -35,6 +35,10 @@ func p0Scope() approval.Scope {
 
 const p0Fallback = "p0-approved"
 
+// maxP0Held is how many P0 requests may wait for Jason at once; Signal shows
+// one prompt each, so more than a few would be noise anyway
+const maxP0Held = 4
+
 // p0Down answers a P0 role request whose every eligible member is down. The
 // router never falls back on its own: with approvals wired it holds the
 // request and asks Jason once, naming no prompt text; the request goes
@@ -55,6 +59,13 @@ func (rt *Router) p0Down(w http.ResponseWriter, r *http.Request, raw []byte, fie
 	fb := rt.pickSpend(ro, "P1", nil)
 	if fb == "" {
 		rt.capReached(w)
+		return
+	}
+	select {
+	case rt.p0Held <- struct{}{}:
+		defer func() { <-rt.p0Held }()
+	default:
+		refuse(fmt.Sprintf("; %d sensitive requests are already waiting for Jason's approval, so this one wasn't held", maxP0Held))
 		return
 	}
 	sum := sha256.Sum256(raw)

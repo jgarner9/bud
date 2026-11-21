@@ -256,3 +256,28 @@ func errMessage(t *testing.T, w *httptest.ResponseRecorder) string {
 	}
 	return out.Error.Message
 }
+
+func TestAFailureMarkedAfterAnExpiryStaysDown(t *testing.T) {
+	c := &fakeClock{t: time.Unix(1000, 0)}
+	h := newHealth(c.now, quiet, map[string]bool{})
+	h.markDown("cloud")
+	c.add(recoverAfter + time.Second)
+	if h.isDown("cloud") {
+		t.Fatal("still down after the interval")
+	}
+	h.markDown("cloud")
+	if !h.isDown("cloud") {
+		t.Error("a failure after the expiry was lost")
+	}
+	// expiry checks and new failures race without the race detector firing
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(2)
+		go func() { defer wg.Done(); h.isDown("cloud") }()
+		go func() { defer wg.Done(); h.markDown("cloud") }()
+	}
+	wg.Wait()
+	if !h.isDown("cloud") {
+		t.Error("a concurrent failure was undone by a stale expiry check")
+	}
+}

@@ -191,3 +191,17 @@ func TestAnExplicitP0ModelWhoseProviderIsDownGetsNoOverride(t *testing.T) {
 		t.Errorf("status %d: %s", w.Code, w.Body)
 	}
 }
+
+func TestP0RequestsPastTheHeldLimitAreRefusedAtOnce(t *testing.T) {
+	rig := newP0Rig(t, time.Minute, allow)
+	for range maxP0Held {
+		rig.rt.p0Held <- struct{}{}
+	}
+	w := do(t, rig.rt, "POST", "/v1/chat/completions", p0Body, nil)
+	if w.Code != 503 || !strings.Contains(errMessage(t, w), "already waiting") {
+		t.Errorf("status %d: %s", w.Code, w.Body)
+	}
+	if len(rig.prompt) != 0 || rig.cloud.hits.Load() != 0 {
+		t.Error("asked, or went upstream")
+	}
+}

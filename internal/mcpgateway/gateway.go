@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"jgarner.dev/bud/internal/tailnet"
 )
 
 // PrivacyHeader carries the session's privacy tier. A request without it is
@@ -167,7 +169,7 @@ func literalHost(hostport string) bool {
 		host = h
 	}
 	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
-	return insideHost(host)
+	return tailnet.Inside(host)
 }
 
 // refuse answers every request in the body with a JSON-RPC error, sending
@@ -276,7 +278,7 @@ func peer(remote string) (netip.Addr, bool) {
 	if err != nil {
 		return netip.Addr{}, false
 	}
-	return a, insideAddr(a)
+	return a, tailnet.InsideAddr(a)
 }
 
 // statusWriter remembers the status the upstream answered with. Unwrap

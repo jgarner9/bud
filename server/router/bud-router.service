@@ -1,0 +1,26 @@
+# The home server's model router (Suite D70), as a systemd user unit:
+#
+#   cp bud-router.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-router
+#
+# op run resolves the op:// references in the env file through the Bud
+# vault's service account, whose token the first EnvironmentFile holds.
+# Provider keys reach the router's environment and never touch disk. Edit
+# --listen to the server's tailnet IP (tailscale ip -4) before enabling.
+[Unit]
+Description=Bud router
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/router.env -- %h/.local/bin/bud router --listen 127.0.0.1:8795
+Restart=on-failure
+RestartSec=5
+# the tailnet address may not be up yet at boot; the restart covers it
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

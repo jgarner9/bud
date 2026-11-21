@@ -123,7 +123,7 @@ func Render(in Input) (*Output, error) {
 			"settings": map[string]any{"baseURL": strings.TrimSuffix(p.Endpoint, "/")},
 			"models":   models,
 		}
-		if v := keyVar(pid, p.Key); v != "" {
+		if v := registry.KeyVar(pid, p.Key); v != "" {
 			entry["env"] = []any{v}
 			if strings.HasPrefix(p.Key, "op://") {
 				out.Secrets[v] = p.Key
@@ -238,28 +238,6 @@ func Render(in Input) (*Output, error) {
 	out.Config = buf.Bytes()
 
 	return out, nil
-}
-
-// keyVar is the environment variable a provider's key comes from: the one
-// an {env:VAR} names, or BUD_<PROVIDER>_API_KEY for an op:// reference
-func keyVar(provider, key string) string {
-	switch {
-	case key == "":
-		return ""
-	case strings.HasPrefix(key, "{env:"):
-		return strings.TrimSuffix(strings.TrimPrefix(key, "{env:"), "}")
-	default:
-		up := strings.Map(func(r rune) rune {
-			if r >= 'a' && r <= 'z' {
-				return r - 'a' + 'A'
-			}
-			if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-				return r
-			}
-			return '_'
-		}, provider)
-		return "BUD_" + up + "_API_KEY"
-	}
 }
 
 // mcpServers is OpenCode's mcp.servers for the resolved servers: remote

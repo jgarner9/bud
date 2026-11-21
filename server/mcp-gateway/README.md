@@ -12,6 +12,7 @@ The home server's MCP gateway (Suite D72): `bud mcp-gateway` behind a systemd us
 
 The real config and env file come from the overlay, since they name the tailnet address and the Bud vault.
 
+1. Run `bud sync` first: the gateway reads its privacy rules (Suite D112) from the synced registry and won't start without one.
 1. Put the config at `~/.local/state/bud/mcp-gateway.json`, with `listen` set to the home server's tailnet IP (`tailscale ip -4`) and a port.
 2. Put the env file at `~/.config/bud-server/mcp-gateway.env`, and the service account's `OP_SERVICE_ACCOUNT_TOKEN=...` at `~/.config/bud-server/op-service-account.env`, both mode 0600.
 3. Install and start the unit with the commands at the top of `bud-mcp-gateway.service`, then `loginctl enable-linger` so it runs without a login.

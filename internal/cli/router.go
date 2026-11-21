@@ -109,7 +109,8 @@ func runRouter(g *Globals, args []string, listen, registryPath, spendPath string
 }
 
 // loadRouterRegistry reads --registry, or else the registry the last sync
-// rendered from, the way bud doctor finds it
+// rendered from, the way bud doctor finds it. The router, bud memory-mcp and
+// the MCP gateway all load theirs here
 func loadRouterRegistry(path string) (*models.Registry, error) {
 	if path != "" {
 		return models.Load(path)

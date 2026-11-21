@@ -43,6 +43,11 @@ var Tiers = []string{"P0", "P1", "P2"}
 // router
 const PrivacyHeader = "X-Bud-Privacy"
 
+// RaisedHeader names the privacy rule that raised a request's tier (Suite
+// D112), so a client can say why a request stayed local; the router and the
+// MCP gateway both send it
+const RaisedHeader = "X-Bud-Privacy-Raised"
+
 // RequestTier reads a PrivacyHeader value. A missing one is P0, so a client
 // nobody configured fails closed (Suite D81); ok is false for any other
 // value than a tier.

@@ -36,7 +36,7 @@ const RolePrefix = "bud/"
 
 // RaisedHeader names the privacy rule that raised a request's tier, so a
 // client can say why a request stayed local
-const RaisedHeader = "X-Bud-Privacy-Raised"
+const RaisedHeader = registry.RaisedHeader
 
 // endpoints are the paths the router forwards, each appended to the
 // provider's endpoint

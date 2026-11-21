@@ -27,6 +27,10 @@ import (
 // treated as P0, so a client nobody configured fails closed (Suite D81)
 const PrivacyHeader = registry.PrivacyHeader
 
+// RaisedHeader names the privacy rule that raised a request's tier (Suite
+// D112), on the gateway's answer; an upstream's header of that name is dropped
+const RaisedHeader = registry.RaisedHeader
+
 // maxBody caps a request body; MCP requests are small, and the gateway has
 // to read each one whole to find its tool calls
 const maxBody = 4 << 20
@@ -42,6 +46,7 @@ type Gateway struct {
 	audit   *Audit
 	now     func() time.Time
 	appr    Approvals
+	rules   []registry.CompiledRule
 	mux     *http.ServeMux
 }
 
@@ -58,6 +63,10 @@ type Approvals struct {
 
 // SetApprovals sets the approval wiring; call it before serving
 func (g *Gateway) SetApprovals(a Approvals) { g.appr = a }
+
+// SetRules sets the registry's privacy rules (Suite D23, D112), which can
+// only raise a request's tier; call it before serving
+func (g *Gateway) SetRules(rules []registry.CompiledRule) { g.rules = rules }
 
 type upstream struct {
 	approval *Approval // nil: the server's calls aren't reviewed
@@ -91,7 +100,12 @@ func New(c *Config, audit *Audit, getenv func(string) string) (*Gateway, error) 
 			up.header = s.Key.Header
 		}
 		up.proxy = &httputil.ReverseProxy{
-			Rewrite:       up.rewrite,
+			Rewrite: up.rewrite,
+			ModifyResponse: func(resp *http.Response) error {
+				// only the gateway says which rule raised a request
+				resp.Header.Del(RaisedHeader)
+				return nil
+			},
 			FlushInterval: -1, // server-sent events go out as they arrive
 			ErrorLog:      log.New(io.Discard, "", 0),
 			ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) {
@@ -150,10 +164,6 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("mcp-gateway: %s is %q; use P0, P1 or P2", PrivacyHeader, tier), http.StatusBadRequest)
 		return
 	}
-	// what rewrite forwards: the checked tier, so a missing header reaches
-	// a Bud-owned upstream as P0, never as nothing
-	r.Header.Set(PrivacyHeader, tier)
-
 	var body []byte
 	if r.Body != nil {
 		var err error
@@ -166,6 +176,18 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 	msgs, batch := parse(body)
 	start := g.now()
 	base := Record{Server: up.name, Tier: tier, Client: client.String()}
+	if len(g.rules) > 0 {
+		if raised, rule := registry.Raise(tier, g.rules, texts(body)); rule != "" {
+			// the rule's name only: the text it matched never reaches the log
+			log.Printf("mcp-gateway: rule %s raised a %s request to %s", rule, tier, raised)
+			base.Tier, base.Raised = raised, rule
+			w.Header().Set(RaisedHeader, rule)
+		}
+	}
+	tier = base.Tier
+	// what rewrite forwards: the checked and raised tier, so a missing header
+	// reaches a Bud-owned upstream as P0, never as nothing
+	r.Header.Set(PrivacyHeader, tier)
 
 	if !slices.Contains(up.privacy, tier) {
 		g.refuse(w, r, up, msgs, batch, base, start)
@@ -207,6 +229,9 @@ func literalHost(hostport string) bool {
 // nothing upstream, and logs each one (Suite D81)
 func (g *Gateway) refuse(w http.ResponseWriter, r *http.Request, up *upstream, msgs []message, batch bool, base Record, start time.Time) {
 	reason := fmt.Sprintf("%s isn't open to %s sessions: they may use only tools that never leave the house (Suite D81)", up.name, base.Tier)
+	if base.Raised != "" {
+		reason += fmt.Sprintf("; privacy rule %s made this a %s request, so leave out what it matched", base.Raised, base.Tier)
+	}
 	var replies []json.RawMessage
 	for _, m := range msgs {
 		g.log(m.record(base, "refused", http.StatusForbidden, g.now().Sub(start)))
@@ -221,7 +246,7 @@ func (g *Gateway) refuse(w http.ResponseWriter, r *http.Request, up *upstream, m
 		replies = append(replies, b)
 	}
 	if len(msgs) == 0 {
-		g.log(Record{Server: base.Server, Tier: base.Tier, Client: base.Client, Method: r.Method, Decision: "refused", Status: http.StatusForbidden})
+		g.log(Record{Server: base.Server, Tier: base.Tier, Raised: base.Raised, Client: base.Client, Method: r.Method, Decision: "refused", Status: http.StatusForbidden})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusForbidden)

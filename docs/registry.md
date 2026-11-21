@@ -81,7 +81,7 @@ Three roles see private data, so every model they list must allow P0. The `class
 
 ### Privacy rules
 
-Privacy rules raise a request's privacy tier when its text matches (Suite D23, D112). The router applies them to every request body before it picks a model, so a message that starts with `#private` stays on a local model even when the client sent `P1` or `P2`. They only raise: a request already more private stays as it is, and a rule can never lower a tier.
+Privacy rules raise a request's privacy tier when its text matches (Suite D23, D112). The router applies them to every request body before it picks a model, so a message that starts with `#private` stays on a local model even when the client sent `P1` or `P2`. The MCP gateway applies the same rules to every tool call's arguments, so a pasted private key can't be sent to a cloud tool such as Linear from a `P1` session. They only raise: a request already more private stays as it is, and a rule can never lower a tier.
 
 ```jsonc
 "privacy_rules": {
@@ -94,7 +94,7 @@ Privacy rules raise a request's privacy tier when its text matches (Suite D23, D
 | `match` | A regular expression in Go's RE2 syntax, matched against each message's text on its own, not the whole conversation. Use `(?i)` for any case. |
 | `tier` | `P0` or `P1`: what a matching request becomes. `P2` is refused, since it can't raise anything. |
 
-A rule's name is an ID like a provider's. Two rules ship: `marker` keeps a conversation local when a message starts with `#private`, and `private-key` does the same for a pasted private key. Personal rules (names, places, accounts) go in the overlay's `registry.jsonc`, which merges them by name like the rest, so an overlay rule of the same name replaces the public one whole. The router names the rule that fired in the `X-Bud-Privacy-Raised` response header.
+A rule's name is an ID like a provider's. Two rules ship: `marker` keeps a conversation local when a message starts with `#private`, and `private-key` does the same for a pasted private key. Personal rules (names, places, accounts) go in the overlay's `registry.jsonc`, which merges them by name like the rest, so an overlay rule of the same name replaces the public one whole. The router and the gateway name the rule that fired in the `X-Bud-Privacy-Raised` response header.
 
 ## Keeping it true
 

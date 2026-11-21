@@ -1,6 +1,6 @@
 # The router
 
-`bud router` (`internal/router`, `internal/cli/router.go`) is the home server's one OpenAI-compatible endpoint over the model registry's providers (Suite D70, D71, D98). Its unit is in `server/router/`. It routes, proxies, enforces privacy tiers, tracks spend and caps the month's top-up. It also tracks provider health and falls back when a model is down (Suite D104). The privacy rules are built (Suite D112). Not built yet: the classifier, ranking, and Lemonade behind it (Suite D98).
+`bud router` (`internal/router`, `internal/cli/router.go`) is the home server's one OpenAI-compatible endpoint over the model registry's providers (Suite D70, D71, D98). Its unit is in `server/router/`. It routes, proxies, enforces privacy tiers, tracks spend and caps the month's top-up. It also tracks provider health and falls back when a model is down (Suite D104). The privacy rules are built (Suite D112), and the MCP gateway applies the same ones to tool-call arguments (`docs/internals/mcp-gateway.md`). Not built yet: the classifier, ranking, and Lemonade behind it (Suite D98).
 
 ## Endpoints
 

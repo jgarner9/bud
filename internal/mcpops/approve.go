@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"jgarner.dev/bud/internal/approval"
@@ -39,6 +40,9 @@ func (s *Server) SetApprovals(a Approvals) { s.appr = a }
 // always loopback, so every ops call shares one scope. Nothing in a request
 // chooses it. The binding that matters is the action and the exact argument
 // bytes
+// opsTarget is the approval target, the server's name in the gateway config
+const opsTarget = "ops"
+
 func opsScope() approval.Scope {
 	return approval.Scope{Runtime: "mcp-ops", Profile: "unknown", Surface: "ops", Actor: "loopback", Session: "loopback"}
 }
@@ -47,16 +51,21 @@ func opsScope() approval.Scope {
 // tool is reviewed first with no lock held, so a call waiting on Jason doesn't
 // block doctor for up to an hour, and takes the mutex only for its effect
 func (s *Server) run(ctx context.Context, t Tool, args json.RawMessage) (any, error) {
-	if t.Tier != ApprovalTier {
+	switch t.Tier {
+	case ReadOnly:
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		return t.Run(ctx, args)
+	case ApprovalTier:
+	default:
+		// an unknown tier is refused, so a new or mistyped one fails closed
+		return nil, fmt.Errorf("mcp-ops: tool %s has an unknown tier, so the call was not made", t.Name)
 	}
 	if s.appr.Store.Path == "" || s.appr.Review == nil {
 		return nil, errors.New("mcp-ops: approval reviews are unavailable, so the call was not made")
 	}
 	scope := opsScope()
-	call := approval.Invocation{Action: "mcp:ops/" + t.Name, Target: s.name, Arguments: args}
+	call := approval.Invocation{Action: "mcp:ops/" + t.Name, Target: opsTarget, Arguments: args}
 	var deadline time.Time
 	if s.appr.Timeout > 0 {
 		deadline = time.Now().Add(s.appr.Timeout)
@@ -65,9 +74,13 @@ func (s *Server) run(ctx context.Context, t Tool, args json.RawMessage) (any, er
 	var runErr error
 	ran := false
 	err := s.appr.Store.Dispatch(ctx, scope, call, deadline, s.appr.Review(scope), func(ctx context.Context, _ approval.Invocation) error {
-		ran = true
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		// the wait for the lock may outlast the approval or the request
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		ran = true
 		v, runErr = t.Run(ctx, args)
 		return nil
 	})

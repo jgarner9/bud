@@ -192,3 +192,44 @@ func TestToolsListMarksApprovalToolsAsNotReadOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestAnUnknownTierIsRefused(t *testing.T) {
+	var ran atomic.Bool
+	s := New([]Tool{{Name: "odd", Tier: Tier(99), Run: func(context.Context, json.RawMessage) (any, error) {
+		ran.Store(true)
+		return nil, nil
+	}}})
+	_, out := post(t, s, call("odd", `{}`))
+	if text, isErr := toolText(t, out); !isErr || !strings.Contains(text, "unknown tier") || ran.Load() {
+		t.Errorf("result = %q, isError %v, ran %v", text, isErr, ran.Load())
+	}
+}
+
+func TestTheApprovalTargetIsOps(t *testing.T) {
+	f := newWriteFixture(t, storePath(t), allow)
+	post(t, f.s, call("write", `{}`))
+	if p := <-f.seen; p.Invocation.Target != "ops" || p.Invocation.Action != "mcp:ops/write" {
+		t.Errorf("invocation = %+v, want target ops and action mcp:ops/write", p.Invocation)
+	}
+}
+
+func TestAnApprovedEffectDoesNotRunAfterTheRequestEndsWhileWaitingForTheLock(t *testing.T) {
+	f := newWriteFixture(t, storePath(t), allow)
+	ctx, cancel := context.WithCancel(context.Background())
+	f.s.mu.Lock() // a read-only call holds the lock
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.s.run(ctx, f.s.tools[1], json.RawMessage(`{}`))
+		done <- err
+	}()
+	<-f.seen
+	time.Sleep(50 * time.Millisecond) // the approved effect is now waiting on the lock
+	cancel()
+	f.s.mu.Unlock()
+	if err := <-done; err == nil {
+		t.Error("run returned no error after the request ended")
+	}
+	if n := f.writes.Load(); n != 0 {
+		t.Errorf("effect ran %d times after the request ended", n)
+	}
+}

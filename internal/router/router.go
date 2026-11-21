@@ -2,7 +2,7 @@
 // (Suite D70, D71, D98): it lists every registry provider's models and
 // forwards chat, completion and embedding requests to the provider that
 // serves the one asked for, and only to a model that may see the request's
-// privacy tier. Spend caps and ranking come later. See docs/internals/router.md
+// privacy tier, tracks spend and caps the month's top-up. Ranking comes later. See docs/internals/router.md
 package router
 
 import (
@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"jgarner.dev/bud/internal/registry"
 )
@@ -49,13 +50,29 @@ type Router struct {
 	reg     *registry.Registry
 	targets map[string]target // by registry model id
 	proxy   *httputil.ReverseProxy
+	ledger  *Ledger
+	cap     float64
+	logf    func(string, ...any)
+
+	noteMu sync.Mutex
+	noted  map[string]bool
+}
+
+// Options are what New needs besides the registry and environment
+type Options struct {
+	// Ledger records spend; nil keeps it in memory only
+	Ledger *Ledger
+	// TopUpCap is the dollars a month of top-up the router may spend; 0 means none
+	TopUpCap float64
+	// Logf writes to the router's log; nil uses the standard logger
+	Logf func(string, ...any)
 }
 
 type ctxKey struct{}
 
 // New checks that every keyed provider's key is in the environment, so a
 // unit started without its env file fails at once instead of on a request
-func New(reg *registry.Registry, getenv func(string) string) (*Router, error) {
+func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Router, error) {
 	keys := map[string]string{}
 	for pid, p := range reg.Providers {
 		v := registry.KeyVar(pid, p.Key)
@@ -67,7 +84,13 @@ func New(reg *registry.Registry, getenv func(string) string) (*Router, error) {
 		}
 		keys[pid] = getenv(v)
 	}
-	rt := &Router{reg: reg, targets: map[string]target{}}
+	rt := &Router{reg: reg, targets: map[string]target{}, ledger: opts.Ledger, cap: opts.TopUpCap, logf: opts.Logf, noted: map[string]bool{}}
+	if rt.logf == nil {
+		rt.logf = log.Printf
+	}
+	if rt.ledger == nil {
+		rt.ledger, _ = NewLedger("", reg.Models)
+	}
 	for id, m := range reg.Models {
 		p, ok := reg.Providers[m.Provider]
 		if !ok {
@@ -83,7 +106,14 @@ func New(reg *registry.Registry, getenv func(string) string) (*Router, error) {
 		// Set replaces any upstream X-Bud-Model, so only the router says
 		// which model answered
 		ModifyResponse: func(resp *http.Response) error {
-			resp.Header.Set("X-Bud-Model", resp.Request.Context().Value(ctxKey{}).(*resolved).id)
+			id := resp.Request.Context().Value(ctxKey{}).(*resolved).id
+			resp.Header.Set("X-Bud-Model", id)
+			// set before the body is charged, so it's the total before this request
+			resp.Header.Set("X-Bud-Spend", fmt.Sprintf("topup=%.2f/%.2f", rt.ledger.TopUp(), rt.cap))
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				stream := strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream")
+				resp.Body = &meter{rc: resp.Body, stream: stream, finish: func(u *usage) { rt.charge(id, u) }}
+			}
 			return nil
 		},
 		Rewrite: rt.rewrite,
@@ -101,6 +131,32 @@ func New(reg *registry.Registry, getenv func(string) string) (*Router, error) {
 	return rt, nil
 }
 
+// charge prices a response's usage and adds it to the ledger
+func (rt *Router) charge(id string, u *usage) {
+	m := rt.reg.Models[id]
+	if m.Cost != "C1" && m.Cost != "C2" {
+		return
+	}
+	if u == nil || m.Price == nil {
+		rt.noteUntracked(id)
+		return
+	}
+	cost := u.Prompt*m.Price.In/1e6 + u.Completion*m.Price.Out/1e6
+	if err := rt.ledger.Charge(id, cost); err != nil {
+		rt.logf("router: %v", err)
+	}
+}
+
+func (rt *Router) noteUntracked(id string) {
+	rt.noteMu.Lock()
+	first := !rt.noted[id]
+	rt.noted[id] = true
+	rt.noteMu.Unlock()
+	if first {
+		rt.logf("router: spend for model %s isn't tracked: no price or no usage in its responses", id)
+	}
+}
+
 func (rt *Router) rewrite(pr *httputil.ProxyRequest) {
 	t := pr.In.Context().Value(ctxKey{}).(*resolved)
 	pr.Out.URL = t.url
@@ -111,6 +167,10 @@ func (rt *Router) rewrite(pr *httputil.ProxyRequest) {
 	pr.Out.Header.Del("Cookie")
 	// the tier was this router's business; providers never see it
 	pr.Out.Header.Del(registry.PrivacyHeader)
+	// the meter reads usage from the body, so it must be plain: without the
+	// client's Accept-Encoding the transport asks for gzip itself and hands
+	// back the body decoded
+	pr.Out.Header.Del("Accept-Encoding")
 	if t.key != "" {
 		pr.Out.Header.Set("Authorization", "Bearer "+t.key)
 	}
@@ -178,8 +238,12 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "invalid_request_error", fmt.Sprintf("no model %q; GET /v1/models lists them", model))
 			return
 		}
-		if id = rt.pick(ro, tier); id == "" {
+		if rt.pick(ro, tier) == "" {
 			writeError(w, http.StatusForbidden, "invalid_request_error", fmt.Sprintf("no model in role %s takes %s requests; GET /v1/models with %s: %s lists what does", role, tier, registry.PrivacyHeader, tier))
+			return
+		}
+		if id = rt.pickSpend(ro, tier); id == "" {
+			rt.capReached(w)
 			return
 		}
 	}
@@ -191,6 +255,28 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !rt.reg.Models[id].Allows(tier) {
 		writeError(w, http.StatusForbidden, "invalid_request_error", fmt.Sprintf("model %s can't take %s requests; GET /v1/models with %s: %s lists the ones that can", id, tier, registry.PrivacyHeader, tier))
 		return
+	}
+	if rt.ledger.spendsTopUp(id) {
+		release, err := rt.ledger.admitTopUp(r.Context().Done(), rt.cap)
+		if err != nil {
+			if reason := err.Error(); reason != "" {
+				writeError(w, http.StatusServiceUnavailable, "api_error", reason)
+			} else {
+				rt.capReached(w)
+			}
+			return
+		}
+		// the proxy returns once the body is copied and charged
+		defer release()
+	}
+	// without include_usage a stream carries no usage to charge
+	if r.URL.Path == "/v1/chat/completions" {
+		var stream bool
+		if json.Unmarshal(fields["stream"], &stream) == nil && stream {
+			if _, has := fields["stream_options"]; !has {
+				fields["stream_options"] = json.RawMessage(`{"include_usage":true}`)
+			}
+		}
 	}
 	name, _ := json.Marshal(t.name)
 	fields["model"] = name
@@ -224,6 +310,36 @@ func (rt *Router) pick(ro registry.Role, tier string) string {
 		}
 	}
 	return ""
+}
+
+// pickSpend picks among the tier's eligible members, first one that spends no
+// top-up, then one that does while the month's top-up is under the cap. ""
+// means the cap stops every eligible member.
+func (rt *Router) pickSpend(ro registry.Role, tier string) string {
+	var ids []string
+	if m, ok := rt.reg.Models[ro.Pin]; ok && ro.Pin != "" && m.Allows(tier) {
+		ids = append(ids, ro.Pin)
+	}
+	for _, id := range ro.Members() {
+		if m, ok := rt.reg.Models[id]; ok && m.Allows(tier) {
+			ids = append(ids, id)
+		}
+	}
+	for _, id := range ids {
+		if !rt.ledger.spendsTopUp(id) {
+			return id
+		}
+	}
+	if rt.ledger.TopUp() < rt.cap {
+		for _, id := range ids {
+			return id
+		}
+	}
+	return ""
+}
+
+func (rt *Router) capReached(w http.ResponseWriter) {
+	writeError(w, http.StatusPaymentRequired, "insufficient_quota", fmt.Sprintf("this month's top-up cap of $%.2f is reached; spending past it needs Jason's approval, which isn't built yet; C0 models and models with allowance left still work, and GET /v1/models lists them", rt.cap))
 }
 
 func (rt *Router) models(w http.ResponseWriter, tier string) {

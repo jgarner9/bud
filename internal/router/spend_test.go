@@ -2,6 +2,7 @@ package router
 
 import (
 	"compress/gzip"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -338,5 +339,45 @@ func TestAnOversizedJSONResponseIsStillCharged(t *testing.T) {
 	}
 	if got := l.TopUp(); got < 0.999 || got > 1.001 {
 		t.Errorf("topup = %v, want 1", got)
+	}
+}
+
+func TestTheRouterRecordsItsCapWithTheNextCharge(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "spend.json")
+	c := &clock{time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)}
+	_, l := newSpendRouter(t, "http://x.invalid", path, 7.5, c)
+	if err := l.Charge("paid", 1.25); err != nil {
+		t.Fatal(err)
+	}
+	sp, err := ReadSpend(path, c.t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sp.Recorded || sp.Month != "2026-03" || sp.TopUp != 1.25 || sp.Spent["paid"] != 1.25 || sp.Cap == nil || *sp.Cap != 7.5 {
+		t.Errorf("spend %+v", sp)
+	}
+}
+
+func TestReadSpendLeavesTheFileAndReadsAnOldMonthAsEmpty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "spend.json")
+	sp, err := ReadSpend(path, time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil || sp.Recorded || sp.Month != "2026-04" || sp.TopUp != 0 || len(sp.Spent) != 0 {
+		t.Errorf("missing: %+v %v", sp, err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("ReadSpend created the file: %v", err)
+	}
+	old := []byte(`{"month":"2026-03","spent":{"paid":3},"topup":3,"cap":10}`)
+	os.WriteFile(path, old, 0o600)
+	sp, err = ReadSpend(path, time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil || !sp.Recorded || sp.TopUp != 0 || len(sp.Spent) != 0 || *sp.Cap != 10 {
+		t.Errorf("old month: %+v %v", sp, err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != string(old) {
+		t.Error("ReadSpend changed the file")
+	}
+	os.WriteFile(path, []byte("{nope"), 0o600)
+	if _, err := ReadSpend(path, time.Now()); err == nil || !strings.Contains(err.Error(), path) {
+		t.Errorf("corrupt: %v", err)
 	}
 }

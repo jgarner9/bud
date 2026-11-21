@@ -6,12 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 
 	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/doctor"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/registry"
+	"jgarner.dev/bud/internal/router"
 	"jgarner.dev/bud/internal/syncer"
 )
 
@@ -21,9 +25,13 @@ type Sources struct {
 	Doctor func(doctor.Options) []doctor.Result
 	// Paths resolves bud's paths, for the ledger and the sync lock
 	Paths func() (*paths.Paths, error)
+	// Registry loads the model registry, for each model's cost class and
+	// allowance; nil, or an error, leaves those out of spend
+	Registry func() (*registry.Registry, error)
 }
 
-// Defaults reads this machine
+// Defaults reads this machine, with no registry; bud mcp-ops adds the
+// synced one
 func Defaults() Sources {
 	return Sources{Doctor: doctor.Run, Paths: paths.Resolve}
 }
@@ -54,8 +62,16 @@ func Tools(src Sources) []Tool {
 				return syncStatus(src.Paths)
 			},
 		},
-		notBuilt("spend", "Router spend against the C2 cap (about $10 a month of Go top-up).",
-			"router spend isn't built yet: the model gateway that counts it comes in build plan phase 3 (Suite D70)"),
+		{
+			Name:        "spend",
+			Description: "Returns this month's model spend as bud router counted it: the top-up total against the router's monthly cap (about $10 of Go top-up), and each model's dollars spent, with its cost class and, for an included model, its allowance and what's left. Read-only; months are UTC.",
+			Run: func(_ context.Context, args json.RawMessage) (any, error) {
+				if err := decodeArgs(args, &struct{}{}); err != nil {
+					return nil, err
+				}
+				return routerSpend(src, time.Now())
+			},
+		},
 		{
 			Name:        "approvals",
 			Description: "Counts the approval requests waiting on Jason's yes or no, in total and by action (such as mcp:linear/save_issue). Ids, targets and arguments are left out, so nothing here can approve or replay a request. Read-only.",
@@ -94,6 +110,79 @@ func decodeArgs(args json.RawMessage, v any) error {
 		return &ArgError{Msg: "bad arguments: " + strings.TrimPrefix(err.Error(), "json: ")}
 	}
 	return nil
+}
+
+type modelSpend struct {
+	ID    string  `json:"id"`
+	Cost  string  `json:"cost,omitempty"`
+	Spent float64 `json:"spent"`
+	// Allowance and AllowanceLeft are set for an included (C1) model with
+	// an allowance
+	Allowance     *float64 `json:"allowance,omitempty"`
+	AllowanceLeft *float64 `json:"allowance_left,omitempty"`
+}
+
+type spendOut struct {
+	Month string   `json:"month"`
+	Note  string   `json:"note,omitempty"`
+	TopUp float64  `json:"topup"`
+	Cap   *float64 `json:"topup_cap,omitempty"`
+	Left  *float64 `json:"topup_left,omitempty"`
+	// Models lists the models with spend this month, by id
+	Models []modelSpend `json:"models"`
+}
+
+// cents rounds dollars to the cent, so float sums read cleanly
+func cents(v float64) float64 { return math.Round(v*100) / 100 }
+
+// routerSpend reads the router's spend ledger without writing to it
+func routerSpend(src Sources, now time.Time) (spendOut, error) {
+	p, err := src.Paths()
+	if err != nil {
+		return spendOut{}, err
+	}
+	sp, err := router.ReadSpend(p.RouterSpend(), now)
+	if err != nil {
+		return spendOut{}, err
+	}
+	out := spendOut{Month: sp.Month, TopUp: cents(sp.TopUp), Models: []modelSpend{}}
+	var notes []string
+	if !sp.Recorded {
+		notes = append(notes, "the router hasn't charged anything on this server yet")
+	}
+	if sp.Cap != nil {
+		c, left := cents(*sp.Cap), cents(math.Max(0, *sp.Cap-sp.TopUp))
+		out.Cap, out.Left = &c, &left
+	} else if sp.Recorded {
+		notes = append(notes, "the cap isn't in the ledger yet; the router records it with its next charge")
+	}
+	var reg *registry.Registry
+	if src.Registry != nil {
+		if reg, err = src.Registry(); err != nil {
+			reg = nil
+			notes = append(notes, "cost classes and allowances are left out: "+err.Error())
+		}
+	}
+	ids := make([]string, 0, len(sp.Spent))
+	for id := range sp.Spent {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		m := modelSpend{ID: id, Spent: cents(sp.Spent[id])}
+		if reg != nil {
+			if rm, ok := reg.Models[id]; ok {
+				m.Cost = rm.Cost
+				if rm.Cost == "C1" && rm.Allowance > 0 {
+					a, left := cents(rm.Allowance), cents(math.Max(0, rm.Allowance-sp.Spent[id]))
+					m.Allowance, m.AllowanceLeft = &a, &left
+				}
+			}
+		}
+		out.Models = append(out.Models, m)
+	}
+	out.Note = strings.Join(notes, "; ")
+	return out, nil
 }
 
 type approvalsOut struct {

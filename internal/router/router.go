@@ -151,6 +151,7 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 	if rt.ledger == nil {
 		rt.ledger, _ = NewLedger("", reg.Models)
 	}
+	rt.ledger.setCap(rt.cap)
 	for id, m := range reg.Models {
 		p, ok := reg.Providers[m.Provider]
 		if !ok {

@@ -12,6 +12,7 @@ import (
 	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/mcpops"
 	"jgarner.dev/bud/internal/paths"
+	models "jgarner.dev/bud/internal/registry"
 )
 
 func init() {
@@ -45,7 +46,9 @@ func runMCPOps(g *Globals, args []string, listen string) error {
 	if err != nil {
 		return fmt.Errorf("resolve bud paths: %w", err)
 	}
-	srv := mcpops.New(mcpops.Tools(mcpops.Defaults()))
+	src := mcpops.Defaults()
+	src.Registry = func() (*models.Registry, error) { return loadRouterRegistry("") }
+	srv := mcpops.New(mcpops.Tools(src))
 	srv.SetApprovals(mcpops.Approvals{
 		Store: approval.Store{Path: p.ApprovalStore()},
 		Review: func(s approval.Scope) approval.Review {

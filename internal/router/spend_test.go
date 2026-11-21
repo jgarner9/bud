@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -258,5 +259,84 @@ func TestAGzipAskingClientIsStillCharged(t *testing.T) {
 	}
 	if got := l.TopUp(); got < 0.999 || got > 1.001 {
 		t.Errorf("topup = %v, want 1: the meter didn't see the usage", got)
+	}
+}
+
+func TestAFailedLedgerWriteStopsTopUpButNotAllowance(t *testing.T) {
+	up := jsonUpstream(`{"prompt_tokens":1000000,"completion_tokens":0}`)
+	defer up.Close()
+	dir := t.TempDir()
+	c := &clock{time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)}
+	sub := filepath.Join(dir, "state")
+	if err := os.Mkdir(sub, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	rt, _ := newSpendRouter(t, up.URL, filepath.Join(sub, "spend.json"), 10, c)
+	// the ledger's dir becomes a file, so every write fails
+	if err := os.Remove(sub); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sub, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// inc2 has 5 dollars of allowance, so this spends none of the top-up
+	if w := do(t, rt, "POST", "/v1/chat/completions", chatBody("inc2"), nil); w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if w := do(t, rt, "POST", "/v1/chat/completions", chatBody("paid"), nil); w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "couldn't be saved") {
+		t.Fatalf("top-up after a failed write: %d %s", w.Code, w.Body)
+	}
+	if w := do(t, rt, "POST", "/v1/chat/completions", chatBody("inc2"), nil); w.Code != 200 {
+		t.Fatalf("allowance after a failed write: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestTopUpRequestsRunOneAtATime(t *testing.T) {
+	entered := make(chan struct{}, 2)
+	unblock := make(chan struct{})
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered <- struct{}{}
+		<-unblock
+		w.Header().Set("Content-Type", "application/json")
+		// 10 dollars on the paid model: the whole cap
+		io.WriteString(w, `{"choices":[],"usage":{"prompt_tokens":1000000,"completion_tokens":0}}`)
+	}))
+	defer up.Close()
+	c := &clock{time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)}
+	rt, l := newSpendRouter(t, up.URL, "", 10, c)
+	codes := make(chan int, 2)
+	for range 2 {
+		go func() { codes <- do(t, rt, "POST", "/v1/chat/completions", chatBody("paid"), nil).Code }()
+	}
+	<-entered
+	select {
+	case <-entered:
+		t.Fatal("a second top-up request reached the provider while the first was in flight")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(unblock)
+	got := []int{<-codes, <-codes}
+	slices.Sort(got)
+	if got[0] != 200 || got[1] != http.StatusPaymentRequired {
+		t.Errorf("codes = %v, want one 200 and one 402", got)
+	}
+	if l.TopUp() > 10.001 {
+		t.Errorf("topup = %v, past the cap", l.TopUp())
+	}
+}
+
+func TestAnOversizedJSONResponseIsStillCharged(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"data":"`+strings.Repeat("x", 11<<20)+`","usage":{"prompt_tokens":1000000,"completion_tokens":500000}}`)
+	}))
+	defer up.Close()
+	c := &clock{time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)}
+	rt, l := newSpendRouter(t, up.URL, "", 10, c)
+	if w := do(t, rt, "POST", "/v1/embeddings", chatBody("inc1"), nil); w.Code != 200 {
+		t.Fatalf("%d", w.Code)
+	}
+	if got := l.TopUp(); got < 0.999 || got > 1.001 {
+		t.Errorf("topup = %v, want 1", got)
 	}
 }

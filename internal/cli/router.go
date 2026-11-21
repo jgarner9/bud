@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"os/signal"
@@ -61,8 +62,8 @@ func runRouter(g *Globals, args []string, listen, registryPath, spendPath string
 	if err != nil {
 		return err
 	}
-	if topUpCap < 0 {
-		return usageErrorf("--topup-cap %g can't be negative", topUpCap)
+	if topUpCap < 0 || math.IsNaN(topUpCap) || math.IsInf(topUpCap, 0) {
+		return usageErrorf("--topup-cap %g must be a dollar amount of 0 or more", topUpCap)
 	}
 	if spendPath == "" {
 		p, err := paths.Resolve()

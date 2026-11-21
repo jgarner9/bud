@@ -28,6 +28,13 @@ type Ledger struct {
 	month  string
 	spent  map[string]float64
 	topUp  float64
+	// failed is the last ledger write's error; while it's set no top-up is
+	// admitted, since a charge that isn't on disk would be lost on restart
+	failed error
+
+	// slot lets one top-up request run at a time, so requests admitted
+	// under the cap can't all land past it together
+	slot chan struct{}
 }
 
 type ledgerFile struct {
@@ -39,7 +46,7 @@ type ledgerFile struct {
 // NewLedger loads the ledger at path; a missing file is an empty ledger and
 // an empty path keeps it in memory.
 func NewLedger(path string, models map[string]registry.Model) (*Ledger, error) {
-	l := &Ledger{Now: time.Now, path: path, models: models, spent: map[string]float64{}}
+	l := &Ledger{Now: time.Now, path: path, models: models, spent: map[string]float64{}, slot: make(chan struct{}, 1)}
 	if path == "" {
 		return l, nil
 	}
@@ -102,9 +109,42 @@ func (l *Ledger) Charge(id string, cost float64) error {
 		return fmt.Errorf("encode the spend ledger: %w", err)
 	}
 	if err := atomicfile.WriteFile(l.path, data, 0o600); err != nil {
-		return fmt.Errorf("write the spend ledger %s: %w", l.path, err)
+		l.failed = fmt.Errorf("write the spend ledger %s: %w", l.path, err)
+		return l.failed
 	}
+	l.failed = nil
 	return nil
+}
+
+// errTopUpClosed says why no top-up may be spent right now
+type errTopUpClosed struct{ reason string }
+
+func (e errTopUpClosed) Error() string { return e.reason }
+
+// admitTopUp waits for the top-up slot, then admits the request if the
+// month is under limit and the ledger's last write worked. release frees the
+// slot; call it once the response has been charged
+func (l *Ledger) admitTopUp(done <-chan struct{}, limit float64) (release func(), err error) {
+	select {
+	case l.slot <- struct{}{}:
+	case <-done:
+		return nil, errTopUpClosed{"the request ended while waiting for another top-up request to finish"}
+	}
+	var once sync.Once
+	release = func() { once.Do(func() { <-l.slot }) }
+	l.mu.Lock()
+	l.roll()
+	failed, total := l.failed, l.topUp
+	l.mu.Unlock()
+	if failed != nil {
+		release()
+		return nil, errTopUpClosed{"the spend ledger couldn't be saved, so no top-up is spent until it can; check the router's log"}
+	}
+	if total >= limit {
+		release()
+		return nil, errTopUpClosed{""}
+	}
+	return release, nil
 }
 
 // Left is the allowance a C1 model has left this month, never below zero
@@ -146,6 +186,27 @@ type usage struct {
 // maxUsageBody is how much of a JSON response is kept to find its usage
 const maxUsageBody = 10 << 20
 
+// usageTail is how much of an oversized JSON response is kept to find usage
+const usageTail = 64 << 10
+
+// usageInTail finds the last "usage" object in the tail of a JSON body
+func usageInTail(b []byte) *usage {
+	i := bytes.LastIndex(b, []byte(`"usage"`))
+	if i < 0 {
+		return nil
+	}
+	rest := bytes.TrimLeft(b[i+len(`"usage"`):], " \t\r\n")
+	rest, ok := bytes.CutPrefix(rest, []byte(":"))
+	if !ok {
+		return nil
+	}
+	var u usage
+	if json.NewDecoder(bytes.NewReader(rest)).Decode(&u) != nil {
+		return nil
+	}
+	return &u
+}
+
 // meter passes a response body through unchanged and, when it ends or is
 // closed, charges the usage it saw
 type meter struct {
@@ -177,15 +238,14 @@ func (m *meter) Close() error {
 
 func (m *meter) feed(b []byte) {
 	if !m.stream {
-		if m.over {
-			return
-		}
-		if m.buf.Len()+len(b) > maxUsageBody {
-			m.over = true
-			m.buf.Reset()
-			return
-		}
 		m.buf.Write(b)
+		if m.buf.Len() > maxUsageBody {
+			// keep only the tail, where usage comes after the choices or data
+			m.over = true
+			tail := append([]byte(nil), m.buf.Bytes()[m.buf.Len()-usageTail:]...)
+			m.buf.Reset()
+			m.buf.Write(tail)
+		}
 		return
 	}
 	m.buf.Write(b)
@@ -228,7 +288,9 @@ func (m *meter) end() {
 		if m.buf.Len() > 0 {
 			m.line(m.buf.String())
 		}
-	} else if !m.over {
+	} else if m.over {
+		m.last = usageInTail(m.buf.Bytes())
+	} else {
 		var c struct {
 			Usage *usage `json:"usage"`
 		}

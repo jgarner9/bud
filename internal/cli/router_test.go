@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -55,5 +56,16 @@ func TestRouterWithoutSyncedContentSaysToSync(t *testing.T) {
 	err := runRouter(&Globals{}, nil, "127.0.0.1:0", "", "", 10)
 	if err == nil || !strings.Contains(err.Error(), "bud sync") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestRouterRefusesACapThatIsntADollarAmount(t *testing.T) {
+	path := filepath.Join("..", "..", "content", "env", "registry.jsonc")
+	for _, c := range []float64{-1, math.NaN(), math.Inf(1)} {
+		err := runRouter(&Globals{}, nil, "127.0.0.1:0", path, filepath.Join(t.TempDir(), "spend.json"), c)
+		var ue *UsageError
+		if !errors.As(err, &ue) {
+			t.Errorf("%v: err = %v, want a usage error", c, err)
+		}
 	}
 }

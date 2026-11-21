@@ -256,9 +256,18 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "invalid_request_error", fmt.Sprintf("model %s can't take %s requests; GET /v1/models with %s: %s lists the ones that can", id, tier, registry.PrivacyHeader, tier))
 		return
 	}
-	if rt.ledger.spendsTopUp(id) && rt.ledger.TopUp() >= rt.cap {
-		rt.capReached(w)
-		return
+	if rt.ledger.spendsTopUp(id) {
+		release, err := rt.ledger.admitTopUp(r.Context().Done(), rt.cap)
+		if err != nil {
+			if reason := err.Error(); reason != "" {
+				writeError(w, http.StatusServiceUnavailable, "api_error", reason)
+			} else {
+				rt.capReached(w)
+			}
+			return
+		}
+		// the proxy returns once the body is copied and charged
+		defer release()
 	}
 	// without include_usage a stream carries no usage to charge
 	if r.URL.Path == "/v1/chat/completions" {

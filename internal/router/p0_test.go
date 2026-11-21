@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -203,5 +204,98 @@ func TestP0RequestsPastTheHeldLimitAreRefusedAtOnce(t *testing.T) {
 	}
 	if len(rig.prompt) != 0 || rig.cloud.hits.Load() != 0 {
 		t.Error("asked, or went upstream")
+	}
+}
+
+func TestOneApprovalCoversTheRestOfItsTurnAndTheNextMessageAsksAgain(t *testing.T) {
+	asked := 0
+	rig := newP0Rig(t, time.Minute, func(ctx context.Context, p approval.Prompt) (approval.Choice, error) {
+		asked++
+		return approval.AllowOnce, nil
+	})
+	conv := map[string]string{"x-opencode-session": "hermes-conv-1"}
+	turn1 := `{"model":"bud/coding","messages":[{"role":"user","content":"plan my day"}]}`
+	// the tool loop's next call: the same message, then the tool's answer
+	turn1b := `{"model":"bud/coding","messages":[{"role":"user","content":"plan my day"},{"role":"assistant","content":"","tool_calls":[]},{"role":"tool","content":"3 events"}]}`
+	turn2 := `{"model":"bud/coding","messages":[{"role":"user","content":"plan my day"},{"role":"assistant","content":"done"},{"role":"user","content":"and tomorrow"}]}`
+	send := func(body string, h map[string]string) {
+		t.Helper()
+		if w := do(t, rig.rt, "POST", "/v1/chat/completions", body, h); w.Code != 200 {
+			t.Fatalf("status %d: %s", w.Code, w.Body)
+		}
+	}
+	send(turn1, conv)
+	send(turn1b, conv)
+	if asked != 1 {
+		t.Errorf("one turn asked %d times, want once", asked)
+	}
+	send(turn2, conv)
+	if asked != 2 {
+		t.Errorf("the next message asked %d times in all, want 2", asked)
+	}
+	// another conversation, or none named, never rides on this approval
+	send(turn1b, map[string]string{"x-opencode-session": "hermes-conv-2"})
+	send(turn1b, nil)
+	if asked != 4 {
+		t.Errorf("other conversations asked %d times in all, want 4", asked)
+	}
+	if got := rig.cloud.hits.Load(); got != 5 {
+		t.Errorf("upstream got %d requests, want 5", got)
+	}
+}
+
+func TestTheSameWordsSentAgainLaterAreANewTurn(t *testing.T) {
+	asked := 0
+	rig := newP0Rig(t, time.Minute, func(context.Context, approval.Prompt) (approval.Choice, error) {
+		asked++
+		return approval.AllowOnce, nil
+	})
+	conv := map[string]string{"x-opencode-session": "hermes-conv-1"}
+	for _, body := range []string{
+		`{"model":"bud/coding","messages":[{"role":"user","content":"yes"}]}`,
+		`{"model":"bud/coding","messages":[{"role":"user","content":"yes"},{"role":"assistant","content":"ok"},{"role":"user","content":"yes"}]}`,
+	} {
+		if w := do(t, rig.rt, "POST", "/v1/chat/completions", body, conv); w.Code != 200 {
+			t.Fatalf("status %d: %s", w.Code, w.Body)
+		}
+	}
+	if asked != 2 {
+		t.Errorf("a repeated message asked %d times in all, want 2", asked)
+	}
+}
+
+func TestRequestsOfOneTurnArrivingTogetherAskOnce(t *testing.T) {
+	var mu sync.Mutex
+	asked := 0
+	gate := make(chan struct{})
+	rig := newP0Rig(t, time.Minute, func(context.Context, approval.Prompt) (approval.Choice, error) {
+		mu.Lock()
+		asked++
+		mu.Unlock()
+		<-gate
+		return approval.AllowOnce, nil
+	})
+	conv := map[string]string{"x-opencode-session": "hermes-conv-1"}
+	body := `{"model":"bud/coding","messages":[{"role":"user","content":"plan my day"}]}`
+	var wg sync.WaitGroup
+	codes := make([]int, 3)
+	for i := range codes {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			codes[i] = do(t, rig.rt, "POST", "/v1/chat/completions", body, conv).Code
+		}(i)
+	}
+	<-rig.prompt
+	time.Sleep(50 * time.Millisecond) // let the others reach the wait
+	close(gate)
+	wg.Wait()
+	if asked != 1 {
+		t.Errorf("three requests of one turn asked %d times, want once", asked)
+	}
+	for i, c := range codes {
+		if c != 200 {
+			t.Errorf("request %d: status %d", i, c)
+		}
 	}
 }

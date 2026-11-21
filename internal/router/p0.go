@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 
 	"jgarner.dev/bud/internal/approval"
@@ -35,6 +37,97 @@ func p0Scope() approval.Scope {
 
 const p0Fallback = "p0-approved"
 
+// p0TurnTTL is how long an approval covers the rest of its turn: an agent's
+// tool loop sends several requests for one message, each a new body, and
+// Jason approved the message, not one request of it
+const p0TurnTTL = 10 * time.Minute
+
+// turnKey names the turn a P0 request belongs to: the client's conversation
+// id (x-opencode-session, which Hermes sends), the latest user message, the
+// role and the fallback model. Every request of one turn repeats the same
+// latest user message; the next message is a new turn and asks again. A
+// request without a conversation id, or without a user message, has no key,
+// so it always asks
+func turnKey(r *http.Request, raw []byte, role, fb string) string {
+	conv := r.Header.Get(SessionHeader)
+	if conv == "" {
+		return ""
+	}
+	var req struct {
+		Messages []struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if json.Unmarshal(raw, &req) != nil {
+		return ""
+	}
+	var last json.RawMessage
+	turn := 0
+	for _, m := range req.Messages {
+		if m.Role == "user" {
+			last, turn = m.Content, turn+1
+		}
+	}
+	if last == nil {
+		return ""
+	}
+	// the count of user messages tells a repeated message from the one it
+	// repeats: the same words sent again later are a new turn
+	h := sha256.New()
+	for _, part := range [][]byte{[]byte(conv), []byte(role), []byte(fb), []byte(strconv.Itoa(turn)), last} {
+		h.Write(part)
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// turnApproved says whether Jason already approved key's turn, forgetting
+// turns that have expired
+func (rt *Router) turnApproved(key string, now time.Time) bool {
+	rt.p0Mu.Lock()
+	defer rt.p0Mu.Unlock()
+	for k, until := range rt.p0Turns {
+		if !now.Before(until) {
+			delete(rt.p0Turns, k)
+		}
+	}
+	_, ok := rt.p0Turns[key]
+	return key != "" && ok
+}
+
+// claimTurn makes the caller the one request of key's turn that asks Jason:
+// it returns a release func for the asker, or the channel that closes when
+// the asker is done, so a request that overlaps it (a retry, a parallel
+// tool call) waits for that answer instead of sending a second prompt
+func (rt *Router) claimTurn(key string) (release func(), done <-chan struct{}) {
+	rt.p0Mu.Lock()
+	defer rt.p0Mu.Unlock()
+	if ch, ok := rt.p0Asking[key]; ok {
+		return nil, ch
+	}
+	ch := make(chan struct{})
+	rt.p0Asking[key] = ch
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			rt.p0Mu.Lock()
+			delete(rt.p0Asking, key)
+			rt.p0Mu.Unlock()
+			close(ch)
+		})
+	}, nil
+}
+
+func (rt *Router) approveTurn(key string, now time.Time) {
+	if key == "" {
+		return
+	}
+	rt.p0Mu.Lock()
+	rt.p0Turns[key] = now.Add(p0TurnTTL)
+	rt.p0Mu.Unlock()
+}
+
 // maxP0Held is how many P0 requests may wait for Jason at once; Signal shows
 // one prompt each, so more than a few would be noise anyway
 const maxP0Held = 4
@@ -61,12 +154,43 @@ func (rt *Router) p0Down(w http.ResponseWriter, r *http.Request, raw []byte, fie
 		rt.capReached(w)
 		return
 	}
+	key := turnKey(r, raw, role, fb)
+	if rt.turnApproved(key, time.Now()) {
+		// the rest of a turn Jason approved: same conversation, same
+		// message, same fallback
+		if rt.forward(w, r, fields, fb, p0Fallback) {
+			rt.badGateway(w)
+		}
+		return
+	}
 	select {
 	case rt.p0Held <- struct{}{}:
 		defer func() { <-rt.p0Held }()
 	default:
 		refuse(fmt.Sprintf("; %d sensitive requests are already waiting for Jason's approval, so this one wasn't held", maxP0Held))
 		return
+	}
+	release := func() {}
+	for key != "" {
+		rel, done := rt.claimTurn(key)
+		if rel != nil {
+			release = rel
+			defer release()
+			break
+		}
+		select {
+		case <-done:
+		case <-r.Context().Done():
+			refuse(fmt.Sprintf("; Jason didn't approve sending it to %s (the request ended first)", fb))
+			return
+		}
+		if rt.turnApproved(key, time.Now()) {
+			if rt.forward(w, r, fields, fb, p0Fallback) {
+				rt.badGateway(w)
+			}
+			return
+		}
+		// the other request wasn't approved: this one asks for itself
 	}
 	sum := sha256.Sum256(raw)
 	args, _ := json.Marshal(map[string]string{"role": role, "endpoint": r.URL.Path, "body_sha256": hex.EncodeToString(sum[:])})
@@ -81,6 +205,12 @@ func (rt *Router) p0Down(w http.ResponseWriter, r *http.Request, raw []byte, fie
 			return err
 		}
 		ran = true
+		// the window runs from Jason's answer, not from the end of a long
+		// answer upstream
+		rt.approveTurn(key, time.Now())
+		// requests of this turn that waited on this answer go now, not
+		// after this one's whole answer has streamed
+		release()
 		// the request's own context carries the forward: the review's ends
 		// with the wait for Jason, which a long stream would outlive
 		failed = rt.forward(w, r, fields, fb, p0Fallback)

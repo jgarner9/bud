@@ -2,6 +2,7 @@ package approval
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,8 +10,11 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
+	"sort"
 	"strings"
 	"syscall"
+	"unicode"
 )
 
 // maxReviewLine bounds the reply line so a misbehaving peer can't grow memory
@@ -164,12 +168,92 @@ func readSecret(path string) (string, error) {
 	return s, nil
 }
 
+// titles say what a known action asks, in words for a phone, and which of
+// its arguments are only there to bind the approval (hashes, paths) and so
+// aren't worth showing
+var titles = map[string]struct {
+	title func(target string) string
+	hide  []string
+}{
+	"router:p0-fallback": {
+		title: func(t string) string {
+			return "The local model is down. Send this private (P0) chat to " + t + " instead?"
+		},
+		hide: []string{"endpoint"},
+	},
+}
+
+// maxSummaryValue bounds one argument's shown value
+const maxSummaryValue = 160
+
+// summarize is the prompt's text: what is asked, the arguments worth reading
+// as "key: value" lines (sorted, hashes left out, long values cut) and when
+// it expires, never raw JSON. Arguments that aren't a JSON object are shown
+// as they are, cut to maxSummaryArgs
 func summarize(p Prompt) string {
-	args := p.Invocation.Arguments
-	more := ""
-	if len(args) > maxSummaryArgs {
-		args, more = args[:maxSummaryArgs], "..."
+	inv := p.Invocation
+	var b strings.Builder
+	t, known := titles[inv.Action]
+	if known {
+		b.WriteString(t.title(inv.Target))
+	} else {
+		fmt.Fprintf(&b, "%s on %s", inv.Action, inv.Target)
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(inv.Arguments, &fields) == nil {
+		keys := make([]string, 0, len(fields))
+		for k := range fields {
+			if strings.Contains(k, "sha256") || strings.Contains(k, "hash") || slices.Contains(t.hide, k) {
+				continue
+			}
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		shown := 0
+		for _, k := range keys {
+			v := plain(fields[k])
+			if len(v) > maxSummaryValue {
+				v = v[:maxSummaryValue] + "..."
+			}
+			line := "\n" + k + ": " + v
+			if shown+len(line) > maxSummaryArgs {
+				b.WriteString("\n...")
+				break
+			}
+			b.WriteString(line)
+			shown += len(line)
+		}
+	} else if len(inv.Arguments) > 0 {
+		args, more := inv.Arguments, ""
+		if len(args) > maxSummaryArgs {
+			args, more = args[:maxSummaryArgs], "..."
+		}
+		fmt.Fprintf(&b, "\nargs: %s%s", args, more)
+	}
+	if !p.ExpiresAt.IsZero() {
+		fmt.Fprintf(&b, "\nExpires at %s.", p.ExpiresAt.Local().Format("15:04"))
 	}
 
-	return fmt.Sprintf("%s on %s\nargs: %s%s", p.Invocation.Action, p.Invocation.Target, args, more)
+	return b.String()
+}
+
+// plain is a JSON value as a phone should show it: a string without its
+// quotes and escapes and on one line, anything else compact
+func plain(v json.RawMessage) string {
+	var s string
+	if json.Unmarshal(v, &s) == nil {
+		// one value is one line: a newline in an argument mustn't pass
+		// for another field, or for words of bud's own, in the prompt
+		return strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+				return ' '
+			}
+			return r
+		}, s)
+	}
+	var buf bytes.Buffer
+	if json.Compact(&buf, v) == nil {
+		return buf.String()
+	}
+	return string(v)
 }

@@ -13,13 +13,13 @@ import (
 
 func TestRouterRefusesAListenAddressOutsideTheTailnet(t *testing.T) {
 	for _, l := range []string{"0.0.0.0:8795", "192.168.1.5:8795", "localhost:8795", ":8795", "nonsense"} {
-		err := runRouter(&Globals{}, nil, l, "")
+		err := runRouter(&Globals{}, nil, l, "", "", 10)
 		var ue *UsageError
 		if !errors.As(err, &ue) {
 			t.Errorf("%s: err = %v, want a usage error", l, err)
 		}
 	}
-	err := runRouter(&Globals{}, nil, "0.0.0.0:1", "")
+	err := runRouter(&Globals{}, nil, "0.0.0.0:1", "", "", 10)
 	if err == nil || !strings.Contains(err.Error(), "Suite D72") {
 		t.Errorf("err = %v", err)
 	}
@@ -40,7 +40,7 @@ func TestRouterServesTheRegistryAtThePathGiven(t *testing.T) {
 	orig := serveRouter
 	serveRouter = func(_ context.Context, a string, _ http.Handler) error { addr = a; return nil }
 	t.Cleanup(func() { serveRouter = orig })
-	if err := runRouter(&Globals{}, nil, "127.0.0.1:0", path); err != nil {
+	if err := runRouter(&Globals{}, nil, "127.0.0.1:0", path, filepath.Join(t.TempDir(), "spend.json"), 10); err != nil {
 		t.Fatal(err)
 	}
 	if addr != "127.0.0.1:0" {
@@ -52,7 +52,7 @@ func TestRouterWithoutSyncedContentSaysToSync(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	err := runRouter(&Globals{}, nil, "127.0.0.1:0", "")
+	err := runRouter(&Globals{}, nil, "127.0.0.1:0", "", "", 10)
 	if err == nil || !strings.Contains(err.Error(), "bud sync") {
 		t.Errorf("err = %v", err)
 	}

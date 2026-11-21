@@ -41,7 +41,7 @@ func do(t *testing.T, h http.Handler, method, path, body string, hdr map[string]
 }
 
 func TestModelsListsEveryModelAndRoleAlias(t *testing.T) {
-	rt, err := New(testRegistry("http://x.invalid/v1", ""), env(nil))
+	rt, err := New(testRegistry("http://x.invalid/v1", ""), env(nil), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestRequestsGoToTheProviderWithTheModelRenamedAndTheRestUntouched(t *testin
 		io.WriteString(w, `{"ok":true}`)
 	}))
 	defer up.Close()
-	rt, err := New(testRegistry(up.URL+"/v1/", "{env:GO_KEY}"), env(map[string]string{"GO_KEY": "sekret"}))
+	rt, err := New(testRegistry(up.URL+"/v1/", "{env:GO_KEY}"), env(map[string]string{"GO_KEY": "sekret"}), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestRoleAliasResolvesToTheRolesDefault(t *testing.T) {
 		gotBody = string(b)
 	}))
 	defer up.Close()
-	rt, _ := New(testRegistry(up.URL, ""), env(nil))
+	rt, _ := New(testRegistry(up.URL, ""), env(nil), Options{})
 	// vision pins glm-5.3 although its pool lists only "other"
 	do(t, rt, "POST", "/v1/embeddings", `{"model":"bud/vision"}`, nil)
 	if gotBody != `{"model":"glm-upstream"}` {
@@ -141,7 +141,7 @@ func TestStreamChunksArriveBeforeTheUpstreamFinishes(t *testing.T) {
 	}))
 	defer up.Close()
 	defer close(release)
-	rt, _ := New(testRegistry(up.URL, ""), env(nil))
+	rt, _ := New(testRegistry(up.URL, ""), env(nil), Options{})
 	front := httptest.NewServer(rt)
 	defer front.Close()
 
@@ -166,7 +166,7 @@ func TestStreamChunksArriveBeforeTheUpstreamFinishes(t *testing.T) {
 }
 
 func TestUnknownModelIs404NamingItAndPointingAtTheList(t *testing.T) {
-	rt, _ := New(testRegistry("http://x.invalid", ""), env(nil))
+	rt, _ := New(testRegistry("http://x.invalid", ""), env(nil), Options{})
 	w := do(t, rt, "POST", "/v1/chat/completions", `{"model":"nope"}`, nil)
 	if w.Code != 404 || !strings.Contains(w.Body.String(), `\"nope\"`) || !strings.Contains(w.Body.String(), "GET /v1/models") {
 		t.Errorf("%d %s", w.Code, w.Body)
@@ -177,7 +177,7 @@ func TestUnknownModelIs404NamingItAndPointingAtTheList(t *testing.T) {
 }
 
 func TestBadJSONIs400InOpenAIShape(t *testing.T) {
-	rt, _ := New(testRegistry("http://x.invalid", ""), env(nil))
+	rt, _ := New(testRegistry("http://x.invalid", ""), env(nil), Options{})
 	w := do(t, rt, "POST", "/v1/chat/completions", `{nope`, nil)
 	var e struct {
 		Error struct{ Message, Type string }
@@ -191,7 +191,7 @@ func TestBadJSONIs400InOpenAIShape(t *testing.T) {
 }
 
 func TestBodyOverTenMiBIs413(t *testing.T) {
-	rt, _ := New(testRegistry("http://x.invalid", ""), env(nil))
+	rt, _ := New(testRegistry("http://x.invalid", ""), env(nil), Options{})
 	big := `{"model":"glm-5.3","pad":"` + strings.Repeat("a", maxBody) + `"}`
 	if w := do(t, rt, "POST", "/v1/chat/completions", big, nil); w.Code != 413 {
 		t.Errorf("status %d", w.Code)
@@ -199,7 +199,7 @@ func TestBodyOverTenMiBIs413(t *testing.T) {
 }
 
 func TestNewFailsWhenAProvidersKeyVariableIsEmpty(t *testing.T) {
-	_, err := New(testRegistry("http://x.invalid", "op://vault/item/field"), env(nil))
+	_, err := New(testRegistry("http://x.invalid", "op://vault/item/field"), env(nil), Options{})
 	if err == nil || !strings.Contains(err.Error(), "BUD_GO_API_KEY") || !strings.Contains(err.Error(), "op run") {
 		t.Errorf("err = %v", err)
 	}
@@ -209,7 +209,7 @@ func TestUpstreamDownIs502WithoutTheDialError(t *testing.T) {
 	up := httptest.NewServer(http.NotFoundHandler())
 	addr := up.URL
 	up.Close()
-	rt, _ := New(testRegistry(addr, ""), env(nil))
+	rt, _ := New(testRegistry(addr, ""), env(nil), Options{})
 	w := do(t, rt, "POST", "/v1/chat/completions", `{"model":"glm-5.3"}`, nil)
 	if w.Code != 502 {
 		t.Fatalf("status %d", w.Code)
@@ -225,7 +225,7 @@ func TestEndpointQueryStaysAQuery(t *testing.T) {
 		path, query = r.URL.Path, r.URL.RawQuery
 	}))
 	defer up.Close()
-	rt, err := New(testRegistry(up.URL+"/v1/?tenant=home", ""), env(nil))
+	rt, err := New(testRegistry(up.URL+"/v1/?tenant=home", ""), env(nil), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func tierServer(t *testing.T) (*Router, *http.Header, *string) {
 		io.WriteString(w, "{}")
 	}))
 	t.Cleanup(up.Close)
-	rt, err := New(tierRegistry(up.URL), env(nil))
+	rt, err := New(tierRegistry(up.URL), env(nil), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

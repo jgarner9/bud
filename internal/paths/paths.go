@@ -185,3 +185,6 @@ func (p *Paths) MCPAudit() string { return filepath.Join(p.State, "mcp-audit.jso
 
 // RunLogs holds private logs from bud run.
 func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }
+
+// RouterSpend is the router's spend ledger (Suite D24, D64)
+func (p *Paths) RouterSpend() string { return filepath.Join(p.State, "router-spend.json") }

@@ -218,3 +218,19 @@ func TestUpstreamDownIs502WithoutTheDialError(t *testing.T) {
 		t.Errorf("body leaks the transport error: %s", b)
 	}
 }
+
+func TestEndpointQueryStaysAQuery(t *testing.T) {
+	var path, query string
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path, query = r.URL.Path, r.URL.RawQuery
+	}))
+	defer up.Close()
+	rt, err := New(testRegistry(up.URL+"/v1/?tenant=home", ""), env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	do(t, rt, "POST", "/v1/chat/completions", `{"model":"glm-5.3"}`, nil)
+	if path != "/v1/chat/completions" || query != "tenant=home" {
+		t.Errorf("path %q query %q, want /v1/chat/completions and tenant=home", path, query)
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -38,7 +39,7 @@ var endpoints = map[string]string{
 }
 
 type target struct {
-	base string
+	base *url.URL
 	name string
 	key  string
 }
@@ -72,15 +73,19 @@ func New(reg *registry.Registry, getenv func(string) string) (*Router, error) {
 		if !ok {
 			return nil, fmt.Errorf("model %s: no provider %q", id, m.Provider)
 		}
-		if _, err := url.Parse(p.Endpoint); err != nil {
+		base, err := url.Parse(p.Endpoint)
+		if err != nil || base.Host == "" {
 			return nil, fmt.Errorf("provider %s: endpoint isn't a URL", m.Provider)
 		}
-		rt.targets[id] = target{base: strings.TrimSuffix(p.Endpoint, "/"), name: m.Name, key: keys[m.Provider]}
+		rt.targets[id] = target{base: base, name: m.Name, key: keys[m.Provider]}
 	}
 	rt.proxy = &httputil.ReverseProxy{
 		Rewrite: rt.rewrite,
 		// -1 flushes after every write, so SSE chunks arrive as they're made
 		FlushInterval: -1,
+		// the proxy's own log line names the upstream and the dial error,
+		// which shouldn't reach the journal any more than the client
+		ErrorLog: log.New(io.Discard, "", 0),
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) {
 			// the transport error names the upstream's address, which isn't
 			// the client's business
@@ -173,12 +178,11 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "the request body couldn't be re-encoded")
 		return
 	}
-	u, err := url.Parse(t.base + suffix)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, "api_error", "the model's provider has no usable endpoint")
-		return
-	}
-	res := &resolved{url: u, key: t.key, body: body}
+	// joined onto the path, so an endpoint's query string stays a query
+	u := *t.base
+	u.Path = strings.TrimSuffix(u.Path, "/") + suffix
+	u.RawPath = ""
+	res := &resolved{url: &u, key: t.key, body: body}
 	rt.proxy.ServeHTTP(w, r.WithContext(contextWith(r, res)))
 }
 

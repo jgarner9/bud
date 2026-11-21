@@ -14,7 +14,7 @@ Every tool is read-only and wraps code bud already has. The only thing it touche
 | `approvals` | none | The count of approval requests still waiting, `pending` in total and `by_action` (such as `mcp:linear/save_issue`). It reads `paths.ApprovalStore` without the lock, writes nothing and creates nothing, and leaves out ids, targets and arguments, so it can't approve or replay anything. An unwritten store is zero. Expired and decided requests aren't counted. |
 | `reviews` | none | Not built yet: the error says staged skill and memory writes come with Hermes (D48) and the memory curator (phase 5). |
 
-The three that aren't built are listed anyway, with descriptions that say so, so a model asked "what's waiting on me" answers that the queues don't exist yet rather than that nothing is waiting. Each one becomes a wrapper when the code it reads lands.
+The two that aren't built are listed anyway, with descriptions that say so, so a model asked "what's waiting on me" answers that the queues don't exist yet rather than that nothing is waiting. Each one becomes a wrapper when the code it reads lands.
 
 Tool calls run one at a time, since `doctor` and `sync_status` both take the sync lock and would otherwise see each other as a running sync.
 

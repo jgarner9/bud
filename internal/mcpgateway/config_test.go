@@ -120,6 +120,41 @@ func TestServerWithoutApprovalOrReadOnlyIsRefusedButOpsIsNot(t *testing.T) {
 	}
 }
 
+func TestRenderedApprovalsWithReadOnlyAndToolsAreRefused(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "mcp-gateway.json")
+	cfg := `{"listen":"127.0.0.1:1","servers":{"linear":{"url":"https://mcp.linear.app/mcp","privacy":["P1"]}}}`
+	if err := os.WriteFile(p, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rendered := `{"servers":{"linear":{"read_only":true,"tools":{}}}}`
+	if err := os.WriteFile(filepath.Join(dir, "mcp-gateway-approvals.json"), []byte(rendered), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Read(p); err == nil || !strings.Contains(err.Error(), "not both") {
+		t.Errorf("Read = %v, want read_only and tools refused", err)
+	}
+}
+
+func TestAnEmptyRenderedToolsBlockAsksEverything(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "mcp-gateway.json")
+	cfg := `{"listen":"127.0.0.1:1","servers":{"linear":{"url":"https://mcp.linear.app/mcp","privacy":["P1"]}}}`
+	if err := os.WriteFile(p, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mcp-gateway-approvals.json"), []byte(`{"servers":{"linear":{"tools":{}}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Read(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Servers["linear"].Approval.Asks("get_issue") {
+		t.Error("an empty tools block let a call through without asking")
+	}
+}
+
 func TestReadLaysTheRenderedApprovalsOverTheServers(t *testing.T) {
 	dir := t.TempDir()
 	cfg := `{"listen":"127.0.0.1:1","servers":{"linear":{"url":"https://mcp.linear.app/mcp","privacy":["P1"]},

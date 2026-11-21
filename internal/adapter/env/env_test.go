@@ -257,7 +257,21 @@ func TestALaterFragmentReplacesAServersApprovalTiers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tools := r.Gateway["linear"].Tools; len(tools) != 1 || tools["list_*"] != "allow" {
+	if tools := r.Gateway["linear"].Tools; tools == nil || len(*tools) != 1 || (*tools)["list_*"] != "allow" {
 		t.Errorf("got %v", tools)
+	}
+}
+
+func TestAnEmptyApprovalBlockRendersAsAskEverything(t *testing.T) {
+	r, err := resolve(t, `{"bud": {"mcp": {"linear": {"gateway": true, "privacy": ["P1"], "approval": {"tools": {}}}}}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.GatewayApprovals()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"tools": {}`) {
+		t.Errorf("rendered %s, want linear's empty tools kept", b)
 	}
 }

@@ -192,9 +192,10 @@ type Resolved struct {
 // GatewayServer is what the gateway reads about one server beside its own
 // config: the file bud sync renders (see GatewayApprovals)
 type GatewayServer struct {
-	// Tools are upstream tool-name globs, allow or ask
-	Tools    map[string]string `json:"tools,omitempty"`
-	ReadOnly bool              `json:"read_only,omitempty"`
+	// Tools are upstream tool-name globs, allow or ask. An empty block is
+	// kept as {} (every tool asks), so only a server with no block omits it
+	Tools    *map[string]string `json:"tools,omitempty"`
+	ReadOnly bool               `json:"read_only,omitempty"`
 }
 
 // GatewayApprovals renders the gateway's approvals file, or nil when no
@@ -359,7 +360,8 @@ func gatewayServer(name string, s Server) (GatewayServer, []string) {
 		return gs, nil
 	}
 	var bad []string
-	gs.Tools = map[string]string{}
+	tools := map[string]string{}
+	gs.Tools = &tools
 	for _, k := range sortedKeys(s.Approval.Tools) {
 		up, ok := strings.CutPrefix(k, name+"_")
 		switch {
@@ -375,7 +377,7 @@ func gatewayServer(name string, s Server) (GatewayServer, []string) {
 			bad = append(bad, fmt.Sprintf("%s: %q isn't allow or ask", k, v))
 			continue
 		}
-		gs.Tools[up] = s.Approval.Tools[k]
+		tools[up] = s.Approval.Tools[k]
 	}
 
 	return gs, bad

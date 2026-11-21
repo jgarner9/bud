@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"jgarner.dev/bud/internal/agent"
+	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/content"
 	"jgarner.dev/bud/internal/overlay"
@@ -109,8 +110,8 @@ func checkReviewChannel(p *paths.Paths) Result {
 	} else if fi, err := os.Lstat(sock); err != nil || fi.Mode()&os.ModeSocket == 0 {
 		missing = append(missing, "no socket at "+sock)
 	}
-	if fi, err := os.Stat(p.ReviewSecret()); err != nil || !fi.Mode().IsRegular() || fi.Size() == 0 {
-		missing = append(missing, "no secret at "+p.ReviewSecret())
+	if err := approval.CheckSecret(p.ReviewSecret()); err != nil {
+		missing = append(missing, "the secret isn't usable ("+err.Error()+")")
 	}
 	if len(missing) == 0 {
 		r.Detail = "the reviewer's socket and secret are in place"

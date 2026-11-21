@@ -139,6 +139,9 @@ func (c *Config) mergeApprovals(file string) error {
 		return fmt.Errorf("%s: %w", file, err)
 	}
 	for name, a := range f.Servers {
+		if a.ReadOnly && a.Tools != nil {
+			return fmt.Errorf("%s: servers.%s: set read_only or tools, not both; run bud sync to render it again", file, name)
+		}
 		s, ok := c.Servers[name]
 		if !ok {
 			continue

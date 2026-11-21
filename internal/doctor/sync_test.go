@@ -458,7 +458,7 @@ func TestReviewChannelWarnsOnlyOnAServerDeviceAndNeverFails(t *testing.T) {
 		t.Fatalf("a server device wasn't checked: %v", got)
 	}
 	r := checkReviewChannel(p)
-	if r.Status != Warn || !strings.Contains(r.Detail, "no socket") || !strings.Contains(r.Detail, "no secret") {
+	if r.Status != Warn || !strings.Contains(r.Detail, "no socket") || !strings.Contains(r.Detail, "secret isn't usable") {
 		t.Fatalf("missing: %+v", r)
 	}
 	if err := os.MkdirAll(filepath.Dir(p.ReviewSecret()), 0o700); err != nil {
@@ -467,7 +467,7 @@ func TestReviewChannelWarnsOnlyOnAServerDeviceAndNeverFails(t *testing.T) {
 	if err := os.WriteFile(p.ReviewSecret(), []byte("s3cret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if r := checkReviewChannel(p); r.Status != Warn || strings.Contains(r.Detail, "no secret") || !strings.Contains(r.Detail, "no socket") {
+	if r := checkReviewChannel(p); r.Status != Warn || strings.Contains(r.Detail, "secret isn't usable") || !strings.Contains(r.Detail, "no socket") {
 		t.Errorf("secret only: %+v", r)
 	}
 	if err := os.MkdirAll(filepath.Dir(p.ReviewSocket()), 0o700); err != nil {
@@ -480,6 +480,13 @@ func TestReviewChannelWarnsOnlyOnAServerDeviceAndNeverFails(t *testing.T) {
 	defer l.Close()
 	if r := checkReviewChannel(p); r.Status != OK {
 		t.Errorf("in place: %+v", r)
+	}
+	// a secret the reviewer would refuse warns too
+	if err := os.Chmod(p.ReviewSecret(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := checkReviewChannel(p); r.Status != Warn || !strings.Contains(r.Detail, "mode 0600") {
+		t.Errorf("loose secret: %+v", r)
 	}
 	t.Setenv("XDG_RUNTIME_DIR", "")
 	p2, _ := paths.Resolve()

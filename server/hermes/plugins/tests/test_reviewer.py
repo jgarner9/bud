@@ -145,6 +145,69 @@ class ReviewerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.reply(r), {"id": "a1", "choice": "deny"})
         self.assertLessEqual(waits[0], 3600)
 
+    async def test_expiry_passing_during_a_slow_send_denies_and_withdraws(self):
+        expires = iso(3600)
+        at = self.reviewer_mod.parse_expiry(expires)
+        self.server.clock = lambda: at - 100
+        real = self.a.open_review
+
+        async def slow(summary):
+            handle = await real(summary)
+            self.server.clock = lambda: at + 1  # the send took until after the expiry
+            return handle
+        self.a.open_review = slow
+        r, _ = await self.ask(expires=expires)
+        self.assertEqual(await self.reply(r), {"id": "a1", "choice": "deny"})
+        self.assertEqual(len(self.a._prompts), 0)
+        self.assertIn("timed out", self.a.sent[-1][1])
+
+    async def test_stop_withdraws_an_in_flight_review_and_a_later_reaction_is_ignored(self):
+        r, _ = await self.ask()
+        p = await self.prompt()
+        await self.server.stop()
+        self.assertEqual(len(self.a._prompts), 0)
+        self.assertEqual(self.server._active, {})
+        await self.a._handle_envelope(reaction(UP, p.timestamp))
+        self.assertEqual(self.a.reactions, [])
+        self.assertEqual(self.approvals.calls, [])
+        self.assertNotEqual((await self.reply(r)).get("choice"), "once")
+
+    async def test_an_extra_key_is_refused_and_nothing_is_sent(self):
+        r, w = await self.connect()
+        w.write(json.dumps({"id": "a1", "summary": "s", "expires_at": iso(), "secret": SECRET,
+                            "extra": 1}).encode() + b"\n")
+        await w.drain()
+        self.assertIn("error", await self.reply(r))
+        self.assertEqual(self.a.sent, [])
+
+    async def test_a_missing_key_is_refused_too(self):
+        r, w = await self.connect()
+        w.write(json.dumps({"id": "a1", "summary": "s", "secret": SECRET}).encode() + b"\n")
+        await w.drain()
+        self.assertIn("error", await self.reply(r))
+        self.assertEqual(self.a.sent, [])
+
+    async def test_an_unsafe_secret_file_is_refused_at_request_time(self):
+        os.unlink(self.secret)
+        target = os.path.join(self.dir, "real")
+        with open(target, "w") as f:
+            f.write(SECRET)
+        os.chmod(target, 0o600)
+        os.symlink(target, self.secret)
+        r, _ = await self.ask()
+        self.assertIn("error", await self.reply(r))
+        os.unlink(self.secret)
+        os.mkfifo(self.secret, 0o600)  # must not block
+        r, _ = await self.ask("a2")
+        self.assertIn("error", await self.reply(r))
+        os.unlink(self.secret)
+        with open(self.secret, "w") as f:
+            f.write("x" * 5000)
+        os.chmod(self.secret, 0o600)
+        r, _ = await self.ask("a3")
+        self.assertIn("error", await self.reply(r))
+        self.assertEqual(self.a.sent, [])
+
     async def test_a_sender_who_is_not_allowed_answers_nothing(self):
         r, w = await self.ask()
         p = await self.prompt()
@@ -209,6 +272,19 @@ class StartTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_it_refuses_a_missing_secret(self):
         self.assertFalse(await self.start(0o700, write_secret=False))
+
+    async def test_it_refuses_a_symlinked_secret(self):
+        run = os.path.join(self.dir, "run")
+        os.mkdir(run, 0o700)
+        real = os.path.join(self.dir, "real")
+        with open(real, "w") as f:
+            f.write("x")
+        os.chmod(real, 0o600)
+        link = os.path.join(self.dir, "link")
+        os.symlink(real, link)
+        s = self.mod.ReviewServer(os.path.join(run, "r.sock"), link, self.a)
+        self.addAsyncCleanup(s.stop)
+        self.assertFalse(await s.start())
 
     def test_default_paths_follow_the_go_side(self):
         env = {"XDG_RUNTIME_DIR": "/run/user/1", "XDG_STATE_HOME": "/st"}

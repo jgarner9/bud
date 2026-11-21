@@ -1,11 +1,11 @@
 ---
 name: mail
-description: Read, search, tidy and answer the person's email through Bud's mail tools (mail_*), with every send and reply approved on their phone first and cleanup only ever moving mail to the trash. Use when asked about their inbox, to find or summarize a message, to clean up mail, or to write, send or reply to an email.
+description: Read, search, tidy and answer the person's email through Bud's mail tools, with every send and reply approved on their phone first and cleanup only ever moving mail to the trash. Use when asked about their inbox, to find or summarize a message, to clean up mail, or to write, send or reply to an email.
 ---
 
 # Mail
 
-Bud's mail tools (`bud mail-mcp`, Suite D106) reach the person's mailbox on the home server. They exist only in a private (P0) session, so mail is read by the local model and never leaves the house (D23). If no `mail_*` tool is available, say in one line that mail isn't reachable from this session and stop; never ask for a password or try another way in.
+Bud's mail tools (`bud mail-mcp`, Suite D106) reach the person's mailbox on the home server. They exist only in a private (P0) session, so mail is read by the local model and never leaves the house (D23). The tools are named below by their own names; each runtime adds the server's name in front, so in Hermes `list_folders` is `mcp__mail__list_folders`. If none of the mail server's tools is available, say in one line that mail isn't reachable from this session and stop; never ask for a password or try another way in.
 
 ## What runs alone and what asks
 

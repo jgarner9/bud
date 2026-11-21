@@ -86,8 +86,10 @@ end)
 assert(last_note():find("refused the password", 1, true), last_note())
 eq(vim.fn.filereadable(tmp .. "/opencode.args"), 0, "nothing starts after a failed check")
 
--- a healthy server: the TUI attaches, with the password in its environment
+-- a healthy server: the TUI attaches, with the password in its environment.
+-- A second press while the check is in flight starts nothing more
 vim.env.FAKE_CODE = "200"
+planning.open()
 planning.open()
 wait("the TUI", function()
   return vim.fn.filereadable(tmp .. "/opencode.pw") == 1 and vim.fn.readfile(tmp .. "/opencode.pw")[1] ~= nil
@@ -111,8 +113,9 @@ eq(planning.statusline(), "plan:home", "still running while hidden")
 planning.toggle()
 eq(#vim.api.nvim_tabpage_list_wins(0), 2, "shown again")
 
--- stopping the TUI clears the status
-planning.stop()
+-- quitting stops the TUI and hands quit its job to wait on
+local jobs = planning.stop_all()
+eq(#jobs, 1, "quit gets the planning job")
 wait("the TUI to exit", function()
   return planning.statusline() == ""
 end)

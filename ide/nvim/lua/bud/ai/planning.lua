@@ -16,7 +16,9 @@ M.width = 0.4
 M.curl = "curl"
 M.opencode = "opencode"
 
-local state = { status = nil } -- status: "home" while running, "off" after a failed check
+-- status: "home" while running, "off" after a failed check; checking while
+-- a check is in flight, so a second press doesn't start a second TUI
+local state = { status = nil, checking = false }
 local term -- { buf, job }
 
 local function setting(key, default)
@@ -190,7 +192,12 @@ function M.open()
   if vim.fn.executable(M.opencode) ~= 1 then
     return unavailable(("%s isn't installed: run bud install"):format(M.opencode))
   end
+  if state.checking then
+    return
+  end
+  state.checking = true
   M.check(url, password, function(ok, cerr)
+    state.checking = false
     if not ok then
       return unavailable(cerr)
     end
@@ -216,6 +223,17 @@ function M.stop()
   if term and term.job then
     vim.fn.jobstop(term.job)
   end
+end
+
+-- stop_all is for quitting (bud.quit): it stops the TUI and returns its
+-- job, for quit to wait on
+function M.stop_all()
+  if term and term.job and term.job > 0 then
+    local job = term.job
+    vim.fn.jobstop(job)
+    return { job }
+  end
+  return {}
 end
 
 -- statusline is "plan:home" while the pane's TUI runs and "plan:off" after

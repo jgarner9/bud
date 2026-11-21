@@ -332,7 +332,7 @@ func TestPlanningURLIsAServerURL(t *testing.T) {
 			t.Errorf("%q: %v", u, err)
 		}
 	}
-	for _, u := range []string{"100.64.0.1:8797", "http://opencode:pw@100.64.0.1:8797", "http://100.64.0.1:8797/api", "ws://100.64.0.1:8797"} {
+	for _, u := range []string{"100.64.0.1:8797", "http://opencode:pw@100.64.0.1:8797", "http://100.64.0.1:8797/api", "ws://100.64.0.1:8797", "http://100.64.0.1:8797#x", "http://100.64.0.1:8797?a=b"} {
 		s := Defaults()
 		s.AI.Planning.URL = u
 		if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "ai.planning.url") {

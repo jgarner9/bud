@@ -247,7 +247,7 @@ func (s Settings) Validate() error {
 	}
 	if u := s.AI.Planning.URL; u != "" {
 		pu, err := url.Parse(u)
-		if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") || pu.Host == "" || pu.User != nil || strings.Trim(pu.Path, "/") != "" || pu.RawQuery != "" {
+		if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") || pu.Host == "" || pu.User != nil || strings.Trim(pu.Path, "/") != "" || pu.RawQuery != "" || pu.Fragment != "" || strings.HasSuffix(u, "#") || strings.HasSuffix(u, "?") {
 			return fmt.Errorf("ai.planning.url: %q isn't a server URL such as http://<tailnet IP>:8797 (no path, no password: that goes in ai.planning.password_file)", u)
 		}
 	}

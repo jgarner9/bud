@@ -681,6 +681,11 @@
       "resource": "/home/you/data/bud/overlay/*"
     }
   ],
+  "plugins": [
+    {
+      "package": "/home/you/data/bud/active/plugins/bud-unattended-deny"
+    }
+  ],
   "providers": {
     "classify": {
       "models": {

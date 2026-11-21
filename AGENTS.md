@@ -45,6 +45,7 @@ just rotate-test     # rotate-release-key.sh against a throwaway repo, with fake
 just release-plan-test # release-plan.sh's decisions against throwaway repos with a fake gh
 just content-release-test # content-release.sh's releases against throwaway repos with fake gh, bud and signer
 just hermes-plugin-test # the bud-signal Hermes plugin's Python tests (stdlib unittest, no Hermes needed)
+just opencode-plugin-test # the bud-unattended-deny OpenCode plugin's tests (node --test, no OpenCode needed)
 just site-test       # assemble the docs site from site/ and docs/*.md; fails when a page isn't in the sidebar
 just leak-check      # fail on personal details in tracked files (tailnet hosts, real op:// vaults, home dirs, BUD_LEAK_PATTERNS)
 just leak-test       # leak-check.sh's own tests

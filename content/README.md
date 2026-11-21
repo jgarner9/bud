@@ -8,7 +8,7 @@ What syncs to every device that runs OpenCode (Suite D17, D57): generic instruct
 | `skills/<id>/SKILL.md` | Skills, one directory each: `bud-dev`, `file-issue` | built (task 1.11) |
 | `agents/*.md` | Agents as Markdown with front matter: `chat` | built (task 1.11) |
 | `commands/*.md` | Commands, with fixed, trusted command lines only | phase 4 |
-| `plugins/<name>/` | OpenCode TypeScript plugins | phase 7 |
+| `plugins/<name>/` | OpenCode plugins, one directory each: `bud-unattended-deny`, which rejects a permission ask nobody answers within 10 minutes (Suite D111). Every profile that runs OpenCode takes them unless it lists `plugins` | built (Suite D111) |
 | `env/registry.jsonc` | Providers, models and the nine roles (Suite D46, D58) | task 1.2 |
 | `env/*.jsonc` | Config fragments: `base` (the action tiers as permission rules, every device), `coding` (formatters, asking outside the project, the dev machine's tools and MCP servers) and `server` (the home server's tools and MCP servers, for OpenCode and Hermes). The `bud` key in a fragment lists MCP servers once for every runtime (docs/internals/sync.md). Routes come later | built (tasks 1.7, 1.11, JGA-358) |
 

@@ -31,4 +31,4 @@ It runs as its own system user, `bud-planning`, not as Jason. Then a planning se
 
 ## Known gaps
 
-- An OpenCode server with no client attached waits forever on a permission ask (docs/internals/suite.md, "Unattended sessions"). The server fragment's Linear and GitHub writes ask, so a planning session left asking when the IDE detaches waits until it's attached again. Planning sessions are attended through the IDE, so the rules stay as they are for now.
+- Stock OpenCode waits forever on a permission ask that no client answers (docs/internals/suite.md, "Unattended sessions"). The server fragment's Linear and GitHub writes ask, so bud's `bud-unattended-deny` plugin (Suite D111) rejects any ask still unanswered after 10 minutes, telling the model nobody answered. Attached through the IDE, you answer asks as before. An overlay profile that lists `plugins` must include `bud-unattended-deny`. `tests/` holds the plugin's tests (`just opencode-plugin-test`).

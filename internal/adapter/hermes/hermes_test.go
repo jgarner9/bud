@@ -426,3 +426,40 @@ func TestShellJoinQuotesForShlex(t *testing.T) {
 		t.Fatalf("got %s, want %s", got, want)
 	}
 }
+
+func TestWithARouterThePrivateProfileAsksItForTheManager(t *testing.T) {
+	in := input(t, `{"bud": {"router": "http://100.64.0.5:8795/"}}`)
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out.Config)
+	for _, want := range []string{
+		"fallback_providers: []\n",
+		"model:\n  default: \"bud/manager\"\n  provider: \"custom:bud\"\n",
+		// one provider, the router, with no key and the smallest context the
+		// router may pick (qwen-35b's, not glm's)
+		"providers:\n  bud:\n    api: \"http://100.64.0.5:8795/v1\"\n    models:\n      \"bud/manager\":\n        context_length: 32768\n    transport: \"chat_completions\"\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lacks:\n%s\nin:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "qwen.invalid") || strings.Contains(got, "key_env") || strings.Contains(got, "X-Bud-Privacy: \"P1\"") {
+		t.Errorf("the private profile reaches only the router, with no key and no tier header:\n%s", got)
+	}
+	if !slices.ContainsFunc(out.Notes, func(n string) bool {
+		return strings.Contains(n, "asks the router at http://100.64.0.5:8795 for bud/manager")
+	}) {
+		t.Errorf("notes don't say Hermes goes through the router: %q", out.Notes)
+	}
+
+	in.Cloud = true
+	cloud, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := string(cloud.Config); strings.Contains(c, "bud/manager") || !strings.Contains(c, "glm-5.3") {
+		t.Errorf("the cloud profile still names its providers itself:\n%s", c)
+	}
+}

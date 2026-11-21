@@ -96,6 +96,27 @@ func TestTheGatewayMustBeALoopbackOrTailnetIP(t *testing.T) {
 	}
 }
 
+func TestTheRouterMustBeALoopbackOrTailnetIPWithNoPath(t *testing.T) {
+	for raw, want := range map[string]string{
+		"http://archie.example.ts.net:8795": "the router answers only its IP address",
+		"http://192.168.1.2:8795":           "the router listens on the tailnet only",
+		"http://100.64.0.1":                 "give the router's port, such as :8795",
+		"http://100.64.0.1:8795/v1":         "bud adds /v1",
+	} {
+		_, err := resolve(t, `{"bud": {"router": "`+raw+`"}}`)
+		if err == nil || !strings.Contains(err.Error(), "bud.router") || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: got %v, want %q", raw, err, want)
+		}
+	}
+	r, err := resolve(t, `{"bud": {"router": "http://100.64.0.1:8795/"}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Router != "http://100.64.0.1:8795" {
+		t.Errorf("Router = %q, want it without the trailing slash", r.Router)
+	}
+}
+
 func TestEveryProblemIsReportedAtOnce(t *testing.T) {
 	_, err := resolve(t, `{"bud": {"privacy": "P3", "mcp": {
 		"Bad": {"privacy": ["P1"]},

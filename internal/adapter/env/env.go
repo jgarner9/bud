@@ -115,6 +115,12 @@ type Bud struct {
 	// It lives in the overlay, since the address is personal. Empty means
 	// none, and servers reached through it are left out
 	Gateway string `json:"gateway,omitempty"`
+	// Router is the model router's base URL, such as http://<tailnet IP>:8795
+	// (Suite D70, D104). It lives in the overlay, since the address is
+	// personal. When set, Hermes's private profile asks the router for
+	// bud/manager instead of naming providers itself, so the router's health
+	// fallback covers it. Empty means Hermes talks to the providers directly
+	Router string `json:"router,omitempty"`
 	// Privacy is the tier this device's sessions send the gateway. Empty
 	// sends no header, which the gateway takes as P0
 	Privacy string `json:"privacy,omitempty"`
@@ -183,6 +189,8 @@ type Resolved struct {
 	Left   map[string]string
 	Hermes map[string]any
 	Tiers  map[string]string
+	// Router is the model router's base URL, empty when none is set
+	Router string
 	// Gateway holds each enabled gateway server's approval settings, by
 	// name, including servers left out of this device's runtimes, since the
 	// gateway still serves them
@@ -263,6 +271,11 @@ func (b *Bud) Resolve() (*Resolved, error) {
 			add("bud.gateway: %v", err)
 		}
 	}
+	if b.Router != "" {
+		if err := checkService(b.Router, "router", "8795", "bud adds /v1"); err != nil {
+			add("bud.router: %v", err)
+		}
+	}
 
 	for _, tool := range sortedKeys(b.Tiers) {
 		if !toolRe.MatchString(tool) {
@@ -273,7 +286,7 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
-	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers}
+	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, Router: strings.TrimSuffix(b.Router, "/")}
 	for _, name := range sortedKeys(b.MCP) {
 		s := b.MCP[name]
 		at := "bud.mcp." + name
@@ -449,22 +462,29 @@ func (r *Resolved) CheckExtras(where string, extras map[string]any, transport []
 // address, since the gateway refuses a Host that isn't one (it guards
 // against DNS rebinding), so a MagicDNS name would never get through
 func checkGateway(raw string) error {
+	return checkService(raw, "gateway", "8790", "bud adds /<server>/mcp")
+}
+
+// checkService checks a home-server service's base URL: http(s), a loopback
+// or tailnet IP with a port, and no path, since the service listens on the
+// tailnet only (Suite D72) and bud adds the path itself
+func checkService(raw, name, port, path string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return fmt.Errorf("%q isn't an http(s) URL such as http://<tailnet IP>:8790", raw)
+		return fmt.Errorf("%q isn't an http(s) URL such as http://<tailnet IP>:%s", raw, port)
 	}
 	if u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.User != nil {
-		return fmt.Errorf("%q: give only the scheme, address and port; bud adds /<server>/mcp", raw)
+		return fmt.Errorf("%q: give only the scheme, address and port; %s", raw, path)
 	}
 	ip, err := netip.ParseAddr(strings.Trim(u.Hostname(), "[]"))
 	if err != nil {
-		return fmt.Errorf("%q names a host, and the gateway answers only its IP address; use the tailnet IP (tailscale ip -4)", raw)
+		return fmt.Errorf("%q names a host, and the %s answers only its IP address; use the tailnet IP (tailscale ip -4)", raw, name)
 	}
 	if !ip.IsLoopback() && !tailnet(ip) {
-		return fmt.Errorf("%q isn't a loopback or tailnet address, and the gateway listens on the tailnet only", raw)
+		return fmt.Errorf("%q isn't a loopback or tailnet address, and the %s listens on the tailnet only", raw, name)
 	}
 	if _, _, err := net.SplitHostPort(u.Host); err != nil {
-		return fmt.Errorf("%q: give the gateway's port, such as :8790", raw)
+		return fmt.Errorf("%q: give the %s's port, such as :%s", raw, name, port)
 	}
 
 	return nil

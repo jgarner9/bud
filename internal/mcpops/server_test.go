@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/doctor"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/registry"
 	"jgarner.dev/bud/internal/syncer"
 )
 
@@ -136,7 +138,7 @@ func TestDoctorReportsCountsAndResults(t *testing.T) {
 // the queues that aren't built say so as a tool error, never an empty list
 func TestUnbuiltToolsSaySo(t *testing.T) {
 	s := New(Tools(Defaults()))
-	for _, name := range []string{"spend", "reviews"} {
+	for _, name := range []string{"reviews"} {
 		_, out := post(t, s, call(name, `{}`))
 		text, isErr := toolText(t, out)
 		if !isErr || !strings.Contains(text, "isn't built yet") {
@@ -352,5 +354,81 @@ func TestApprovalsToolCountsPendingRequestsWithoutIds(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(empty); len(entries) != 0 {
 		t.Errorf("the tool created %v", entries)
+	}
+}
+
+func spendSources(t *testing.T, ledger string, reg func() (*registry.Registry, error)) Sources {
+	t.Helper()
+	dir := t.TempDir()
+	if ledger != "" {
+		if err := os.WriteFile(filepath.Join(dir, "router-spend.json"), []byte(ledger), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := Defaults()
+	src.Paths = func() (*paths.Paths, error) { return &paths.Paths{State: dir}, nil }
+	src.Registry = reg
+	return src
+}
+
+func spendCall(t *testing.T, src Sources) spendOut {
+	t.Helper()
+	_, out := post(t, New(Tools(src)), call("spend", `{}`))
+	text, isErr := toolText(t, out)
+	if isErr {
+		t.Fatalf("error: %s", text)
+	}
+	var got spendOut
+	if err := json.Unmarshal([]byte(text), &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func TestSpendToolReportsTheMonthAgainstTheCapAndAllowances(t *testing.T) {
+	month := time.Now().UTC().Format("2006-01")
+	reg := func() (*registry.Registry, error) {
+		return &registry.Registry{Models: map[string]registry.Model{
+			"go-kimi": {Cost: "C1", Allowance: 12},
+			"paid":    {Cost: "C2"},
+		}}, nil
+	}
+	got := spendCall(t, spendSources(t, `{"month":"`+month+`","spent":{"paid":2.004,"go-kimi":4.5,"gone":1},"topup":2.004,"cap":10}`, reg))
+	if got.Month != month || got.TopUp != 2 || got.Cap == nil || *got.Cap != 10 || got.Left == nil || *got.Left != 8 || got.Note != "" {
+		t.Errorf("got %+v", got)
+	}
+	if len(got.Models) != 3 || got.Models[0].ID != "go-kimi" || got.Models[1].ID != "gone" || got.Models[2].ID != "paid" {
+		t.Fatalf("models %+v", got.Models)
+	}
+	kimi := got.Models[0]
+	if kimi.Cost != "C1" || kimi.Spent != 4.5 || *kimi.Allowance != 12 || *kimi.AllowanceLeft != 7.5 {
+		t.Errorf("kimi %+v", kimi)
+	}
+	if got.Models[2].Cost != "C2" || got.Models[2].Allowance != nil || got.Models[1].Cost != "" {
+		t.Errorf("models %+v", got.Models)
+	}
+}
+
+func TestSpendToolWithNoLedgerOrAnOldMonthOrNoRegistry(t *testing.T) {
+	got := spendCall(t, spendSources(t, "", nil))
+	if got.TopUp != 0 || got.Cap != nil || len(got.Models) != 0 || !strings.Contains(got.Note, "hasn't charged") {
+		t.Errorf("no ledger: %+v", got)
+	}
+	got = spendCall(t, spendSources(t, `{"month":"2001-01","spent":{"paid":3},"topup":3,"cap":10}`, nil))
+	if got.TopUp != 0 || *got.Left != 10 || len(got.Models) != 0 {
+		t.Errorf("old month: %+v", got)
+	}
+	month := time.Now().UTC().Format("2006-01")
+	bad := func() (*registry.Registry, error) { return nil, errors.New("no synced content") }
+	got = spendCall(t, spendSources(t, `{"month":"`+month+`","spent":{"paid":3},"topup":3}`, bad))
+	if got.Cap != nil || got.Models[0].Cost != "" || !strings.Contains(got.Note, "no synced content") || !strings.Contains(got.Note, "cap isn't in the ledger") {
+		t.Errorf("no registry: %+v", got)
+	}
+	_, out := post(t, New(Tools(spendSources(t, "{nope", nil))), call("spend", `{}`))
+	if text, isErr := toolText(t, out); !isErr || !strings.Contains(text, "router-spend.json") {
+		t.Errorf("corrupt: %q %v", text, isErr)
+	}
+	if _, out := post(t, New(Tools(spendSources(t, "", nil))), call("spend", `{"x":1}`)); errCode(out) != -32602 {
+		t.Errorf("bad args: %v", out)
 	}
 }

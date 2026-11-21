@@ -28,6 +28,9 @@ type Ledger struct {
 	month  string
 	spent  map[string]float64
 	topUp  float64
+	// cap is the router's top-up cap, saved with the ledger so readers such
+	// as bud mcp-ops can report it; nil until the router sets it
+	cap *float64
 	// failed is the last ledger write's error; while it's set no top-up is
 	// admitted, since a charge that isn't on disk would be lost on restart
 	failed error
@@ -41,6 +44,8 @@ type ledgerFile struct {
 	Month string             `json:"month"`
 	Spent map[string]float64 `json:"spent"`
 	TopUp float64            `json:"topup"`
+	// Cap is the top-up cap of the router that last wrote the file
+	Cap *float64 `json:"cap,omitempty"`
 }
 
 // NewLedger loads the ledger at path; a missing file is an empty ledger and
@@ -66,6 +71,56 @@ func NewLedger(path string, models map[string]registry.Model) (*Ledger, error) {
 		l.spent = f.Spent
 	}
 	return l, nil
+}
+
+// setCap records the cap the router runs with, written with the next charge
+func (l *Ledger) setCap(c float64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.cap = &c
+}
+
+// Spend is what a spend ledger file says about the month at a given time
+type Spend struct {
+	// Month is the UTC calendar month, as 2006-01
+	Month string
+	// Recorded is false when the file doesn't exist yet
+	Recorded bool
+	// Spent is each model's dollars this month; models with none are absent
+	Spent map[string]float64
+	// TopUp is this month's top-up total
+	TopUp float64
+	// Cap is the top-up cap of the router that last wrote the file; nil
+	// when no router that records it has written it yet
+	Cap *float64
+}
+
+// ReadSpend reads the ledger at path without changing it, the way the
+// router would see it at now: a file from an earlier month reads as an
+// empty month. A missing file reads as an empty month with Recorded false
+func ReadSpend(path string, now time.Time) (Spend, error) {
+	out := Spend{Month: now.UTC().Format("2006-01"), Spent: map[string]float64{}}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return out, nil
+	}
+	if err != nil {
+		return Spend{}, fmt.Errorf("read the spend ledger %s: %w", path, err)
+	}
+	var f ledgerFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		return Spend{}, fmt.Errorf("the spend ledger %s isn't valid JSON (%v)", path, err)
+	}
+	out.Recorded, out.Cap = true, f.Cap
+	if f.Month == out.Month {
+		out.TopUp = f.TopUp
+		for id, v := range f.Spent {
+			if v > 0 {
+				out.Spent[id] = v
+			}
+		}
+	}
+	return out, nil
 }
 
 // roll drops the old month's numbers when the month has changed
@@ -104,7 +159,7 @@ func (l *Ledger) Charge(id string, cost float64) error {
 	if l.path == "" {
 		return nil
 	}
-	data, err := json.Marshal(ledgerFile{Month: l.month, Spent: l.spent, TopUp: l.topUp})
+	data, err := json.Marshal(ledgerFile{Month: l.month, Spent: l.spent, TopUp: l.topUp, Cap: l.cap})
 	if err != nil {
 		return fmt.Errorf("encode the spend ledger: %w", err)
 	}

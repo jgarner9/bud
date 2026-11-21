@@ -20,7 +20,18 @@ type Account struct {
 	tls  *tls.Config // nil for a plain connection to loopback (tests)
 	user string
 	pass string
-	mu   sync.Mutex
+	mu   sync.Mutex // one IMAP session at a time
+	// writes holds a move, restore or send together with its log entry,
+	// so a restore or the digest never sees a move that isn't logged yet
+	writes sync.Mutex
+
+	// Trash is the folder cleanup moves to when no folder has the \Trash
+	// special-use flag
+	Trash string
+	// Log records moves, restores and sends; moves and sends need it
+	Log *Log
+	// Sender sends; without it the send tools say sending isn't set up
+	Sender *Sender
 }
 
 // NewAccount checks the IMAP address and credentials. A loopback host is
@@ -33,7 +44,7 @@ func NewAccount(addr, user, pass string) (*Account, error) {
 	if user == "" || pass == "" {
 		return nil, errors.New("no mail credentials: set BUD_MAIL_USER and BUD_MAIL_PASSWORD (op run fills them from the Bud vault)")
 	}
-	a := &Account{addr: addr, user: user, pass: pass}
+	a := &Account{addr: addr, user: user, pass: pass, Trash: "Deleted Messages"}
 	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
 		a.tls = &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
 	}
@@ -55,7 +66,11 @@ func (a *Account) session(ctx context.Context, fn func(*Client) error) error {
 		_ = c.Close()
 		return err
 	}
-	return c.Logout(ctx)
+	// the work is done once fn returns: a LOGOUT that fails (a dropped
+	// connection, say) mustn't turn a move that happened into a failure,
+	// which would skip its log entry
+	_ = c.Logout(ctx)
+	return nil
 }
 
 // FolderInfo is a folder with its counts

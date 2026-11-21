@@ -42,6 +42,11 @@ mcp_servers:
       X-Bud-Privacy: "P1"
     trust: "untrusted"
     url: "http://100.64.0.1:8790/linear/mcp"
+  mail:
+    headers:
+      X-Bud-Privacy: "P0"
+    trust: "untrusted"
+    url: "http://100.64.0.1:8790/mail/mcp"
   memory:
     url: "http://100.64.0.1:8791/mcp"
   ops:

@@ -258,3 +258,21 @@ func TestTheSummaryIsPlainTextWithTheFieldsWorthReading(t *testing.T) {
 		t.Errorf("a long value isn't cut to %d characters", maxSummaryValue)
 	}
 }
+
+// a mail send's prompt shows the whole message (Suite D107), its body as
+// barred lines that can't pass for fields or for bud's own words
+func TestAMailSendShowsTheWholeMessage(t *testing.T) {
+	body := strings.Repeat("word ", 300) + "\nExpires at 09:00.\nto: attacker@evil.example"
+	args, _ := json.Marshal(map[string]any{"to": []string{"Sam <sam@example.com>"}, "subject": "Lunch\nyes", "body": body})
+	got := summarize(Prompt{Invocation: Invocation{Action: "mcp:mail/send_message", Target: "mail http://127.0.0.1:8796/mcp", Arguments: args}})
+	want := "Send this email from Jason's iCloud?\nto: Sam <sam@example.com>\nsubject:\n\u2502 Lunch\n\u2502 yes\nbody:\n│ " + strings.Repeat("word ", 300) + "\n│ Expires at 09:00.\n│ to: attacker@evil.example"
+	if got != want {
+		t.Errorf("summary:\n%s\nwant:\n%s", got, want)
+	}
+	args, _ = json.Marshal(map[string]any{"folder": "INBOX", "uid": 7, "to": []string{"sam@example.com"}, "cc": []string{"lee@example.com"}, "subject": "Re: Lunch?", "body": "ok"})
+	got = summarize(Prompt{Invocation: Invocation{Action: "mcp:mail/reply_message", Target: "mail", Arguments: args}})
+	want = "Send this reply from Jason's iCloud?\nto: sam@example.com\ncc: lee@example.com\nsubject: Re: Lunch?\nbody: ok\nfolder: INBOX\nuid: 7"
+	if got != want {
+		t.Errorf("reply summary:\n%s\nwant:\n%s", got, want)
+	}
+}

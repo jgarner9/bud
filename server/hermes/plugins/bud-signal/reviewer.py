@@ -25,7 +25,10 @@ logger = logging.getLogger(__name__)
 MAX_LINE = 64 << 10  # the client's own limit
 MAX_WAIT = 3600  # an unanswered approval is denied after an hour (Suite D42)
 READ_TIMEOUT = 10  # for the request line to arrive
-MAX_SUMMARY = 2000
+# a mail send's prompt holds the whole message (Suite D107): a 4,000
+# character body plus its recipients and subject. A longer summary is
+# refused, never cut, so Jason never approves text he wasn't shown
+MAX_SUMMARY = 6000
 MAX_SECRET = 4096
 FIELDS = frozenset({"id", "summary", "expires_at", "secret"})
 
@@ -221,12 +224,14 @@ class ReviewServer:
         expires = parse_expiry(req.get("expires_at"))
         if not isinstance(summary, str) or not summary.strip() or expires is None:
             return await refuse("malformed request")
+        if len(summary) > MAX_SUMMARY:
+            return await refuse("summary too long to show whole")
         wait = min(expires - self.clock(), MAX_WAIT)
         if wait <= 0:
             return await self._say(writer, {"id": rid, "choice": "deny"})
 
         try:
-            handle = await self.host.open_review(summary[:MAX_SUMMARY])
+            handle = await self.host.open_review(summary)
         except Exception as e:
             logger.warning("bud-signal: couldn't post an approval review: %s", e)
             return await refuse("couldn't send the prompt")

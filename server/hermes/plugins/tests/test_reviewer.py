@@ -180,6 +180,14 @@ class ReviewerTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("error", await self.reply(r))
         self.assertEqual(self.a.sent, [])
 
+    async def test_a_summary_too_long_to_show_whole_is_refused_not_cut(self):
+        r, w = await self.connect()
+        long = "x" * (self.reviewer_mod.MAX_SUMMARY + 1)
+        w.write(json.dumps({"id": "a1", "summary": long, "expires_at": iso(), "secret": SECRET}).encode() + b"\n")
+        await w.drain()
+        self.assertEqual(await self.reply(r), {"id": "a1", "error": "summary too long to show whole"})
+        self.assertEqual(self.a.sent, [])
+
     async def test_a_missing_key_is_refused_too(self):
         r, w = await self.connect()
         w.write(json.dumps({"id": "a1", "summary": "s", "secret": SECRET}).encode() + b"\n")

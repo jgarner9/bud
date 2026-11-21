@@ -18,6 +18,11 @@
       "privacy": ["P0"],
       "approval": { "tools": { "list_*": "allow", "create_*": "ask", "move_*": "ask", "delete_*": "ask" } }
     },
+    "mail": {
+      "url": "http://127.0.0.1:8796/mcp",
+      "privacy": ["P0"],
+      "approval": { "tools": { "list_*": "allow", "search_*": "allow", "read_*": "allow", "move_to_trash": "allow", "restore_*": "allow", "cleanup_*": "allow", "send_*": "ask", "reply_*": "ask" } }
+    },
     "ops": {
       "url": "http://127.0.0.1:8792/mcp",
       "privacy": ["P0", "P1", "P2"]

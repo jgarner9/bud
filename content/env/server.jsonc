@@ -10,7 +10,7 @@
 // MCP server with a fine-grained PAT from op run (D76, D94). The Bud ops MCP
 // (D83) is on this machine's loopback. The calendar (D82) goes through the
 // gateway, which lets only P0 sessions use it; it is Hermes's alone, so the
-// planning OpenCode is denied it. Your overlay's env sets bud.gateway and
+// planning OpenCode is denied it. Mail (D106) is the same. Your overlay's env sets bud.gateway and
 // bud.mcp.memory.url.
 {
   "websearch": { "provider": "exa" },
@@ -31,8 +31,9 @@
     { "action": "github_search_*", "resource": "*", "effect": "allow" },
     { "action": "github_create_pull_request", "resource": "*", "effect": "allow" },
 
-    // the calendar is the manager's only (D82)
+    // the calendar and mail are the manager's only (D82, D106)
     { "action": "calendar_*", "resource": "*", "effect": "deny" },
+    { "action": "mail_*", "resource": "*", "effect": "deny" },
 
     { "action": "context7_*", "resource": "*", "effect": "allow" },
     { "action": "memory_*", "resource": "*", "effect": "allow" },
@@ -68,6 +69,14 @@
         "gateway": true,
         "privacy": ["P0"],
         "approval": { "tools": { "calendar_list_*": "allow", "calendar_create_*": "ask", "calendar_move_*": "ask", "calendar_delete_*": "ask" } },
+      },
+      // bud mail-mcp, server/mail-mcp/ (D106): reading, moving to Deleted
+      // Messages and restoring run alone (D36); every send and reply asks
+      // (D31), and its prompt shows the whole message (D107)
+      "mail": {
+        "gateway": true,
+        "privacy": ["P0"],
+        "approval": { "tools": { "mail_list_*": "allow", "mail_search_*": "allow", "mail_read_*": "allow", "mail_move_to_trash": "allow", "mail_restore_*": "allow", "mail_cleanup_*": "allow", "mail_send_*": "ask", "mail_reply_*": "ask" } },
       },
     },
     // Hermes's own tools by action tier (D10, D48), read by bud hermes-gate
@@ -128,6 +137,9 @@
         // reads are marked read-only and run alone; creating, moving and
         // deleting events ask by phone (D82)
         "calendar": { "trust": "untrusted" },
+        // reads, moves to the trash and restores are marked read-only and
+        // run alone; sends and replies ask (D31, D36)
+        "mail": { "trust": "untrusted" },
       },
     },
   },

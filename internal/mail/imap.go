@@ -524,7 +524,7 @@ func (c *Client) Search(ctx context.Context, cr Criteria) ([]uint32, error) {
 }
 
 // headerFields are the headers a summary fetches
-const headerFields = "DATE FROM TO CC SUBJECT MESSAGE-ID IN-REPLY-TO REFERENCES"
+const headerFields = "DATE FROM TO CC SUBJECT MESSAGE-ID IN-REPLY-TO REFERENCES REPLY-TO"
 
 // Summary is one message's flags, size and main headers, fetched without
 // marking it read

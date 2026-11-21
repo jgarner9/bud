@@ -15,6 +15,18 @@
         "list_*": "allow",
         "search_*": "allow"
       }
+    },
+    "mail": {
+      "tools": {
+        "cleanup_*": "allow",
+        "list_*": "allow",
+        "move_to_trash": "allow",
+        "read_*": "allow",
+        "reply_*": "ask",
+        "restore_*": "allow",
+        "search_*": "allow",
+        "send_*": "ask"
+      }
     }
   }
 }

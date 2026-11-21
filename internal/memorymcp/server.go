@@ -29,7 +29,6 @@ import (
 // Searcher finds approved records within one token's tiers
 type Searcher interface {
 	Retrieve(ctx context.Context, q memory.Query) ([]memory.Record, error)
-	Search(ctx context.Context, query string, limit int) ([]memory.Record, error)
 }
 
 // Stager stages records for review
@@ -39,7 +38,7 @@ type Stager interface {
 
 // Vectors lists and stores the vectors a model still needs
 type Vectors interface {
-	Pending(ctx context.Context, model string, limit int) ([]memory.Unembedded, error)
+	Pending(ctx context.Context, model string, after int64, limit int) ([]memory.Unembedded, error)
 	PutVector(ctx context.Context, id int64, model string, values []float64, bodyHash string) error
 }
 
@@ -319,46 +318,21 @@ func (s *Server) search(ctx context.Context, tier string, raw json.RawMessage) (
 	}
 
 	note := ""
-	var recs []memory.Record
-	vecs, err := s.Embed.Embed(ctx, []string{a.Query})
-	if err == nil {
-		recs, err = mem.Retrieve(ctx, memory.Query{Query: a.Query, Model: s.Model, Values: vecs[0], Source: a.Source, Since: a.Since, Until: a.Until, Limit: limit})
+	q := memory.Query{Query: a.Query, Source: a.Source, Since: a.Since, Until: a.Until, Limit: limit}
+	if vecs, err := s.Embed.Embed(ctx, []string{a.Query}); err == nil {
+		q.Model, q.Values = s.Model, vecs[0]
 	} else {
-		// the meaning half is down; words still find most things
+		// the meaning half is down; words still find most things, and the
+		// service applies the filters to them the same way
 		note = "The embedding server is down, so this matched by words only (" + err.Error() + ")."
-		recs, err = textOnly(ctx, mem, a.Query, a.Source, a.Since, a.Until, limit)
 	}
+	recs, err := mem.Retrieve(ctx, q)
 	if err != nil {
 		return nil, unavailable(err, "nothing was searched")
 	}
 	out := map[string]any{"results": results(recs)}
 	if note != "" {
 		out["note"] = note
-	}
-
-	return out, nil
-}
-
-// textOnly searches by words and applies the filters the service's text
-// search lacks. It asks for more than limit, so filtering leaves enough
-func textOnly(ctx context.Context, mem Searcher, query, source, since, until string, limit int) ([]memory.Record, error) {
-	recs, err := mem.Search(ctx, query, 100)
-	if err != nil {
-		return nil, err
-	}
-	var out []memory.Record
-	for _, r := range recs {
-		day := r.CreatedAt
-		if len(day) >= 10 {
-			day = day[:10]
-		}
-		if (source != "" && r.Source != source) || (since != "" && day < since) || (until != "" && day > until) {
-			continue
-		}
-		out = append(out, r)
-		if len(out) == limit {
-			break
-		}
 	}
 
 	return out, nil

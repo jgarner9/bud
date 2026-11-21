@@ -31,9 +31,9 @@ A search uses the token of the session's tier, so the service, not memory-mcp, d
 
 The query embedding and the backfill use the registry's embedding role: its first model, which must be on a local provider and give `dims` (memory holds P0 text). `HTTPEmbedder` posts to the provider's `/embeddings` and refuses a reply with other than `dims` numbers per vector, or vectors that don't line up with the inputs.
 
-When the embedding server is down, `memory_search` falls back to the service's text search, applies `source`, `since` and `until` itself (the text search has no filters), and adds a `note` saying it matched by words only.
+When the embedding server is down, `memory_search` calls `/retrieve` with no model or vector, so the service ranks by words alone and still applies `source`, `since` and `until` before its limit, and adds a `note` saying it matched by words only.
 
-`Backfill` runs once at start and then every minute (`--no-backfill` turns it off). It asks `/vector_pending` for the model, embeds 16 records at a time and stores each vector with `/vector_put`, passing back the record's `body_hash`. A record edited in between comes back as `ErrStale`; it is skipped for the round and stays pending. A failure waits longer each time, up to ten minutes, so a down embedding server isn't hammered. A new model in the registry starts with every approved record pending, so this is also the re-embed path.
+`Backfill` runs once at start and then every minute (`--no-backfill` turns it off). It asks `/vector_pending` for the model, embeds 16 records at a time and stores each vector with `/vector_put`, passing back the record's `body_hash`. Each round walks forward by id (`after` is the last id it was given), so it ends once it passes the newest record. A record edited in between comes back as `ErrStale`; it stays pending and the next round picks up its new body, and however many records keep changing, they can't hold back the ones after them. A failure waits longer each time, up to ten minutes, so a down embedding server isn't hammered. A new model in the registry starts with every approved record pending, so this is also the re-embed path.
 
 ## Measured
 

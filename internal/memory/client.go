@@ -76,8 +76,8 @@ type Record struct {
 // Source, Since and Until (inclusive YYYY-MM-DD) are optional filters
 type Query struct {
 	Query  string    `json:"query"`
-	Model  string    `json:"model"`
-	Values []float64 `json:"values"`
+	Model  string    `json:"model,omitempty"`
+	Values []float64 `json:"values,omitempty"`
 	Source string    `json:"source,omitempty"`
 	Since  string    `json:"since,omitempty"`
 	Until  string    `json:"until,omitempty"`
@@ -85,7 +85,8 @@ type Query struct {
 }
 
 // Retrieve searches approved records by text and vector together, within
-// the token's tiers
+// the token's tiers. A Query with no Model and Values ranks by text alone,
+// with the same filters
 func (c *Client) Retrieve(ctx context.Context, q Query) ([]Record, error) {
 	var reply struct {
 		Records []Record `json:"records"`
@@ -146,10 +147,14 @@ type Unembedded struct {
 // stays pending, so the next round embeds the new body
 var ErrStale = errors.New("the record changed since it was read")
 
-// Pending lists up to limit approved records that model still has to
-// embed; a limit of 0 takes the service's default of 20
-func (c *Client) Pending(ctx context.Context, model string, limit int) ([]Unembedded, error) {
+// Pending lists up to limit approved records with ids above after that
+// model still has to embed, in id order; a limit of 0 takes the service's
+// default of 20
+func (c *Client) Pending(ctx context.Context, model string, after int64, limit int) ([]Unembedded, error) {
 	req := map[string]any{"model": model}
+	if after > 0 {
+		req["after"] = after
+	}
 	if limit > 0 {
 		req["limit"] = limit
 	}

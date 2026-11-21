@@ -167,10 +167,10 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     result = {"id": record_reference(self.server.store.db, payload["id"], payload["source"], payload["reference_key"])}
             elif action == "retrieve":
                 allowed = {"query", "model", "values", "source", "since", "until", "limit"}
-                if set(payload) - allowed or not {"query", "model", "values"} <= set(payload):
+                if set(payload) - allowed or "query" not in payload or ("model" in payload) != ("values" in payload):
                     raise ValueError()
                 result = {"records": retrieve(
-                    self.server.store.db, payload["query"], payload["model"], payload["values"],
+                    self.server.store.db, payload["query"], payload.get("model"), payload.get("values"),
                     policy["tiers"], payload.get("source"), payload.get("since"),
                     payload.get("until"), payload.get("limit", 20),
                 )}
@@ -182,10 +182,10 @@ class MemoryHandler(BaseHTTPRequestHandler):
                 )
                 result = {"records": [dict(zip(("id", "source", "kind", "privacy", "body", "created_at", "distance"), row)) for row in rows]}
             elif action == "vector_pending":
-                if set(payload) - {"model", "limit"} or "model" not in payload:
+                if set(payload) - {"model", "limit", "after"} or "model" not in payload:
                     raise ValueError()
                 rows = VectorIndex(self.server.store.db).pending(
-                    payload["model"], policy["tiers"], payload.get("limit", 20)
+                    payload["model"], policy["tiers"], payload.get("limit", 20), payload.get("after", 0)
                 )
                 result = {"records": [dict(zip(("id", "privacy", "body", "body_hash"), row)) for row in rows]}
             elif action == "export":

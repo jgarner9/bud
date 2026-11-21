@@ -41,6 +41,11 @@ class RetrievalTests(unittest.TestCase):
         self.assertEqual(rows[0]["matches"], ["text", "vector"])
         self.assertEqual(rows[0]["source"], "home")
         self.assertEqual(rows[0]["privacy"], "P2")
+        # without model and values it ranks by text alone, with the same filters
+        rows = retrieve(self.store.db, "orchard", None, None, ["P2"], "home", "2026-01-01", "2026-01-02", 5)
+        self.assertEqual([(r["id"], r["matches"]) for r in rows], [(target, ["text"])])
+        with self.assertRaises(ValueError):
+            retrieve(self.store.db, "orchard", "embed", None, ["P2"])
 
     def test_invalid_filters_fail_closed(self):
         for kwargs in ({"tiers": []}, {"tiers": ["P3"]}, {"tiers": ["P2"], "since": "2026-1-1"},

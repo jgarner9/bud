@@ -18,17 +18,17 @@ import (
 type fakeVectors struct {
 	pending  []memory.Unembedded
 	stored   map[int64]bool
-	changing int64
+	changing func(id int64) bool
 	err      error
 }
 
-func (f *fakeVectors) Pending(_ context.Context, _ string, limit int) ([]memory.Unembedded, error) {
+func (f *fakeVectors) Pending(_ context.Context, _ string, after int64, limit int) ([]memory.Unembedded, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
 	var out []memory.Unembedded
 	for _, p := range f.pending {
-		if !f.stored[p.ID] && len(out) < limit {
+		if !f.stored[p.ID] && p.ID > after && len(out) < limit {
 			out = append(out, p)
 		}
 	}
@@ -36,7 +36,7 @@ func (f *fakeVectors) Pending(_ context.Context, _ string, limit int) ([]memory.
 }
 
 func (f *fakeVectors) PutVector(_ context.Context, id int64, _ string, _ []float64, _ string) error {
-	if id == f.changing {
+	if f.changing != nil && f.changing(id) {
 		return fmt.Errorf("memory vector_put: record %d: %w", id, memory.ErrStale)
 	}
 	f.stored[id] = true
@@ -44,7 +44,7 @@ func (f *fakeVectors) PutVector(_ context.Context, id int64, _ string, _ []float
 }
 
 func TestBackfillDrainsInBatchesAndSkipsAChangingRecord(t *testing.T) {
-	v := &fakeVectors{stored: map[int64]bool{}, changing: 2}
+	v := &fakeVectors{stored: map[int64]bool{}, changing: func(id int64) bool { return id == 2 }}
 	for i := int64(1); i <= 5; i++ {
 		v.pending = append(v.pending, memory.Unembedded{ID: i, Body: fmt.Sprint("body ", i)})
 	}
@@ -61,6 +61,17 @@ func TestBackfillDrainsInBatchesAndSkipsAChangingRecord(t *testing.T) {
 	}
 	if v.stored[2] {
 		t.Error("the changing record should stay pending")
+	}
+
+	// records that keep changing don't hold back the ones after them,
+	// however many there are
+	v = &fakeVectors{stored: map[int64]bool{}, changing: func(id int64) bool { return id <= 150 }}
+	for i := int64(1); i <= 151; i++ {
+		v.pending = append(v.pending, memory.Unembedded{ID: i, Body: "b"})
+	}
+	b.Vectors, b.Batch = v, 16
+	if n, err := b.Round(context.Background()); err != nil || n != 1 || !v.stored[151] {
+		t.Errorf("Round past 150 changing records = %d, %v; want record 151 stored", n, err)
 	}
 
 	v.err = memory.ErrUnavailable

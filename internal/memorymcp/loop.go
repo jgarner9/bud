@@ -61,23 +61,18 @@ func (b *Backfill) Round(ctx context.Context) (int, error) {
 		size = 16
 	}
 	stored := 0
-	// a record that keeps changing under it is skipped for this round
-	// rather than asked for forever
-	skip := map[int64]bool{}
+	// the round walks forward by id, so a record that changes under it is
+	// left for the next round instead of being asked for again
+	var after int64
 	for {
-		pending, err := b.Vectors.Pending(ctx, b.Model, min(size+len(skip), 100))
+		todo, err := b.Vectors.Pending(ctx, b.Model, after, size)
 		if err != nil {
 			return stored, err
-		}
-		var todo []memory.Unembedded
-		for _, p := range pending {
-			if !skip[p.ID] && len(todo) < size {
-				todo = append(todo, p)
-			}
 		}
 		if len(todo) == 0 {
 			return stored, nil
 		}
+		after = todo[len(todo)-1].ID
 		texts := make([]string, len(todo))
 		for i, p := range todo {
 			texts[i] = p.Body
@@ -90,7 +85,7 @@ func (b *Backfill) Round(ctx context.Context) (int, error) {
 			err := b.Vectors.PutVector(ctx, p.ID, b.Model, vecs[i], p.BodyHash)
 			switch {
 			case errors.Is(err, memory.ErrStale):
-				skip[p.ID] = true
+				// changed since it was read; the next round has its new body
 			case err != nil:
 				return stored, fmt.Errorf("store record %d's vector: %w", p.ID, err)
 			default:

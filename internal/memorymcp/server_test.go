@@ -15,26 +15,15 @@ import (
 
 // fakeMemory is one memory-service identity
 type fakeMemory struct {
-	recs     []memory.Record
-	query    memory.Query
-	searched string
-	staged   []memory.Draft
-	err      error
+	recs   []memory.Record
+	query  memory.Query
+	staged []memory.Draft
+	err    error
 }
 
 func (f *fakeMemory) Retrieve(_ context.Context, q memory.Query) ([]memory.Record, error) {
 	f.query = q
 	return f.recs, f.err
-}
-
-func (f *fakeMemory) Search(_ context.Context, q string, _ int) ([]memory.Record, error) {
-	f.searched = q
-	out := make([]memory.Record, len(f.recs))
-	for i, r := range f.recs {
-		r.Matches = []string{"text"}
-		out[i] = r
-	}
-	return out, f.err
 }
 
 func (f *fakeMemory) Stage(_ context.Context, d memory.Draft) (int64, error) {
@@ -147,12 +136,17 @@ func TestSearchFallsBackToWordsWhenTheEmbedderIsDown(t *testing.T) {
 	if errText != "" {
 		t.Fatal(errText)
 	}
-	res := got["results"].([]any)
-	if len(res) != 1 || res[0].(map[string]any)["id"] != 3.0 {
-		t.Errorf("filters weren't applied to the words-only search: %v", res)
+	// the service filters the words-only search, so no vectors are sent
+	// and the filters go with it
+	q := tiers["P0"].query
+	if q.Model != "" || q.Values != nil || q.Query != "q" || q.Source != "hermes" || q.Since != "2026-11-21" || q.Until != "2026-11-21" || q.Limit != defLimit {
+		t.Errorf("a words-only retrieve got %+v", q)
 	}
-	if note, _ := got["note"].(string); !strings.Contains(note, "words only") || tiers["P0"].searched != "q" {
-		t.Errorf("note = %q, searched %q", note, tiers["P0"].searched)
+	if res := got["results"].([]any); len(res) != 3 {
+		t.Errorf("results = %v", res)
+	}
+	if note, _ := got["note"].(string); !strings.Contains(note, "words only") {
+		t.Errorf("note = %q", note)
 	}
 }
 

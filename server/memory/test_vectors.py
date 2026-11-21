@@ -58,6 +58,8 @@ class VectorTests(unittest.TestCase):
         self.assertEqual([r[0] for r in self.index.pending("old", ["P0"])], [edited, fresh])
         # a new model starts with every approved record pending, then drains
         self.assertEqual([r[0] for r in self.index.pending("new", ["P0"])], [done, edited, fresh])
+        # after pages past records a client skipped
+        self.assertEqual([r[0] for r in self.index.pending("new", ["P0"], after=done)], [edited, fresh])
         first = self.index.pending("new", ["P0"], limit=1)
         self.assertEqual([row[:3] for row in first], [(done, "P0", "embedded")])
         # an edit between reading a record and storing its vector is refused
@@ -69,7 +71,7 @@ class VectorTests(unittest.TestCase):
             self.index.put(rid, "new", [0, 1, 0], body_hash)
         self.assertEqual(self.index.pending("new", ["P0"]), [])
         self.assertNotIn(staged, [r[0] for r in self.index.pending("new", ["P0", "P2"])])
-        for bad in ((" ", ["P0"], 20), ("m", [], 20), ("m", ["P3"], 20), ("m", ["P0"], 0), ("m", ["P0"], True)):
+        for bad in ((" ", ["P0"], 20), ("m", [], 20), ("m", ["P3"], 20), ("m", ["P0"], 0), ("m", ["P0"], True), ("m", ["P0"], 20, -1), ("m", ["P0"], 20, True)):
             with self.assertRaises(ValueError):
                 self.index.pending(*bad)
 

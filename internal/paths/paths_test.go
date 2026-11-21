@@ -73,3 +73,27 @@ func TestResolveIgnoresRelativeXDG(t *testing.T) {
 		t.Fatalf("config = %q, want the default", p.Config)
 	}
 }
+
+func TestReviewPathsFailClosedWithoutRuntimeDir(t *testing.T) {
+	t.Setenv("HOME", "/home/me")
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	p, err := Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.ReviewSocket() != "" {
+		t.Errorf("socket = %q, want empty without XDG_RUNTIME_DIR", p.ReviewSocket())
+	}
+	if want := filepath.FromSlash("/home/me/.local/state/bud/approvals.json"); p.Approvals() != want {
+		t.Errorf("approvals = %q, want %q", p.Approvals(), want)
+	}
+
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	p, _ = Resolve()
+	if want := filepath.FromSlash("/run/user/1000/bud/review.sock"); p.ReviewSocket() != want {
+		t.Errorf("socket = %q, want %q", p.ReviewSocket(), want)
+	}
+	if want := filepath.FromSlash("/home/me/.local/state/bud/review.secret"); p.ReviewSecret() != want {
+		t.Errorf("secret = %q, want %q", p.ReviewSecret(), want)
+	}
+}

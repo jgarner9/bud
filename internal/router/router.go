@@ -34,6 +34,10 @@ const maxBody = 10 << 20
 // RolePrefix starts a model id that names a role instead of a model
 const RolePrefix = "bud/"
 
+// RaisedHeader names the privacy rule that raised a request's tier, so a
+// client can say why a request stayed local
+const RaisedHeader = "X-Bud-Privacy-Raised"
+
 // endpoints are the paths the router forwards, each appended to the
 // provider's endpoint
 var endpoints = map[string]string{
@@ -53,6 +57,7 @@ type target struct {
 // Router serves the OpenAI API over a registry's providers
 type Router struct {
 	reg     *registry.Registry
+	rules   []registry.CompiledRule
 	targets map[string]target // by registry model id
 	proxy   *httputil.ReverseProxy
 	ledger  *Ledger
@@ -115,7 +120,11 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 		}
 		keys[pid] = getenv(v)
 	}
-	rt := &Router{reg: reg, targets: map[string]target{}, ledger: opts.Ledger, cap: opts.TopUpCap, logf: opts.Logf, noted: map[string]bool{}}
+	rules, err := reg.CompileRules()
+	if err != nil {
+		return nil, err
+	}
+	rt := &Router{reg: reg, rules: rules, targets: map[string]target{}, ledger: opts.Ledger, cap: opts.TopUpCap, logf: opts.Logf, noted: map[string]bool{}}
 	if rt.logf == nil {
 		rt.logf = log.Printf
 	}
@@ -165,6 +174,9 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 		ModifyResponse: func(resp *http.Response) error {
 			id := resp.Request.Context().Value(ctxKey{}).(*resolved).id
 			resp.Header.Set("X-Bud-Model", id)
+			// ours was set on the writer before the proxy copied the upstream's
+			// headers in, so only a rule of this router can name one
+			resp.Header.Del(RaisedHeader)
 			if f := resp.Request.Context().Value(ctxKey{}).(*resolved).fallback; f != "" {
 				resp.Header.Set("X-Bud-Fallback", f)
 			}
@@ -314,6 +326,11 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "the request body isn't a JSON object")
 		return
+	}
+	if raised, rule := registry.Raise(tier, rt.rules, texts(fields)); rule != "" {
+		rt.logf("router: rule %s raised a %s request to %s", rule, tier, raised)
+		w.Header().Set(RaisedHeader, rule)
+		tier = raised
 	}
 	var model string
 	if err := json.Unmarshal(fields["model"], &model); err != nil || model == "" {

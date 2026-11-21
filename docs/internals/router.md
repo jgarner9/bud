@@ -1,6 +1,6 @@
 # The router
 
-`bud router` (`internal/router`, `internal/cli/router.go`) is the home server's one OpenAI-compatible endpoint over the model registry's providers (Suite D70, D71, D98). Its unit is in `server/router/`. It routes, proxies, enforces privacy tiers, tracks spend and caps the month's top-up. It also tracks provider health and falls back when a model is down (Suite D104). Not built yet: the classifier, ranking, and Lemonade behind it (Suite D98).
+`bud router` (`internal/router`, `internal/cli/router.go`) is the home server's one OpenAI-compatible endpoint over the model registry's providers (Suite D70, D71, D98). Its unit is in `server/router/`. It routes, proxies, enforces privacy tiers, tracks spend and caps the month's top-up. It also tracks provider health and falls back when a model is down (Suite D104). The privacy rules are built (Suite D112). Not built yet: the classifier, ranking, and Lemonade behind it (Suite D98).
 
 ## Endpoints
 
@@ -14,6 +14,10 @@ The body is read up to 10 MiB (413 past it) and decoded into `map[string]json.Ra
 ## Privacy tiers
 
 The tier comes from `X-Bud-Privacy` (`registry.RequestTier`, shared with the MCP gateway): P0, P1 or P2, and a missing header is P0, so an unconfigured client fails closed (Suite D23, D81). Any other value is a 400 naming the valid ones. A model serves a request only if the tier is in its `privacy` list (`Model.Allows`); otherwise an explicit model id, or a role with no eligible member, is a 403 that points at `GET /v1/models` with that header. The header is stripped before forwarding, and every proxied response carries `X-Bud-Model: <registry model id>`, replacing any upstream header of that name. As at the gateway, the header is a guard against private text leaking by accident, not authentication: a caller on the tailnet can send any tier, and the tailnet is the authentication (Suite D72). Devices get their header from `bud sync`.
+
+## Privacy rules
+
+`registry.privacy_rules` (Suite D23, D112) can only raise the tier, never lower it. `New` compiles them (`Registry.CompileRules`, sorted by name; a pattern that doesn't compile fails `New`). `ServeHTTP` applies them right after the header is read and the body decoded, before `model` is looked at, so the explicit-model 403, role picking and the P0 fallback all use the raised tier. `texts` (`rules.go`) lists what they read: every chat message's `content` of any role (a string, or the text of each `{"type":"text"}` part), a completion's `prompt` and an embedding's `input` (a string or an array of strings; token arrays are skipped). Whatever it can't read is skipped, since the upstream rejects a malformed body anyway. Each text is matched on its own. `registry.Raise` returns the most private tier and the first rule, by name, that gave it. A raised request's response carries `X-Bud-Privacy-Raised: <rule>`, also on a 403 or 503, and an upstream header of that name is deleted; a request no rule raised carries none. The log line is `router: rule <name> raised a <tier> request to <tier>`, and no request text is ever logged. `GET /v1/models` has no body, so no rule applies there. The classifier (Suite D67), which would raise a tier by judgement, is still not built.
 
 ## Keys and headers
 

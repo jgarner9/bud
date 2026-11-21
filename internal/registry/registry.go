@@ -76,6 +76,19 @@ type Registry struct {
 	Providers map[string]Provider `json:"providers"`
 	Models    map[string]Model    `json:"models"`
 	Roles     map[string]Role     `json:"roles"`
+	// PrivacyRules raise a request's privacy tier (Suite D23, D112)
+	PrivacyRules map[string]PrivacyRule `json:"privacy_rules,omitempty"`
+}
+
+// PrivacyRule raises a request's privacy tier when its pattern matches any
+// one text of the request (Suite D23, D112). Rules only raise, never lower
+type PrivacyRule struct {
+	// Match is an RE2 regular expression (Go's regexp syntax), matched
+	// against each message's text on its own; use (?i) for any case
+	Match string `json:"match"`
+	// Tier is P0 or P1: what a matching request becomes, unless it is
+	// already more private
+	Tier string `json:"tier"`
 }
 
 // Provider is an endpoint models are served from
@@ -240,8 +253,8 @@ func decodeError(b []byte, dec *json.Decoder, err error) error {
 	return fmt.Errorf("line %d: %w", bytes.Count(b[:off], []byte("\n"))+1, err)
 }
 
-// Merge returns base with overlay on top: an overlay provider, model or role
-// replaces the base entry of the same ID whole, and new IDs are added
+// Merge returns base with overlay on top: an overlay provider, model, role or
+// privacy rule replaces the base entry of the same ID whole, and new IDs are added
 func Merge(base, overlay *Registry) (*Registry, error) {
 	if overlay == nil {
 		return base, nil
@@ -250,10 +263,11 @@ func Merge(base, overlay *Registry) (*Registry, error) {
 		return nil, fmt.Errorf("the overlay registry is version %d but the public one is %d; bring the overlay's version in line", overlay.Version, base.Version)
 	}
 	out := &Registry{
-		Version:   base.Version,
-		Providers: merged(base.Providers, overlay.Providers),
-		Models:    merged(base.Models, overlay.Models),
-		Roles:     merged(base.Roles, overlay.Roles),
+		Version:      base.Version,
+		Providers:    merged(base.Providers, overlay.Providers),
+		Models:       merged(base.Models, overlay.Models),
+		Roles:        merged(base.Roles, overlay.Roles),
+		PrivacyRules: merged(base.PrivacyRules, overlay.PrivacyRules),
 	}
 
 	return out, nil
@@ -390,12 +404,36 @@ func (r *Registry) Validate() error {
 		checkRole(r, name, role, add)
 	}
 
+	for name, rule := range r.PrivacyRules {
+		checkPrivacyRule(name, rule, add)
+	}
+
 	if len(errs) == 0 {
 		return nil
 	}
 	sort.Strings(errs)
 
 	return fmt.Errorf("%d %s:%s%s", len(errs), plural(len(errs), "problem"), errorSep, strings.Join(errs, errorSep))
+}
+
+// checkPrivacyRule checks one privacy rule's name, pattern and tier
+func checkPrivacyRule(name string, rule PrivacyRule, add func(string, ...any)) {
+	at := "privacy_rules." + name
+	if !idRe.MatchString(name) {
+		add("%s: an ID is lowercase letters, digits, '.', '_' and '-'", at)
+	}
+	if rule.Match == "" {
+		add("%s: match is empty; give it a regular expression", at)
+	} else if _, err := regexp.Compile(rule.Match); err != nil {
+		add("%s: match doesn't compile: %v; it is Go's RE2 syntax", at, err)
+	}
+	switch rule.Tier {
+	case "P0", "P1":
+	case "P2":
+		add("%s: tier P2 can't raise anything, since P2 is the least private; use P0 or P1", at)
+	default:
+		add("%s: tier is %q; use P0 or P1", at, rule.Tier)
+	}
 }
 
 // checkModelCaps checks the capability fields (Suite D64, D65)

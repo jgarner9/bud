@@ -119,4 +119,15 @@
     // qwen-35b is the only one that may see a P0 image
     "vision": { "needs": ["image"], "pool": ["qwen-35b", "qwen3.8-flash", "glm-5.3-flash", "kimi-k3.1-pro", "gemini-4-argon"] },
   },
+
+  // Rules that raise a request's privacy tier, applied by the router to
+  // every message before it picks a model (Suite D23, D112). They only
+  // raise: a request already more private stays as it is. Personal rules
+  // (names, places, accounts) go in the overlay's registry.jsonc.
+  "privacy_rules": {
+    // start a message with #private to keep the whole conversation local
+    "marker": { "match": "(?i)^\\s*#private\\b", "tier": "P0" },
+    // a pasted private key is a secret (Suite D23)
+    "private-key": { "match": "-----BEGIN [A-Z ]*PRIVATE KEY-----", "tier": "P0" },
+  },
 }

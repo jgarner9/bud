@@ -104,10 +104,14 @@ class ServiceTest(unittest.TestCase):
             self.assertEqual(200, request(AGENT, "/reference", {"id": data["id"], "source": "synthetic", "reference_key": "ref"})[0])
             if os.environ.get("VEC_EXTENSION"):
                 pending = request(AGENT, "/vector_pending", {"model": "synthetic"})
-                self.assertEqual((200, [{"id": data["id"], "privacy": "P0", "body": "private orchard"}]), (pending[0], pending[1]["records"]))
+                body_hash = hashlib.sha256(b"private orchard").hexdigest()
+                self.assertEqual((200, [{"id": data["id"], "privacy": "P0", "body": "private orchard", "body_hash": body_hash}]), (pending[0], pending[1]["records"]))
+                stale = {"id": data["id"], "model": "synthetic", "values": [0.1, 0.2], "body_hash": "0" * 64}
+                self.assertEqual(409, request(AGENT, "/vector_put", stale)[0])
+                self.assertEqual(400, request(AGENT, "/vector_put", {**stale, "body_hash": 1})[0])
                 self.assertEqual(403, request(CLOUD, "/vector_pending", {"model": "synthetic"})[0])
                 self.assertEqual(400, request(AGENT, "/vector_pending", {"model": "synthetic", "privacy": ["P2"]})[0])
-                self.assertEqual(200, request(AGENT, "/vector_put", {"id": data["id"], "model": "synthetic", "values": [0.1, 0.2]})[0])
+                self.assertEqual(200, request(AGENT, "/vector_put", {**stale, "body_hash": body_hash})[0])
                 self.assertEqual([], request(AGENT, "/vector_pending", {"model": "synthetic"})[1]["records"])
                 status, hits = request(AGENT, "/vector_search", {"model": "synthetic", "values": [0.1, 0.2]})
                 self.assertEqual(200, status)

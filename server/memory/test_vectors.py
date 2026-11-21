@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 from store import Store
-from vectors import VectorIndex
+from vectors import StaleRecord, VectorIndex
 
 
 @unittest.skipUnless(os.environ.get("VEC_EXTENSION"), "sqlite-vec extension not configured")
@@ -58,9 +58,15 @@ class VectorTests(unittest.TestCase):
         self.assertEqual([r[0] for r in self.index.pending("old", ["P0"])], [edited, fresh])
         # a new model starts with every approved record pending, then drains
         self.assertEqual([r[0] for r in self.index.pending("new", ["P0"])], [done, edited, fresh])
-        self.assertEqual(self.index.pending("new", ["P0"], limit=1), [(done, "P0", "embedded")])
-        for rid, _, _ in self.index.pending("new", ["P0"]):
-            self.index.put(rid, "new", [0, 1, 0])
+        first = self.index.pending("new", ["P0"], limit=1)
+        self.assertEqual([row[:3] for row in first], [(done, "P0", "embedded")])
+        # an edit between reading a record and storing its vector is refused
+        self.store.db.execute("UPDATE records SET body = ?, body_hash = ? WHERE id = ?", ("again", "newer", done))
+        with self.assertRaises(StaleRecord):
+            self.index.put(done, "new", [0, 1, 0], first[0][3])
+        self.assertIn(done, [r[0] for r in self.index.pending("new", ["P0"])])
+        for rid, _, _, body_hash in self.index.pending("new", ["P0"]):
+            self.index.put(rid, "new", [0, 1, 0], body_hash)
         self.assertEqual(self.index.pending("new", ["P0"]), [])
         self.assertNotIn(staged, [r[0] for r in self.index.pending("new", ["P0", "P2"])])
         for bad in ((" ", ["P0"], 20), ("m", [], 20), ("m", ["P3"], 20), ("m", ["P0"], 0), ("m", ["P0"], True)):

@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler
 
 from store import KINDS, PRIVACY_TIERS, Store
 from history import ensure_history, record_reference, export_approved, export_recovery, restore_recovery
-from vectors import VectorIndex
+from vectors import StaleRecord, VectorIndex
 from retrieval import retrieve
 
 MAX_REQUEST = 65536
@@ -141,8 +141,12 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     for row in rows
                 ]}
             elif action in ("vector_put", "reference"):
-                expected = {"id", "model", "values"} if action == "vector_put" else {"id", "source", "reference_key"}
-                if set(payload) != expected or type(payload["id"]) is not int:
+                if action == "vector_put":
+                    keys = set(payload) - {"body_hash"}
+                    valid = keys == {"id", "model", "values"} and isinstance(payload.get("body_hash", ""), str)
+                else:
+                    valid = set(payload) == {"id", "source", "reference_key"}
+                if not valid or type(payload["id"]) is not int:
                     raise ValueError()
                 row = self.server.store.db.execute(
                     "SELECT privacy, state FROM records WHERE id = ?", (payload["id"],)
@@ -151,7 +155,13 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     self.reply(404, {"error": "record unavailable"})
                     return
                 if action == "vector_put":
-                    VectorIndex(self.server.store.db).put(payload["id"], payload["model"], payload["values"])
+                    try:
+                        VectorIndex(self.server.store.db).put(
+                            payload["id"], payload["model"], payload["values"], payload.get("body_hash")
+                        )
+                    except StaleRecord:
+                        self.reply(409, {"error": "record changed since it was read; embed it again"})
+                        return
                     result = {"stored": True}
                 else:
                     result = {"id": record_reference(self.server.store.db, payload["id"], payload["source"], payload["reference_key"])}
@@ -177,7 +187,7 @@ class MemoryHandler(BaseHTTPRequestHandler):
                 rows = VectorIndex(self.server.store.db).pending(
                     payload["model"], policy["tiers"], payload.get("limit", 20)
                 )
-                result = {"records": [dict(zip(("id", "privacy", "body"), row)) for row in rows]}
+                result = {"records": [dict(zip(("id", "privacy", "body", "body_hash"), row)) for row in rows]}
             elif action == "export":
                 if payload:
                     raise ValueError()

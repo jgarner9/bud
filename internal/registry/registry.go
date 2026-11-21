@@ -39,6 +39,23 @@ var APIs = []string{"openai"}
 // Tiers are the privacy tiers a model may be given (Suite D23)
 var Tiers = []string{"P0", "P1", "P2"}
 
+// PrivacyHeader carries a request's privacy tier to the MCP gateway and the
+// router
+const PrivacyHeader = "X-Bud-Privacy"
+
+// RequestTier reads a PrivacyHeader value. A missing one is P0, so a client
+// nobody configured fails closed (Suite D81); ok is false for any other
+// value than a tier.
+func RequestTier(v string) (tier string, ok bool) {
+	if v == "" {
+		return "P0", true
+	}
+	return v, slices.Contains(Tiers, v)
+}
+
+// Allows reports whether the model may see requests of the tier
+func (m Model) Allows(tier string) bool { return slices.Contains(m.Privacy, tier) }
+
 // Costs are the cost tiers (Suite D24)
 var Costs = []string{"C0", "C1", "C2"}
 

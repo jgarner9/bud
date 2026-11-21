@@ -1,8 +1,8 @@
 // Package router is the home server's single OpenAI-compatible endpoint
 // (Suite D70, D71, D98): it lists every registry provider's models and
 // forwards chat, completion and embedding requests to the provider that
-// serves the one asked for. This slice only routes and proxies; privacy
-// tiers, spend caps and ranking come later. See docs/internals/router.md
+// serves the one asked for, and only to a model that may see the request's
+// privacy tier. Spend caps and ranking come later. See docs/internals/router.md
 package router
 
 import (
@@ -80,6 +80,12 @@ func New(reg *registry.Registry, getenv func(string) string) (*Router, error) {
 		rt.targets[id] = target{base: base, name: m.Name, key: keys[m.Provider]}
 	}
 	rt.proxy = &httputil.ReverseProxy{
+		// Set replaces any upstream X-Bud-Model, so only the router says
+		// which model answered
+		ModifyResponse: func(resp *http.Response) error {
+			resp.Header.Set("X-Bud-Model", resp.Request.Context().Value(ctxKey{}).(*resolved).id)
+			return nil
+		},
 		Rewrite: rt.rewrite,
 		// -1 flushes after every write, so SSE chunks arrive as they're made
 		FlushInterval: -1,
@@ -103,6 +109,8 @@ func (rt *Router) rewrite(pr *httputil.ProxyRequest) {
 	// business, not the provider's
 	pr.Out.Header.Del("Authorization")
 	pr.Out.Header.Del("Cookie")
+	// the tier was this router's business; providers never see it
+	pr.Out.Header.Del(registry.PrivacyHeader)
 	if t.key != "" {
 		pr.Out.Header.Set("Authorization", "Bearer "+t.key)
 	}
@@ -112,18 +120,24 @@ func (rt *Router) rewrite(pr *httputil.ProxyRequest) {
 }
 
 type resolved struct {
+	id   string
 	url  *url.URL
 	key  string
 	body []byte
 }
 
 func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	tier, valid := registry.RequestTier(r.Header.Get(registry.PrivacyHeader))
+	if !valid {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", fmt.Sprintf("%s is %q; use P0, P1 or P2", registry.PrivacyHeader, tier))
+		return
+	}
 	if r.URL.Path == "/v1/models" {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			writeError(w, http.StatusMethodNotAllowed, "invalid_request_error", "use GET")
 			return
 		}
-		rt.models(w)
+		rt.models(w, tier)
 		return
 	}
 	suffix, ok := endpoints[r.URL.Path]
@@ -159,11 +173,23 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	id := model
 	if role, ok := strings.CutPrefix(model, RolePrefix); ok {
-		id = rt.reg.Roles[role].Default()
+		ro, known := rt.reg.Roles[role]
+		if !known || ro.Default() == "" {
+			writeError(w, http.StatusNotFound, "invalid_request_error", fmt.Sprintf("no model %q; GET /v1/models lists them", model))
+			return
+		}
+		if id = rt.pick(ro, tier); id == "" {
+			writeError(w, http.StatusForbidden, "invalid_request_error", fmt.Sprintf("no model in role %s takes %s requests; GET /v1/models with %s: %s lists what does", role, tier, registry.PrivacyHeader, tier))
+			return
+		}
 	}
 	t, ok := rt.targets[id]
 	if !ok {
 		writeError(w, http.StatusNotFound, "invalid_request_error", fmt.Sprintf("no model %q; GET /v1/models lists them", model))
+		return
+	}
+	if !rt.reg.Models[id].Allows(tier) {
+		writeError(w, http.StatusForbidden, "invalid_request_error", fmt.Sprintf("model %s can't take %s requests; GET /v1/models with %s: %s lists the ones that can", id, tier, registry.PrivacyHeader, tier))
 		return
 	}
 	name, _ := json.Marshal(t.name)
@@ -182,11 +208,25 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	u := *t.base
 	u.Path = strings.TrimSuffix(u.Path, "/") + suffix
 	u.RawPath = ""
-	res := &resolved{url: &u, key: t.key, body: body}
+	res := &resolved{id: id, url: &u, key: t.key, body: body}
 	rt.proxy.ServeHTTP(w, r.WithContext(contextWith(r, res)))
 }
 
-func (rt *Router) models(w http.ResponseWriter) {
+// pick chooses a role's model for a tier: the pin if it may see the tier,
+// else the first member that may. "" means none can.
+func (rt *Router) pick(ro registry.Role, tier string) string {
+	if m, ok := rt.reg.Models[ro.Pin]; ok && ro.Pin != "" && m.Allows(tier) {
+		return ro.Pin
+	}
+	for _, id := range ro.Members() {
+		if m, ok := rt.reg.Models[id]; ok && m.Allows(tier) {
+			return id
+		}
+	}
+	return ""
+}
+
+func (rt *Router) models(w http.ResponseWriter, tier string) {
 	type entry struct {
 		ID      string `json:"id"`
 		Object  string `json:"object"`
@@ -194,10 +234,13 @@ func (rt *Router) models(w http.ResponseWriter) {
 	}
 	data := []entry{}
 	for id, m := range rt.reg.Models {
+		if !m.Allows(tier) {
+			continue
+		}
 		data = append(data, entry{id, "model", m.Provider})
 	}
 	for role, ro := range rt.reg.Roles {
-		if ro.Default() != "" {
+		if rt.pick(ro, tier) != "" {
 			data = append(data, entry{RolePrefix + role, "model", "bud"})
 		}
 	}

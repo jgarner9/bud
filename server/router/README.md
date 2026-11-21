@@ -1,6 +1,6 @@
 # server/router/
 
-The home server's model router (Suite D70, D71): `bud router` behind a systemd user unit. It is one OpenAI-compatible endpoint over every provider in the model registry, so a device points its client at the router and names a model (or `bud/<role>`) without holding any provider key. This first slice only routes and proxies; privacy tiers, spend caps and ranking are not built. How it works is in [docs/internals/router.md](https://github.com/jgarner9/bud/blob/main/docs/internals/router.md).
+The home server's model router (Suite D70, D71): `bud router` behind a systemd user unit. It is one OpenAI-compatible endpoint over every provider in the model registry, so a device points its client at the router and names a model (or `bud/<role>`) without holding any provider key. It enforces privacy tiers per request (the `X-Bud-Privacy` header, P0 when missing); spend caps and ranking are not built. How it works is in [docs/internals/router.md](https://github.com/jgarner9/bud/blob/main/docs/internals/router.md).
 
 | File | What it is |
 | --- | --- |

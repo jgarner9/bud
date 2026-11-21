@@ -9,7 +9,7 @@ The home server's calendar MCP server (Suite D82): `bud calendar-mcp` behind a s
 
 ## Setting it up
 
-1. Make an app-specific password for the Apple ID (appleid.apple.com, Sign-In and Security, App-Specific Passwords) and save it, with the Apple ID's email as the username, in the Bud vault.
+1. Make an app-specific password for the Apple ID (appleid.apple.com, Sign-In and Security, App-Specific Passwords) and save it in the Bud vault as an item named `iCloud`, with the Apple ID's email as the username. The mail server (`server/mail-mcp/`) reads the same item.
 2. Put the env file at `~/.config/bud-server/calendar-mcp.env`, mode 0600, with the item's `op://` paths. The service account's token file is the one the gateway already uses.
 3. Install and start the unit with the commands at the top of `bud-calendar-mcp.service`. Add `--tz <zone>` to its `ExecStart` if the server's own zone isn't Jason's.
 4. Add the `calendar` entry from `server/mcp-gateway/mcp-gateway.example.json` to the gateway's config, and restart the gateway.

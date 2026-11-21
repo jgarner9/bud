@@ -133,7 +133,10 @@ class PromptsTest(unittest.TestCase):
         clock.now += 1
         ps.reserve("s", "r3", "+1", False)
         self.assertEqual(len(ps), 2)
-        self.assertIsNone(ps.by_code(p1.code))
+        # r1's code is free once it's gone, so r3 may draw it: what matters
+        # is that the code no longer finds r1
+        found = ps.by_code(p1.code)
+        self.assertTrue(found is None or found.request_id != "r1", found)
 
     def test_drop_leaves_a_newer_prompt_with_the_same_code(self):
         ps = a.Prompts(ttl=60, pick=lambda n: 5)

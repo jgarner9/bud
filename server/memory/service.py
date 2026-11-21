@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler
 
 from store import KINDS, PRIVACY_TIERS, Store
 from history import ensure_history, record_reference, export_approved, export_recovery, restore_recovery
-from vectors import VectorIndex
+from vectors import StaleRecord, VectorIndex
 from retrieval import retrieve
 
 MAX_REQUEST = 65536
@@ -28,7 +28,7 @@ class MemoryServer(socketserver.UnixStreamServer):
             or not policy["tiers"]
             or any(tier not in ("P0", "P1", "P2") for tier in policy["tiers"])
             or not isinstance(policy.get("actions"), list)
-            or any(action not in ("stage", "search", "approve", "vector_put", "vector_search", "retrieve", "reference", "export", "backup", "restore") for action in policy["actions"])
+            or any(action not in ("stage", "search", "approve", "vector_put", "vector_search", "vector_pending", "retrieve", "reference", "export", "backup", "restore") for action in policy["actions"])
             or (any(action in policy["actions"] for action in ("approve", "backup", "restore")) and "stage" in policy["actions"])
             or (any(action in policy["actions"] for action in ("backup", "restore")) and set(policy["tiers"]) != {"P0", "P1", "P2"})
             for token, policy in clients.items()
@@ -103,7 +103,7 @@ class MemoryHandler(BaseHTTPRequestHandler):
         if policy is None:
             self.reply(401, {"error": "unauthorized"})
             return
-        if self.path not in ("/stage", "/search", "/approve", "/vector_put", "/vector_search", "/retrieve", "/reference", "/export", "/backup", "/restore"):
+        if self.path not in ("/stage", "/search", "/approve", "/vector_put", "/vector_search", "/vector_pending", "/retrieve", "/reference", "/export", "/backup", "/restore"):
             self.reply(404, {"error": "unknown endpoint"})
             return
         action = self.path[1:]
@@ -141,8 +141,12 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     for row in rows
                 ]}
             elif action in ("vector_put", "reference"):
-                expected = {"id", "model", "values"} if action == "vector_put" else {"id", "source", "reference_key"}
-                if set(payload) != expected or type(payload["id"]) is not int:
+                if action == "vector_put":
+                    keys = set(payload) - {"body_hash"}
+                    valid = keys == {"id", "model", "values"} and isinstance(payload.get("body_hash", ""), str)
+                else:
+                    valid = set(payload) == {"id", "source", "reference_key"}
+                if not valid or type(payload["id"]) is not int:
                     raise ValueError()
                 row = self.server.store.db.execute(
                     "SELECT privacy, state FROM records WHERE id = ?", (payload["id"],)
@@ -151,7 +155,13 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     self.reply(404, {"error": "record unavailable"})
                     return
                 if action == "vector_put":
-                    VectorIndex(self.server.store.db).put(payload["id"], payload["model"], payload["values"])
+                    try:
+                        VectorIndex(self.server.store.db).put(
+                            payload["id"], payload["model"], payload["values"], payload.get("body_hash")
+                        )
+                    except StaleRecord:
+                        self.reply(409, {"error": "record changed since it was read; embed it again"})
+                        return
                     result = {"stored": True}
                 else:
                     result = {"id": record_reference(self.server.store.db, payload["id"], payload["source"], payload["reference_key"])}
@@ -171,6 +181,13 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     payload["model"], payload["values"], policy["tiers"], payload.get("limit", 20)
                 )
                 result = {"records": [dict(zip(("id", "source", "kind", "privacy", "body", "created_at", "distance"), row)) for row in rows]}
+            elif action == "vector_pending":
+                if set(payload) - {"model", "limit"} or "model" not in payload:
+                    raise ValueError()
+                rows = VectorIndex(self.server.store.db).pending(
+                    payload["model"], policy["tiers"], payload.get("limit", 20)
+                )
+                result = {"records": [dict(zip(("id", "privacy", "body", "body_hash"), row)) for row in rows]}
             elif action == "export":
                 if payload:
                     raise ValueError()

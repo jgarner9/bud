@@ -6,6 +6,10 @@ import re
 import struct
 
 
+class StaleRecord(Exception):
+    """The record's body changed after its text was read for embedding."""
+
+
 class VectorIndex:
     def __init__(self, db):
         self.db = db
@@ -38,7 +42,10 @@ class VectorIndex:
         except (OverflowError, struct.error) as exc:
             raise ValueError("embedding values must fit float32") from exc
 
-    def put(self, record_id, model, values):
+    def put(self, record_id, model, values, body_hash=None):
+        """Store a record's vector by model. A re-embed passes the body_hash
+        that pending returned, so a record edited in between is refused
+        (StaleRecord) instead of having an old body's vector marked current."""
         if not isinstance(model, str) or not model.strip() or len(model) > 256:
             raise ValueError("model must be a non-empty string of at most 256 characters")
         packed = self._packed(values)
@@ -47,6 +54,8 @@ class VectorIndex:
             record = self.db.execute("SELECT body_hash FROM records WHERE id = ?", (record_id,)).fetchone()
             if record is None:
                 raise KeyError(record_id)
+            if body_hash is not None and body_hash != record[0]:
+                raise StaleRecord(record_id)
             existing = self.db.execute("SELECT dimensions, table_name FROM embedding_models WHERE model = ?", (model,)).fetchone()
             if existing and existing != (len(values), table):
                 raise ValueError("embedding dimensions differ from the model's index")
@@ -58,6 +67,29 @@ class VectorIndex:
             self.db.execute("""INSERT INTO embedding_provenance (record_id, model, body_hash)
                 VALUES (?, ?, ?) ON CONFLICT(record_id, model)
                 DO UPDATE SET body_hash = excluded.body_hash""", (record_id, model, record[0]))
+
+    def pending(self, model, privacy, limit=20):
+        """Approved records in the allowed tiers that have no current vector
+        for model: never embedded by it, or edited since. A client re-embeds
+        by embedding these and calling put until none are left, which is how
+        a new model or new dims is rolled out (Suite D52). Each row carries
+        the body_hash to pass back to put."""
+        if not isinstance(model, str) or not model.strip() or len(model) > 256:
+            raise ValueError("model must be a non-empty string of at most 256 characters")
+        if not privacy or any(p not in ("P0", "P1", "P2") for p in privacy):
+            raise ValueError("privacy must specify allowed tiers")
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        marks = ",".join("?" for _ in privacy)
+        return self.db.execute(
+            f"""SELECT r.id, r.privacy, r.body, r.body_hash
+                FROM records r LEFT JOIN embedding_provenance p
+                  ON p.record_id = r.id AND p.model = ?
+                WHERE r.state = 'approved' AND r.privacy IN ({marks})
+                  AND (p.body_hash IS NULL OR p.body_hash != r.body_hash)
+                ORDER BY r.id LIMIT ?""",
+            (model, *privacy, limit),
+        ).fetchall()
 
     def search(self, model, values, privacy, limit=20):
         packed = self._packed(values)

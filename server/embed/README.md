@@ -30,7 +30,7 @@ The build script checks that the tag still points at the pinned commit and that 
 
 ## Changing the model
 
-Every stored vector records the model that made it, and vectors from different models are never compared (each model gets its own index in the memory service). A new model, a new quantization or new dims is therefore a re-embed: change the pins here, give the unit's `--alias` and the registry's model `name` a new value together (so new vectors land in a new index rather than next to old ones), set `dims`, and re-embed memory. `bud doctor --net` warns when the server returns a different vector size from the registry's `dims`, the sign that the server and the registry disagree; weights with the same size and the same alias can't be told apart, which is why the alias has to change.
+Every stored vector records the model that made it, and vectors from different models are never compared (each model gets its own index in the memory service, and `POST /vector_pending` lists what a model still has to embed; see `server/memory/README.md`). A new model, a new quantization or new dims is therefore a re-embed: change the pins here, give the unit's `--alias` and the registry's model `name` a new value together (so new vectors land in a new index rather than next to old ones), set `dims`, and re-embed memory. `bud doctor --net` warns when the server returns a different vector size from the registry's `dims`, the sign that the server and the registry disagree; weights with the same size and the same alias can't be told apart, which is why the alias has to change.
 
 ## Measured
 

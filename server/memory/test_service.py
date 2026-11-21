@@ -58,7 +58,7 @@ class ServiceTest(unittest.TestCase):
 
             def serve():
                 server = MemoryServer(path, str(Path(tmp) / "memory.db"), {
-                    AGENT: {"actions": ["stage", "search", "vector_put", "vector_search", "retrieve", "reference"], "tiers": ["P0"]},
+                    AGENT: {"actions": ["stage", "search", "vector_put", "vector_search", "vector_pending", "retrieve", "reference"], "tiers": ["P0"]},
                     REVIEWER: {"actions": ["approve", "search"], "tiers": ["P0"]},
                     CLOUD: {"actions": ["search", "retrieve", "export", "reference"], "tiers": ["P1", "P2"]},
                     BACKUP: {"actions": ["backup", "restore"], "tiers": ["P0", "P1", "P2"]},
@@ -103,7 +103,16 @@ class ServiceTest(unittest.TestCase):
             self.assertEqual(403, request(CLOUD, "/stage", record)[0])
             self.assertEqual(200, request(AGENT, "/reference", {"id": data["id"], "source": "synthetic", "reference_key": "ref"})[0])
             if os.environ.get("VEC_EXTENSION"):
-                self.assertEqual(200, request(AGENT, "/vector_put", {"id": data["id"], "model": "synthetic", "values": [0.1, 0.2]})[0])
+                pending = request(AGENT, "/vector_pending", {"model": "synthetic"})
+                body_hash = hashlib.sha256(b"private orchard").hexdigest()
+                self.assertEqual((200, [{"id": data["id"], "privacy": "P0", "body": "private orchard", "body_hash": body_hash}]), (pending[0], pending[1]["records"]))
+                stale = {"id": data["id"], "model": "synthetic", "values": [0.1, 0.2], "body_hash": "0" * 64}
+                self.assertEqual(409, request(AGENT, "/vector_put", stale)[0])
+                self.assertEqual(400, request(AGENT, "/vector_put", {**stale, "body_hash": 1})[0])
+                self.assertEqual(403, request(CLOUD, "/vector_pending", {"model": "synthetic"})[0])
+                self.assertEqual(400, request(AGENT, "/vector_pending", {"model": "synthetic", "privacy": ["P2"]})[0])
+                self.assertEqual(200, request(AGENT, "/vector_put", {**stale, "body_hash": body_hash})[0])
+                self.assertEqual([], request(AGENT, "/vector_pending", {"model": "synthetic"})[1]["records"])
                 status, hits = request(AGENT, "/vector_search", {"model": "synthetic", "values": [0.1, 0.2]})
                 self.assertEqual(200, status)
                 self.assertEqual(data["id"], hits["records"][0]["id"])

@@ -102,6 +102,7 @@ func TestTheRouterMustBeALoopbackOrTailnetIPWithNoPath(t *testing.T) {
 		"http://192.168.1.2:8795":           "the router listens on the tailnet only",
 		"http://100.64.0.1":                 "give the router's port, such as :8795",
 		"http://100.64.0.1:8795/v1":         "bud adds /v1",
+		"http://100.64.0.1:8795#x":          "bud adds /v1",
 	} {
 		_, err := resolve(t, `{"bud": {"router": "`+raw+`"}}`)
 		if err == nil || !strings.Contains(err.Error(), "bud.router") || !strings.Contains(err.Error(), want) {

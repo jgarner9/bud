@@ -473,7 +473,7 @@ func checkService(raw, name, port, path string) error {
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return fmt.Errorf("%q isn't an http(s) URL such as http://<tailnet IP>:%s", raw, port)
 	}
-	if u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.User != nil {
+	if u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
 		return fmt.Errorf("%q: give only the scheme, address and port; %s", raw, path)
 	}
 	ip, err := netip.ParseAddr(strings.Trim(u.Hostname(), "[]"))

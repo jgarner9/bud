@@ -1,0 +1,22 @@
+# Account.Reply reads the original's header. Hand-written (see login_list.imap)
+S: * OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] IMAP4 service ready
+C: a1 LOGIN "someone@example.com" "app-pass"
+S: a1 OK user logged in
+C: a2 EXAMINE "INBOX"
+S: * 3 EXISTS
+S: a2 OK [READ-ONLY] EXAMINE completed
+C: a3 UID FETCH 7 (UID FLAGS RFC822.SIZE INTERNALDATE BODY.PEEK[HEADER.FIELDS (DATE FROM TO CC SUBJECT MESSAGE-ID IN-REPLY-TO REFERENCES REPLY-TO)])
+S: * 1 FETCH (UID 7 FLAGS (\Seen) RFC822.SIZE 100 INTERNALDATE " 3-Nov-2026 09:15:00 -0600" BODY[HEADER.FIELDS (DATE FROM TO CC SUBJECT MESSAGE-ID IN-REPLY-TO REFERENCES REPLY-TO)] {#}
+L: From: Sam Lee <sam@example.com>
+L: To: someone@example.com, Pat <pat@example.com>
+L: Cc: lee@example.com
+L: Subject: Lunch?
+L: Message-ID: <m7@example.com>
+L: References: <m1@example.com>
+L:  <m5@example.com>
+L:
+S: )
+S: a3 OK FETCH completed
+C: a4 LOGOUT
+S: * BYE logging out
+S: a4 OK LOGOUT completed

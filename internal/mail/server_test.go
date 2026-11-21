@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	netmail "net/mail"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -91,6 +92,12 @@ type fakeAcct struct {
 	body    Body
 	err     error
 
+	moved     []Moved
+	acts      []Action
+	sent      *Outgoing
+	gotUIDs   []uint32
+	gotID     string
+	gotSince  time.Time
 	gotFolder string
 	gotCr     Criteria
 	gotLimit  int
@@ -107,6 +114,32 @@ func (f *fakeAcct) Search(_ context.Context, folder string, cr Criteria, limit i
 func (f *fakeAcct) Read(_ context.Context, folder string, uid uint32, _ int) (Body, error) {
 	f.gotFolder, f.gotUID = folder, uid
 	return f.body, f.err
+}
+
+func (f *fakeAcct) MoveToTrash(_ context.Context, folder string, uids []uint32) ([]Moved, string, error) {
+	f.gotFolder, f.gotUIDs = folder, uids
+	return f.moved, "Deleted Messages", f.err
+}
+
+func (f *fakeAcct) Restore(_ context.Context, id string) (Action, error) {
+	f.gotID = id
+	return Action{Action: "restore", ToFolder: "INBOX", MessageID: id}, f.err
+}
+
+func (f *fakeAcct) Digest(since time.Time) ([]Action, error) {
+	f.gotSince = since
+	return f.acts, f.err
+}
+
+func (f *fakeAcct) Send(_ context.Context, m Outgoing) (string, error) {
+	f.sent = &m
+	return "<new@example.com>", f.err
+}
+
+func (f *fakeAcct) Reply(_ context.Context, folder string, uid uint32, to, cc []*netmail.Address, body string) (string, error) {
+	f.gotFolder, f.gotUID = folder, uid
+	f.sent = &Outgoing{To: to, Cc: cc, Body: body}
+	return "<re@example.com>", f.err
 }
 
 // callTool posts one tools/call and returns its result
@@ -215,10 +248,13 @@ func TestReadNeedsAUIDAndReportsBackendErrors(t *testing.T) {
 	}
 }
 
-func TestTheToolsAreAllMarkedReadOnly(t *testing.T) {
+// Hermes runs read-only tools alone and asks for the rest, so only the
+// sends may be marked otherwise (Suite D31, D36)
+func TestOnlyTheSendsAreMarkedAsWrites(t *testing.T) {
 	for _, tl := range toolList {
-		if tl.Annotations["readOnlyHint"] != true {
-			t.Errorf("%s isn't read-only", tl.Name)
+		send := tl.Name == "send_message" || tl.Name == "reply_message"
+		if (tl.Annotations["readOnlyHint"] == true) == send {
+			t.Errorf("%s: readOnlyHint %v", tl.Name, tl.Annotations["readOnlyHint"])
 		}
 	}
 }

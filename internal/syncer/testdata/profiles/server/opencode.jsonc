@@ -83,6 +83,14 @@
         "type": "remote",
         "url": "http://100.64.0.1:8790/linear/mcp"
       },
+      "mail": {
+        "headers": {
+          "X-Bud-Privacy": "P1"
+        },
+        "oauth": false,
+        "type": "remote",
+        "url": "http://100.64.0.1:8790/mail/mcp"
+      },
       "memory": {
         "oauth": false,
         "type": "remote",
@@ -639,6 +647,11 @@
     },
     {
       "action": "calendar_*",
+      "effect": "deny",
+      "resource": "*"
+    },
+    {
+      "action": "mail_*",
       "effect": "deny",
       "resource": "*"
     },

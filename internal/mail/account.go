@@ -21,6 +21,14 @@ type Account struct {
 	user string
 	pass string
 	mu   sync.Mutex
+
+	// Trash is the folder cleanup moves to when no folder has the \Trash
+	// special-use flag
+	Trash string
+	// Log records moves, restores and sends; moves and sends need it
+	Log *Log
+	// Sender sends; without it the send tools say sending isn't set up
+	Sender *Sender
 }
 
 // NewAccount checks the IMAP address and credentials. A loopback host is
@@ -33,7 +41,7 @@ func NewAccount(addr, user, pass string) (*Account, error) {
 	if user == "" || pass == "" {
 		return nil, errors.New("no mail credentials: set BUD_MAIL_USER and BUD_MAIL_PASSWORD (op run fills them from the Bud vault)")
 	}
-	a := &Account{addr: addr, user: user, pass: pass}
+	a := &Account{addr: addr, user: user, pass: pass, Trash: "Deleted Messages"}
 	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
 		a.tls = &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
 	}

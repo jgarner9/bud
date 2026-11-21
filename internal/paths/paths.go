@@ -193,6 +193,10 @@ func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway
 // audit log (JGA-348) exists
 func (p *Paths) MCPAudit() string { return filepath.Join(p.State, "mcp-audit.jsonl") }
 
+// MailActions is bud mail-mcp's log of every move, restore and send (Suite
+// D36, D106), which the cleanup digest and restores read
+func (p *Paths) MailActions() string { return filepath.Join(p.State, "mail-actions.jsonl") }
+
 // RunLogs holds private logs from bud run.
 func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }
 

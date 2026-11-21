@@ -28,9 +28,12 @@ type Header struct {
 	From      []string `json:"from,omitempty"`
 	To        []string `json:"to,omitempty"`
 	Cc        []string `json:"cc,omitempty"`
+	ReplyTo   []string `json:"reply_to,omitempty"`
 	Subject   string   `json:"subject,omitempty"`
 	MessageID string   `json:"message_id,omitempty"`
 	InReplyTo string   `json:"in_reply_to,omitempty"`
+	// References is kept for replies, and not shown
+	References string `json:"-"`
 }
 
 // Attachment is named and sized only; its contents never leave the server
@@ -111,9 +114,12 @@ func readHeader(h netmail.Header) Header {
 		From:      addresses(h, "From"),
 		To:        addresses(h, "To"),
 		Cc:        addresses(h, "Cc"),
+		ReplyTo:   addresses(h, "Reply-To"),
 		Subject:   decodeWords(h.Get("Subject")),
 		MessageID: strings.TrimSpace(h.Get("Message-Id")),
 		InReplyTo: strings.TrimSpace(h.Get("In-Reply-To")),
+		// unfolded and one line, since a reply copies it into a header
+		References: strings.Join(strings.Fields(h.Get("References")), " "),
 	}
 }
 

@@ -174,7 +174,20 @@ func readSecret(path string) (string, error) {
 var titles = map[string]struct {
 	title func(target string) string
 	hide  []string
+	// whole are arguments shown in full, never cut, in this order before
+	// the rest: a mail send shows the whole message (Suite D107). A
+	// multi-line value is shown as lines each opening with a bar, so no
+	// line of it can pass for a field or for bud's own words
+	whole []string
 }{
+	"mcp:mail/send_message": {
+		title: func(string) string { return "Send this email from Jason's iCloud?" },
+		whole: []string{"to", "cc", "subject", "body"},
+	},
+	"mcp:mail/reply_message": {
+		title: func(string) string { return "Send this reply from Jason's iCloud?" },
+		whole: []string{"to", "cc", "body"},
+	},
 	"router:p0-fallback": {
 		title: func(t string) string {
 			return "The local model is down. Send this private (P0) chat to " + t + " instead?"
@@ -201,9 +214,14 @@ func summarize(p Prompt) string {
 	}
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(inv.Arguments, &fields) == nil {
+		for _, k := range t.whole {
+			if v, ok := fields[k]; ok {
+				b.WriteString(wholeLine(k, v))
+			}
+		}
 		keys := make([]string, 0, len(fields))
 		for k := range fields {
-			if strings.Contains(k, "sha256") || strings.Contains(k, "hash") || slices.Contains(t.hide, k) {
+			if strings.Contains(k, "sha256") || strings.Contains(k, "hash") || slices.Contains(t.hide, k) || slices.Contains(t.whole, k) {
 				continue
 			}
 			keys = append(keys, k)
@@ -235,6 +253,35 @@ func summarize(p Prompt) string {
 	}
 
 	return b.String()
+}
+
+// wholeLine shows one argument in full: a list of strings as a comma-
+// separated line, a one-line string as itself, and a string with line
+// breaks as lines under the key that each open with a bar
+func wholeLine(k string, v json.RawMessage) string {
+	var list []string
+	if json.Unmarshal(v, &list) == nil {
+		for i, s := range list {
+			list[i] = plain(mustJSON(s))
+		}
+		return "\n" + k + ": " + strings.Join(list, ", ")
+	}
+	var s string
+	if json.Unmarshal(v, &s) != nil || !strings.ContainsAny(s, "\r\n\u2028\u2029") {
+		return "\n" + k + ": " + plain(v)
+	}
+	s = strings.NewReplacer("\r\n", "\n", "\r", "\n", "\u2028", "\n", "\u2029", "\n").Replace(s)
+	var b strings.Builder
+	b.WriteString("\n" + k + ":")
+	for _, line := range strings.Split(s, "\n") {
+		b.WriteString("\n\u2502 " + plain(mustJSON(line)))
+	}
+	return b.String()
+}
+
+func mustJSON(s string) json.RawMessage {
+	b, _ := json.Marshal(s)
+	return b
 }
 
 // plain is a JSON value as a phone should show it: a string without its

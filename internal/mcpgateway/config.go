@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"slices"
 	"sort"
@@ -34,6 +35,41 @@ type Server struct {
 	URL     string   `json:"url"`
 	Privacy []string `json:"privacy"`
 	Key     *Key     `json:"key,omitempty"`
+	// Approval turns on review for this server's approval-tier tool calls.
+	// Without it every call passes through as before
+	Approval *Approval `json:"approval,omitempty"`
+}
+
+// Approval says which of a server's tools need a review before the call goes
+// upstream. Tools maps upstream tool-name globs (path.Match syntax, e.g.
+// "get_*") to "allow" or "ask"; a tool no glob names asks, so a new upstream
+// tool fails closed. When several globs match, "ask" wins
+type Approval struct {
+	Tools map[string]string `json:"tools,omitempty"`
+}
+
+// Asks says whether a call to tool needs a review
+func (a *Approval) Asks(tool string) bool {
+	allowed := false
+	for _, glob := range sortedKeys(a.Tools) {
+		if ok, _ := path.Match(glob, tool); !ok {
+			continue
+		}
+		if a.Tools[glob] != "allow" {
+			return true
+		}
+		allowed = true
+	}
+	return !allowed
+}
+
+func sortedKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Key says where an upstream reads its key from and which environment
@@ -111,6 +147,19 @@ func (c *Config) Validate() error {
 		}
 		if slices.Contains(s.Privacy, "P0") && !inside {
 			add("%s.privacy: allows P0, but %s is outside the house; P0 sessions may use only tools that never leave it (Suite D81)", at, s.URL)
+		}
+		if a := s.Approval; a != nil {
+			for _, glob := range sortedKeys(a.Tools) {
+				if _, err := path.Match(glob, ""); err != nil {
+					add("%s.approval.tools: %q isn't a valid tool-name glob", at, glob)
+				}
+				if v := a.Tools[glob]; v != "allow" && v != "ask" {
+					add("%s.approval.tools.%s: %q isn't allow or ask", at, glob, v)
+				}
+			}
+		}
+		if u != nil && u.RawQuery != "" && s.Approval != nil {
+			add("%s.url: has a query string, which an approval review would show; put credentials in the key header (key.header, key.env) instead", at)
 		}
 		if k := s.Key; k != nil {
 			if k.Header == "" {

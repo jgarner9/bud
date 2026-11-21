@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/mcpgateway"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -60,6 +61,13 @@ func runMCPGateway(g *Globals, args []string, configPath string) error {
 	if err != nil {
 		return err
 	}
+
+	gw.SetApprovals(mcpgateway.Approvals{
+		Store: approval.Store{Path: p.ApprovalStore()},
+		Review: func(s approval.Scope) approval.Review {
+			return approval.SocketReview(p.ReviewSocket(), p.ReviewSecret(), s)
+		},
+	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

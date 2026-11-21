@@ -978,6 +978,10 @@ function M.setup()
     if vim.fn.mode() == "n" then
       first, last = last, last
     end
+    if require("bud.ai.agent").backend() == "opencode" then
+      vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
+      return require("bud.ai.opencode").share(math.min(first, last), math.max(first, last))
+    end
     M.share(vim.api.nvim_buf_get_name(0), math.min(first, last), math.max(first, last))
     vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
   end, { desc = "Share the selection with the AI" })

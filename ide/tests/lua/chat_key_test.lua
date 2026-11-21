@@ -18,6 +18,8 @@ local function backend(name)
 end
 
 local term = require("bud.ai.term")
+-- nvim stands in for the opencode executable
+require("bud.ai.opencode").executable = vim.v.progpath
 local agent = require("bud.ai.agent")
 local opened, toggled, sessions = 0, 0, 0
 vim.api.nvim_create_user_command("Opencode", function()

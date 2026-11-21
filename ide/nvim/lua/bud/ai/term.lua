@@ -290,7 +290,7 @@ end
 -- loads the plugin on first use, so nothing is on the runtimepath at startup.
 function M.chat_key()
   if require("bud.ai.agent").backend() == "opencode" then
-    return vim.cmd("Opencode")
+    return require("bud.ai.opencode").run()
   end
   return M.toggle()
 end

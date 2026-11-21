@@ -29,6 +29,7 @@ jobs:
       - run: sh scripts/install-test.sh
       - run: sh scripts/release_plan_test.sh
       - run: sh scripts/content_release_test.sh
+      - run: node --test server/planning-opencode/tests/*.test.mjs
 
   hermes-plugin:
     runs-on: ubuntu-latest

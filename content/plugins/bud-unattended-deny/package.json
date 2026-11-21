@@ -1,0 +1,8 @@
+{
+  "name": "bud-unattended-deny",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./server.js"
+  }
+}

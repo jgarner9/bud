@@ -48,6 +48,9 @@ func (a *Account) Record(ctx context.Context, w io.Writer) (Findings, error) {
 		return f, fmt.Errorf("connect to the IMAP server %s: %w", a.addr, err)
 	}
 	tr := newTracer(conn, w)
+	// a session that fails is the one most worth reading, so what was
+	// traced is written however it ends
+	defer tr.flush()
 	c, err := NewClient(ctx, tr)
 	if err != nil {
 		_ = conn.Close()
@@ -99,7 +102,6 @@ func (a *Account) Record(ctx context.Context, w io.Writer) (Findings, error) {
 	if err := c.Logout(ctx); err != nil {
 		return f, err
 	}
-	tr.flush()
 	return f, nil
 }
 
@@ -107,11 +109,17 @@ func (a *Account) Record(ctx context.Context, w io.Writer) (Findings, error) {
 // redacting as it writes
 type tracer struct {
 	net.Conn
-	mu      sync.Mutex
-	out     *bufio.Writer
-	client  lineSplitter
-	server  lineSplitter
-	authing bool // the next client line is AUTHENTICATE's secret
+	mu     sync.Mutex
+	out    *bufio.Writer
+	client lineSplitter
+	server lineSplitter
+	// login is the tag of a LOGIN or AUTHENTICATE under way: every client
+	// line until the server answers that tag is redacted whole, so a
+	// credential sent as a literal can't leak on the line after it
+	login string
+	// broken is set when a literal's length can't be read: from there on
+	// nothing more is written, since its bytes can't be told from lines
+	broken bool
 }
 
 func newTracer(conn net.Conn, w io.Writer) *tracer {
@@ -119,6 +127,7 @@ func newTracer(conn net.Conn, w io.Writer) *tracer {
 	_, _ = t.out.WriteString("# Recorded by bud mail-mcp --record: the login, literals and addresses are\n# redacted, so a literal here is a placeholder and not its real length\n")
 	t.client.emit = func(l string, lit bool) { t.line("C", l, lit) }
 	t.server.emit = func(l string, lit bool) { t.line("S", l, lit) }
+	t.client.stop, t.server.stop = t.stop, t.stop
 	return t
 }
 
@@ -144,23 +153,37 @@ func (t *tracer) flush() {
 }
 
 var (
-	reLogin   = regexp.MustCompile(`(?i)^(\S+ LOGIN) .*$`)
-	reAuth    = regexp.MustCompile(`(?i)^\S+ AUTHENTICATE PLAIN`)
+	reLogin   = regexp.MustCompile(`(?i)^(\S+) (LOGIN|AUTHENTICATE)\b`)
 	reAddress = regexp.MustCompile(`[^\s"<>()]+@[^\s"<>()]+`)
-	reLitMark = regexp.MustCompile(`\{\d+\}$`)
+	// a literal's marker: {n}, non-synchronizing {n+} (LITERAL+), and the
+	// ~{n} of a binary literal, which ends the same way
+	reLitMark = regexp.MustCompile(`\{(\d*)\+?\}$`)
 )
 
+func (t *tracer) stop() {
+	if !t.broken {
+		t.broken = true
+		_, _ = t.out.WriteString("# the trace stops here: a literal's length couldn't be read, so its bytes can't be told from lines\n")
+	}
+}
+
 func (t *tracer) line(dir, l string, lit bool) {
-	switch {
-	case lit:
+	if t.broken {
+		return
+	}
+	if lit {
 		_, _ = t.out.WriteString("L: [redacted]\n")
 		return
-	case dir == "C" && t.authing:
-		l, t.authing = "<redacted>", false
+	}
+	switch {
+	case dir == "C" && t.login != "":
+		l = "<redacted>"
 	case dir == "C" && reLogin.MatchString(l):
-		l = reLogin.ReplaceAllString(l, "$1 <redacted>")
-	case dir == "C" && reAuth.MatchString(l):
-		t.authing = true
+		m := reLogin.FindStringSubmatch(l)
+		t.login = m[1]
+		l = m[1] + " " + strings.ToUpper(m[2]) + " <redacted>"
+	case dir == "S" && t.login != "" && strings.HasPrefix(l, t.login+" "):
+		t.login = ""
 	}
 	l = reAddress.ReplaceAllString(l, "someone@example.com")
 	l = reLitMark.ReplaceAllString(l, "{#}")
@@ -170,13 +193,15 @@ func (t *tracer) line(dir, l string, lit bool) {
 // lineSplitter cuts one direction of the stream into lines, passing a
 // literal's bytes as one placeholder after the line that announced it
 type lineSplitter struct {
-	buf  bytes.Buffer
-	lit  int // literal bytes still to come
-	emit func(line string, literal bool)
+	buf    bytes.Buffer
+	lit    int  // literal bytes still to come
+	broken bool // a literal's length couldn't be read, so nothing more is cut
+	emit   func(line string, literal bool)
+	stop   func() // called once, when a literal's length can't be read
 }
 
 func (s *lineSplitter) feed(p []byte) {
-	for len(p) > 0 {
+	for len(p) > 0 && !s.broken {
 		if s.lit > 0 {
 			k := min(s.lit, len(p))
 			s.lit -= k
@@ -195,9 +220,18 @@ func (s *lineSplitter) feed(p []byte) {
 		p = p[i+1:]
 		l := strings.TrimSuffix(s.buf.String(), "\r")
 		s.buf.Reset()
+		m := reLitMark.FindStringSubmatch(l)
+		if m != nil {
+			n, err := strconv.Atoi(m[1])
+			if err != nil || n < 0 {
+				// the literal's bytes would pass for lines: stop the trace
+				s.broken = true
+			}
+			s.lit = n
+		}
 		s.emit(l, false)
-		if m := reLitMark.FindString(l); m != "" {
-			s.lit, _ = strconv.Atoi(m[1 : len(m)-1])
+		if s.broken {
+			s.stop()
 		}
 	}
 }

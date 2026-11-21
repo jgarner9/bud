@@ -448,3 +448,49 @@ func TestARecordingRedactsTheLoginLiteralsAndAddresses(t *testing.T) {
 		}
 	}
 }
+
+func TestTheTracerRedactsEveryLoginLineAndEveryLiteralForm(t *testing.T) {
+	var out strings.Builder
+	tr := newTracer(nil, &out)
+	// a username sent as a literal puts the password on the next line
+	tr.client.feed([]byte("a1 LOGIN {5}\r\n"))
+	tr.server.feed([]byte("+ go ahead\r\n"))
+	tr.client.feed([]byte("j\xc3\xa4sn \"app-pass\"\r\n"))
+	tr.server.feed([]byte("a1 OK logged in\r\na2 OK done\r\n"))
+	tr.client.feed([]byte("a2 NOOP\r\n"))
+	// a non-synchronizing literal (LITERAL+) holds message text too
+	tr.server.feed([]byte("* 1 FETCH (BODY[] {11+}\r\nprivate txt)\r\n"))
+	// a literal whose length can't be read stops the trace
+	tr.server.feed([]byte("* 2 FETCH (BODY[] {99999999999999999999}\r\nsecret body\r\n"))
+	tr.flush()
+	got := out.String()
+	for _, secret := range []string{"app-pass", "private", "secret body", "sn"} {
+		if strings.Contains(got, secret) {
+			t.Errorf("the trace holds %q:\n%s", secret, got)
+		}
+	}
+	for _, want := range []string{
+		"C: a1 LOGIN <redacted>\nS: + go ahead\nL: [redacted]\nC: <redacted>\nS: a1 OK logged in\n",
+		"C: a2 NOOP\n",
+		"S: * 1 FETCH (BODY[] {#}\nL: [redacted]\nS: )\n",
+		"# the trace stops here",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the trace lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestAFailedRecordingKeepsItsTrace(t *testing.T) {
+	a, err := NewAccount(replay(t, "login_refused"), "someone@example.com", "old-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	if _, err := a.Record(context.Background(), &out); err == nil {
+		t.Fatal("a refused login recorded")
+	}
+	if !strings.Contains(out.String(), "C: a1 LOGIN <redacted>\n") {
+		t.Errorf("the trace of a failed session was lost:\n%s", out.String())
+	}
+}

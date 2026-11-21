@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled language, the synced config, the startup time, Claude Code and the project registry, plus what `bud sync` left on a device with a profile set, and each problem comes with the command that fixes it. `bud doctor --net` also asks whether newer content is out and whether the model endpoints answer.
+Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled language, the synced config, the startup time, Claude Code and the project registry, plus what `bud sync` left on a device with a profile set, and each problem comes with the command that fixes it. `bud doctor --net` also asks whether newer content is out, whether the model endpoints answer, and whether the embedding server returns vectors of the size the registry names.
 
 ## Common problems
 

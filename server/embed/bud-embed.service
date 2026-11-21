@@ -1,0 +1,40 @@
+# The home server's embedding server (JGA-294, Suite D52): llama.cpp's
+# llama-server running Qwen3-Embedding-0.6B on the CPU, so memory embeds and
+# searches while the Qwen box sleeps. As a systemd user unit:
+#
+#   cp bud-embed.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-embed
+#
+# scripts/build-embed-server.sh builds the binary and fetches the model into
+# ~/.local/lib/bud/embed/; the env file holds the digests it printed, and
+# the unit refuses to start when either file differs. Edit --host to the
+# server's tailnet IP (tailscale ip -4) before enabling: the registry's embed
+# provider points there on port 8082, and nothing else may listen for it.
+[Unit]
+Description=Bud embedding server
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/bud-server/embed.env
+ExecStartPre=/bin/sh -c 'cd %h/.local/lib/bud/embed && printf "%%s  llama-server\n%%s  qwen3-embedding-0.6b-q8_0.gguf\n" "$BUD_EMBED_SERVER_SHA256" "$BUD_EMBED_MODEL_SHA256" | sha256sum --check --quiet --strict'
+# --pooling last is how Qwen3-Embedding pools. Two slots of 4,096 tokens,
+# so a query isn't stuck behind a re-embed batch, with a micro-batch as
+# large, since one input must fit one micro-batch. A longer input gets a
+# 400 that names the limit. This holds about 2.1 GB resident
+ExecStart=%h/.local/lib/bud/embed/llama-server --host 127.0.0.1 --port 8082 \
+  --model %h/.local/lib/bud/embed/qwen3-embedding-0.6b-q8_0.gguf \
+  --alias qwen3-embedding-0.6b --embedding --pooling last \
+  --ctx-size 8192 --parallel 2 --batch-size 4096 --ubatch-size 4096 \
+  --threads ${BUD_EMBED_THREADS} --no-webui
+Restart=on-failure
+RestartSec=5
+# the tailnet address may not be up yet at boot; the restart covers it
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=default.target

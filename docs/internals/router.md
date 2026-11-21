@@ -17,7 +17,7 @@ The tier comes from `X-Bud-Privacy` (`registry.RequestTier`, shared with the MCP
 
 ## Keys and headers
 
-A provider's key comes from the environment variable the OpenCode adapter names for it (`registry.KeyVar`: the `{env:VAR}` it names, or `BUD_<PROVIDER>_API_KEY` for an `op://` reference). `New` fails when a keyed provider's variable is empty, so a unit started outside `op run` stops at once. The key goes out as `Authorization: Bearer`; the client's `Authorization` and `Cookie` are dropped, as are hop-by-hop headers and `Accept-Encoding`. Without the client's `Accept-Encoding` the transport asks for gzip itself and decodes the body, so the spend meter always reads plain JSON. Key values are never logged or returned.
+A provider's key comes from the environment variable the OpenCode adapter names for it (`registry.KeyVar`: the `{env:VAR}` it names, or `BUD_<PROVIDER>_API_KEY` for an `op://` reference). `New` fails when a keyed provider's variable is empty, so a unit started outside `op run` stops at once. The key goes out as `Authorization: Bearer`; the client's `Authorization` and `Cookie` are dropped, as are hop-by-hop headers and `Accept-Encoding`. Without the client's `Accept-Encoding` the transport asks for gzip itself and decodes the body, so the spend meter always reads plain JSON. Key values are never logged or returned. Every forwarded request carries `x-opencode-session`, which OpenCode Go requires (it answers 400 `MissingSessionID` without it) and uses for routing and prompt caching: the client's own value when it sent one, else `bud-` and a hash of the first user message, so every turn of a conversation gets the same id and none of the prompt is in it. Other providers ignore it.
 
 ## Proxying and errors
 

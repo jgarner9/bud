@@ -8,6 +8,8 @@ package router
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -228,9 +230,41 @@ func (rt *Router) rewrite(pr *httputil.ProxyRequest) {
 	if t.key != "" {
 		pr.Out.Header.Set("Authorization", "Bearer "+t.key)
 	}
+	if pr.Out.Header.Get(SessionHeader) == "" {
+		pr.Out.Header.Set(SessionHeader, sessionID(t.body))
+	}
 	pr.Out.Header.Set("Content-Length", strconv.Itoa(len(t.body)))
 	pr.Out.ContentLength = int64(len(t.body))
 	pr.Out.Body = io.NopCloser(bytes.NewReader(t.body))
+}
+
+// SessionHeader carries a conversation's id upstream. OpenCode Go refuses a
+// request without one (400 MissingSessionID) and uses it for routing and
+// prompt caching; other providers ignore it. A client's own value is kept
+const SessionHeader = "X-Opencode-Session"
+
+// sessionID is a stable id for the conversation a request belongs to, for a
+// client that sent none: a hash of its first user message, which every later
+// turn of the same chat repeats. It names nothing of the prompt. A request
+// with no user message gets a hash of its whole body
+func sessionID(body []byte) string {
+	var req struct {
+		Messages []struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	seed := body
+	if json.Unmarshal(body, &req) == nil {
+		for _, m := range req.Messages {
+			if m.Role == "user" {
+				seed = m.Content
+				break
+			}
+		}
+	}
+	sum := sha256.Sum256(append([]byte("bud-session\x00"), seed...))
+	return "bud-" + hex.EncodeToString(sum[:16])
 }
 
 type resolved struct {

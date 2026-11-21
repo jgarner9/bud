@@ -363,3 +363,42 @@ func TestPrivacyHeaderIsNotForwardedAndTheAnsweringModelIsNamed(t *testing.T) {
 		t.Errorf("X-Bud-Model = %v, want [p1]", got)
 	}
 }
+
+func TestASessionIDGoesUpstreamStableAcrossAConversationsTurns(t *testing.T) {
+	var got []string
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Header.Get(SessionHeader))
+		io.WriteString(w, `{"ok":true}`)
+	}))
+	defer up.Close()
+	rt, err := New(testRegistry(up.URL+"/v1/", "{env:GO_KEY}"), env(map[string]string{"GO_KEY": "sekret"}), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	send := func(messages string, headers map[string]string) {
+		t.Helper()
+		if w := do(t, rt, "POST", "/v1/chat/completions", `{"model":"bud/coding","messages":`+messages+`}`, headers); w.Code != 200 {
+			t.Fatalf("status %d: %s", w.Code, w.Body)
+		}
+	}
+	first := `{"role":"system","content":"now is 10:00"},{"role":"user","content":"plan my day"}`
+	send(`[`+first+`]`, nil)
+	send(`[{"role":"system","content":"now is 10:05"},{"role":"user","content":"plan my day"},{"role":"assistant","content":"ok"},{"role":"user","content":"and tomorrow"}]`, nil)
+	send(`[{"role":"user","content":"something else"}]`, nil)
+	send(`[`+first+`]`, map[string]string{"x-opencode-session": "client-chosen"})
+	if len(got) != 4 {
+		t.Fatalf("upstream saw %d requests, want 4", len(got))
+	}
+	if !strings.HasPrefix(got[0], "bud-") || got[0] != got[1] {
+		t.Errorf("one conversation's turns got %q and %q, want one bud- id", got[0], got[1])
+	}
+	if got[2] == got[0] {
+		t.Errorf("another conversation got the same id %q", got[2])
+	}
+	if got[3] != "client-chosen" {
+		t.Errorf("the client's own id became %q", got[3])
+	}
+	if strings.Contains(strings.Join(got, " "), "plan") {
+		t.Errorf("an id carries prompt text: %q", got)
+	}
+}

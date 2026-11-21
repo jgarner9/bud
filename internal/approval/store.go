@@ -232,3 +232,43 @@ func (s Store) Get(id string) (Request, error) {
 	})
 	return result, err
 }
+
+// PendingCounts counts the requests still waiting for an answer at now, by
+// action. It reads the file without taking the lock or creating anything:
+// writes replace the file atomically, so a read sees a whole store. Ids,
+// targets and digests are left out. A store that doesn't exist yet is empty
+func (s Store) PendingCounts(now time.Time) (map[string]int, error) {
+	if s.Path == "" {
+		return nil, errors.New("approval store path is empty")
+	}
+	file, err := os.OpenFile(s.Path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		return map[string]int{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	if err := makePrivateRegular(file); err != nil {
+		return nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxStoreBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxStoreBytes {
+		return nil, ErrStoreFull
+	}
+	var requests map[string]Request
+	if err := json.Unmarshal(data, &requests); err != nil || requests == nil {
+		return nil, errors.New("invalid approval store")
+	}
+	counts := map[string]int{}
+	for _, r := range requests {
+		if r.State == Pending && now.Before(r.ExpiresAt) {
+			counts[r.Action]++
+		}
+	}
+
+	return counts, nil
+}

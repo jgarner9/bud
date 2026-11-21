@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -51,7 +52,7 @@ func Merge(frags []Fragment) (map[string]any, error) {
 // replacedLists are the bud.mcp.<name> lists a later fragment replaces
 // rather than appends to: a server's tiers, so an overlay can narrow them,
 // and its command, so an overlay can swap the executable
-var replacedLists = []string{"privacy", "command"}
+var replacedLists = []string{"privacy", "command", "approval"}
 
 // replaceServerLists drops from out each list in replacedLists that frag
 // sets for the same server, so the merge that follows replaces it
@@ -151,6 +152,20 @@ type Server struct {
 	// HermesOnly exposes a loopback server to the P0 Hermes profile only.
 	// Leave URL unset until the worker is installed.
 	HermesOnly bool `json:"hermes_only,omitempty"`
+	// Approval tiers a gateway server's tools for the gateway's review
+	// (Suite D97, D103). Keys are tool-name globs with the runtime's
+	// "<name>_" prefix, as in the permission rules; bud sync strips it, since
+	// the gateway matches the upstream's own names. A tool no glob names asks
+	Approval *Approval `json:"approval,omitempty"`
+	// ReadOnly says every tool on a gateway server only reads, so the
+	// gateway needs no approval block for it
+	ReadOnly bool `json:"read_only,omitempty"`
+}
+
+// Approval is a server's tool tiers, in the shape of the gateway's
+// approval block
+type Approval struct {
+	Tools map[string]string `json:"tools,omitempty"`
 }
 
 // Remote says whether the resolved server is reached over HTTP
@@ -168,6 +183,32 @@ type Resolved struct {
 	Left   map[string]string
 	Hermes map[string]any
 	Tiers  map[string]string
+	// Gateway holds each enabled gateway server's approval settings, by
+	// name, including servers left out of this device's runtimes, since the
+	// gateway still serves them
+	Gateway map[string]GatewayServer
+}
+
+// GatewayServer is what the gateway reads about one server beside its own
+// config: the file bud sync renders (see GatewayApprovals)
+type GatewayServer struct {
+	// Tools are upstream tool-name globs, allow or ask
+	Tools    map[string]string `json:"tools,omitempty"`
+	ReadOnly bool              `json:"read_only,omitempty"`
+}
+
+// GatewayApprovals renders the gateway's approvals file, or nil when no
+// gateway server is declared
+func (r *Resolved) GatewayApprovals() ([]byte, error) {
+	if len(r.Gateway) == 0 {
+		return nil, nil
+	}
+	b, err := json.MarshalIndent(map[string]any{"servers": r.Gateway}, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("render the gateway approvals: %w", err)
+	}
+
+	return append(b, '\n'), nil
 }
 
 // Names are the resolved servers' names, sorted
@@ -231,7 +272,7 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
-	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Hermes: b.Hermes, Tiers: b.Tiers}
+	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers}
 	for _, name := range sortedKeys(b.MCP) {
 		s := b.MCP[name]
 		at := "bud.mcp." + name
@@ -260,6 +301,22 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		if s.HermesOnly && (!slices.Equal(s.Privacy, []string{"P0"}) || s.Gateway || len(s.Command) > 0 || (s.URL != "" && !loopbackService(s.URL))) {
 			add("%s: hermes_only requires P0 and a direct loopback URL, or no URL until configured", at)
 			continue
+		}
+		if !s.Gateway && (s.Approval != nil || s.ReadOnly) {
+			add("%s: approval and read_only apply to gateway servers only", at)
+			continue
+		}
+		if s.ReadOnly && s.Approval != nil {
+			add("%s: set read_only or approval, not both", at)
+			continue
+		}
+		if gs, bad := gatewayServer(name, s); len(bad) > 0 {
+			for _, m := range bad {
+				add("%s.approval.tools: %s", at, m)
+			}
+			continue
+		} else if s.Gateway && !s.Disabled {
+			r.Gateway[name] = gs
 		}
 		if s.Gateway && (len(s.Headers) > 0 || len(s.Env) > 0) {
 			add("%s: a gateway server takes no headers or env; the gateway adds its key", at)
@@ -292,6 +349,36 @@ func (b *Bud) Resolve() (*Resolved, error) {
 	}
 
 	return r, nil
+}
+
+// gatewayServer checks a server's approval tiers and strips the "<name>_"
+// prefix from their keys
+func gatewayServer(name string, s Server) (GatewayServer, []string) {
+	gs := GatewayServer{ReadOnly: s.ReadOnly}
+	if s.Approval == nil {
+		return gs, nil
+	}
+	var bad []string
+	gs.Tools = map[string]string{}
+	for _, k := range sortedKeys(s.Approval.Tools) {
+		up, ok := strings.CutPrefix(k, name+"_")
+		switch {
+		case !ok || up == "":
+			bad = append(bad, fmt.Sprintf("%q must start with %s_, as the permission rules' tool names do", k, name))
+			continue
+		}
+		if _, err := path.Match(up, ""); err != nil || !toolRe.MatchString(up) {
+			bad = append(bad, fmt.Sprintf("%q isn't a valid tool-name glob", k))
+			continue
+		}
+		if v := s.Approval.Tools[k]; v != "allow" && v != "ask" {
+			bad = append(bad, fmt.Sprintf("%s: %q isn't allow or ask", k, v))
+			continue
+		}
+		gs.Tools[up] = s.Approval.Tools[k]
+	}
+
+	return gs, bad
 }
 
 // loopbackService keeps an internal-only server literal, so an environment

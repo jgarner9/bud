@@ -412,6 +412,10 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 			want{filepath.Join(p.HermesCloud(), "config.yaml"), cloud.Config, 0o600, "config", "rendered"},
 			want{p.HermesTiers(), out.Tiers, 0o600, "config", "rendered"},
 		)
+		if out.GatewayApprovals != nil {
+			// the gateway (this machine's) reads its approval tiers from here
+			wants = append(wants, want{p.MCPGatewayApprovals(), out.GatewayApprovals, 0o600, "config", "rendered"})
+		}
 		// the same servers were left out of opencode.jsonc, for the same reasons
 		for _, n := range append(out.Notes, cloud.Notes...) {
 			if !slices.Contains(rep.Notes, n) {

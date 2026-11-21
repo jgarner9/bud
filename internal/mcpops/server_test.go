@@ -1,16 +1,20 @@
 package mcpops
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/doctor"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/syncer"
@@ -132,7 +136,7 @@ func TestDoctorReportsCountsAndResults(t *testing.T) {
 // the queues that aren't built say so as a tool error, never an empty list
 func TestUnbuiltToolsSaySo(t *testing.T) {
 	s := New(Tools(Defaults()))
-	for _, name := range []string{"spend", "approvals", "reviews"} {
+	for _, name := range []string{"spend", "reviews"} {
 		_, out := post(t, s, call(name, `{}`))
 		text, isErr := toolText(t, out)
 		if !isErr || !strings.Contains(text, "isn't built yet") {
@@ -300,5 +304,53 @@ func TestSyncStatusReportsTheLedgerAndDrift(t *testing.T) {
 	defer unlock()
 	if text, isErr := syncCall(t); !isErr || !strings.Contains(text, "ask again") {
 		t.Errorf("busy: %v %s", isErr, text)
+	}
+}
+
+func TestApprovalsToolCountsPendingRequestsWithoutIds(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "approvals.json")
+	st := approval.Store{Path: path}
+	now := time.Now()
+	for i, action := range []string{"mcp:linear/save_issue", "mcp:linear/save_issue", "mcp:calendar/create_event"} {
+		r, err := approval.New(fmt.Sprintf("secret-id-%d", i), "s", action, "t", []byte("{}"), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := st.Create(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, _ := os.ReadFile(path)
+	src := Defaults()
+	src.Paths = func() (*paths.Paths, error) { return &paths.Paths{State: filepath.Dir(path)}, nil }
+	s := New(Tools(src))
+	_, out := post(t, s, call("approvals", `{}`))
+	text, isErr := toolText(t, out)
+	if isErr || strings.Contains(text, "secret-id") {
+		t.Fatalf("%q %v", text, isErr)
+	}
+	var got struct {
+		Pending  int            `json:"pending"`
+		ByAction map[string]int `json:"by_action"`
+	}
+	if err := json.Unmarshal([]byte(text), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Pending != 3 || got.ByAction["mcp:linear/save_issue"] != 2 || got.ByAction["mcp:calendar/create_event"] != 1 {
+		t.Errorf("got %+v", got)
+	}
+	if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
+		t.Error("the tool wrote the store")
+	}
+	// no store yet is an empty queue, and creates nothing
+	src.Paths = func() (*paths.Paths, error) { return &paths.Paths{State: t.TempDir()}, nil }
+	empty := t.TempDir()
+	src.Paths = func() (*paths.Paths, error) { return &paths.Paths{State: empty}, nil }
+	_, out = post(t, New(Tools(src)), call("approvals", `{}`))
+	if text, isErr := toolText(t, out); isErr || !strings.Contains(text, `"pending": 0`) {
+		t.Errorf("empty: %q %v", text, isErr)
+	}
+	if entries, _ := os.ReadDir(empty); len(entries) != 0 {
+		t.Errorf("the tool created %v", entries)
 	}
 }

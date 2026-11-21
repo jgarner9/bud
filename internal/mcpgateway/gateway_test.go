@@ -44,7 +44,7 @@ func fakeUpstream(t *testing.T) (*httptest.Server, chan seen) {
 func newGateway(t *testing.T, upstream string, privacy ...string) (*Gateway, string) {
 	t.Helper()
 	c := &Config{Listen: "127.0.0.1:0", Servers: map[string]Server{
-		"linear": {URL: upstream + "/mcp", Privacy: privacy, Key: &Key{Header: "Authorization", Prefix: "Bearer ", Env: "LINEAR_API_KEY"}},
+		"linear": {URL: upstream + "/mcp", Privacy: privacy, ReadOnly: true, Key: &Key{Header: "Authorization", Prefix: "Bearer ", Env: "LINEAR_API_KEY"}},
 	}}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
@@ -281,7 +281,7 @@ func TestEventsStreamAsTheyArrive(t *testing.T) {
 
 func TestMissingKeyStopsTheGateway(t *testing.T) {
 	c := &Config{Listen: "127.0.0.1:0", Servers: map[string]Server{
-		"exa": {URL: "https://mcp.exa.ai/mcp", Privacy: []string{"P2"}, Key: &Key{Header: "x-api-key", Env: "EXA_API_KEY"}},
+		"exa": {URL: "https://mcp.exa.ai/mcp", Privacy: []string{"P2"}, ReadOnly: true, Key: &Key{Header: "x-api-key", Env: "EXA_API_KEY"}},
 	}}
 	_, err := New(c, nil, func(string) string { return "" })
 	if err == nil || !strings.Contains(err.Error(), "EXA_API_KEY") || !strings.Contains(err.Error(), "op run") {

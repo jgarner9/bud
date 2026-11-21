@@ -1,0 +1,20 @@
+{
+  "servers": {
+    "calendar": {
+      "tools": {
+        "create_*": "ask",
+        "delete_*": "ask",
+        "list_*": "allow",
+        "move_*": "ask"
+      }
+    },
+    "linear": {
+      "tools": {
+        "extract_images": "allow",
+        "get_*": "allow",
+        "list_*": "allow",
+        "search_*": "allow"
+      }
+    }
+  }
+}

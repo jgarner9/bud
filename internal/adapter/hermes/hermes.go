@@ -100,6 +100,8 @@ type Input struct {
 type Output struct {
 	Config []byte
 	Tiers  []byte
+	// GatewayApprovals is the MCP gateway's approvals file (env.Resolved.GatewayApprovals), nil when no gateway server is declared
+	GatewayApprovals []byte
 	// Notes say what was left out and why
 	Notes []string
 	// CloudKeys are the variables that hold the keys of the providers left
@@ -279,6 +281,9 @@ func Render(in Input) (*Output, error) {
 		return nil, err
 	}
 	out.Tiers = append(tb, '\n')
+	if out.GatewayApprovals, err = tools.GatewayApprovals(); err != nil {
+		return nil, err
+	}
 
 	return out, nil
 }

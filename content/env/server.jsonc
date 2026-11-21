@@ -41,7 +41,14 @@
   "bud": {
     "privacy": "P1",
     "mcp": {
-      "linear": { "gateway": true, "privacy": ["P1", "P2"] },
+      // approval tiers the gateway enforces (D97, D103): reads run alone,
+      // anything else asks, and a tool no key names asks too. Keys carry the
+      // runtime's <name>_ prefix; bud sync strips it for the gateway
+      "linear": {
+        "gateway": true,
+        "privacy": ["P1", "P2"],
+        "approval": { "tools": { "linear_get_*": "allow", "linear_list_*": "allow", "linear_search_*": "allow", "linear_extract_images": "allow" } },
+      },
       // GitHub's hosted server, so there is no binary to install or keep up
       // to date; the fine-grained PAT is sent as a header. A PAT works without
       // a Copilot licence. With the variable unset, Hermes doesn't connect it
@@ -56,7 +63,12 @@
       // read-only, and its answers never leave the house, so P0 may use it
       "ops": { "url": "http://127.0.0.1:8792/mcp", "privacy": ["P0", "P1", "P2"] },
       // bud calendar-mcp, server/calendar-mcp/ (D82)
-      "calendar": { "gateway": true, "privacy": ["P0"] },
+      // listing runs alone; creating, moving and deleting events ask
+      "calendar": {
+        "gateway": true,
+        "privacy": ["P0"],
+        "approval": { "tools": { "calendar_list_*": "allow", "calendar_create_*": "ask", "calendar_move_*": "ask", "calendar_delete_*": "ask" } },
+      },
     },
     // Hermes's own tools by action tier (D10, D48), read by bud hermes-gate
     // before every call; terminal commands follow the shell rules in

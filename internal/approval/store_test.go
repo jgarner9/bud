@@ -338,3 +338,27 @@ func TestStoreConsumesOnceAcrossProcesses(t *testing.T) {
 		t.Fatalf("persisted request = %+v, %v", got, err)
 	}
 }
+
+func TestPendingCountsSkipsExpiredAndDecided(t *testing.T) {
+	st := Store{Path: filepath.Join(t.TempDir(), "approvals.json")}
+	now := time.Now()
+	for i, a := range []string{"a", "a", "b"} {
+		r, err := New(fmt.Sprintf("id%d", i), "s", a, "t", []byte("{}"), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := st.Create(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.Decide("id2", Denied, now); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.PendingCounts(now)
+	if err != nil || len(got) != 1 || got["a"] != 2 {
+		t.Fatalf("got %v, %v", got, err)
+	}
+	if got, _ := st.PendingCounts(now.Add(2 * time.Hour)); len(got) != 0 {
+		t.Errorf("after expiry: %v", got)
+	}
+}

@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/doctor"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/syncer"
@@ -54,8 +56,16 @@ func Tools(src Sources) []Tool {
 		},
 		notBuilt("spend", "Router spend against the C2 cap (about $10 a month of Go top-up).",
 			"router spend isn't built yet: the model gateway that counts it comes in build plan phase 3 (Suite D70)"),
-		notBuilt("approvals", "The approval queue: actions waiting on Jason's yes or no.",
-			"the approval queue isn't built yet: it comes with the approval service (build plan phase 7) and the shared approval log (JGA-348)"),
+		{
+			Name:        "approvals",
+			Description: "Counts the approval requests waiting on Jason's yes or no, in total and by action (such as mcp:linear/save_issue). Ids, targets and arguments are left out, so nothing here can approve or replay a request. Read-only.",
+			Run: func(_ context.Context, args json.RawMessage) (any, error) {
+				if err := decodeArgs(args, &struct{}{}); err != nil {
+					return nil, err
+				}
+				return pendingApprovals(src.Paths, time.Now())
+			},
+		},
 		notBuilt("reviews", "The review queue: staged skill and memory writes waiting on Jason's review.",
 			"the review queue isn't built yet: staged skill and memory writes come with Hermes (Suite D48) and the memory curator (build plan phase 5)"),
 	}
@@ -84,6 +94,29 @@ func decodeArgs(args json.RawMessage, v any) error {
 		return &ArgError{Msg: "bad arguments: " + strings.TrimPrefix(err.Error(), "json: ")}
 	}
 	return nil
+}
+
+type approvalsOut struct {
+	Pending  int            `json:"pending"`
+	ByAction map[string]int `json:"by_action"`
+}
+
+// pendingApprovals reads the approval store without writing to it
+func pendingApprovals(resolve func() (*paths.Paths, error), now time.Time) (approvalsOut, error) {
+	p, err := resolve()
+	if err != nil {
+		return approvalsOut{}, err
+	}
+	counts, err := approval.Store{Path: p.ApprovalStore()}.PendingCounts(now)
+	if err != nil {
+		return approvalsOut{}, fmt.Errorf("read the approval store: %w", err)
+	}
+	out := approvalsOut{ByAction: counts}
+	for _, n := range counts {
+		out.Pending += n
+	}
+
+	return out, nil
 }
 
 type check struct {

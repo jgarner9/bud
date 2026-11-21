@@ -27,7 +27,8 @@ One JSON file (D2), by default `~/.local/state/bud/mcp-gateway.json` (`paths.MCP
 | `servers.<name>` | One upstream server. Devices reach it at `http://<listen>/<name>/mcp`. Names are lowercase letters, digits and `-`. |
 | `.url` | The upstream's Streamable HTTP endpoint. `https`, or `http` to a loopback or tailnet host. |
 | `.privacy` | The session tiers that may use it. A server outside the house (any host that isn't loopback or tailnet) may not list `P0` (D81). |
-| `.approval` | Optional. Turns on review for this server's approval-tier tools; see "Approvals". Without it every call passes through. |
+| `.approval` | Turns on review for this server's approval-tier tools; see "Approvals". Required unless the server is `read_only` or is `ops`. |
+| `.read_only` | Optional. Says every tool on the server only reads, so it needs no `approval` block. |
 | `.key` | Optional. The header the upstream reads its key from, a prefix such as `Bearer `, and the environment variable `op run` fills. A missing or empty variable stops the gateway at start, naming it. |
 
 The gateway refuses a config with an unknown tier, a bad name, a wildcard listen address or a P0 cloud server, and says which field to fix.
@@ -44,7 +45,9 @@ A JSON-RPC error inside a 200 response (the tool itself failing) isn't read back
 
 ## Approvals
 
-A server with an `approval` block holds its approval-tier `tools/call` requests for review (Suite D97, D103; design in the r6b approvals note). The block is opt-in per server, so a server without it behaves exactly as above.
+A server with an `approval` block holds its approval-tier `tools/call` requests for review (Suite D97, D103; design in the r6b approvals note). The block is required (Suite D103): the gateway refuses to load a config with a server that has neither `approval` nor `read_only: true`, except `ops`, naming the server and saying to add its block to the env fragment and run `bud sync`. A `read_only` server passes through as above.
+
+The tiers come from the env fragment's `bud.mcp.<name>.approval` (and `read_only`). `bud sync` on the server profile renders them to `mcp-gateway-approvals.json` (`paths.MCPGatewayApprovals`) beside the config, and `Read` lays that file over every server in the config that sets neither itself; entries for servers the config lacks are ignored, and a missing file changes nothing. The public `content/env/server.jsonc` tiers Linear (reads allow) and the calendar (`list_*` allow; create, move and delete ask). After updating bud, an existing home server must run `bud sync` (or add the blocks to its `mcp-gateway.json` by hand) before restarting the gateway, or it refuses to start; any other gateway server the overlay adds needs its own `approval` or `read_only` in the overlay's env.
 
 ```json
 "approval": { "tools": { "get_*": "allow", "list_*": "allow", "search_*": "allow" } }

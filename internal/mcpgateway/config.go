@@ -14,11 +14,13 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
 
+	"jgarner.dev/bud/internal/paths"
 	models "jgarner.dev/bud/internal/registry"
 	"jgarner.dev/bud/internal/tailnet"
 )
@@ -38,6 +40,10 @@ type Server struct {
 	// Approval turns on review for this server's approval-tier tool calls.
 	// Without it every call passes through as before
 	Approval *Approval `json:"approval,omitempty"`
+	// ReadOnly says every tool on this server only reads, so it needs no
+	// approval block. Without either, the config is refused (Suite D103):
+	// a server's tools must be tiered or declared read-only
+	ReadOnly bool `json:"read_only,omitempty"`
 }
 
 // Approval says which of a server's tools need a review before the call goes
@@ -100,10 +106,53 @@ func Read(path string) (*Config, error) {
 	if err := dec.Decode(&c); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := c.mergeApprovals(filepath.Join(filepath.Dir(path), paths.MCPGatewayApprovalsFile)); err != nil {
+		return nil, err
+	}
 	if err := c.Validate(); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return &c, nil
+}
+
+// mergeApprovals lays the approvals file bud sync renders from the env
+// fragments over the servers: a server's own approval or read_only in the
+// config wins. A missing file changes nothing, and entries for servers this
+// config doesn't have are ignored
+func (c *Config) mergeApprovals(file string) error {
+	b, err := os.ReadFile(file)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read the gateway approvals: %w", err)
+	}
+	var f struct {
+		Servers map[string]struct {
+			Tools    map[string]string `json:"tools"`
+			ReadOnly bool              `json:"read_only"`
+		} `json:"servers"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&f); err != nil {
+		return fmt.Errorf("%s: %w", file, err)
+	}
+	for name, a := range f.Servers {
+		s, ok := c.Servers[name]
+		if !ok {
+			continue
+		}
+		if s.Approval == nil && !s.ReadOnly {
+			if a.ReadOnly {
+				s.ReadOnly = true
+			} else if a.Tools != nil {
+				s.Approval = &Approval{Tools: a.Tools}
+			}
+			c.Servers[name] = s
+		}
+	}
+	return nil
 }
 
 // Validate reports every problem at once, each naming the field to fix
@@ -147,6 +196,12 @@ func (c *Config) Validate() error {
 		}
 		if slices.Contains(s.Privacy, "P0") && !inside {
 			add("%s.privacy: allows P0, but %s is outside the house; P0 sessions may use only tools that never leave it (Suite D81)", at, s.URL)
+		}
+		if s.Approval == nil && !s.ReadOnly && name != "ops" {
+			add("%s.approval: the server has no approval tiers and isn't read_only; add its approval block to the env fragment (bud.mcp.%s.approval) and run bud sync, or set read_only if it never writes (Suite D103)", at, name)
+		}
+		if s.Approval != nil && s.ReadOnly {
+			add("%s: set read_only or approval, not both", at)
 		}
 		if s.Approval != nil && name == "ops" {
 			// ops reviews its own approval-tier tools at the leaf, outside its

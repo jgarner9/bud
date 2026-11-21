@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/registry"
 	"jgarner.dev/bud/internal/tailnet"
 )
@@ -40,16 +41,32 @@ type Gateway struct {
 	servers map[string]*upstream
 	audit   *Audit
 	now     func() time.Time
+	appr    Approvals
 	mux     *http.ServeMux
 }
 
+// Approvals is what the gateway needs to hold approval-tier calls for review.
+// The zero value has no Review, so such a call is refused as unavailable
+type Approvals struct {
+	Store approval.Store
+	// Review builds the reviewer for one call's scope, normally
+	// approval.SocketReview over the reviewer's socket and secret
+	Review func(approval.Scope) approval.Review
+	// Timeout caps one review's wait; zero leaves the store's one hour
+	Timeout time.Duration
+}
+
+// SetApprovals sets the approval wiring; call it before serving
+func (g *Gateway) SetApprovals(a Approvals) { g.appr = a }
+
 type upstream struct {
-	name    string
-	privacy []string
-	url     *url.URL
-	header  string // the key's header, empty for a server with no key
-	value   string // the key, with its prefix
-	proxy   *httputil.ReverseProxy
+	approval *Approval // nil: the server's calls aren't reviewed
+	name     string
+	privacy  []string
+	url      *url.URL
+	header   string // the key's header, empty for a server with no key
+	value    string // the key, with its prefix
+	proxy    *httputil.ReverseProxy
 }
 
 // New builds the gateway from a validated config, reading each key with
@@ -66,7 +83,7 @@ func New(c *Config, audit *Audit, getenv func(string) string) (*Gateway, error) 
 		if err != nil {
 			return nil, fmt.Errorf("servers.%s.url: %w", name, err)
 		}
-		up := &upstream{name: name, privacy: s.Privacy, url: u, value: keys[name]}
+		up := &upstream{approval: s.Approval, name: name, privacy: s.Privacy, url: u, value: keys[name]}
 		if s.Key != nil {
 			up.header = s.Key.Header
 		}
@@ -140,6 +157,10 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 
 	if !slices.Contains(up.privacy, tier) {
 		g.refuse(w, r, up, msgs, batch, base, start)
+		return
+	}
+
+	if up.approval != nil && g.holdForApproval(w, r, up, body, msgs, batch, base, start) {
 		return
 	}
 

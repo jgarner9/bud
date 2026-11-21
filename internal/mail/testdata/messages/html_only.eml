@@ -1,0 +1,5 @@
+From: Store <deals@example.net>
+Subject: Sale
+Content-Type: text/html; charset=iso-8859-1
+
+<html><head><style>p{color:red}</style></head><body><script>alert(1)</script><p>Café sale&nbsp;today &amp; tomorrow</p><div>Line two<br>Line three</div></body></html>

@@ -85,6 +85,20 @@ Markdown files open rendered: headings, lists, code blocks, tables and checkboxe
 | `ga` (or `:w`, `:wq`, `:x`, `ZZ`) · `q` | In a proposed edit: accept · reject (closing either side any other way rejects it too). |
 | `y` · `a` · `n` · `r` | In a permission prompt: allow · allow for this session · deny · deny and say why. |
 
+## OpenCode
+
+With `ai.backend` set to `opencode`, the chat is opencode.nvim (D150). bud keeps its own `<leader>o` keys off and maps these instead; on any other backend they say how to switch.
+
+| Keys | Does |
+| --- | --- |
+| `<leader>ac` | Show or hide the chat. |
+| `<leader>as` | Add the selection (or this line) to the chat's context. |
+| `<leader>ad` | Review the session's changes: changed files on the left, before and after on the right. `r` picks a range of prompts, `c` leaves a comment the next prompt carries, `q` closes. |
+| `<leader>ap` · `<leader>aS` | Pick the model · pick a session. |
+| `<leader>ay` · `<leader>an` | Allow the waiting request once · deny it, from any window. In the chat, `1`/`2`/`3` (or `j`/`k` and `<CR>`) also answer it, with allow always as the third choice. |
+
+`:Opencode` has every other action, such as `:Opencode revert all prompt` to undo the last prompt's edits.
+
 ## Debugging
 
 | Keys | Does |

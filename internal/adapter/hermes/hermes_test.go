@@ -439,7 +439,7 @@ func TestWithARouterThePrivateProfileAsksItForTheManager(t *testing.T) {
 		"model:\n  default: \"bud/manager\"\n  provider: \"custom:bud\"\n",
 		// one provider, the router, with no key and the smallest context the
 		// router may pick (qwen-35b's, not glm's)
-		"providers:\n  bud:\n    api: \"http://100.64.0.5:8795/v1\"\n    models:\n      \"bud/manager\":\n        context_length: 32768\n    transport: \"chat_completions\"\n",
+		"providers:\n  bud:\n    api: \"http://100.64.0.5:8795/v1\"\n    models:\n      \"bud/manager\":\n        context_length: 32768\n    session_affinity_header: \"x-opencode-session\"\n    transport: \"chat_completions\"\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("lacks:\n%s\nin:\n%s", want, got)

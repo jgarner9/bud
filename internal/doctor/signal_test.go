@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -24,7 +26,11 @@ func onPath(context.Context, string) ([]byte, error) { return nil, errors.New("u
 
 func TestSignalDaemonCheckWarnsWhenItDoesntAnswer(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/check" {
+		switch r.URL.Path {
+		case "/api/v1/check":
+		case "/away/api/v1/check":
+			http.Redirect(w, r, "/api/v1/check", http.StatusFound)
+		default:
 			http.NotFound(w, r)
 		}
 	}))
@@ -36,6 +42,11 @@ func TestSignalDaemonCheckWarnsWhenItDoesntAnswer(t *testing.T) {
 	swapSignal(t, srv.URL+"/nope", nil, nil)
 	if r := checkSignalDaemon(); r.Status != Warn || !strings.Contains(r.Detail, "404") || !strings.Contains(r.Fix, "bud-signal-cli") {
 		t.Errorf("404: %+v", r)
+	}
+	// a redirect is never followed, even to a path that would answer
+	swapSignal(t, srv.URL+"/away", nil, nil)
+	if r := checkSignalDaemon(); r.Status != Warn || !strings.Contains(r.Detail, "302") {
+		t.Errorf("redirect: %+v", r)
 	}
 	srv.Close()
 	swapSignal(t, srv.URL, nil, nil)
@@ -90,6 +101,54 @@ func TestHermesFirstLineStopsAfterTheVersionLine(t *testing.T) {
 	}
 	if d := time.Since(start); d > 10*time.Second {
 		t.Errorf("waited %s for the rest of the output", d)
+	}
+}
+
+// a child that holds stdout open and keeps running is killed with it
+func TestHermesFirstLineKillsChildrenThatHoldThePipe(t *testing.T) {
+	dir := t.TempDir()
+	bin, pidFile := filepath.Join(dir, "hermes"), filepath.Join(dir, "child.pid")
+	script := "#!/bin/sh\nsleep 30 &\necho $! > " + pidFile + "\necho 'Hermes Agent v0.23.2'\nwait\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	out, err := hermesFirstLine(context.Background(), bin)
+	if err != nil || !strings.Contains(string(out), "v0.23.2") {
+		t.Fatalf("%q, %v", out, err)
+	}
+	if d := time.Since(start); d > 10*time.Second {
+		t.Errorf("waited %s", d)
+	}
+	b, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	deadline := time.Now().Add(5 * time.Second)
+	for syscall.Kill(pid, 0) == nil {
+		if time.Now().After(deadline) {
+			t.Fatalf("child %d still running", pid)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// a version line that never ends is cut off at the deadline
+func TestHermesFirstLineStopsAtTheDeadline(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "hermes")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf 'Hermes'\nsleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	out, _ := hermesFirstLine(ctx, bin)
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("waited %s", d)
+	}
+	if versionRe.Match(out) {
+		t.Errorf("got a version from %q", out)
 	}
 }
 

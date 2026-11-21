@@ -8,9 +8,11 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"jgarner.dev/bud"
@@ -32,9 +34,24 @@ var (
 
 // hermesFirstLine runs hermes --version and returns its first line, then
 // stops it: the version is on that line, and what follows includes an
-// update check over the network, which bud doctor without --net never makes
+// update check over the network, which bud doctor without --net never makes.
+// It runs in its own process group, and the whole group is killed, so a
+// child that keeps the pipe open or carries on the update check goes too
 func hermesFirstLine(ctx context.Context, bin string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, bin, "--version")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	killGroup := func() error {
+		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil {
+			if errors.Is(err, syscall.ESRCH) {
+				return os.ErrProcessDone
+			}
+			return err
+		}
+		return nil
+	}
+	// on the context's deadline, which also unblocks the read below
+	cmd.Cancel = killGroup
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -43,7 +60,7 @@ func hermesFirstLine(ctx context.Context, bin string) ([]byte, error) {
 		return nil, err
 	}
 	line, readErr := bufio.NewReader(io.LimitReader(out, 4096)).ReadString('\n')
-	_ = cmd.Process.Kill()
+	_ = killGroup()
 	_ = cmd.Wait()
 	if line == "" && readErr != nil {
 		return nil, fmt.Errorf("no output: %w", readErr)
@@ -61,10 +78,13 @@ func checkSignalDaemon() Result {
 	r := Result{Name: "signal-cli"}
 	ctx, cancel := context.WithTimeout(context.Background(), signalTimeout)
 	defer cancel()
+	// never follows a redirect, so a reply pointing elsewhere can't take
+	// the probe off the machine; it warns as a non-200
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, signalURL+"/api/v1/check", nil)
 	if err == nil {
 		var resp *http.Response
-		if resp, err = http.DefaultClient.Do(req); err == nil {
+		if resp, err = client.Do(req); err == nil {
 			resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
 				err = fmt.Errorf("it answered %s", resp.Status)

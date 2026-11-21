@@ -31,6 +31,8 @@ func TestTextsReadsEveryStringTheRulesShouldSee(t *testing.T) {
 		{"malformed messages skipped", `{"messages":"nope"}`, nil},
 		{"malformed message skipped", `{"messages":[7,{"content":5},{"content":"ok"}]}`, []string{"ok"}},
 		{"null content", `{"messages":[{"role":"assistant","content":null}]}`, nil},
+		{"null prompt and input", `{"prompt":null,"input":null}`, nil},
+		{"null array elements", `{"prompt":[null,"p"],"input":[null]}`, []string{"p"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

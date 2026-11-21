@@ -56,9 +56,13 @@ func contentTexts(raw json.RawMessage) []string {
 // stringsOf reads a string, or an array of strings, skipping any other kind
 // of element such as a token array
 func stringsOf(raw json.RawMessage) []string {
-	var s string
+	// a null decodes into a *string as nil, not as "", so it is skipped
+	var s *string
 	if json.Unmarshal(raw, &s) == nil {
-		return []string{s}
+		if s == nil {
+			return nil
+		}
+		return []string{*s}
 	}
 	var list []json.RawMessage
 	if json.Unmarshal(raw, &list) != nil {
@@ -66,8 +70,9 @@ func stringsOf(raw json.RawMessage) []string {
 	}
 	var out []string
 	for _, item := range list {
-		if json.Unmarshal(item, &s) == nil {
-			out = append(out, s)
+		var e *string
+		if json.Unmarshal(item, &e) == nil && e != nil {
+			out = append(out, *e)
 		}
 	}
 

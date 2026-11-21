@@ -100,13 +100,3 @@ var shareClaudeDir = func(pr *prompter, yes bool, provider string) (bool, error)
 
 	return true, nil
 }
-
-// homeClaudeDir is where Claude Code keeps its config without
-// CLAUDE_CONFIG_DIR
-func homeClaudeDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".claude"), nil
-}

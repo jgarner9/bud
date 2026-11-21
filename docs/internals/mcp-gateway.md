@@ -27,6 +27,8 @@ One JSON file (D2), by default `~/.local/state/bud/mcp-gateway.json` (`paths.MCP
 | `servers.<name>` | One upstream server. Devices reach it at `http://<listen>/<name>/mcp`. Names are lowercase letters, digits and `-`. |
 | `.url` | The upstream's Streamable HTTP endpoint. `https`, or `http` to a loopback or tailnet host. |
 | `.privacy` | The session tiers that may use it. A server outside the house (any host that isn't loopback or tailnet) may not list `P0` (D81). |
+| `.approval` | Turns on review for this server's approval-tier tools; see "Approvals". Required unless the server is `read_only` or is `ops`. |
+| `.read_only` | Optional. Says every tool on the server only reads, so it needs no `approval` block. |
 | `.key` | Optional. The header the upstream reads its key from, a prefix such as `Bearer `, and the environment variable `op run` fills. A missing or empty variable stops the gateway at start, naming it. |
 
 The gateway refuses a config with an unknown tier, a bad name, a wildcard listen address or a P0 cloud server, and says which field to fix.
@@ -40,6 +42,30 @@ The gateway refuses a config with an unknown tier, a bad name, a wildcard listen
 5. **The audit log.** Each `tools/call` becomes one JSON line once the upstream's response ends (for an event stream, when the stream closes; a client that leaves mid-stream still gets its record): time, server, tier, client address, tool, the argument names (sorted; the values are left out, since they can hold private text or keys), the decision (`allowed` or `refused`), the HTTP status and the milliseconds taken. A refused request that isn't a tool call is logged with its method and no tool. Other allowed methods (`initialize`, `tools/list`) aren't logged. The file is appended to, and is set to mode 0600 at start even if it already existed. The status is the final one, never an interim 1xx.
 
 A JSON-RPC error inside a 200 response (the tool itself failing) isn't read back, so the log says the call went upstream, not that it worked.
+
+## Approvals
+
+A server with an `approval` block holds its approval-tier `tools/call` requests for review (Suite D97, D103; design in the r6b approvals note). The block is required (Suite D103): the gateway refuses to load a config with a server that has neither `approval` nor `read_only: true`, except `ops`, naming the server and saying to add its block to the env fragment and run `bud sync`. A `read_only` server passes through as above.
+
+The tiers come from the env fragment's `bud.mcp.<name>.approval` (and `read_only`). `bud sync` on the server profile renders them to `mcp-gateway-approvals.json` (`paths.MCPGatewayApprovals`) beside the config, and `Read` lays that file over every server in the config that sets neither itself; entries for servers the config lacks are ignored, and a missing file changes nothing. The public `content/env/server.jsonc` tiers Linear (reads allow) and the calendar (`list_*` allow; create, move and delete ask). After updating bud, an existing home server must run `bud sync` (or add the blocks to its `mcp-gateway.json` by hand) before restarting the gateway, or it refuses to start; any other gateway server the overlay adds needs its own `approval` or `read_only` in the overlay's env.
+
+```json
+"approval": { "tools": { "get_*": "allow", "list_*": "allow", "search_*": "allow" } }
+```
+
+`tools` maps upstream tool-name globs (`path.Match`, against the upstream's own names such as `save_issue`) to `allow` or `ask`. A tool no glob names asks, so a new upstream tool fails closed; when several globs match, `ask` wins. A bad glob or a value other than `allow` or `ask` fails validation.
+
+An asking call goes through `approval.Store.Dispatch` with `approval.SocketReview` (`paths.ReviewSocket`, `paths.ReviewSecret`, the store at `paths.ApprovalStore`), and the HTTP request stays open until Jason answers. The binding is:
+
+- Action `mcp:<server>/<tool>`; target the server name and its upstream URL as scheme://host/path only (no userinfo, query or fragment). Config validation refuses a query string on a server with an `approval` block; put credentials in the `key` header.
+- Arguments: the exact bytes of `params.arguments`. On approval the gateway forwards the body it already read, byte for byte, so the digest covers what is sent.
+- Scope: runtime `mcp-gateway`, profile the privacy tier, surface the server name, actor the client address, session the `Mcp-Session-Id` header, else the client address and tier. A retry on a new MCP session asks again.
+
+Every failure denies and sends nothing upstream: a denial, expiry (one hour at most), a reviewer that is down or refuses, a reply that doesn't match, or a store that can't be written. The client gets HTTP 200 with a JSON-RPC result whose `isError` is true and a short reason, so the model can tell the user. A client that disconnects cancels the review and gets nothing. A batch holding an approval-tier call is refused whole, with an `isError` result per request. The gate reads raw JSON, and fails closed on an approval-enabled server: a message it can't parse, or a `tools/call` whose params or name can't be read or whose `arguments` is present and not an object, is refused with an `isError` result and audited as `refused`. Reads and `allow` tools pass through byte for byte.
+
+The audit log records the decision for each asking call: `approved` (forwarded; the status is the upstream's), `denied`, `expired`, `unavailable`, `failed`, `canceled` (status 499, client left) or `refused` (batch). Argument values are never logged. Whether MCP clients tolerate a long hold is still unmeasured (design open question 2).
+
+The `ops` server is the exception: `approval` on a server named `ops` is a config error. Ops enforces approvals at its own leaf, outside its mutex (see `mcp-ops.md`), so a gateway review as well would ask twice. Calls to `ops` pass through unreviewed here.
 
 ## Not yet
 

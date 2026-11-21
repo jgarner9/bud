@@ -17,11 +17,15 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"jgarner.dev/bud/internal/approval"
+	"jgarner.dev/bud/internal/registry"
+	"jgarner.dev/bud/internal/tailnet"
 )
 
 // PrivacyHeader carries the session's privacy tier. A request without it is
 // treated as P0, so a client nobody configured fails closed (Suite D81)
-const PrivacyHeader = "X-Bud-Privacy"
+const PrivacyHeader = registry.PrivacyHeader
 
 // maxBody caps a request body; MCP requests are small, and the gateway has
 // to read each one whole to find its tool calls
@@ -37,16 +41,32 @@ type Gateway struct {
 	servers map[string]*upstream
 	audit   *Audit
 	now     func() time.Time
+	appr    Approvals
 	mux     *http.ServeMux
 }
 
+// Approvals is what the gateway needs to hold approval-tier calls for review.
+// The zero value has no Review, so such a call is refused as unavailable
+type Approvals struct {
+	Store approval.Store
+	// Review builds the reviewer for one call's scope, normally
+	// approval.SocketReview over the reviewer's socket and secret
+	Review func(approval.Scope) approval.Review
+	// Timeout caps one review's wait; zero leaves the store's one hour
+	Timeout time.Duration
+}
+
+// SetApprovals sets the approval wiring; call it before serving
+func (g *Gateway) SetApprovals(a Approvals) { g.appr = a }
+
 type upstream struct {
-	name    string
-	privacy []string
-	url     *url.URL
-	header  string // the key's header, empty for a server with no key
-	value   string // the key, with its prefix
-	proxy   *httputil.ReverseProxy
+	approval *Approval // nil: the server's calls aren't reviewed
+	name     string
+	privacy  []string
+	url      *url.URL
+	header   string // the key's header, empty for a server with no key
+	value    string // the key, with its prefix
+	proxy    *httputil.ReverseProxy
 }
 
 // New builds the gateway from a validated config, reading each key with
@@ -63,7 +83,7 @@ func New(c *Config, audit *Audit, getenv func(string) string) (*Gateway, error) 
 		if err != nil {
 			return nil, fmt.Errorf("servers.%s.url: %w", name, err)
 		}
-		up := &upstream{name: name, privacy: s.Privacy, url: u, value: keys[name]}
+		up := &upstream{approval: s.Approval, name: name, privacy: s.Privacy, url: u, value: keys[name]}
 		if s.Key != nil {
 			up.header = s.Key.Header
 		}
@@ -71,8 +91,8 @@ func New(c *Config, audit *Audit, getenv func(string) string) (*Gateway, error) 
 			Rewrite:       up.rewrite,
 			FlushInterval: -1, // server-sent events go out as they arrive
 			ErrorLog:      log.New(io.Discard, "", 0),
-			ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
-				http.Error(w, fmt.Sprintf("mcp-gateway: %s didn't answer: %v", name, err), http.StatusBadGateway)
+			ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) {
+				http.Error(w, fmt.Sprintf("mcp-gateway: %s didn't answer; check the upstream service", name), http.StatusBadGateway)
 			},
 		}
 		g.servers[name] = up
@@ -116,11 +136,8 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mcp-gateway: requests from web pages are refused; reach the gateway by its IP address", http.StatusForbidden)
 		return
 	}
-	tier := r.Header.Get(PrivacyHeader)
-	if tier == "" {
-		tier = "P0"
-	}
-	if !slices.Contains([]string{"P0", "P1", "P2"}, tier) {
+	tier, valid := registry.RequestTier(r.Header.Get(PrivacyHeader))
+	if !valid {
 		http.Error(w, fmt.Sprintf("mcp-gateway: %s is %q; use P0, P1 or P2", PrivacyHeader, tier), http.StatusBadRequest)
 		return
 	}
@@ -140,6 +157,10 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 
 	if !slices.Contains(up.privacy, tier) {
 		g.refuse(w, r, up, msgs, batch, base, start)
+		return
+	}
+
+	if up.approval != nil && g.holdForApproval(w, r, up, body, msgs, batch, base, start) {
 		return
 	}
 
@@ -167,7 +188,7 @@ func literalHost(hostport string) bool {
 		host = h
 	}
 	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
-	return insideHost(host)
+	return tailnet.Inside(host)
 }
 
 // refuse answers every request in the body with a JSON-RPC error, sending
@@ -276,7 +297,7 @@ func peer(remote string) (netip.Addr, bool) {
 	if err != nil {
 		return netip.Addr{}, false
 	}
-	return a, insideAddr(a)
+	return a, tailnet.InsideAddr(a)
 }
 
 // statusWriter remembers the status the upstream answered with. Unwrap

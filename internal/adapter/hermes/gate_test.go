@@ -106,7 +106,7 @@ func TestTheReplyIsWhatHermesReads(t *testing.T) {
 			t.Errorf("%+v: got %s, want %s", v, got, want)
 		}
 	}
-	// no rule_key, so an approval never becomes a standing one
+	// The reply omits rule_key; Hermes may still substitute a broader key.
 	if strings.Contains(string(Verdict{Ask, "x"}.Reply()), "rule_key") {
 		t.Error("the reply carries a rule_key")
 	}
@@ -178,5 +178,48 @@ func TestTheGateReadsTheProfileFromHermessWire(t *testing.T) {
 		if v := tiers.Decide(p); v.Effect != want {
 			t.Errorf("%s: got %s (%s), want %s", wire, v.Effect, v.Reason, want)
 		}
+	}
+}
+
+// Hermes shows a plugin's approval with a label in place of the command, so
+// a terminal ask carries the whole line in its reason, as a JSON string after
+// CommandPrefix, for Jason to read and bud-signal to match (Suite D42)
+func TestATerminalAskCarriesTheWholeCommand(t *testing.T) {
+	for line, why := range map[string]string{
+		"rm -rf build":                     "It needs your approval (Suite D10).",
+		"  git push origin main ":          "It needs your approval (Suite D10).",
+		"go test ./... && git push origin": `Its part "git push origin" needs your approval (Suite D10).`,
+		"go test ./... > out.txt":          "It uses substitution, redirection or a subshell, which bud can't tier, so it needs your approval.",
+		// lines that could trip a reader: quotes, backticks, new lines, the reason's own words
+		"echo \"a\\\"b\" `x` \n touch y": "",
+		`git push 'bud: run "x"? ok'`:    "It needs your approval (Suite D10).",
+		"printf 'héllo\u2028' | rm z":    "",
+	} {
+		v := testTiers().Decide(terminal(line))
+		if v.Effect != Ask {
+			t.Errorf("%q: got %s (%s), want ask", line, v.Effect, v.Reason)
+			continue
+		}
+		rest, ok := strings.CutPrefix(v.Reason, CommandPrefix)
+		if !ok {
+			t.Errorf("%q: the reason doesn't start with %q: %s", line, CommandPrefix, v.Reason)
+			continue
+		}
+		dec := json.NewDecoder(strings.NewReader(rest))
+		var got string
+		if err := dec.Decode(&got); err != nil {
+			t.Errorf("%q: the reason holds no JSON string: %v (%s)", line, err, v.Reason)
+			continue
+		}
+		if got != line {
+			t.Errorf("the reason names %q, want the whole line %q", got, line)
+		}
+		if tail := rest[dec.InputOffset():]; !strings.HasPrefix(tail, "? ") || why != "" && tail != "? "+why {
+			t.Errorf("%q: the reason ends %q, want %q", line, tail, "? "+why)
+		}
+	}
+	// readable on the card: && and > aren't escaped
+	if v := testTiers().Decide(terminal("go test ./... && git push > log")); !strings.Contains(v.Reason, `"go test ./... && git push > log"`) {
+		t.Errorf("the command should read as typed: %s", v.Reason)
 	}
 }

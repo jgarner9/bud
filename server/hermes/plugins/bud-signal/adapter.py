@@ -9,9 +9,10 @@ or "no <code>", denies it. Only a sender SIGNAL_ALLOWED_USERS names may answer, 
 again that it's the person whose message raised the approval (approvals.approvers is empty).
 Typed /approve and /deny keep working as before.
 
-A command Jason puts in backticks in his own Signal message is pre-approved: when the agent then
-asks to run exactly that command, the prompt approves itself once and says so. His next message
-replaces what it covers, and text that reaches the agent any other way (tool output, web pages,
+A command Jason puts in backticks in his own Signal message, or on a line that starts "run:", is
+pre-approved: when the agent then asks to run exactly that command, the prompt approves itself
+once and says so. bud's gate raises most of these, and Hermes shows them with a label for the
+command, so the command is read from the gate's reason (approvals.command_of). His next message replaces what it covers, and text that reaches the agent any other way (tool output, web pages,
 files, mail) never counts, since only his messages from his own number are read for it.
 
 It relies on SignalAdapter's private parts (_handle_envelope, send's raw_response, the bundled
@@ -20,6 +21,7 @@ plugin's register), so plugin.yaml pins the Hermes version it was checked agains
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Optional
 
@@ -28,8 +30,9 @@ from gateway.platforms.base import SendResult
 from plugins.platforms.signal.register import register as bundled_register
 from plugins.platforms.signal.adapter import SignalAdapter
 
-from .approvals import (APPROVE, APPROVED_MARK, DENIED_MARK, GRACE_SECONDS, PreApprovals, Prompts, footer,
-                        may_answer, parse_code, reaction_choice, reaction_of, text_of)
+from .reviewer import ReviewServer, default_paths
+from .approvals import (APPROVE, Prompt, APPROVED_MARK, DENIED_MARK, GRACE_SECONDS, PreApprovals, Prompts, command_of,
+                        footer, may_answer, parse_code, reaction_choice, reaction_of, text_of)
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +52,53 @@ class BudSignalAdapter(SignalAdapter):
         if not any(may_answer(u, self.dm_allow_from) for u in self.dm_allow_from):
             logger.warning("bud-signal: SIGNAL_ALLOWED_USERS names nobody, so no Signal reaction or code "
                            "can answer an approval; set it to your own number")
+        self._reviewer: Optional[ReviewServer] = None
+
+    async def connect(self, *args, **kwargs):
+        ok = await super().connect(*args, **kwargs)
+        if ok and self._reviewer is None:
+            self._reviewer = ReviewServer(*default_paths(), self)
+            await self._reviewer.start()  # logs and returns False rather than raising
+        return ok
+
+    async def disconnect(self, *args, **kwargs):
+        reviewer, self._reviewer = self._reviewer, None
+        if reviewer is not None:
+            await reviewer.stop()
+        return await super().disconnect(*args, **kwargs)
+
+    async def open_review(self, summary: str) -> Prompt:
+        """Post a reviewer-socket prompt to Jason and keep it for his answer. Its code comes from the same
+        space as Hermes's approval cards, so a code never names two waiting prompts."""
+        owners = sorted(u for u in self.dm_allow_from if may_answer(u, self.dm_allow_from))
+        if len(owners) != 1:
+            raise RuntimeError("SIGNAL_ALLOWED_USERS must name exactly one number to ask")
+        p = self._prompts.reserve("", "", owners[0], False)
+        p.review = asyncio.get_running_loop().create_future()
+        result = await self.send(p.chat_id, f"Bud asks for approval:\n{summary}\n\n{footer(p.code, False)}")
+        if not result.success:
+            self._prompts.drop(p)
+            raise RuntimeError(result.error or "send failed")
+        raw = result.raw_response if isinstance(result.raw_response, dict) else {}
+        ts = raw.get("timestamp")
+        if isinstance(ts, int) and ts > 0:
+            self._prompts.bind(p, ts)
+        return p
+
+    async def close_review(self, p: Prompt, note: Optional[str]) -> None:
+        """Forget a reviewer prompt so a later reaction or code does nothing, and say why when given."""
+        self._prompts.drop(p)
+        if note:
+            await self.send(p.chat_id, note)
 
     async def _send_exec_approval_prompt(self, prompt) -> SendResult:
         if not prompt.request_id:
             # an answer couldn't be tied to one request, so leave it to the typed /approve prompt
             return SendResult(success=False, error="no request id")
         deny_only = not any(choice != "deny" for _, choice, _ in prompt.actions)
-        if not deny_only and self._asked.take(prompt.chat_id, prompt.command):
-            done = await self._approve_asked(prompt)
+        command = command_of(prompt.command, prompt.description)
+        if not deny_only and command is not None and self._asked.take(prompt.chat_id, command):
+            done = await self._approve_asked(prompt, command)
             if done is not None:
                 return done
         p = self._prompts.reserve(prompt.session_key, prompt.request_id, prompt.chat_id, deny_only)
@@ -73,14 +115,14 @@ class BudSignalAdapter(SignalAdapter):
             logger.warning("bud-signal: signal-cli sent no timestamp for an approval, so only its code answers it")
         return SendResult(success=True, message_id=str(ts) if ts else None, raw_response=result.raw_response)
 
-    async def _approve_asked(self, prompt) -> Optional[SendResult]:
+    async def _approve_asked(self, prompt, command: str) -> Optional[SendResult]:
         """Approve once a call Jason named in his message and tell him so; None when Hermes refuses
         it (it isn't his request, or it's gone), so the caller asks as usual."""
         from tools.approval import resolve_gateway_approval_card
         if not resolve_gateway_approval_card(prompt.session_key, APPROVE, prompt.request_id,
                                              actor_id=prompt.chat_id, extra=self.config.extra or {}):
             return None
-        result = await self.send(prompt.chat_id, f"{APPROVED_MARK} Running `{prompt.command.strip()}`, "
+        result = await self.send(prompt.chat_id, f"{APPROVED_MARK} Running `{command.strip()}`, "
                                  "approved once by your message.", metadata=prompt.metadata)
         return SendResult(success=True, message_id=None, raw_response=result.raw_response)
 
@@ -111,7 +153,7 @@ class BudSignalAdapter(SignalAdapter):
         self._asked.record(text.sender, text.text)
         parsed = parse_code(text.text)
         if parsed is None:
-            # his message to the agent: what it names in backticks is pre-approved for this turn
+            # his message to the agent: what it names in backticks or on a run: line is pre-approved for this turn
             return False
         choice, code = parsed
         p = self._prompts.by_code(code)
@@ -134,6 +176,14 @@ class BudSignalAdapter(SignalAdapter):
         from tools.approval import list_gateway_approvals, resolve_gateway_approval_card
         if p.chat_id != sender:
             # a prompt sent to one chat is answered from that chat only
+            return
+        if p.review is not None:
+            # a reviewer-socket prompt: the socket handler replies and forgets it
+            if not p.review.done():
+                p.review.set_result(choice)
+                if p.timestamp:
+                    await self.send_reaction(p.chat_id, APPROVED_MARK if choice == APPROVE else DENIED_MARK,
+                                             self.account, p.timestamp)
             return
         if choice == APPROVE and p.deny_only:
             await self.send(p.chat_id, "That one can only be denied, because the whole command couldn't be shown.")

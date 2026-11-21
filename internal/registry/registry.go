@@ -39,6 +39,23 @@ var APIs = []string{"openai"}
 // Tiers are the privacy tiers a model may be given (Suite D23)
 var Tiers = []string{"P0", "P1", "P2"}
 
+// PrivacyHeader carries a request's privacy tier to the MCP gateway and the
+// router
+const PrivacyHeader = "X-Bud-Privacy"
+
+// RequestTier reads a PrivacyHeader value. A missing one is P0, so a client
+// nobody configured fails closed (Suite D81); ok is false for any other
+// value than a tier.
+func RequestTier(v string) (tier string, ok bool) {
+	if v == "" {
+		return "P0", true
+	}
+	return v, slices.Contains(Tiers, v)
+}
+
+// Allows reports whether the model may see requests of the tier
+func (m Model) Allows(tier string) bool { return slices.Contains(m.Privacy, tier) }
+
 // Costs are the cost tiers (Suite D24)
 var Costs = []string{"C0", "C1", "C2"}
 
@@ -289,6 +306,38 @@ func (r *Registry) Validate() error {
 		}
 	}
 
+	// Generated provider key names normalize punctuation to underscores.
+	// Refuse two different sources for the same environment variable.
+	keySources := map[string]string{}
+	for id, provider := range r.Providers {
+		if provider.Key == "" {
+			continue
+		}
+		name := ""
+		if strings.HasPrefix(provider.Key, "{env:") && strings.HasSuffix(provider.Key, "}") {
+			name = strings.TrimSuffix(strings.TrimPrefix(provider.Key, "{env:"), "}")
+		} else if strings.HasPrefix(provider.Key, "op://") {
+			normalized := strings.Map(func(r rune) rune {
+				if r >= 'a' && r <= 'z' {
+					return r - 'a' + 'A'
+				}
+				if r >= '0' && r <= '9' {
+					return r
+				}
+				return '_'
+			}, id)
+			name = "BUD_" + normalized + "_API_KEY"
+		}
+		if name == "" {
+			continue
+		}
+		if previous, ok := keySources[name]; ok && previous != provider.Key {
+			add("providers: conflicting key sources for %s; rename a provider or use distinct environment variables", name)
+		} else {
+			keySources[name] = provider.Key
+		}
+	}
+
 	if len(r.Models) == 0 {
 		add("models: none listed; add at least one")
 	}
@@ -429,4 +478,27 @@ func plural(n int, word string) string {
 	}
 
 	return word + "s"
+}
+
+// KeyVar is the environment variable a provider's key comes from: the one
+// an {env:VAR} names, or BUD_<PROVIDER>_API_KEY for an op:// reference. It
+// is empty for a provider with no key. The OpenCode adapter and the router
+// both use it, so a unit's env file feeds either
+func KeyVar(provider, key string) string {
+	switch {
+	case key == "":
+		return ""
+	case strings.HasPrefix(key, "{env:"):
+		return strings.TrimSuffix(strings.TrimPrefix(key, "{env:"), "}")
+	}
+	up := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r - 'a' + 'A'
+		case (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9'):
+			return r
+		}
+		return '_'
+	}, provider)
+	return "BUD_" + up + "_API_KEY"
 }

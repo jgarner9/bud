@@ -4,7 +4,7 @@ How to work on this repository. OpenCode reads only this file (Bud Suite D17); `
 
 ## What this is
 
-This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module building one `bud` binary, plus the IDE, the app, the home-server units and the content that syncs to devices. The Suite's architecture, its decision log (cited as "Suite Dn" here, to keep it apart from `BASE.md`'s own D-numbers) and the build plan live outside this repo for now; `docs/suite/` will hold them once they are carried over.
+This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module building one `bud` binary, plus the IDE, home-server units and content that syncs to devices. The [current Suite architecture](docs/internals/suite.md) records decisions that guide work here. The full Suite decision log and build plan live separately. "Suite Dn" refers to that log. `BASE.md` has its own decision numbers for the IDE and CLI.
 
 | Path | What it holds |
 | --- | --- |
@@ -12,8 +12,8 @@ This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module
 | `ide/` | The Neovim IDE: `nvim/`, `languages/`, `layouts/`, `tools/`, `migrations/`, `bundles/`, `plugins/` and its Lua tests, all embedded in the binary |
 | `content/` | What syncs to every device running OpenCode: `AGENTS.md`, skills, agents, commands, plugins and `env/` (the model registry and config fragments) |
 | `profiles/` | Example device profiles only; real ones live in the private overlay |
-| `server/` | Home-server units (Hermes, the planning OpenCode, router, curator, KB site); empty until phase 2 |
-| `app/` | The Tauri chat app, shipped through platform channels, never sync; empty until phase 7 |
+| `server/` | Home-server service units for the MCP gateway, calendar, ops and Signal, plus Hermes setup and its Bud plugin |
+| `app/` | Notes for Bud's planned Herdr desktop and mobile integration |
 | `docs/`, `scripts/` | User and internals docs (also the docs site), and build and test scripts |
 
 Nothing personal goes in this public repo: no hostnames, tailnet names, home paths, real `op://` paths or personal skills. Those live in the private overlay (Suite D21, D59).
@@ -22,7 +22,7 @@ Nothing personal goes in this public repo: no hostnames, tailnet names, home pat
 
 Bud's IDE is a Neovim-based editor driven by a small Go CLI (`bud`). The CLI installs, launches, updates and syncs an isolated Neovim config (`NVIM_APPNAME=bud`, so it never touches `~/.config/nvim`). `BASE.md` is the full plan plus a numbered decision log (D1, D2, ...). Nearly all of it is built, but a few parts are still marked as later, so check the code before assuming a planned feature exists. When a decision changes, update `BASE.md` too.
 
-AI is **backend-agnostic over ACP** (D131, superseding D124/D26), with OpenClaw as the planned default backend (D132; `claude` stays the default until the move is done, D140), and the move is in progress: 1.1 replaces Claude Code's stream-json transport with an ACP client (BASE.md 4.4 and the 1.1 build order in section 6). Until those tasks land, the tree still holds the Claude Code version: one session per project, started and owned by Neovim (D25, BASE.md 4.2), with Neovim TUIs built on the `bud.ai.claude` Lua module. New AI code talks ACP through `bud.ai.acp`; don't add a second protocol, a model provider or an API client unless asked.
+The IDE chat is moving to the pinned sudo-tee/opencode.nvim talking to local OpenCode (D150, superseding the ACP plan in D131/D132 and D138-D140; Suite D96). Until JGA-350 lands, the tree still holds the older chat: the `bud.ai.claude` Claude Code session (D25, BASE.md 4.2) and the `bud.ai.acp` client. Don't extend either; new chat work goes through opencode.nvim, and removing the old code is a separate change Jason reviews. Don't add a model provider or an API client unless asked.
 
 ## Docs
 
@@ -91,6 +91,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | Anything under `ide/nvim/`: plugins, lazy loading, languages, layouts, debugging, UI, the dashboard, the settings screen | `docs/internals/neovim.md` |
 | `bud bootstrap`, the nightly build, release signing | `docs/internals/release.md` |
 | `bud mcp-gateway` (`internal/mcpgateway`): the home server's MCP gateway and its unit in `server/mcp-gateway/` | `docs/internals/mcp-gateway.md` |
+| `bud router` (`internal/router`): the home server's OpenAI-compatible router over the registry's providers and its unit in `server/router/` | `docs/internals/router.md` |
 | `bud calendar-mcp` (`internal/calendar`): the calendar MCP server over CalDAV and its unit in `server/calendar-mcp/` | `docs/internals/calendar.md` |
 | `bud mcp-ops` (`internal/mcpops`): the Bud ops MCP server and its unit in `server/mcp-ops/` | `docs/internals/mcp-ops.md` |
 | Signal for Hermes: the `bud-signal` plugin in `server/hermes/plugins/`, approvals by reaction or code, signal-cli's unit in `server/signal-cli/` | `docs/internals/signal.md` |

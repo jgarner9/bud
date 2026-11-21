@@ -167,7 +167,7 @@ func TestAFailedComponentDoesntStopTheRest(t *testing.T) {
 }
 
 func TestComponentsNotBuiltSayWhichPhase(t *testing.T) {
-	for c, phase := range map[string]string{"harness": "phase 1", "server": "phase 2", "qwen": "phase 3", "app": "phase 7"} {
+	for c, phase := range map[string]string{"server": "phase 2", "qwen": "phase 3", "app": "phase 7"} {
 		err := installComponents[c](&Globals{}, true)
 		if err == nil || !strings.Contains(err.Error(), "not built yet") || !strings.Contains(err.Error(), phase) {
 			t.Errorf("%s: want not built yet and %s, got %v", c, phase, err)
@@ -177,5 +177,73 @@ func TestComponentsNotBuiltSayWhichPhase(t *testing.T) {
 		if installComponents[c] == nil {
 			t.Errorf("component %s has no install", c)
 		}
+	}
+}
+
+func TestInstallDeviceOpenCodeHarness(t *testing.T) {
+	for _, tc := range []struct {
+		name, installed, after, wantError string
+		wantInstall                       bool
+	}{
+		{name: "already pinned", installed: "2.3.2"},
+		{name: "actual version output", installed: "opencode v2.3.2"},
+		{name: "different prefixed version", installed: "opencode v2.3.20", wantError: "want 2.3.2"},
+		{name: "different version", installed: "2.3.1", wantError: "want 2.3.2"},
+		{name: "unreadable version", installed: "unknown", wantError: "reports version unknown"},
+		{name: "install the pin", after: "2.3.2", wantInstall: true},
+		{name: "verify after npm", after: "2.3.1", wantInstall: true, wantError: "want 2.3.2"},
+		{name: "missing after npm", wantInstall: true, wantError: "isn't on PATH"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			overlay, _ := deviceHome(t)
+			if err := os.MkdirAll(overlay, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			prof := `{"name":"coding","components":["harness"],"channel":"stable"}`
+			if err := os.WriteFile(filepath.Join(overlay, "coding.json"), []byte(prof), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			bin := t.TempDir()
+			t.Setenv("PATH", bin)
+			writeOpenCode := func(version string) {
+				if version == "" {
+					return
+				}
+				script := "#!/bin/sh\nprintf '%s\\n' '" + version + "'\n"
+				if version == "unknown" {
+					script = "#!/bin/sh\nexit 1\n"
+				}
+				if err := os.WriteFile(filepath.Join(bin, "opencode"), []byte(script), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			writeOpenCode(tc.installed)
+
+			orig := npmInstall
+			t.Cleanup(func() { npmInstall = orig })
+			var packages []string
+			npmInstall = func(pkg string) error {
+				packages = append(packages, pkg)
+				writeOpenCode(tc.after)
+				return nil
+			}
+
+			err := install(&Globals{}, nil, true, "coding")
+			if tc.wantError == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+				t.Fatalf("got %v, want %q", err, tc.wantError)
+			}
+			var want []string
+			if tc.wantInstall {
+				want = []string{"@opencode/cli@2.3.2"}
+			}
+			if !slices.Equal(packages, want) {
+				t.Fatalf("npm installed %v, want %v", packages, want)
+			}
+		})
 	}
 }

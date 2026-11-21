@@ -18,8 +18,12 @@ type Paths struct {
 	Data   string // ~/.local/share/bud: plugins, Mason, bud-managed binaries, user tools
 	State  string // ~/.local/state/bud: machine config, project registry
 	Cache  string // ~/.cache/bud: Neovim's stdpath("cache"), logs and bytecode
-	BinDir string // ~/.local/bin: where install.sh puts bud unless told otherwise
-	Home   string // $HOME, for what lives outside bud's own dirs
+	// Runtime is $XDG_RUNTIME_DIR/bud, or empty when that is unset or relative.
+	// There is no fallback to a world-writable dir like /tmp: sockets that carry
+	// approvals must fail closed, so ReviewSocket is empty and the reviewer refuses
+	Runtime string
+	BinDir  string // ~/.local/bin: where install.sh puts bud unless told otherwise
+	Home    string // $HOME, for what lives outside bud's own dirs
 }
 
 // Resolve reads XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME and XDG_CACHE_HOME, falling back
@@ -30,13 +34,19 @@ func Resolve() (*Paths, error) {
 		return nil, err
 	}
 
+	runtime := ""
+	if dir := os.Getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(dir) {
+		runtime = filepath.Join(dir, AppName)
+	}
+
 	return &Paths{
-		Config: filepath.Join(xdg("XDG_CONFIG_HOME", home, ".config"), AppName),
-		Data:   filepath.Join(xdg("XDG_DATA_HOME", home, ".local", "share"), AppName),
-		State:  filepath.Join(xdg("XDG_STATE_HOME", home, ".local", "state"), AppName),
-		Cache:  filepath.Join(xdg("XDG_CACHE_HOME", home, ".cache"), AppName),
-		BinDir: filepath.Join(home, ".local", "bin"),
-		Home:   home,
+		Runtime: runtime,
+		Config:  filepath.Join(xdg("XDG_CONFIG_HOME", home, ".config"), AppName),
+		Data:    filepath.Join(xdg("XDG_DATA_HOME", home, ".local", "share"), AppName),
+		State:   filepath.Join(xdg("XDG_STATE_HOME", home, ".local", "state"), AppName),
+		Cache:   filepath.Join(xdg("XDG_CACHE_HOME", home, ".cache"), AppName),
+		BinDir:  filepath.Join(home, ".local", "bin"),
+		Home:    home,
 	}, nil
 }
 
@@ -182,3 +192,32 @@ func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway
 // MCPAudit is where the MCP gateway logs every tool call until the shared
 // audit log (JGA-348) exists
 func (p *Paths) MCPAudit() string { return filepath.Join(p.State, "mcp-audit.jsonl") }
+
+// RunLogs holds private logs from bud run.
+func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }
+
+// RouterSpend is the router's spend ledger (Suite D24, D64)
+func (p *Paths) RouterSpend() string { return filepath.Join(p.State, "router-spend.json") }
+
+// MCPGatewayApprovals is the per-server approval tiers bud sync renders from
+// the env fragments; the gateway reads it from beside its own config
+const MCPGatewayApprovalsFile = "mcp-gateway-approvals.json"
+
+func (p *Paths) MCPGatewayApprovals() string { return filepath.Join(p.State, MCPGatewayApprovalsFile) }
+
+// ApprovalStore is the approval store (internal/approval), private to the trusted processes
+func (p *Paths) ApprovalStore() string { return filepath.Join(p.State, "approvals.json") }
+
+// ReviewSocket is the unix socket the Signal plugin's reviewer listens on. It is
+// empty when there is no runtime dir, and callers must treat that as unavailable
+func (p *Paths) ReviewSocket() string {
+	if p.Runtime == "" {
+		return ""
+	}
+
+	return filepath.Join(p.Runtime, "review.sock")
+}
+
+// ReviewSecret is the 0600 file holding the reviewer secret, defense in depth on top of
+// the socket's permissions. It lives in state so it survives a reboot
+func (p *Paths) ReviewSecret() string { return filepath.Join(p.State, "review.secret") }

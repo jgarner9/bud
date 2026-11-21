@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -174,5 +175,56 @@ func TestAISetupClaude(t *testing.T) {
 	})
 	if !strings.Contains(out, "bud claude setup") {
 		t.Errorf("no hand-over: %q", out)
+	}
+}
+
+func TestAISetupInstallsPinnedOpenCode(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	dir := filepath.Join(state, "bud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"ai":{"backend":"opencode"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withAICheck(t, backend.Status{Backend: "opencode", Argv: []string{"opencode", "acp"}})
+	var installed string
+	orig := npmInstall
+	t.Cleanup(func() { npmInstall = orig })
+	npmInstall = func(pkg string) error { installed = pkg; return nil }
+	captureStdout(t, func() {
+		if err := aiSetup(nil, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if installed != "@opencode/cli@2.3.2" {
+		t.Errorf("installed %q, want @opencode/cli@2.3.2", installed)
+	}
+}
+
+func TestNpmInstallAllowsOnlyOpenCodeScript(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "npm"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	original := runOnTerminal
+	t.Cleanup(func() { runOnTerminal = original })
+	var got []string
+	runOnTerminal = func(argv []string) error { got = argv; return nil }
+	for _, tc := range []struct {
+		pkg  string
+		want []string
+	}{
+		{backend.OpenCodePackage, []string{"npm", "install", "-g", "--allow-scripts=@opencode/cli", backend.OpenCodePackage}},
+		{"openclaw", []string{"npm", "install", "-g", "openclaw"}},
+	} {
+		if err := npmInstall(tc.pkg); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("install %s: got %q, want %q", tc.pkg, got, tc.want)
+		}
 	}
 }

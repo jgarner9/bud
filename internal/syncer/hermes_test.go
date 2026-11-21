@@ -280,6 +280,21 @@ func TestAServerSyncRendersBothHermesProfilesAndRefusesACloudKey(t *testing.T) {
 	if !strings.Contains(cloud, "opencode.ai") || !strings.Contains(cloud, "standalone: true") {
 		t.Errorf("the cloud profile should list Go and stay standalone:\n%s", cloud)
 	}
+	// Hermes reads signal-cli's URL from the private .env, which keeps
+	// Jason's own lines; the cloud profile's .env isn't touched
+	if got := read(t, o.Paths.HermesEnv()); got != "OP_SERVICE_ACCOUNT_TOKEN=x\nSIGNAL_HTTP_URL=http://127.0.0.1:8793\n" {
+		t.Errorf("the private .env: got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(o.Paths.HermesCloud(), ".env")); !os.IsNotExist(err) {
+		t.Errorf("the cloud profile's .env should be left alone; stat: %v", err)
+	}
+	// set once, it's left alone
+	rep := run(t, o)
+	for _, c := range rep.Changes {
+		if c.Path == o.Paths.HermesEnv() {
+			t.Errorf("a second sync changes the .env again: %+v", c)
+		}
+	}
 	// Signal and bud-signal are the private profile's alone
 	if strings.Contains(cloud, "platforms:") || strings.Contains(cloud, "bud-signal") || !strings.Contains(private, "bud-signal") {
 		t.Errorf("Signal belongs to the private profile only:\n%s", cloud)
@@ -375,5 +390,152 @@ func TestAHeldDirsTrackedFilesAreNeitherPlannedNorDropped(t *testing.T) {
 	plan, kept := holdBack(files, []string{"/h/plugins/bud-signal"})
 	if len(kept) != 1 || kept[0].Path != "/h/plugins/bud-signal/a.py" || len(plan) != 2 {
 		t.Errorf("plan %v, kept %v", plan, kept)
+	}
+}
+
+func TestSignalEnvSetsOnlyTheURL(t *testing.T) {
+	const url = "http://127.0.0.1:8793"
+	for _, tc := range []struct {
+		name, have, want string
+		changed          bool
+	}{
+		{"missing", "", "SIGNAL_HTTP_URL=" + url + "\n", true},
+		{"appended", "SIGNAL_ACCOUNT=+1\n# note\nOTHER=x", "SIGNAL_ACCOUNT=+1\n# note\nOTHER=x\nSIGNAL_HTTP_URL=" + url + "\n", true},
+		{"replaced", "A=1\nexport SIGNAL_HTTP_URL=http://old:1\r\nB=2\n", "A=1\nexport SIGNAL_HTTP_URL=" + url + "\r\nB=2\n", true},
+		{"appended with CRLF", "A=1\r\nB=2", "A=1\r\nB=2\r\nSIGNAL_HTTP_URL=" + url + "\r\n", true},
+		{"behind a BOM", "\ufeffSIGNAL_HTTP_URL=x\n", "\ufeffSIGNAL_HTTP_URL=" + url + "\n", true},
+		{"already set", "SIGNAL_HTTP_URL=\"" + url + "\"\nA=1\n", "SIGNAL_HTTP_URL=\"" + url + "\"\nA=1\n", false},
+		{"a longer name", "SIGNAL_HTTP_URL_OLD=x\n", "SIGNAL_HTTP_URL_OLD=x\nSIGNAL_HTTP_URL=" + url + "\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), ".env")
+			if tc.have != "" {
+				if err := os.WriteFile(path, []byte(tc.have), 0o640); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, perm, changed, err := signalEnv(path, url)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.want || changed != tc.changed {
+				t.Errorf("got %q (changed %v), want %q (changed %v)", got, changed, tc.want, tc.changed)
+			}
+			wantPerm := os.FileMode(0o640)
+			if tc.have == "" {
+				wantPerm = 0o600
+			}
+			if perm != wantPerm {
+				t.Errorf("perm %o, want %o", perm, wantPerm)
+			}
+		})
+	}
+}
+
+func TestHermesConfigKeepsRuntimeStateAcrossSync(t *testing.T) {
+	const onboarding = "onboarding:\n  seen:\n    busy_input_prompt: true\n"
+	const choice = "  service_install_choice: decline\n"
+	for _, tc := range []struct {
+		name, gateway, gatewayWithState string
+	}{
+		{"private", "", "gateway:\n" + choice},
+		{"cloud", "gateway:\n  standalone: true\n", "gateway:\n  standalone: true\n" + choice},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			original := "# config\n" + tc.gateway + "web:\n  keyless_fallback: false\n"
+			runtimeConfig := "# config\n" + tc.gatewayWithState + "web:\n  keyless_fallback: false\n" + onboarding
+			if err := os.WriteFile(path, []byte(runtimeConfig), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			// An existing ledger hashes the exact bytes Bud originally wrote.
+			ledger := Ledger{Files: []File{{Path: path, SHA256: hash([]byte(original)), Kind: "config", Layer: "rendered"}}}
+			assertClean := func() {
+				t.Helper()
+				if drift, err := ledger.Drift(); err != nil || len(drift) != 0 {
+					t.Fatalf("Drift() = %+v, %v", drift, err)
+				}
+			}
+			assertClean()
+			plan := func(rendered string) ([]fileStep, []Change) {
+				t.Helper()
+				steps, _, skips, err := planFiles(ledger.Files, []want{{path, []byte(rendered), 0o600, "config", "rendered"}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return steps, skips
+			}
+			if steps, skips := plan(original); len(steps) != 0 || len(skips) != 0 {
+				t.Fatalf("unchanged render planned steps %v, skips %v", steps, skips)
+			}
+			updated := original + "updates:\n  check: false\n"
+			steps, skips := plan(updated)
+			if len(steps) != 1 || steps[0].Action != Write || len(skips) != 0 {
+				t.Fatalf("changed render planned steps %v, skips %v", steps, skips)
+			}
+			if err := steps[0].apply(); err != nil {
+				t.Fatal(err)
+			}
+			ledger.Files[0] = steps[0].entry
+			got := read(t, path)
+			if !strings.Contains(got, onboarding) || !strings.Contains(got, choice) {
+				t.Fatalf("Hermes state missing after rewrite:\n%s", got)
+			}
+			assertClean()
+			if steps, skips := plan(updated); len(steps) != 0 || len(skips) != 0 {
+				t.Fatalf("repeat sync planned steps %v, skips %v", steps, skips)
+			}
+			edited := strings.Replace(got, "keyless_fallback: false", "keyless_fallback: true", 1)
+			if err := os.WriteFile(path, []byte(edited), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if drift, err := ledger.Drift(); err != nil || len(drift) != 1 || drift[0].Path != path {
+				t.Fatalf("Drift() with manual edit = %+v, %v", drift, err)
+			}
+			if steps, skips := plan(updated); len(steps) != 0 || len(skips) != 1 {
+				t.Fatalf("manually edited render planned steps %v, skips %v", steps, skips)
+			}
+		})
+	}
+}
+
+func TestContactsRenderOnlyIntoPrivateHermes(t *testing.T) {
+	s := newServer(t)
+	content := tree(t)
+	content["env/server.jsonc"] = &fstest.MapFile{Data: repoFile(t, "server.jsonc")}
+	content["env/contacts.jsonc"] = &fstest.MapFile{Data: []byte(`{
+		"mcp": {"servers": {"contacts": {"enabled": true}}},
+		"bud": {
+			"mcp": {"contacts": {
+				"hermes_only": true, "url": "http://127.0.0.1:8794/mcp", "privacy": ["P0"],
+				"headers": {"Authorization": "Bearer {env:BUD_CONTACTS_MCP_TOKEN}"}
+			}},
+			"hermes": {"mcp_servers": {"contacts": {"trust": "untrusted"}}}
+		}
+	}`)}
+	s.publish("2026.11.17.1", "edge", content)
+	o := options(t, s)
+	o.Device = "home"
+	examples := o.Profiles
+	o.Profiles = func() []profile.Dir {
+		return append(examples(), profile.Dir{Name: "home", FS: fstest.MapFS{
+			"home.json": {Data: []byte(`{"name": "home", "components": ["server"], "channel": "edge", "content": {"env": ["base", "server", "contacts"]}}`)},
+		}})
+	}
+	run(t, o)
+	private := read(t, o.Paths.HermesConfig())
+	if !strings.Contains(private, "  contacts:\n") || !strings.Contains(private, "Bearer ${BUD_CONTACTS_MCP_TOKEN}") {
+		t.Errorf("private config is missing the contacts server or token reference:\n%s", private)
+	}
+	for _, path := range []string{
+		filepath.Join(o.Paths.HermesCloud(), "config.yaml"),
+		filepath.Join(o.Paths.OpenCodeConfig(), "opencode.jsonc"),
+	} {
+		if output := read(t, path); strings.Contains(output, "contacts") || strings.Contains(output, "BUD_CONTACTS_MCP_TOKEN") {
+			t.Errorf("contacts reached %s:\n%s", path, output)
+		}
+	}
+	if tiers := read(t, o.Paths.HermesTiers()); !strings.Contains(tiers, "mcp__contacts__*") {
+		t.Errorf("the tier gate must deny contacts to other profiles:\n%s", tiers)
 	}
 }

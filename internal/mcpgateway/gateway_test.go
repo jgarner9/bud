@@ -3,6 +3,7 @@ package mcpgateway
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +44,7 @@ func fakeUpstream(t *testing.T) (*httptest.Server, chan seen) {
 func newGateway(t *testing.T, upstream string, privacy ...string) (*Gateway, string) {
 	t.Helper()
 	c := &Config{Listen: "127.0.0.1:0", Servers: map[string]Server{
-		"linear": {URL: upstream + "/mcp", Privacy: privacy, Key: &Key{Header: "Authorization", Prefix: "Bearer ", Env: "LINEAR_API_KEY"}},
+		"linear": {URL: upstream + "/mcp", Privacy: privacy, ReadOnly: true, Key: &Key{Header: "Authorization", Prefix: "Bearer ", Env: "LINEAR_API_KEY"}},
 	}}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
@@ -280,7 +281,7 @@ func TestEventsStreamAsTheyArrive(t *testing.T) {
 
 func TestMissingKeyStopsTheGateway(t *testing.T) {
 	c := &Config{Listen: "127.0.0.1:0", Servers: map[string]Server{
-		"exa": {URL: "https://mcp.exa.ai/mcp", Privacy: []string{"P2"}, Key: &Key{Header: "x-api-key", Env: "EXA_API_KEY"}},
+		"exa": {URL: "https://mcp.exa.ai/mcp", Privacy: []string{"P2"}, ReadOnly: true, Key: &Key{Header: "x-api-key", Env: "EXA_API_KEY"}},
 	}}
 	_, err := New(c, nil, func(string) string { return "" })
 	if err == nil || !strings.Contains(err.Error(), "EXA_API_KEY") || !strings.Contains(err.Error(), "op run") {
@@ -342,5 +343,30 @@ func TestAnExistingAuditLogIsMadePrivate(t *testing.T) {
 	defer a.Close()
 	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o600 {
 		t.Errorf("mode %v", fi.Mode().Perm())
+	}
+}
+
+type failingTransport struct{}
+
+func (failingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("transport failure with canary lin_secret")
+}
+
+func TestUpstreamTransportErrorDoesNotExposeCredentials(t *testing.T) {
+	g, auditPath := newGateway(t, "http://127.0.0.1:1234", "P1")
+	g.servers["linear"].proxy.Transport = failingTransport{}
+	w := call(g, "P1", toolCall)
+	if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "linear didn't answer") {
+		t.Fatalf("unexpected response: %d %s", w.Code, w.Body)
+	}
+	if strings.Contains(w.Body.String(), "lin_secret") {
+		t.Fatal("transport error exposed the upstream credential")
+	}
+	b, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "lin_secret") {
+		t.Fatal("audit log exposed the upstream credential")
 	}
 }

@@ -36,7 +36,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud update --check [--channel stable\|nightly]` | Only says whether a newer release is out. |
 | `bud update --no-doctor` | Skips the app rebuild and the doctor at the end, for scripts. |
 | `bud update --background` | What bud starts by itself at launch, detached and at most once a day, so launching never waits on the network. It installs a newer stable release when `update.auto` is on, else only notes it for the dashboard. `--no-update` skips it. You don't normally run it. |
-| `bud doctor [--quick] [--json] [--net]` | Health checks with the fix for each problem; exits 1 when something is broken. `--quick` skips the slow ones: the startup timing, which the dashboard leaves out. On a device with a profile set, it also checks what `bud sync` left: the profile and registry validate, every file the sync wrote is unchanged, which layer (public or your overlay) each piece of content comes from, and the config on disk is what this bud would render. `--net` adds the checks that go online: whether the device's channel has newer content, whether each model endpoint answers and lists the registry's models, and whether a provider that reports model facts (OpenCode Go does) disagrees with the registry about any of them. It doesn't check your MCP servers or rules, which are yours (D144). |
+| `bud doctor [--quick] [--json] [--net]` | Health checks with the fix for each problem; exits 1 when something is broken. `--quick` skips the slow ones: the startup timing, which the dashboard leaves out. On a device with a profile set, it also checks what `bud sync` left: the profile and registry validate, every file the sync wrote is unchanged, which layer (public or your overlay) each piece of content comes from, and the config on disk is what this bud would render. `--net` adds the checks that go online: whether the device's channel has newer content, whether each model endpoint answers and lists the registry's models, and whether a provider that reports model facts (OpenCode Go does) disagrees with the registry about any of them, and, when `BUD_SEARXNG_URL` is set, whether that SearXNG instance answers JSON searches. The `--net` checks share one 30-second deadline. It doesn't check your MCP servers or rules, which are yours (D144). |
 | `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. Claude Code stays (see Troubleshooting). |
 | `bud bootstrap [--config] user@host` | Installs this version of bud on another machine over SSH, minimal profile by default. `--config` copies your `config.json` across first. |
 | `bud version` | Prints the version. |
@@ -47,6 +47,20 @@ bud [global flags] <command> [command flags] [args]
 | `bud content pack --version YYYY.MM.DD.N [--out dir] <content dir>` | Packs a content dir into `content-<version>.tar.gz` and `content.json`, the bundle CI signs and publishes. You don't normally run it. |
 | `bud content channel --edge V [--stable V] [--out dir]` | Writes `channel.json` naming each channel's content version, for the content release workflow to sign and publish; stable can't be ahead of edge. You don't normally run it. |
 | `bud content offered [--channel edge] <channel.json>` | Prints the content version a published `channel.json` offers on one channel, refusing it unless `<file>.sig` verifies. The workflow reads it before promoting. You don't normally run it. |
+
+## Running commands
+
+`bud run [--timeout D] [--tail N] [--context N] [--max-failures N] [--json] [--max-chars N] -- <command> [args...]` runs a command and saves its full combined output in a private log under Bud's state directory. It prints a compact summary with failure lines and a bounded tail. A failing command returns its exit status; a timeout returns 124. Use `--sh` for an explicit shell command. Read a saved log with `bud run --log <path> --lines 1:40` or `--tail N`.
+
+## Finding code
+
+`bud locate [--kind any|def|use] [--lang <language>] [--max <hits>] [--json] [--max-chars <chars>] [--] <query> [path ...]` finds a symbol or literal phrase in local files. Paths default to the working directory. Put `--` before a query that starts with a dash.
+
+A single identifier is a case-sensitive symbol. Definitions rank first, and `--kind def` or `--kind use` filters them. Other queries use literal smart-case matching. The result groups hits by file and includes a line number and a short excerpt for each hit. `--lang` can narrow a search to Go, Lua, Python, TypeScript, JavaScript, Rust or shell.
+
+The default is 20 hits and 6,000 text characters. Set either limit to 0 to disable that display cap. JSON output includes counts, tool notes and hits, and is unaffected by the character cap. No matches is a successful result.
+
+Locate uses ripgrep if installed and falls back to grep, which can also search ignored files. Optional ast-grep improves definition detection, and repomap can rank phrase hits. Locate needs no network or model.
 
 ## Languages, layouts and projects
 
@@ -110,7 +124,9 @@ How the pieces fit together is in [Claude Code in bud](claude-code.md).
 | Command | What it does |
 | --- | --- |
 | `bud mcp-gateway [--config file]` | Runs the MCP gateway (Suite D72): devices on the tailnet reach Linear, Exa and other keyed MCP servers at `http://<listen>/<server>/mcp`, the gateway adds each server's key from its environment, logs every tool call and refuses cloud servers to sessions whose `X-Bud-Privacy` tier they don't allow (no header counts as P0). The config defaults to `~/.local/state/bud/mcp-gateway.json`. It runs under `op run` as the unit in `server/mcp-gateway/`; see [its README](https://github.com/jgarner9/bud/tree/main/server/mcp-gateway). |
+| `bud router [--listen addr] [--registry file] [--topup-cap dollars] [--spend file]` | Runs the router: one OpenAI-compatible endpoint (`GET /v1/models`, `POST /v1/chat/completions`, `/v1/completions`, `/v1/embeddings`) over every registry provider's models, which a request names by id or as `bud/<role>`. It adds each provider's key from its environment. `--listen` defaults to `127.0.0.1:8795` and must be a loopback or tailnet IP; `--registry` defaults to the synced content's. It tracks spend per model from responses' usage; `--topup-cap` (default 10, 0 for none) is the dollars a month of top-up it will spend before answering 402, and `--spend` is the ledger (default `router-spend.json` in the state dir). Ranking isn't built. It runs under `op run` as the unit in `server/router/`. |
 | `bud calendar-mcp [--listen addr] [--url url] [--tz zone]` | Runs the calendar MCP server (Suite D82) on loopback, behind the MCP gateway, which lets only P0 sessions use it: Hermes lists calendars and events, and creates, moves and deletes events, which it asks Jason about first. Only Hermes's private profile, which has no cloud model, reaches it (Suite D95). It reads iCloud over CalDAV with the Apple ID and app-specific password `op run` puts in `BUD_CALDAV_USER` and `BUD_CALDAV_PASSWORD`. Reminders are events with alarms. It runs as the unit in `server/calendar-mcp/`; see [its README](https://github.com/jgarner9/bud/tree/main/server/calendar-mcp). |
+| `bud contacts-mcp [--listen 127.0.0.1:8794]` | Runs the read-only iCloud CardDAV worker for private Hermes using its loopback bearer token. See the [server setup](https://github.com/jgarner9/bud/tree/main/server/contacts-mcp). |
 | `bud mcp-ops [--listen addr]` | Runs the Bud ops MCP server (Suite D83) on loopback, `127.0.0.1:8792` by default: read-only tools for `bud doctor` (offline, without the `--net` checks) and the sync status (the content version, the overlay commit and any drift), so Hermes can say whether everything is healthy. Spend, the approval queue and the review queue are listed and say they aren't built yet. Devices reach it through the gateway's `ops` server. It runs as the unit in `server/mcp-ops/`; see [its README](https://github.com/jgarner9/bud/tree/main/server/mcp-ops). |
 | `bud hermes-gate <tiers file>` | The tier gate Hermes runs before every tool call (Suite D10, D48), as the `pre_tool_call` hook `bud sync` writes into `~/.hermes/config.yaml`; you don't run it yourself. It reads the call from stdin and prints `{}` (runs alone), an approve directive (Jason approves it in Hermes) or a block, from the tiers `bud sync` writes to `~/.local/state/bud/hermes-tiers.json`. See [how sync renders Hermes](https://github.com/jgarner9/bud/blob/main/docs/internals/sync.md#hermes). |
 
@@ -120,3 +136,9 @@ How the pieces fit together is in [Claude Code in bud](claude-code.md).
 | --- | --- |
 | `bud dev link [path]` | Points `~/.config/bud` at a checkout with symlinks, so edits show up on the next start. |
 | `bud dev unlink` | Goes back to the config this bud ships. |
+
+## Search and fetch
+
+`bud search [--max N] [--time-range day|week|month|year] [--lang code] [--categories list] [--json] [--max-chars N] <query>` queries a SearXNG instance configured by `BUD_SEARXNG_URL` and returns compact, deduplicated results. `bud doctor --net` probes that endpoint and warns when it does not answer JSON searches.
+
+`bud fetch [--raw] [--no-cache] [--allow-private] [--json] [--max-chars N] <url>` extracts readable text, with a 15-minute local cache. Private network addresses are blocked by default, including on redirects and at connection time. Use `--allow-private` only when the target is trusted.

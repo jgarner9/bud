@@ -19,11 +19,16 @@ import (
 	"jgarner.dev/bud/internal/config"
 )
 
+const openCodeVersion = "2.3.2"
+
+// OpenCodePackage is the npm package and version used for the Suite harness.
+const OpenCodePackage = "@opencode/cli@" + openCodeVersion
+
 // Install says how to get each backend's command, for messages
 var Install = map[string]string{
 	"openclaw": "npm install -g openclaw",
 	"codex":    "npm install -g @zed-industries/codex-acp",
-	"opencode": "npm install -g @opencode/cli",
+	"opencode": "npm install -g " + OpenCodePackage,
 }
 
 // Argv is the command line that starts the backend s names as an ACP agent
@@ -149,6 +154,30 @@ func Check(s config.Settings, quick bool) Status {
 	if st.Backend == "openclaw" {
 		checkOpenClaw(&st, s.AI.OpenClaw, quick, st.Bin)
 	}
+	return st
+}
+
+// CheckOpenCodeHarness checks the executable a device profile will use.
+// Generic AI backends can still use their own OpenCode installations.
+func CheckOpenCodeHarness() Status {
+	var settings config.Settings
+	settings.AI.Backend = "opencode"
+	st := Check(settings, false)
+	if st.Version == "opencode v"+openCodeVersion {
+		st.Version = openCodeVersion
+	}
+	if st.Bin == "" || st.Version == openCodeVersion {
+		return st
+	}
+	found := st.Version
+	if found == "" {
+		found = "unknown"
+	}
+	st.Problems = append(st.Problems, Problem{
+		What: fmt.Sprintf("OpenCode at %s reports version %s, want %s", st.Bin, found, openCodeVersion),
+		Fix:  "put OpenCode " + openCodeVersion + " first on PATH (npm install -g " + OpenCodePackage + ")",
+		Hard: true,
+	})
 	return st
 }
 

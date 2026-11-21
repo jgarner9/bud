@@ -67,8 +67,9 @@ var skipped = []string{"README.md", FormatName}
 // fragments carry the bud block (MCP servers and the gateway), which an
 // older bud would pass into opencode.jsonc as it is. Format 3 (JGA-290): the
 // bud block carries tiers, Hermes's tool tiers, which an older bud's strict
-// read of the block refuses
-const Format = 3
+// read of the block refuses. Format 4 (r6b slice 5): servers carry approval
+// and read_only, which render the gateway's approval tiers
+const Format = 4
 
 // Manifest is content.json
 type Manifest struct {

@@ -11,15 +11,18 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/netip"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
 
+	"jgarner.dev/bud/internal/paths"
 	models "jgarner.dev/bud/internal/registry"
+	"jgarner.dev/bud/internal/tailnet"
 )
 
 // Config is mcp-gateway.json
@@ -34,6 +37,45 @@ type Server struct {
 	URL     string   `json:"url"`
 	Privacy []string `json:"privacy"`
 	Key     *Key     `json:"key,omitempty"`
+	// Approval turns on review for this server's approval-tier tool calls.
+	// Without it every call passes through as before
+	Approval *Approval `json:"approval,omitempty"`
+	// ReadOnly says every tool on this server only reads, so it needs no
+	// approval block. Without either, the config is refused (Suite D103):
+	// a server's tools must be tiered or declared read-only
+	ReadOnly bool `json:"read_only,omitempty"`
+}
+
+// Approval says which of a server's tools need a review before the call goes
+// upstream. Tools maps upstream tool-name globs (path.Match syntax, e.g.
+// "get_*") to "allow" or "ask"; a tool no glob names asks, so a new upstream
+// tool fails closed. When several globs match, "ask" wins
+type Approval struct {
+	Tools map[string]string `json:"tools,omitempty"`
+}
+
+// Asks says whether a call to tool needs a review
+func (a *Approval) Asks(tool string) bool {
+	allowed := false
+	for _, glob := range sortedKeys(a.Tools) {
+		if ok, _ := path.Match(glob, tool); !ok {
+			continue
+		}
+		if a.Tools[glob] != "allow" {
+			return true
+		}
+		allowed = true
+	}
+	return !allowed
+}
+
+func sortedKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Key says where an upstream reads its key from and which environment
@@ -47,13 +89,6 @@ type Key struct {
 var (
 	nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 	envRe  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-
-	// tailnet holds Tailscale's address ranges: the CGNAT block it gives
-	// IPv4 addresses from, and its IPv6 ULA prefix
-	tailnet = []netip.Prefix{
-		netip.MustParsePrefix("100.64.0.0/10"),
-		netip.MustParsePrefix("fd7a:115c:a1e0::/48"),
-	}
 )
 
 // Read loads and validates a config file
@@ -71,10 +106,56 @@ func Read(path string) (*Config, error) {
 	if err := dec.Decode(&c); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := c.mergeApprovals(filepath.Join(filepath.Dir(path), paths.MCPGatewayApprovalsFile)); err != nil {
+		return nil, err
+	}
 	if err := c.Validate(); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return &c, nil
+}
+
+// mergeApprovals lays the approvals file bud sync renders from the env
+// fragments over the servers: a server's own approval or read_only in the
+// config wins. A missing file changes nothing, and entries for servers this
+// config doesn't have are ignored
+func (c *Config) mergeApprovals(file string) error {
+	b, err := os.ReadFile(file)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read the gateway approvals: %w", err)
+	}
+	var f struct {
+		Servers map[string]struct {
+			Tools    map[string]string `json:"tools"`
+			ReadOnly bool              `json:"read_only"`
+		} `json:"servers"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&f); err != nil {
+		return fmt.Errorf("%s: %w", file, err)
+	}
+	for name, a := range f.Servers {
+		if a.ReadOnly && a.Tools != nil {
+			return fmt.Errorf("%s: servers.%s: set read_only or tools, not both; run bud sync to render it again", file, name)
+		}
+		s, ok := c.Servers[name]
+		if !ok {
+			continue
+		}
+		if s.Approval == nil && !s.ReadOnly {
+			if a.ReadOnly {
+				s.ReadOnly = true
+			} else if a.Tools != nil {
+				s.Approval = &Approval{Tools: a.Tools}
+			}
+			c.Servers[name] = s
+		}
+	}
+	return nil
 }
 
 // Validate reports every problem at once, each naming the field to fix
@@ -84,7 +165,7 @@ func (c *Config) Validate() error {
 
 	if host, _, err := net.SplitHostPort(c.Listen); err != nil {
 		add("listen: %q isn't host:port", c.Listen)
-	} else if !insideHost(host) || host == "localhost" {
+	} else if !tailnet.Inside(host) || host == "localhost" {
 		add("listen: %q must be a loopback or tailnet IP address, so the gateway is never reachable from outside the tailnet (Suite D72)", host)
 	}
 	if len(c.Servers) == 0 {
@@ -102,8 +183,8 @@ func (c *Config) Validate() error {
 		case err != nil || u.Host == "":
 			add("%s.url: %q isn't a URL", at, s.URL)
 		case u.Scheme == "https":
-			inside = insideHost(u.Hostname())
-		case u.Scheme == "http" && insideHost(u.Hostname()):
+			inside = tailnet.Inside(u.Hostname())
+		case u.Scheme == "http" && tailnet.Inside(u.Hostname()):
 			inside = true
 		default:
 			add("%s.url: use https, or http only to a loopback or tailnet host", at)
@@ -118,6 +199,30 @@ func (c *Config) Validate() error {
 		}
 		if slices.Contains(s.Privacy, "P0") && !inside {
 			add("%s.privacy: allows P0, but %s is outside the house; P0 sessions may use only tools that never leave it (Suite D81)", at, s.URL)
+		}
+		if s.Approval == nil && !s.ReadOnly && name != "ops" {
+			add("%s.approval: the server has no approval tiers and isn't read_only; add its approval block to the env fragment (bud.mcp.%s.approval) and run bud sync, or set read_only if it never writes (Suite D103)", at, name)
+		}
+		if s.Approval != nil && s.ReadOnly {
+			add("%s: set read_only or approval, not both", at)
+		}
+		if s.Approval != nil && name == "ops" {
+			// ops reviews its own approval-tier tools at the leaf, outside its
+			// mutex (r6b design decision 5); a gateway review as well would ask twice
+			add("%s.approval: the ops server enforces approvals itself; remove this block so calls aren't reviewed twice", at)
+		}
+		if a := s.Approval; a != nil {
+			for _, glob := range sortedKeys(a.Tools) {
+				if _, err := path.Match(glob, ""); err != nil {
+					add("%s.approval.tools: %q isn't a valid tool-name glob", at, glob)
+				}
+				if v := a.Tools[glob]; v != "allow" && v != "ask" {
+					add("%s.approval.tools.%s: %q isn't allow or ask", at, glob, v)
+				}
+			}
+		}
+		if u != nil && u.RawQuery != "" && s.Approval != nil {
+			add("%s.url: has a query string, which an approval review would show; put credentials in the key header (key.header, key.env) instead", at)
 		}
 		if k := s.Key; k != nil {
 			if k.Header == "" {
@@ -150,33 +255,6 @@ func (c *Config) keys(getenv func(string) string) (map[string]string, error) {
 		out[name] = k.Prefix + v
 	}
 	return out, nil
-}
-
-// insideHost says whether host is an IP address on loopback or the tailnet.
-// "localhost" counts for an upstream URL, though not for listen, where a
-// resolver could map it elsewhere
-func insideHost(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	a, err := netip.ParseAddr(host)
-	if err != nil {
-		return false
-	}
-	return insideAddr(a)
-}
-
-func insideAddr(a netip.Addr) bool {
-	a = a.Unmap()
-	if a.IsLoopback() {
-		return true
-	}
-	for _, p := range tailnet {
-		if p.Contains(a) {
-			return true
-		}
-	}
-	return false
 }
 
 func sortedNames(m map[string]Server) []string {

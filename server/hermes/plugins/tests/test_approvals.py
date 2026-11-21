@@ -133,7 +133,10 @@ class PromptsTest(unittest.TestCase):
         clock.now += 1
         ps.reserve("s", "r3", "+1", False)
         self.assertEqual(len(ps), 2)
-        self.assertIsNone(ps.by_code(p1.code))
+        # r1's code is free once it's gone, so r3 may draw it: what matters
+        # is that the code no longer finds r1
+        found = ps.by_code(p1.code)
+        self.assertTrue(found is None or found.request_id != "r1", found)
 
     def test_drop_leaves_a_newer_prompt_with_the_same_code(self):
         ps = a.Prompts(ttl=60, pick=lambda n: 5)
@@ -153,6 +156,62 @@ class CommandsIn(unittest.TestCase):
         self.assertEqual(a.commands_in("an empty `` pair"), [])
         self.assertEqual(a.commands_in(None), [])
 
+    def test_run_lines(self):
+        self.assertEqual(a.commands_in("run: touch /tmp/bud-approval-test"), ["touch /tmp/bud-approval-test"])
+        self.assertEqual(a.commands_in("ok\n  Run:  git push  \nthanks"), ["git push"])
+        self.assertEqual(a.commands_in("run: make\nrun: make test"), ["make", "make test"])
+        # only at the start of a line, and not an empty one
+        self.assertEqual(a.commands_in("please run: git push"), [])
+        self.assertEqual(a.commands_in("run:"), [])
+        self.assertEqual(a.commands_in("rerun: git push"), [])
+        # inside a fenced block it is part of that block's command
+        self.assertEqual(a.commands_in("```\nrun: rm -rf x\n```"), ["run: rm -rf x"])
+
+    def test_a_run_line_typed_inside_backticks(self):
+        self.assertEqual(a.commands_in("`run: touch x`"), ["touch x"])
+        self.assertEqual(a.commands_in("please ` RUN:  git push ` now"), ["git push"])
+        self.assertEqual(a.commands_in("`run:`"), [])
+        # only a leading one
+        self.assertEqual(a.commands_in("`echo run: x`"), ["echo run: x"])
+
+
+# reasons as bud's gate (internal/adapter/hermes/gate.go askCommand) writes them, after Hermes decodes the hook's JSON
+GATE_REASON = 'bud: run "touch /tmp/bud-approval-test"? It needs your approval (Suite D10).'
+GATE_TRICKY = 'bud: run "echo \\"\\"? It needs\\" && git push"? It needs your approval (Suite D10).'
+
+
+class CommandOf(unittest.TestCase):
+    def test_a_gate_prompt_names_the_command_in_its_reason(self):
+        self.assertEqual(a.command_of(a.TERMINAL_RULE_LABEL, GATE_REASON), "touch /tmp/bud-approval-test")
+        self.assertEqual(a.command_of(a.TERMINAL_RULE_LABEL,
+                                      'bud: run "go test ./... && git push"? Its part "git push" needs your approval '
+                                      '(Suite D10).'), "go test ./... && git push")
+
+    def test_quotes_in_the_command_cant_end_it_early(self):
+        self.assertEqual(a.command_of(a.TERMINAL_RULE_LABEL, GATE_TRICKY), 'echo ""? It needs" && git push')
+
+    def test_hermess_own_prompt_carries_the_command(self):
+        self.assertEqual(a.command_of("rm -rf build", "recursive delete"), "rm -rf build")
+
+    def test_anything_else_names_nothing(self):
+        for command, description in [
+            (a.TERMINAL_RULE_LABEL, None),
+            (a.TERMINAL_RULE_LABEL, ""),
+            (a.TERMINAL_RULE_LABEL, "touch /tmp/bud-approval-test"),
+            # the shape must start the description, so text quoted later in it counts for nothing
+            (a.TERMINAL_RULE_LABEL, "Plugin requires approval: " + GATE_REASON),
+            (a.TERMINAL_RULE_LABEL, " " + GATE_REASON),
+            (a.TERMINAL_RULE_LABEL, 'bud: run touch x? It needs your approval (Suite D10).'),
+            (a.TERMINAL_RULE_LABEL, 'bud: run "touch x'),
+            (a.TERMINAL_RULE_LABEL, 'bud: run "touch x"'),
+            (a.TERMINAL_RULE_LABEL, 'bud: run "touch x". It needs your approval.'),
+            (a.TERMINAL_RULE_LABEL, 'bud: run 7? It needs your approval.'),
+            # another plugin rule, another tool's, never names a command
+            ("<mcp__linear__save_issue> (plugin approval rule)", GATE_REASON),
+        ]:
+            with self.subTest(command=command, description=description):
+                self.assertIsNone(a.command_of(command, description))
+
 
 class PreApprovalsTest(unittest.TestCase):
     def setUp(self):
@@ -164,6 +223,13 @@ class PreApprovalsTest(unittest.TestCase):
         self.assertFalse(self.pa.take("j", "git push --force"))
         self.assertTrue(self.pa.take("j", " git push "))
         self.assertFalse(self.pa.take("j", "git push"))
+
+    def test_a_run_line_covers_the_exact_command_once(self):
+        self.pa.record("j", "run: touch /tmp/bud-approval-test")
+        self.assertFalse(self.pa.take("j", "touch /tmp/bud-approval-test2"))
+        self.assertFalse(self.pa.take("j", "touch  /tmp/bud-approval-test"))
+        self.assertTrue(self.pa.take("j", "touch /tmp/bud-approval-test"))
+        self.assertFalse(self.pa.take("j", "touch /tmp/bud-approval-test"))
 
     def test_only_that_chat(self):
         self.pa.record("j", "run `git push`")

@@ -9,11 +9,12 @@ wires it into Hermes's Signal adapter. Standard library only, so its tests run a
 
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 APPROVE = "once"  # Hermes's word for approving one call; a reaction never approves more
 DENY = "deny"
@@ -30,9 +31,20 @@ _CODE = re.compile(r"^\s*(yes|no)\s+(\d{4})\s*[.!]?\s*$", re.IGNORECASE)
 # a prompt is kept this long past the approval timeout, so a late answer is told it came too late
 GRACE_SECONDS = 600
 
-# a command Jason puts in backticks: `cmd` or a ```fenced``` block (its first line may name a language)
+# a command Jason puts in backticks: `cmd` or a ```fenced``` block (its first line may name a language),
+# or a line of its own starting "run:", where the rest of the line is the command (no backticks to type)
 _FENCED = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
 _INLINE = re.compile(r"`([^`\n]+)`")
+_RUN = re.compile(r"^[ \t]*run:(.*)$", re.IGNORECASE | re.MULTILINE)
+_RUN_PREFIX = re.compile(r"^run:", re.IGNORECASE)
+
+# Hermes v0.23.2 shows an approval a plugin's pre_tool_call hook asked for with this label in place of the
+# command (tools/approval.py request_tool_approval), and the hook's reason as the description. bud's gate
+# (internal/adapter/hermes/gate.go) starts a terminal call's reason with COMMAND_PREFIX and the whole command
+# as a JSON string, so the command is read back from there; keep the two in step.
+TERMINAL_RULE_LABEL = "<terminal> (plugin approval rule)"
+COMMAND_PREFIX = "bud: run "
+_RULE_LABEL = re.compile(r"^<[^<>]*> \(plugin approval rule\)$")
 
 
 def reaction_choice(emoji: Optional[str]) -> Optional[str]:
@@ -54,13 +66,40 @@ def parse_code(text: Optional[str]) -> Optional[tuple[str, str]]:
 
 
 def commands_in(text: Optional[str]) -> list[str]:
-    """The commands a message names in backticks, stripped, in order. Only backticked text counts,
-    so a request in plain words never pre-approves anything."""
+    """The commands a message names in backticks or on a "run:" line, stripped: fenced blocks,
+    then run lines, then inline backticks. Only those count, so a request in plain words never
+    pre-approves anything. A "run:" line inside a fenced block is part of that block's command, and a leading
+    "run:" inside inline backticks is dropped."""
     text = text or ""
     found = [m.strip() for m in _FENCED.findall(text)]
     rest = _FENCED.sub(" ", text)
-    found += [m.strip() for m in _INLINE.findall(rest)]
+    found += [m.strip() for m in _RUN.findall(rest)]
+    # `run: cmd` in backticks is the run form typed inside them, so it names cmd
+    found += [_RUN_PREFIX.sub("", m.strip(), count=1).strip() for m in _INLINE.findall(rest)]
     return [c for c in found if c]
+
+
+def command_of(command: Optional[str], description: Optional[str]) -> Optional[str]:
+    """The command an approval prompt asks to run, or None when it names none that can be matched.
+
+    Hermes's own prompt for a command it deems dangerous carries the command itself. One raised by bud's gate
+    carries TERMINAL_RULE_LABEL instead, and the command is the JSON string after COMMAND_PREFIX at the very
+    start of the description, which only the gate writes. Any other plugin's rule, a description in another
+    shape, or one Hermes's redaction changed, names nothing, so it always asks."""
+    command = command or ""
+    if command != TERMINAL_RULE_LABEL:
+        return None if _RULE_LABEL.match(command) else command
+    description = description or ""
+    start = len(COMMAND_PREFIX)
+    if not description.startswith(COMMAND_PREFIX) or description[start:start + 1] != '"':
+        return None
+    try:
+        value, end = json.JSONDecoder().raw_decode(description, start)
+    except ValueError:
+        return None
+    if not isinstance(value, str) or description[end:end + 2] != "? ":
+        return None
+    return value
 
 
 def footer(code: str, deny_only: bool) -> str:
@@ -155,6 +194,7 @@ class Prompt:
     deny_only: bool
     created: float
     timestamp: Optional[int] = None  # the Signal message's sent timestamp, once it is sent
+    review: Any = None  # a reviewer-socket prompt's future; None for a Hermes approval card
 
 
 @dataclass
@@ -209,7 +249,7 @@ class Prompts:
 
 @dataclass
 class PreApprovals:
-    """Commands Jason named in backticks in his latest Signal message, by chat (Suite D42: a
+    """Commands Jason named in backticks or on a "run:" line in his latest Signal message, by chat (Suite D42: a
     pre-approval comes from Jason directly and covers only the named action). Each covers one
     call whose command is exactly that text. His next message replaces them, and they lapse after
     ttl, so one doesn't outlive the turn it was given for."""

@@ -96,6 +96,28 @@ func TestTheGatewayMustBeALoopbackOrTailnetIP(t *testing.T) {
 	}
 }
 
+func TestTheRouterMustBeALoopbackOrTailnetIPWithNoPath(t *testing.T) {
+	for raw, want := range map[string]string{
+		"http://archie.example.ts.net:8795": "the router answers only its IP address",
+		"http://192.168.1.2:8795":           "the router listens on the tailnet only",
+		"http://100.64.0.1":                 "give the router's port, such as :8795",
+		"http://100.64.0.1:8795/v1":         "bud adds /v1",
+		"http://100.64.0.1:8795#x":          "bud adds /v1",
+	} {
+		_, err := resolve(t, `{"bud": {"router": "`+raw+`"}}`)
+		if err == nil || !strings.Contains(err.Error(), "bud.router") || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: got %v, want %q", raw, err, want)
+		}
+	}
+	r, err := resolve(t, `{"bud": {"router": "http://100.64.0.1:8795/"}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Router != "http://100.64.0.1:8795" {
+		t.Errorf("Router = %q, want it without the trailing slash", r.Router)
+	}
+}
+
 func TestEveryProblemIsReportedAtOnce(t *testing.T) {
 	_, err := resolve(t, `{"bud": {"privacy": "P3", "mcp": {
 		"Bad": {"privacy": ["P1"]},
@@ -175,5 +197,103 @@ func TestTiersTakeKnownEffectsAndToolNamesOrPatterns(t *testing.T) {
 	_, err = resolve(t, `{"bud": {"tiers": {"Read File": "allow", "x": "sometimes"}}}`)
 	if err == nil || !strings.Contains(err.Error(), "bud.tiers.Read File") || !strings.Contains(err.Error(), `"sometimes" isn't allow, ask or deny`) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestHermesOnlyServersRequirePrivateLoopback(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		server Server
+		valid  bool
+	}{
+		{"literal loopback", Server{HermesOnly: true, URL: "http://127.0.0.1:8794/mcp", Privacy: []string{"P0"}}, true},
+		{"not yet configured", Server{HermesOnly: true, Privacy: []string{"P0"}}, true},
+		{"gateway", Server{HermesOnly: true, Gateway: true, Privacy: []string{"P0"}}, false},
+		{"external URL", Server{HermesOnly: true, URL: "https://example.invalid/mcp", Privacy: []string{"P0"}}, false},
+		{"substituted host", Server{HermesOnly: true, URL: "http://{env:HOST}:8794/mcp", Privacy: []string{"P0"}}, false},
+		{"cloud tier", Server{HermesOnly: true, URL: "http://127.0.0.1:8794/mcp", Privacy: []string{"P0", "P1"}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := Bud{MCP: map[string]Server{"contacts": tc.server}}
+			if _, err := b.Resolve(); (err == nil) != tc.valid {
+				t.Errorf("Resolve = %v, want validity %t", err, tc.valid)
+			}
+		})
+	}
+}
+
+func TestGatewayApprovalsStripThePrefixAndRenderEveryGatewayServer(t *testing.T) {
+	r, err := resolve(t, `{"bud": {"mcp": {
+		"linear": {"gateway": true, "privacy": ["P1"], "approval": {"tools": {"linear_get_*": "allow", "linear_save_issue": "ask"}}},
+		"exa": {"gateway": true, "privacy": ["P1"], "read_only": true},
+		"off": {"gateway": true, "privacy": ["P1"], "disabled": true},
+		"context7": {"url": "https://example.com/mcp", "privacy": ["P1"]}
+	}}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.GatewayApprovals()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{
+  "servers": {
+    "exa": {
+      "read_only": true
+    },
+    "linear": {
+      "tools": {
+        "get_*": "allow",
+        "save_issue": "ask"
+      }
+    }
+  }
+}
+`
+	if string(got) != want {
+		t.Fatalf("got\n%s", got)
+	}
+	none, _ := resolve(t, `{"bud": {"mcp": {}}}`)
+	if b, _ := none.GatewayApprovals(); b != nil {
+		t.Errorf("no gateway servers rendered %s", b)
+	}
+}
+
+func TestBadApprovalTiersAreReported(t *testing.T) {
+	for name, src := range map[string]string{
+		"no prefix":      `{"linear": {"gateway": true, "privacy": ["P1"], "approval": {"tools": {"get_*": "allow"}}}}`,
+		"deny":           `{"linear": {"gateway": true, "privacy": ["P1"], "approval": {"tools": {"linear_x": "deny"}}}}`,
+		"not on gateway": `{"linear": {"url": "https://example.com/mcp", "privacy": ["P1"], "approval": {"tools": {"linear_x": "ask"}}}}`,
+		"both":           `{"linear": {"gateway": true, "privacy": ["P1"], "read_only": true, "approval": {"tools": {}}}}`,
+	} {
+		if _, err := resolve(t, `{"bud": {"mcp": `+src+`}}`); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestALaterFragmentReplacesAServersApprovalTiers(t *testing.T) {
+	r, err := resolve(t,
+		`{"bud": {"mcp": {"linear": {"gateway": true, "privacy": ["P1"], "approval": {"tools": {"linear_get_*": "allow"}}}}}}`,
+		`{"bud": {"mcp": {"linear": {"approval": {"tools": {"linear_list_*": "allow"}}}}}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tools := r.Gateway["linear"].Tools; tools == nil || len(*tools) != 1 || (*tools)["list_*"] != "allow" {
+		t.Errorf("got %v", tools)
+	}
+}
+
+func TestAnEmptyApprovalBlockRendersAsAskEverything(t *testing.T) {
+	r, err := resolve(t, `{"bud": {"mcp": {"linear": {"gateway": true, "privacy": ["P1"], "approval": {"tools": {}}}}}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.GatewayApprovals()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"tools": {}`) {
+		t.Errorf("rendered %s, want linear's empty tools kept", b)
 	}
 }

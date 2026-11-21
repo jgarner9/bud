@@ -3,6 +3,7 @@ SignalAdapter, SendResult and tools.approval), so they run without Hermes instal
 
 import asyncio
 import importlib.util
+import json
 import os
 import sys
 import types
@@ -13,6 +14,7 @@ from typing import Any, Optional
 PLUGIN = os.path.join(os.path.dirname(__file__), "..", "bud-signal")
 BOT, JASON, OTHER = "+15559990000", "+15550001111", "+15552223333"
 UP, DOWN = "\U0001F44D", "\U0001F44E"
+LABEL = "<terminal> (plugin approval rule)"
 
 
 @dataclass
@@ -165,11 +167,12 @@ class AdapterTest(unittest.TestCase):
         self.registered = load(self.approvals)
         self.a = self.registered["adapter_factory"](Config([JASON]))
 
-    def ask(self, request_id="r1", actions=BOTH, deny_only=False, command="rm -rf build", requester=JASON):
+    def ask(self, request_id="r1", actions=BOTH, deny_only=False, command="rm -rf build", requester=JASON,
+            description="asks"):
         self.approvals.pending[request_id] = ("sess", requester, deny_only)
         res = run(self.a._send_exec_approval_prompt(ExecApprovalPrompt(
             chat_id=JASON, session_key="sess", text="Hermes wants to run a command", actions=actions,
-            command=command, request_id=request_id)))
+            command=command, description=description, request_id=request_id)))
         prompt = self.a._prompts.by_timestamp(int(res.message_id)) if res.message_id else None
         return res, prompt
 
@@ -304,6 +307,26 @@ class AdapterTest(unittest.TestCase):
         self.assertIsNotNone(p)
         self.assertEqual(self.approvals.calls, [])
 
+    def test_a_run_line_runs_once_without_asking(self):
+        run(self.a._handle_envelope(text("run: touch /tmp/bud-approval-test")))
+        _, p = self.ask(command="touch /tmp/bud-approval-test")
+        self.assertIsNone(p)
+        self.assertEqual(self.approvals.calls, [("sess", "once", "r1", JASON)])
+        _, p2 = self.ask("r2", command="touch /tmp/bud-approval-test")
+        self.assertIsNotNone(p2)
+
+    def test_a_variation_on_a_run_line_still_asks(self):
+        run(self.a._handle_envelope(text("run: touch /tmp/bud-approval-test")))
+        _, p = self.ask(command="touch /tmp/bud-approval-test && rm -rf ~")
+        self.assertIsNotNone(p)
+        self.assertEqual(self.approvals.calls, [])
+
+    def test_a_strangers_run_line_covers_nothing(self):
+        run(self.a._handle_envelope(text("run: git push", sender=OTHER)))
+        _, p = self.ask(command="git push")
+        self.assertIsNotNone(p)
+        self.assertEqual(self.approvals.calls, [])
+
     def test_a_deny_only_prompt_is_never_pre_approved(self):
         run(self.a._handle_envelope(text("run `git push`")))
         _, p = self.ask(actions=[("Deny", "deny", "danger")], deny_only=True, command="git push")
@@ -315,6 +338,46 @@ class AdapterTest(unittest.TestCase):
         _, p = self.ask(command="git push", requester=OTHER)
         self.assertIsNotNone(p)
         self.assertIn(f"yes {p.code}", self.a.sent[-1][1])
+
+    # what Hermes v0.23.2 hands the adapter for an approval bud's gate asked for: a label for the command,
+    # and the gate's reason, which starts with the whole command (internal/adapter/hermes/gate.go)
+    def gate_ask(self, cmd, request_id="r1", why="It needs your approval (Suite D10)."):
+        return self.ask(request_id, command=LABEL, description=f"bud: run {json.dumps(cmd)}? {why}")
+
+    def test_a_gate_prompt_is_matched_on_the_command_in_its_reason(self):
+        run(self.a._handle_envelope(text("run: touch /tmp/bud-approval-test")))
+        _, p = self.gate_ask("touch /tmp/bud-approval-test")
+        self.assertIsNone(p)
+        self.assertEqual(self.approvals.calls, [("sess", "once", "r1", JASON)])
+        self.assertIn("Running `touch /tmp/bud-approval-test`, approved once", self.a.sent[-1][1])
+        _, p2 = self.gate_ask("touch /tmp/bud-approval-test", "r2")
+        self.assertIsNotNone(p2)
+
+    def test_a_variation_on_a_gate_prompt_still_asks(self):
+        run(self.a._handle_envelope(text("`run: touch /tmp/bud-approval-test`")))
+        for i, cmd in enumerate(["touch /tmp/bud-approval-test && rm -rf ~", "touch  /tmp/bud-approval-test",
+                                 "touch /tmp/bud-approval-test2"]):
+            _, p = self.gate_ask(cmd, f"r{i}")
+            self.assertIsNotNone(p, cmd)
+        self.assertEqual(self.approvals.calls, [])
+
+    def test_text_quoted_in_a_gate_reason_cant_forge_a_match(self):
+        run(self.a._handle_envelope(text("run: git status")))
+        # a command that quotes the approved one, or a reason that names it later on, still asks
+        _, p = self.gate_ask('echo "git status"? It needs" && rm -rf ~')
+        self.assertIsNotNone(p)
+        _, p = self.ask("r2", command=LABEL, description='Plugin requires approval: bud: run "git status"? ok')
+        self.assertIsNotNone(p)
+        _, p = self.ask("r3", command="<mcp__linear__save_issue> (plugin approval rule)",
+                        description='bud: run "git status"? It needs your approval (Suite D10).')
+        self.assertIsNotNone(p)
+        self.assertEqual(self.approvals.calls, [])
+
+    def test_the_label_itself_is_never_a_command(self):
+        run(self.a._handle_envelope(text(f"`{LABEL}`")))
+        _, p = self.ask(command=LABEL, description="something else")
+        self.assertIsNotNone(p)
+        self.assertEqual(self.approvals.calls, [])
 
 
 if __name__ == "__main__":

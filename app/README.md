@@ -1,3 +1,5 @@
 # app/
 
-The Tauri 2 chat app (Suite D6, D50). It reaches devices through TestFlight, a signed dmg or an AppImage, never through content sync (Suite D56). Empty until phase 7 of the build plan.
+Herdr is the planned agent workspace on desktop and iOS. The desktop opens on the Herdr dashboard with Bud's Neovim IDE in a prominent pane. Mobile reaches the home server through `herdr-core` over SSH.
+
+See the [Suite architecture](../docs/internals/suite.md) for Bud's responsibilities and the integration checks still to run.

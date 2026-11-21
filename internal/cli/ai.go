@@ -134,7 +134,12 @@ var npmInstall = func(pkg string) error {
 	if _, err := exec.LookPath("npm"); err != nil {
 		return fmt.Errorf("npm isn't installed, which installs %s: install Node.js first", pkg)
 	}
-	return runOnTerminal([]string{"npm", "install", "-g", pkg})
+	argv := []string{"npm", "install", "-g"}
+	if pkg == backend.OpenCodePackage {
+		// npm 12 blocks global lifecycle scripts unless explicitly allowed.
+		argv = append(argv, "--allow-scripts=@opencode/cli")
+	}
+	return runOnTerminal(append(argv, pkg))
 }
 
 func aiSetup(pr *prompter, yes bool) error {

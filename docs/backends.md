@@ -24,7 +24,7 @@ After changing `ai.backend`, restart the project's agent (`:BudAgent restart`) o
 | `opencode` | `opencode acp` | OpenCode; `bud ai setup` installs it with npm, and if that fails, install it yourself | OpenCode's own providers |
 | `custom` | `ai.custom.command`, e.g. `["gemini", "--experimental-acp"]` | Any ACP agent on your `PATH`, and `ai.agent.chat_ui = "bud"`, since bud knows no TUI for it | Whatever it does |
 
-`bud ai setup` installs the command for `openclaw`, `codex` and `opencode` with npm. For `claude` it points you at `bud claude setup`, and for `custom` the command is yours to install.
+`bud ai setup` installs the command for `openclaw`, `codex` and `opencode` with npm. Its OpenCode install uses `@opencode/cli@2.3.2` and allows that package’s postinstall script; it does not replace or verify an existing executable. The separate server planning OpenCode installer and runtime version enforcement are not built yet. For `claude` it points you at `bud claude setup`, and for `custom` the command is yours to install.
 
 ## What changes with the backend
 

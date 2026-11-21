@@ -6,10 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -114,8 +116,42 @@ func names(results []Result) []string {
 
 func TestSyncChecksSkipADeviceWithNoProfile(t *testing.T) {
 	p, _ := syncedDevice(t)
-	if got := checkSync(p, device(""), true); got != nil {
+	if got := checkSync(p, device(""), Options{Quick: true, Net: true}); got != nil {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestSyncChecksOpenCodeHarnessBeforeFirstSync(t *testing.T) {
+	t.Setenv("BUD_OVERLAY", "")
+	bin := t.TempDir()
+	t.Setenv("PATH", bin)
+	p := tempPaths(t)
+	r := byName(t, checkSync(p, device("dev-machine"), Options{}), "OpenCode harness")
+	if r.Status != Warn || !strings.Contains(r.Fix, "@opencode/cli@2.3.2") {
+		t.Fatalf("missing harness: %+v", r)
+	}
+	for _, version := range []string{"2.3.1", "2.3.2"} {
+		script := "#!/bin/sh\nprintf '%s\\n' '" + version + "'\n"
+		if err := os.WriteFile(filepath.Join(bin, "opencode"), []byte(script), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		r = byName(t, checkSync(p, device("dev-machine"), Options{}), "OpenCode harness")
+		if version == "2.3.2" && (r.Status != OK || r.Detail != version) {
+			t.Errorf("pinned harness: %+v", r)
+		}
+		if version != "2.3.2" && (r.Status != Warn || !strings.Contains(r.Detail, "want 2.3.2")) {
+			t.Errorf("mismatched harness: %+v", r)
+		}
+	}
+	for _, results := range [][]Result{
+		checkSync(p, device("dev-machine"), Options{Quick: true}),
+		checkSync(p, device("model-box"), Options{}),
+	} {
+		for _, r := range results {
+			if r.Name == "OpenCode harness" {
+				t.Fatalf("unexpected harness check in %+v", results)
+			}
+		}
 	}
 }
 
@@ -131,7 +167,7 @@ func TestSyncChecksPassRightAfterASync(t *testing.T) {
 	})}
 	t.Cleanup(func() { netClient = orig })
 
-	results := checkSync(p, device("dev-machine"), false)
+	results := checkSync(p, device("dev-machine"), Options{Quick: true})
 	if got := strings.Join(names(results), ","); got != "device profile,sync ledger,registry,content layers,synced config" {
 		t.Fatalf("offline checks = %s", got)
 	}
@@ -147,7 +183,7 @@ func TestSyncChecksPassRightAfterASync(t *testing.T) {
 		t.Errorf("ledger detail = %q", r.Detail)
 	}
 
-	results = checkSync(p, device("dev-machine"), true)
+	results = checkSync(p, device("dev-machine"), Options{Quick: true, Net: true})
 	if r := byName(t, results, "content channel"); r.Status != OK {
 		t.Errorf("channel = %v: %s", r.Status, r.Detail)
 	}
@@ -204,7 +240,7 @@ func TestContentLayersNameEachItemsLayer(t *testing.T) {
 func TestDeviceProfileFailsWhenItCantBeFound(t *testing.T) {
 	p, _ := syncedDevice(t)
 	withSyncCheck(t, &syncer.Report{}, nil)
-	r := byName(t, checkSync(p, device("laptop"), false), "device profile")
+	r := byName(t, checkSync(p, device("laptop"), Options{Quick: true}), "device profile")
 	if r.Status != Fail || !strings.Contains(r.Detail, "laptop") || r.Fix == "" {
 		t.Fatalf("got %+v", r)
 	}
@@ -230,7 +266,7 @@ func TestSyncLedger(t *testing.T) {
 			p, cfg := syncedDevice(t)
 			withSyncCheck(t, &syncer.Report{}, nil)
 			tt.mess(t, p, cfg)
-			results := checkSync(p, device("dev-machine"), false)
+			results := checkSync(p, device("dev-machine"), Options{Quick: true})
 			r := byName(t, results, "sync ledger")
 			if r.Status != tt.status || !strings.Contains(r.Detail, tt.detail) || !strings.Contains(r.Fix, tt.fix) {
 				t.Fatalf("got %v %q (fix %q), want %v containing %q and fix %q", r.Status, r.Detail, r.Fix, tt.status, tt.detail, tt.fix)
@@ -249,7 +285,7 @@ func TestRegistryFailsWhenItDoesntValidate(t *testing.T) {
 	withSyncCheck(t, &syncer.Report{}, nil)
 	writeFile(t, filepath.Join(p.Content(), synced, "env", "registry.jsonc"), []byte(`{"version": 1, "roles": {"coding": {"model": "nope"}}}`))
 
-	results := checkSync(p, device("dev-machine"), false)
+	results := checkSync(p, device("dev-machine"), Options{Quick: true})
 	r := byName(t, results, "registry")
 	if r.Status != Fail || !strings.Contains(r.Detail, "nope") {
 		t.Fatalf("got %+v", r)
@@ -287,7 +323,7 @@ func TestSyncedConfig(t *testing.T) {
 			if tt.mess {
 				writeFile(t, cfg, []byte(`{"mine": 1}`))
 			}
-			r := byName(t, checkSync(p, device("dev-machine"), false), "synced config")
+			r := byName(t, checkSync(p, device("dev-machine"), Options{Quick: true}), "synced config")
 			if r.Status != tt.status || !strings.Contains(r.Detail, tt.detail) {
 				t.Fatalf("got %v %q, want %v containing %q", r.Status, r.Detail, tt.status, tt.detail)
 			}
@@ -403,8 +439,58 @@ func TestSyncChecksWaitOutARunningSync(t *testing.T) {
 	}
 	defer unlock()
 	// another holder of the lock, as a running sync is: flock is per open file
-	results := checkSync(p, device("dev-machine"), false)
+	results := checkSync(p, device("dev-machine"), Options{Quick: true})
 	if len(results) != 1 || results[0].Status != Warn || !strings.Contains(results[0].Detail, "a bud sync is running") {
 		t.Fatalf("got %+v", results)
+	}
+}
+
+func TestReviewChannelWarnsOnlyOnAServerDeviceAndNeverFails(t *testing.T) {
+	t.Setenv("BUD_OVERLAY", "")
+	runtimeDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	p := tempPaths(t)
+	if got := names(checkSync(p, device("dev-machine"), Options{Quick: true})); slices.Contains(got, "approval reviewer") {
+		t.Fatalf("a device without the server component was checked: %v", got)
+	}
+
+	if got := names(checkSync(p, device("server"), Options{Quick: true})); !slices.Contains(got, "approval reviewer") {
+		t.Fatalf("a server device wasn't checked: %v", got)
+	}
+	r := checkReviewChannel(p)
+	if r.Status != Warn || !strings.Contains(r.Detail, "no socket") || !strings.Contains(r.Detail, "secret isn't usable") {
+		t.Fatalf("missing: %+v", r)
+	}
+	if err := os.MkdirAll(filepath.Dir(p.ReviewSecret()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.ReviewSecret(), []byte("s3cret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := checkReviewChannel(p); r.Status != Warn || strings.Contains(r.Detail, "secret isn't usable") || !strings.Contains(r.Detail, "no socket") {
+		t.Errorf("secret only: %+v", r)
+	}
+	if err := os.MkdirAll(filepath.Dir(p.ReviewSocket()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	l, err := net.Listen("unix", p.ReviewSocket())
+	if err != nil {
+		t.Skip("no unix sockets here:", err)
+	}
+	defer l.Close()
+	if r := checkReviewChannel(p); r.Status != OK {
+		t.Errorf("in place: %+v", r)
+	}
+	// a secret the reviewer would refuse warns too
+	if err := os.Chmod(p.ReviewSecret(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := checkReviewChannel(p); r.Status != Warn || !strings.Contains(r.Detail, "mode 0600") {
+		t.Errorf("loose secret: %+v", r)
+	}
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	p2, _ := paths.Resolve()
+	if r := checkReviewChannel(p2); r.Status != Warn || !strings.Contains(r.Detail, "XDG_RUNTIME_DIR") {
+		t.Errorf("no runtime dir: %+v", r)
 	}
 }

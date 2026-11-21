@@ -267,3 +267,9 @@ func TestTUI(t *testing.T) {
 		t.Error("a missing token file is an error")
 	}
 }
+
+func TestOpenCodeSetupUsesPinnedVersion(t *testing.T) {
+	if got := Install["opencode"]; got != "npm install -g @opencode/cli@2.3.2" {
+		t.Fatalf("OpenCode install = %q; want pinned version", got)
+	}
+}

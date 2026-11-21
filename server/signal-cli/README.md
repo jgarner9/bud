@@ -21,5 +21,5 @@ Signal for Hermes, the manager (Suite D30): signal-cli's daemon behind a systemd
    ```
 
    `SIGNAL_ALLOWED_USERS` must name your number alone: with it unset, or set to `*`, no reaction or code answers an approval. Leave `SIGNAL_GROUP_ALLOWED_USERS` unset, so groups stay off.
-6. `bud sync` installs the `bud-signal` plugin in `~/.hermes/plugins/` and renders Signal into Hermes's config (the URL above, unknown senders ignored, the plugin enabled). Then `hermes gateway restart`.
+6. `bud sync` installs the `bud-signal` plugin in `~/.hermes/plugins/` and renders Signal into Hermes's config (the URL above, unknown senders ignored, the plugin enabled). It also sets `SIGNAL_HTTP_URL` to the URL above in `~/.hermes/.env`, leaving every other line there as it is, since Hermes turns Signal on only when the URL and the bot account are both in its environment. Then `hermes gateway restart`.
 7. Check it end to end, from your phone: send the bot "hi" and get an answer; ask it for something that needs approval (say, a `git push`), react 👍 to the prompt, and see it run and the bot mark the prompt ✅; ask again, reply `no <code>`, and see it refused. A message from any other number gets no answer at all.

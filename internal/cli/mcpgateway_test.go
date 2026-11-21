@@ -17,7 +17,7 @@ func TestMCPGatewayReadsItsConfigAndNeedsItsKeys(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", state)
-	cfg := `{"listen": "127.0.0.1:8790", "servers": {"exa": {"url": "https://mcp.exa.ai/mcp", "privacy": ["P2"],
+	cfg := `{"listen": "127.0.0.1:8790", "servers": {"exa": {"url": "https://mcp.exa.ai/mcp", "privacy": ["P2"], "read_only": true,
 		"key": {"header": "x-api-key", "env": "BUD_TEST_EXA_KEY"}}}}`
 	if err := os.MkdirAll(filepath.Join(state, "bud"), 0o755); err != nil {
 		t.Fatal(err)

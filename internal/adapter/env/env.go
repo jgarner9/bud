@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -51,7 +52,7 @@ func Merge(frags []Fragment) (map[string]any, error) {
 // replacedLists are the bud.mcp.<name> lists a later fragment replaces
 // rather than appends to: a server's tiers, so an overlay can narrow them,
 // and its command, so an overlay can swap the executable
-var replacedLists = []string{"privacy", "command"}
+var replacedLists = []string{"privacy", "command", "approval"}
 
 // replaceServerLists drops from out each list in replacedLists that frag
 // sets for the same server, so the merge that follows replaces it
@@ -114,6 +115,12 @@ type Bud struct {
 	// It lives in the overlay, since the address is personal. Empty means
 	// none, and servers reached through it are left out
 	Gateway string `json:"gateway,omitempty"`
+	// Router is the model router's base URL, such as http://<tailnet IP>:8795
+	// (Suite D70, D104). It lives in the overlay, since the address is
+	// personal. When set, Hermes's private profile asks the router for
+	// bud/manager instead of naming providers itself, so the router's health
+	// fallback covers it. Empty means Hermes talks to the providers directly
+	Router string `json:"router,omitempty"`
 	// Privacy is the tier this device's sessions send the gateway. Empty
 	// sends no header, which the gateway takes as P0
 	Privacy string `json:"privacy,omitempty"`
@@ -148,6 +155,23 @@ type Server struct {
 	// none of a server that leaves P0 out (Suite D81)
 	Privacy  []string `json:"privacy"`
 	Disabled bool     `json:"disabled,omitempty"`
+	// HermesOnly exposes a loopback server to the P0 Hermes profile only.
+	// Leave URL unset until the worker is installed.
+	HermesOnly bool `json:"hermes_only,omitempty"`
+	// Approval tiers a gateway server's tools for the gateway's review
+	// (Suite D97, D103). Keys are tool-name globs with the runtime's
+	// "<name>_" prefix, as in the permission rules; bud sync strips it, since
+	// the gateway matches the upstream's own names. A tool no glob names asks
+	Approval *Approval `json:"approval,omitempty"`
+	// ReadOnly says every tool on a gateway server only reads, so the
+	// gateway needs no approval block for it
+	ReadOnly bool `json:"read_only,omitempty"`
+}
+
+// Approval is a server's tool tiers, in the shape of the gateway's
+// approval block
+type Approval struct {
+	Tools map[string]string `json:"tools,omitempty"`
 }
 
 // Remote says whether the resolved server is reached over HTTP
@@ -165,6 +189,35 @@ type Resolved struct {
 	Left   map[string]string
 	Hermes map[string]any
 	Tiers  map[string]string
+	// Router is the model router's base URL, empty when none is set
+	Router string
+	// Gateway holds each enabled gateway server's approval settings, by
+	// name, including servers left out of this device's runtimes, since the
+	// gateway still serves them
+	Gateway map[string]GatewayServer
+}
+
+// GatewayServer is what the gateway reads about one server beside its own
+// config: the file bud sync renders (see GatewayApprovals)
+type GatewayServer struct {
+	// Tools are upstream tool-name globs, allow or ask. An empty block is
+	// kept as {} (every tool asks), so only a server with no block omits it
+	Tools    *map[string]string `json:"tools,omitempty"`
+	ReadOnly bool               `json:"read_only,omitempty"`
+}
+
+// GatewayApprovals renders the gateway's approvals file, or nil when no
+// gateway server is declared
+func (r *Resolved) GatewayApprovals() ([]byte, error) {
+	if len(r.Gateway) == 0 {
+		return nil, nil
+	}
+	b, err := json.MarshalIndent(map[string]any{"servers": r.Gateway}, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("render the gateway approvals: %w", err)
+	}
+
+	return append(b, '\n'), nil
 }
 
 // Names are the resolved servers' names, sorted
@@ -218,6 +271,11 @@ func (b *Bud) Resolve() (*Resolved, error) {
 			add("bud.gateway: %v", err)
 		}
 	}
+	if b.Router != "" {
+		if err := checkService(b.Router, "router", "8795", "bud adds /v1"); err != nil {
+			add("bud.router: %v", err)
+		}
+	}
 
 	for _, tool := range sortedKeys(b.Tiers) {
 		if !toolRe.MatchString(tool) {
@@ -228,7 +286,7 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
-	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Hermes: b.Hermes, Tiers: b.Tiers}
+	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, Router: strings.TrimSuffix(b.Router, "/")}
 	for _, name := range sortedKeys(b.MCP) {
 		s := b.MCP[name]
 		at := "bud.mcp." + name
@@ -253,6 +311,26 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		if ways > 1 {
 			add("%s: set one of gateway, url and command", at)
 			continue
+		}
+		if s.HermesOnly && (!slices.Equal(s.Privacy, []string{"P0"}) || s.Gateway || len(s.Command) > 0 || (s.URL != "" && !loopbackService(s.URL))) {
+			add("%s: hermes_only requires P0 and a direct loopback URL, or no URL until configured", at)
+			continue
+		}
+		if !s.Gateway && (s.Approval != nil || s.ReadOnly) {
+			add("%s: approval and read_only apply to gateway servers only", at)
+			continue
+		}
+		if s.ReadOnly && s.Approval != nil {
+			add("%s: set read_only or approval, not both", at)
+			continue
+		}
+		if gs, bad := gatewayServer(name, s); len(bad) > 0 {
+			for _, m := range bad {
+				add("%s.approval.tools: %s", at, m)
+			}
+			continue
+		} else if s.Gateway && !s.Disabled {
+			r.Gateway[name] = gs
 		}
 		if s.Gateway && (len(s.Headers) > 0 || len(s.Env) > 0) {
 			add("%s: a gateway server takes no headers or env; the gateway adds its key", at)
@@ -285,6 +363,48 @@ func (b *Bud) Resolve() (*Resolved, error) {
 	}
 
 	return r, nil
+}
+
+// gatewayServer checks a server's approval tiers and strips the "<name>_"
+// prefix from their keys
+func gatewayServer(name string, s Server) (GatewayServer, []string) {
+	gs := GatewayServer{ReadOnly: s.ReadOnly}
+	if s.Approval == nil {
+		return gs, nil
+	}
+	var bad []string
+	tools := map[string]string{}
+	gs.Tools = &tools
+	for _, k := range sortedKeys(s.Approval.Tools) {
+		up, ok := strings.CutPrefix(k, name+"_")
+		switch {
+		case !ok || up == "":
+			bad = append(bad, fmt.Sprintf("%q must start with %s_, as the permission rules' tool names do", k, name))
+			continue
+		}
+		if _, err := path.Match(up, ""); err != nil || !toolRe.MatchString(up) {
+			bad = append(bad, fmt.Sprintf("%q isn't a valid tool-name glob", k))
+			continue
+		}
+		if v := s.Approval.Tools[k]; v != "allow" && v != "ask" {
+			bad = append(bad, fmt.Sprintf("%s: %q isn't allow or ask", k, v))
+			continue
+		}
+		tools[up] = s.Approval.Tools[k]
+	}
+
+	return gs, bad
+}
+
+// loopbackService keeps an internal-only server literal, so an environment
+// substitution cannot send its Authorization header outside this host.
+func loopbackService(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	ip, err := netip.ParseAddr(u.Hostname())
+	return err == nil && ip.Unmap().IsLoopback()
 }
 
 // validURL accepts an http(s) URL. {env:VAR} references are filled at
@@ -342,22 +462,29 @@ func (r *Resolved) CheckExtras(where string, extras map[string]any, transport []
 // address, since the gateway refuses a Host that isn't one (it guards
 // against DNS rebinding), so a MagicDNS name would never get through
 func checkGateway(raw string) error {
+	return checkService(raw, "gateway", "8790", "bud adds /<server>/mcp")
+}
+
+// checkService checks a home-server service's base URL: http(s), a loopback
+// or tailnet IP with a port, and no path, since the service listens on the
+// tailnet only (Suite D72) and bud adds the path itself
+func checkService(raw, name, port, path string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return fmt.Errorf("%q isn't an http(s) URL such as http://<tailnet IP>:8790", raw)
+		return fmt.Errorf("%q isn't an http(s) URL such as http://<tailnet IP>:%s", raw, port)
 	}
-	if u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.User != nil {
-		return fmt.Errorf("%q: give only the scheme, address and port; bud adds /<server>/mcp", raw)
+	if u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		return fmt.Errorf("%q: give only the scheme, address and port; %s", raw, path)
 	}
 	ip, err := netip.ParseAddr(strings.Trim(u.Hostname(), "[]"))
 	if err != nil {
-		return fmt.Errorf("%q names a host, and the gateway answers only its IP address; use the tailnet IP (tailscale ip -4)", raw)
+		return fmt.Errorf("%q names a host, and the %s answers only its IP address; use the tailnet IP (tailscale ip -4)", raw, name)
 	}
 	if !ip.IsLoopback() && !tailnet(ip) {
-		return fmt.Errorf("%q isn't a loopback or tailnet address, and the gateway listens on the tailnet only", raw)
+		return fmt.Errorf("%q isn't a loopback or tailnet address, and the %s listens on the tailnet only", raw, name)
 	}
 	if _, _, err := net.SplitHostPort(u.Host); err != nil {
-		return fmt.Errorf("%q: give the gateway's port, such as :8790", raw)
+		return fmt.Errorf("%q: give the %s's port, such as :%s", raw, name, port)
 	}
 
 	return nil

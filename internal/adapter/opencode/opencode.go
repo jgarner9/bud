@@ -123,7 +123,7 @@ func Render(in Input) (*Output, error) {
 			"settings": map[string]any{"baseURL": strings.TrimSuffix(p.Endpoint, "/")},
 			"models":   models,
 		}
-		if v := keyVar(pid, p.Key); v != "" {
+		if v := registry.KeyVar(pid, p.Key); v != "" {
 			entry["env"] = []any{v}
 			if strings.HasPrefix(p.Key, "op://") {
 				out.Secrets[v] = p.Key
@@ -204,6 +204,11 @@ func Render(in Input) (*Output, error) {
 			if err := tools.CheckExtras("mcp.servers", servers, transportKeys); err != nil {
 				return nil, err
 			}
+			for _, name := range tools.Names() {
+				if tools.Servers[name].HermesOnly {
+					delete(servers, name)
+				}
+			}
 		}
 	}
 	// the private agent is the P0 tool rule, so no fragment may change its
@@ -235,28 +240,6 @@ func Render(in Input) (*Output, error) {
 	return out, nil
 }
 
-// keyVar is the environment variable a provider's key comes from: the one
-// an {env:VAR} names, or BUD_<PROVIDER>_API_KEY for an op:// reference
-func keyVar(provider, key string) string {
-	switch {
-	case key == "":
-		return ""
-	case strings.HasPrefix(key, "{env:"):
-		return strings.TrimSuffix(strings.TrimPrefix(key, "{env:"), "}")
-	default:
-		up := strings.Map(func(r rune) rune {
-			if r >= 'a' && r <= 'z' {
-				return r - 'a' + 'A'
-			}
-			if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-				return r
-			}
-			return '_'
-		}, provider)
-		return "BUD_" + up + "_API_KEY"
-	}
-}
-
 // mcpServers is OpenCode's mcp.servers for the resolved servers: remote
 // ones with OAuth off, since every key bud uses is a header or the
 // gateway's, and local ones as a command
@@ -264,6 +247,9 @@ func mcpServers(tools *env.Resolved) map[string]any {
 	servers := map[string]any{}
 	for _, name := range tools.Names() {
 		s := tools.Servers[name]
+		if s.HermesOnly {
+			continue
+		}
 		var entry map[string]any
 		if s.Remote() {
 			entry = map[string]any{"type": "remote", "url": s.URL, "oauth": false}

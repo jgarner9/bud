@@ -149,6 +149,23 @@ func TestFragmentSecretsJoinTheProviderKeysForOpRun(t *testing.T) {
 	if _, err := Render(in); err == nil || !strings.Contains(err.Error(), "bud.opencode_secrets.BUD_GO_API_KEY") {
 		t.Fatalf("got %v", err)
 	}
+
+	// nor one the environment fills ({env:VAR})
+	in = shipped(t)
+	var v string
+	for pid, p := range in.Registry.Providers {
+		if k := registry.KeyVar(pid, p.Key); k != "" && !strings.HasPrefix(p.Key, "op://") {
+			v = k
+			break
+		}
+	}
+	if v == "" {
+		t.Fatal("the shipped registry has no {env:VAR} provider to test with")
+	}
+	in.Env = append(in.Env, Fragment{Name: "overlay/personal", Src: []byte(`{"bud": {"opencode_secrets": {"` + v + `": "op://vault/elsewhere/key"}}}`)})
+	if _, err := Render(in); err == nil || !strings.Contains(err.Error(), "bud.opencode_secrets."+v) {
+		t.Fatalf("got %v", err)
+	}
 }
 
 func TestFragmentsMergeInOrderAndRulesAppend(t *testing.T) {

@@ -2,7 +2,7 @@
 
 A device profile says what one machine runs, which update channel it follows, and which synced content it takes (Suite D18, D57, D61). `bud install --device <name>` reads it to pick the components to set up and remembers the name as the `device` setting. `bud sync` reads it to select the channel and content for that device. Without a device, `bud install` sets up the IDE alone, as it always has. The device profile is separate from `--profile full|minimal`, which is only how much of the IDE to install (Suite D62).
 
-The public repo ships three examples in `profiles/`: `dev-machine`, `server` and `model-box`. Your real profiles (laptop, home server, Qwen box) live in your private overlay's `profiles/`. An overlay profile replaces the example with the same name in full.
+The public repo ships four examples in `profiles/`: `dev-machine`, `server`, `server-planning` (the planning OpenCode's own user on the home server, `server/planning-opencode/`) and `model-box`. Your real profiles (laptop, home server, Qwen box) live in your private overlay's `profiles/`. An overlay profile replaces the example with the same name in full.
 
 ## Format
 

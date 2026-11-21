@@ -190,10 +190,18 @@ func Render(in Input) (*Output, error) {
 		return nil, err
 	}
 	out.Notes = tools.Notes()
+	// a provider's key variable is the registry's, whether op run or the
+	// environment fills it, so a fragment can't point it elsewhere
+	keyVars := map[string]string{}
+	for pid, p := range r.Providers {
+		if v := registry.KeyVar(pid, p.Key); v != "" {
+			keyVars[v] = pid
+		}
+	}
 	for _, v := range sortedKeys(tools.OpenCodeSecrets) {
 		ref := tools.OpenCodeSecrets[v]
-		if have, ok := out.Secrets[v]; ok && have != ref {
-			return nil, fmt.Errorf("bud.opencode_secrets.%s: a registry provider already reads its key from %s; drop it from the fragment or change the provider's key", v, v)
+		if pid, ok := keyVars[v]; ok && out.Secrets[v] != ref {
+			return nil, fmt.Errorf("bud.opencode_secrets.%s: the registry's provider %s reads its key from %s; drop it from the fragment or change the provider's key", v, pid, v)
 		}
 		out.Secrets[v] = ref
 	}

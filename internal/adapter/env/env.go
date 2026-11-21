@@ -301,8 +301,8 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		if !envVarRe.MatchString(v) {
 			add("bud.opencode_secrets.%s: a variable name is uppercase letters, digits and '_', not starting with a digit", v)
 		}
-		if !strings.HasPrefix(b.OpenCodeSecrets[v], "op://") {
-			add("bud.opencode_secrets.%s: the value must be an op:// reference, never the secret itself", v)
+		if !registry.IsOpRef(b.OpenCodeSecrets[v]) {
+			add("bud.opencode_secrets.%s: the value must be an op://vault/item/field reference, never the secret itself", v)
 		}
 	}
 

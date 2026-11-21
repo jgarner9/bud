@@ -64,9 +64,12 @@ type upstream struct {
 	name     string
 	privacy  []string
 	url      *url.URL
-	header   string // the key's header, empty for a server with no key
-	value    string // the key, with its prefix
-	proxy    *httputil.ReverseProxy
+	// inside is an upstream on loopback or the tailnet: a Bud-owned server,
+	// which is told the session's tier (Suite D108); one outside never is
+	inside bool
+	header string // the key's header, empty for a server with no key
+	value  string // the key, with its prefix
+	proxy  *httputil.ReverseProxy
 }
 
 // New builds the gateway from a validated config, reading each key with
@@ -83,7 +86,7 @@ func New(c *Config, audit *Audit, getenv func(string) string) (*Gateway, error) 
 		if err != nil {
 			return nil, fmt.Errorf("servers.%s.url: %w", name, err)
 		}
-		up := &upstream{approval: s.Approval, name: name, privacy: s.Privacy, url: u, value: keys[name]}
+		up := &upstream{approval: s.Approval, name: name, privacy: s.Privacy, url: u, value: keys[name], inside: tailnet.Inside(u.Hostname())}
 		if s.Key != nil {
 			up.header = s.Key.Header
 		}
@@ -104,7 +107,10 @@ func New(c *Config, audit *Audit, getenv func(string) string) (*Gateway, error) 
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) { g.mux.ServeHTTP(w, r) }
 
 // rewrite points the outgoing request at the upstream and swaps the
-// client's credentials for the server's key
+// client's credentials for the server's key. The tier serve checked goes
+// on only to an upstream inside the house (Suite D108), so a Bud-owned
+// server such as bud memory-mcp can filter by it and a cloud one never
+// learns it
 func (u *upstream) rewrite(pr *httputil.ProxyRequest) {
 	out := *u.url
 	pr.Out.URL = &out
@@ -113,6 +119,9 @@ func (u *upstream) rewrite(pr *httputil.ProxyRequest) {
 	h.Del("Authorization")
 	h.Del("Cookie")
 	h.Del(PrivacyHeader)
+	if u.inside {
+		h.Set(PrivacyHeader, pr.In.Header.Get(PrivacyHeader))
+	}
 	if u.header != "" {
 		h.Set(u.header, u.value)
 	}
@@ -141,6 +150,9 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("mcp-gateway: %s is %q; use P0, P1 or P2", PrivacyHeader, tier), http.StatusBadRequest)
 		return
 	}
+	// what rewrite forwards: the checked tier, so a missing header reaches
+	// a Bud-owned upstream as P0, never as nothing
+	r.Header.Set(PrivacyHeader, tier)
 
 	var body []byte
 	if r.Body != nil {

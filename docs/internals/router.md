@@ -13,7 +13,7 @@ The body is read up to 10 MiB (413 past it) and decoded into `map[string]json.Ra
 
 ## Privacy tiers
 
-The tier comes from `X-Bud-Privacy` (`registry.RequestTier`, shared with the MCP gateway): P0, P1 or P2, and a missing header is P0, so an unconfigured client fails closed (Suite D23, D81). Any other value is a 400 naming the valid ones. A model serves a request only if the tier is in its `privacy` list (`Model.Allows`); otherwise an explicit model id, or a role with no eligible member, is a 403 that points at `GET /v1/models` with that header. The header is stripped before forwarding, and every proxied response carries `X-Bud-Model: <registry model id>`, replacing any upstream header of that name.
+The tier comes from `X-Bud-Privacy` (`registry.RequestTier`, shared with the MCP gateway): P0, P1 or P2, and a missing header is P0, so an unconfigured client fails closed (Suite D23, D81). Any other value is a 400 naming the valid ones. A model serves a request only if the tier is in its `privacy` list (`Model.Allows`); otherwise an explicit model id, or a role with no eligible member, is a 403 that points at `GET /v1/models` with that header. The header is stripped before forwarding, and every proxied response carries `X-Bud-Model: <registry model id>`, replacing any upstream header of that name. As at the gateway, the header is a guard against private text leaking by accident, not authentication: a caller on the tailnet can send any tier, and the tailnet is the authentication (Suite D72). Devices get their header from `bud sync`.
 
 ## Keys and headers
 

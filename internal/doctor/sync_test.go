@@ -6,10 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -440,5 +442,55 @@ func TestSyncChecksWaitOutARunningSync(t *testing.T) {
 	results := checkSync(p, device("dev-machine"), Options{Quick: true})
 	if len(results) != 1 || results[0].Status != Warn || !strings.Contains(results[0].Detail, "a bud sync is running") {
 		t.Fatalf("got %+v", results)
+	}
+}
+
+func TestReviewChannelWarnsOnlyOnAServerDeviceAndNeverFails(t *testing.T) {
+	t.Setenv("BUD_OVERLAY", "")
+	runtimeDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	p := tempPaths(t)
+	if got := names(checkSync(p, device("dev-machine"), Options{Quick: true})); slices.Contains(got, "approval reviewer") {
+		t.Fatalf("a device without the server component was checked: %v", got)
+	}
+
+	if got := names(checkSync(p, device("server"), Options{Quick: true})); !slices.Contains(got, "approval reviewer") {
+		t.Fatalf("a server device wasn't checked: %v", got)
+	}
+	r := checkReviewChannel(p)
+	if r.Status != Warn || !strings.Contains(r.Detail, "no socket") || !strings.Contains(r.Detail, "secret isn't usable") {
+		t.Fatalf("missing: %+v", r)
+	}
+	if err := os.MkdirAll(filepath.Dir(p.ReviewSecret()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.ReviewSecret(), []byte("s3cret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := checkReviewChannel(p); r.Status != Warn || strings.Contains(r.Detail, "secret isn't usable") || !strings.Contains(r.Detail, "no socket") {
+		t.Errorf("secret only: %+v", r)
+	}
+	if err := os.MkdirAll(filepath.Dir(p.ReviewSocket()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	l, err := net.Listen("unix", p.ReviewSocket())
+	if err != nil {
+		t.Skip("no unix sockets here:", err)
+	}
+	defer l.Close()
+	if r := checkReviewChannel(p); r.Status != OK {
+		t.Errorf("in place: %+v", r)
+	}
+	// a secret the reviewer would refuse warns too
+	if err := os.Chmod(p.ReviewSecret(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := checkReviewChannel(p); r.Status != Warn || !strings.Contains(r.Detail, "mode 0600") {
+		t.Errorf("loose secret: %+v", r)
+	}
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	p2, _ := paths.Resolve()
+	if r := checkReviewChannel(p2); r.Status != Warn || !strings.Contains(r.Detail, "XDG_RUNTIME_DIR") {
+		t.Errorf("no runtime dir: %+v", r)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"jgarner.dev/bud/internal/agent"
+	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/content"
 	"jgarner.dev/bud/internal/overlay"
@@ -58,6 +59,9 @@ func checkSync(p *paths.Paths, cfg config.Settings, opts Options) []Result {
 
 	prof, profResult := checkDevice(p, cfg.Device)
 	results := []Result{profResult}
+	if prof != nil && prof.Has("server") {
+		results = append(results, checkReviewChannel(p))
+	}
 	if !opts.Quick && prof != nil && slices.Contains(prof.Components, "harness") {
 		results = append(results, checkOpenCodeHarness())
 	}
@@ -89,6 +93,35 @@ func checkSync(p *paths.Paths, cfg config.Settings, opts Options) []Result {
 	}
 
 	return results
+}
+
+// checkReviewChannel looks for the approval reviewer's socket and secret
+// (Suite D97, D103), which the bud-signal plugin creates and the gateway and
+// ops dial. Only a server-profile device runs them, so only it is asked. A
+// miss warns and never fails: without the reviewer, approval-tier calls are
+// refused, which is safe, but nothing can be approved until it runs. It
+// looks at files and doesn't dial, so no prompt reaches Signal
+func checkReviewChannel(p *paths.Paths) Result {
+	r := Result{Name: "approval reviewer"}
+	var missing []string
+	sock := p.ReviewSocket()
+	if sock == "" {
+		missing = append(missing, "no runtime dir (XDG_RUNTIME_DIR is unset), so there is no socket")
+	} else if fi, err := os.Lstat(sock); err != nil || fi.Mode()&os.ModeSocket == 0 {
+		missing = append(missing, "no socket at "+sock)
+	}
+	if err := approval.CheckSecret(p.ReviewSecret()); err != nil {
+		missing = append(missing, "the secret isn't usable ("+err.Error()+")")
+	}
+	if len(missing) == 0 {
+		r.Detail = "the reviewer's socket and secret are in place"
+		return r
+	}
+	r.Status = Warn
+	r.Detail = strings.Join(missing, "; ") + "; gateway and ops calls that need approval are refused until the bud-signal plugin is running"
+	r.Fix = "restart Hermes's gateway so the bud-signal plugin starts its reviewer (docs/internals/signal.md)"
+
+	return r
 }
 
 func checkOpenCodeHarness() Result {

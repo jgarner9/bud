@@ -199,6 +199,12 @@ func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }
 // RouterSpend is the router's spend ledger (Suite D24, D64)
 func (p *Paths) RouterSpend() string { return filepath.Join(p.State, "router-spend.json") }
 
+// MCPGatewayApprovals is the per-server approval tiers bud sync renders from
+// the env fragments; the gateway reads it from beside its own config
+const MCPGatewayApprovalsFile = "mcp-gateway-approvals.json"
+
+func (p *Paths) MCPGatewayApprovals() string { return filepath.Join(p.State, MCPGatewayApprovalsFile) }
+
 // ApprovalStore is the approval store (internal/approval), private to the trusted processes
 func (p *Paths) ApprovalStore() string { return filepath.Join(p.State, "approvals.json") }
 

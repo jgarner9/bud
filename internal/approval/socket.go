@@ -127,6 +127,13 @@ func readLine(r *bufio.Reader) ([]byte, error) {
 // maxSecret bounds the secret file read
 const maxSecret = 4096
 
+// CheckSecret reports whether the secret file at path passes the checks a
+// review makes before sending it, without returning the secret
+func CheckSecret(path string) error {
+	_, err := readSecret(path)
+	return err
+}
+
 func readSecret(path string) (string, error) {
 	// no-follow so a symlink is refused, non-blocking so a FIFO can't hang
 	// the review, and the checks run on the opened file, not the path

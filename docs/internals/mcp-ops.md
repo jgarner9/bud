@@ -11,10 +11,10 @@ Every tool is read-only and wraps code bud already has. The only thing it touche
 | `doctor` | none | `bud doctor --quick` as JSON: `failed` and `warnings` counts, then each result's `name`, `status` (`ok`, `warn`, `fail`), `detail` and `fix`. It never runs the network checks (`--net`): the server can't see a session's tier, since the gateway strips `X-Bud-Privacy`, and P0 sessions may call it, so nothing it does may leave the house (D81). The slow startup timing is skipped too. |
 | `sync_status` | none | What the sync ledger says this device has: `device`, `channel`, `content` (the version in use), `current` (where the `content/current` link points), `overlay` (repo and commit), `rolled_back`, and `drift`, each file bud wrote whose bytes changed (`changed`) or that's gone (`missing`). `synced` is false on a device `bud sync` never ran on. A sync running right now is an error saying to ask again. |
 | `spend` | none | Not built yet: the error says router spend comes with the model gateway (build plan phase 3, D70). |
-| `approvals` | none | Not built yet: the error says the approval queue comes with the approval service (phase 7) and the shared approval log (JGA-348). |
+| `approvals` | none | The count of approval requests still waiting, `pending` in total and `by_action` (such as `mcp:linear/save_issue`). It reads `paths.ApprovalStore` without the lock, writes nothing and creates nothing, and leaves out ids, targets and arguments, so it can't approve or replay anything. An unwritten store is zero. Expired and decided requests aren't counted. |
 | `reviews` | none | Not built yet: the error says staged skill and memory writes come with Hermes (D48) and the memory curator (phase 5). |
 
-The three that aren't built are listed anyway, with descriptions that say so, so a model asked "what's waiting on me" answers that the queues don't exist yet rather than that nothing is waiting. Each one becomes a wrapper when the code it reads lands.
+The two that aren't built are listed anyway, with descriptions that say so, so a model asked "what's waiting on me" answers that the queues don't exist yet rather than that nothing is waiting. Each one becomes a wrapper when the code it reads lands.
 
 Tool calls run one at a time, since `doctor` and `sync_status` both take the sync lock and would otherwise see each other as a running sync.
 

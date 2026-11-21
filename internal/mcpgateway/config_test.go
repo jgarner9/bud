@@ -59,7 +59,7 @@ func TestValidateNamesEachProblem(t *testing.T) {
 func TestInsideServersMayTakeP0(t *testing.T) {
 	c := &Config{Listen: "100.64.0.1:8790", Servers: map[string]Server{
 		"ops": {URL: "http://127.0.0.1:8791/mcp", Privacy: []string{"P0", "P1"}},
-		"mem": {URL: "http://[fd7a:115c:a1e0::2]:8792/mcp", Privacy: []string{"P0"}},
+		"mem": {URL: "http://[fd7a:115c:a1e0::2]:8792/mcp", Privacy: []string{"P0"}, ReadOnly: true},
 	}}
 	if err := c.Validate(); err != nil {
 		t.Error(err)
@@ -89,7 +89,7 @@ func TestApprovalServerURLWithAQueryIsRefused(t *testing.T) {
 		t.Errorf("got %v, want a query-string error naming the key header", err)
 	}
 	s := c.Servers["linear"]
-	s.Approval = nil
+	s.Approval, s.ReadOnly = nil, true
 	c.Servers["linear"] = s
 	if err := c.Validate(); err != nil {
 		t.Errorf("without approval: %v", err)
@@ -103,5 +103,78 @@ func TestApprovalOnTheOpsServerIsRefused(t *testing.T) {
 	}}
 	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "reviewed twice") {
 		t.Errorf("err = %v, want it to say ops enforces approvals itself", err)
+	}
+}
+
+func TestServerWithoutApprovalOrReadOnlyIsRefusedButOpsIsNot(t *testing.T) {
+	c := &Config{Listen: "127.0.0.1:1", Servers: map[string]Server{
+		"linear": {URL: "https://mcp.linear.app/mcp", Privacy: []string{"P1"}},
+		"ops":    {URL: "http://127.0.0.1:8792/mcp", Privacy: []string{"P0"}},
+	}}
+	err := c.Validate()
+	if err == nil || !strings.Contains(err.Error(), "servers.linear.approval") || !strings.Contains(err.Error(), "bud sync") {
+		t.Fatalf("err = %v, want it to name linear and say to run bud sync", err)
+	}
+	if strings.Contains(err.Error(), "servers.ops") {
+		t.Errorf("ops was refused: %v", err)
+	}
+}
+
+func TestRenderedApprovalsWithReadOnlyAndToolsAreRefused(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "mcp-gateway.json")
+	cfg := `{"listen":"127.0.0.1:1","servers":{"linear":{"url":"https://mcp.linear.app/mcp","privacy":["P1"]}}}`
+	if err := os.WriteFile(p, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rendered := `{"servers":{"linear":{"read_only":true,"tools":{}}}}`
+	if err := os.WriteFile(filepath.Join(dir, "mcp-gateway-approvals.json"), []byte(rendered), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Read(p); err == nil || !strings.Contains(err.Error(), "not both") {
+		t.Errorf("Read = %v, want read_only and tools refused", err)
+	}
+}
+
+func TestAnEmptyRenderedToolsBlockAsksEverything(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "mcp-gateway.json")
+	cfg := `{"listen":"127.0.0.1:1","servers":{"linear":{"url":"https://mcp.linear.app/mcp","privacy":["P1"]}}}`
+	if err := os.WriteFile(p, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mcp-gateway-approvals.json"), []byte(`{"servers":{"linear":{"tools":{}}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Read(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Servers["linear"].Approval.Asks("get_issue") {
+		t.Error("an empty tools block let a call through without asking")
+	}
+}
+
+func TestReadLaysTheRenderedApprovalsOverTheServers(t *testing.T) {
+	dir := t.TempDir()
+	cfg := `{"listen":"127.0.0.1:1","servers":{"linear":{"url":"https://mcp.linear.app/mcp","privacy":["P1"]},
+		"exa":{"url":"https://mcp.exa.ai/mcp","privacy":["P1"]}}}`
+	p := filepath.Join(dir, "mcp-gateway.json")
+	if err := os.WriteFile(p, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Read(p); err == nil || !strings.Contains(err.Error(), "servers.linear.approval") {
+		t.Fatalf("before sync: %v", err)
+	}
+	rendered := `{"servers":{"linear":{"tools":{"get_*":"allow"}},"exa":{"read_only":true},"gone":{"read_only":true}}}`
+	if err := os.WriteFile(filepath.Join(dir, "mcp-gateway-approvals.json"), []byte(rendered), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Read(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Servers["linear"].Approval.Asks("get_issue") || !c.Servers["linear"].Approval.Asks("save_issue") || !c.Servers["exa"].ReadOnly {
+		t.Errorf("servers %+v", c.Servers)
 	}
 }

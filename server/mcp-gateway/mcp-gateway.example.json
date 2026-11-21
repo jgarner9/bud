@@ -4,16 +4,19 @@
     "linear": {
       "url": "https://mcp.linear.app/mcp",
       "privacy": ["P1", "P2"],
-      "key": { "header": "Authorization", "prefix": "Bearer ", "env": "LINEAR_API_KEY" }
+      "key": { "header": "Authorization", "prefix": "Bearer ", "env": "LINEAR_API_KEY" },
+      "approval": { "tools": { "get_*": "allow", "list_*": "allow", "search_*": "allow", "extract_images": "allow" } }
     },
     "exa": {
       "url": "https://mcp.exa.ai/mcp",
       "privacy": ["P1", "P2"],
-      "key": { "header": "x-api-key", "env": "EXA_API_KEY" }
+      "key": { "header": "x-api-key", "env": "EXA_API_KEY" },
+      "read_only": true
     },
     "calendar": {
       "url": "http://127.0.0.1:8791/mcp",
-      "privacy": ["P0"]
+      "privacy": ["P0"],
+      "approval": { "tools": { "list_*": "allow", "create_*": "ask", "move_*": "ask", "delete_*": "ask" } }
     },
     "ops": {
       "url": "http://127.0.0.1:8792/mcp",

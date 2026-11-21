@@ -165,6 +165,7 @@ func TestEachExampleProfileRendersItsGoldenConfigs(t *testing.T) {
 				{filepath.Join(o.Paths.OpenCodeConfig(), "opencode.jsonc"), "opencode.jsonc"},
 				{o.Paths.HermesConfig(), "hermes.yaml"},
 				{filepath.Join(o.Paths.HermesCloud(), "config.yaml"), "hermes-cloud.yaml"},
+				{o.Paths.MCPGatewayApprovals(), "mcp-gateway-approvals.json"},
 			} {
 				golden := filepath.Join("testdata", "profiles", name, f.golden)
 				got, err := os.ReadFile(f.path)

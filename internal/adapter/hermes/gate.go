@@ -229,13 +229,16 @@ func (t *Tiers) lineEffect(line string, depth int) (worst, why string, opaque bo
 }
 
 // partEffect tiers one simple command: the strictest of the command as
-// written and as it runs once wrappers are taken off (env and variable
-// assignments, command, exec, nohup, time, sudo, xargs), with a
-// path-qualified program (./git, /usr/bin/git) also read by its base name,
-// and the words also read with their quotes removed,
-// so a path never dodges a rule for the bare name. A path-qualified program
-// is never matched as the bare one for an allow, since the strictest wins.
-// sh -c and eval run their argument as a line of its own, tiered the same way
+// written and as it runs once wrappers are taken off (variable assignments,
+// env, command, exec, nohup, time, sudo, xargs, nice, timeout, stdbuf), with
+// a path-qualified program (./git, /usr/bin/git) also read by its base name,
+// and the words also read with their quotes removed. A path never dodges a
+// rule for the bare name, and is never matched as the bare one for an
+// allow, since the strictest wins. A wrapper's options can take values
+// (sudo -u root, nice -n 10), which can't be told from the command without
+// knowing each wrapper, so every word after a wrapper is tried as the start
+// of the command it runs. sh -c and eval run their argument as a line of its
+// own, tiered the same way
 func (t *Tiers) partEffect(part string, depth int) string {
 	worst := Allow
 	raise := func(e string) {
@@ -255,16 +258,25 @@ func (t *Tiers) partEffect(part string, depth int) string {
 		// as the shell reads it once quotes are removed: "g"it, \git
 		raise(t.partEffect(strings.Join(plain, " "), depth))
 	}
-	for len(words) > 0 {
-		cmd := strings.Join(words, " ")
-		match(cmd)
-		prog := words[0]
-		if strings.Contains(prog, "/") {
-			base := path.Base(prog)
-			match(strings.Join(append([]string{base}, words[1:]...), " "))
-			prog = base
+	// each start is where a command may begin: 0, and every word after an
+	// assignment or a wrapper; seen keeps the work linear in the words
+	seen := make([]bool, len(words))
+	starts := []int{0}
+	for len(starts) > 0 {
+		i := starts[0]
+		starts = starts[1:]
+		if i >= len(words) || seen[i] {
+			continue
 		}
-		if script, ok := inlineScript(prog, words[1:]); ok {
+		seen[i] = true
+		cmd := words[i:]
+		match(strings.Join(cmd, " "))
+		prog := cmd[0]
+		if strings.Contains(prog, "/") {
+			prog = path.Base(prog)
+			match(strings.Join(append([]string{prog}, cmd[1:]...), " "))
+		}
+		if script, ok := inlineScript(prog, cmd[1:]); ok {
 			if depth >= maxDepth {
 				raise(Ask)
 			} else {
@@ -272,11 +284,14 @@ func (t *Tiers) partEffect(part string, depth int) string {
 				raise(e)
 			}
 		}
-		rest, ok := unwrap(prog, words)
-		if !ok {
-			break
+		switch {
+		case assignment.MatchString(cmd[0]):
+			starts = append(starts, i+1)
+		case slices.Contains(wrappers, prog):
+			for j := i + 1; j < len(words); j++ {
+				starts = append(starts, j)
+			}
 		}
-		words = rest
 	}
 
 	return worst
@@ -284,32 +299,18 @@ func (t *Tiers) partEffect(part string, depth int) string {
 
 var assignment = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 
-// wrappers run the command after them (and their own flags)
+// wrappers run a command given after their own options
 var wrappers = []string{"env", "command", "exec", "nohup", "time", "sudo", "xargs", "nice", "timeout", "stdbuf"}
-
-// unwrap takes a leading variable assignment, or a wrapper and its flags,
-// off a command's words
-func unwrap(prog string, words []string) ([]string, bool) {
-	if assignment.MatchString(words[0]) {
-		return words[1:], true
-	}
-	if !slices.Contains(wrappers, prog) {
-		return nil, false
-	}
-	rest := words[1:]
-	for len(rest) > 0 && (strings.HasPrefix(rest[0], "-") || assignment.MatchString(rest[0])) {
-		rest = rest[1:]
-	}
-	if prog == "timeout" && len(rest) > 0 {
-		rest = rest[1:] // the duration
-	}
-
-	return rest, len(rest) > 0
-}
 
 var shells = []string{"sh", "bash", "zsh", "dash", "ksh"}
 
-// inlineScript finds the line a shell's -c or eval runs
+// shortC is a cluster of short options holding c, such as -c, -ec or -lc
+var shortC = regexp.MustCompile(`^-[A-Za-z]*c[A-Za-z]*$`)
+
+// inlineScript finds the line a shell's -c or eval runs. A shell's other
+// options, long ones and ones that take a value (-o pipefail) among them,
+// may come before -c, so any short-option cluster holding c counts, wherever
+// it is; reading one too many as -c only ever adds a check
 func inlineScript(prog string, args []string) (string, bool) {
 	if prog == "eval" {
 		return strings.Join(args, " "), len(args) > 0
@@ -318,10 +319,7 @@ func inlineScript(prog string, args []string) (string, bool) {
 		return "", false
 	}
 	for i, a := range args {
-		if !strings.HasPrefix(a, "-") || strings.HasPrefix(a, "--") {
-			return "", false
-		}
-		if strings.Contains(a, "c") && i+1 < len(args) {
+		if shortC.MatchString(a) && i+1 < len(args) {
 			return strings.Join(args[i+1:], " "), true
 		}
 	}

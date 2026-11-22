@@ -503,3 +503,22 @@ func TestABadSandboxShellRuleIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// an empty sandbox_shell keeps the permission shell rules, as an unset one does
+func TestAnEmptySandboxShellKeepsTheShellRules(t *testing.T) {
+	out, err := Render(input(t, `{"permissions": [
+		{"action": "shell", "resource": "*", "effect": "ask"},
+		{"action": "shell", "resource": "op *", "effect": "deny"}
+	]}`, `{"bud": {"sandbox_shell": []}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tiers Tiers
+	if err := json.Unmarshal(out.Tiers, &tiers); err != nil {
+		t.Fatal(err)
+	}
+	want := []Rule{{"shell", "*", Ask}, {"shell", "op *", Deny}}
+	if !slices.Equal(tiers.Shell, want) {
+		t.Errorf("the tiers' shell rules: %+v, want %+v", tiers.Shell, want)
+	}
+}

@@ -279,6 +279,23 @@ func TestTheSandboxedTerminalAsksOnlyForTheAskList(t *testing.T) {
 		"twine upload dist/*":          Ask,
 		"docker push img:1":            Ask,
 		"gh release create v1":         Ask,
+		// the bare forms, with no arguments
+		"pnpm publish":  Ask,
+		"yarn publish":  Ask,
+		"cargo publish": Ask,
+		"docker push":   Ask,
+		"gh release":    Ask,
+		// wrapper options that take a value
+		"sudo -u root git push":      Ask,
+		"nice -n 10 ssh host":        Ask,
+		"timeout -s KILL 5 ssh host": Ask,
+		"env -u HOME git push":       Ask,
+		"xargs -I {} scp {} host:":   Ask,
+		// shell options before -c, long ones and ones that take a value
+		"bash --noprofile -c 'op read x'":     Deny,
+		"bash -o pipefail -c 'git push'":      Ask,
+		"bash --norc --noprofile -ec 'ssh h'": Ask,
+		"bash script.sh":                      Allow,
 		// compound commands: the strictest part wins
 		"ls; git push":           Ask,
 		"go test ./... && ssh x": Ask,

@@ -171,7 +171,7 @@ func Render(in Input) (*Output, error) {
 		if r.Action != "shell" {
 			continue
 		}
-		if tools.SandboxShell == nil {
+		if len(tools.SandboxShell) == 0 {
 			shell = append(shell, r)
 		}
 		if r.Effect == Deny {

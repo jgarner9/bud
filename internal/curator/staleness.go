@@ -230,7 +230,7 @@ func (c *Curator) pruneQueue(ctx context.Context) error {
 			continue
 		}
 		k, err := kb.ParseKey(it.Key)
-		if err != nil {
+		if err != nil || k.Path() != it.Page {
 			gone = append(gone, it.ID)
 			continue
 		}

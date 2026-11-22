@@ -332,6 +332,17 @@ func (c *Curator) act(ctx context.Context, st *State, key string, cand *Candidat
 			setFact(p, k, cand.Value, cand.Statement, cand.Section, cand.Occurrences, today)
 			msg = fmt.Sprintf("curator: change %s from %s to %s", key, existing.Value, cand.Value)
 			sum.Changed++
+			// the change settles any contradiction queued about this fact
+			q, err := c.Repo.ReadQueue()
+			if err != nil {
+				return err
+			}
+			if dropKey(q, key) {
+				if err := c.Repo.WriteQueue(q); err != nil {
+					return err
+				}
+				paths = append(paths, kb.QueuePath)
+			}
 			break
 		}
 		q, err := c.Repo.ReadQueue()
@@ -344,7 +355,7 @@ func (c *Curator) act(ctx context.Context, st *State, key string, cand *Candidat
 			q.Items = append(q.Items, kb.Item{
 				ID: id, Kind: kb.ItemContradiction, Page: rel, Section: k.Section, Key: key,
 				Current:  &kb.Claim{Value: existing.Value, Statement: line, Sources: existing.Sources},
-				Proposed: &kb.Claim{Value: cand.Value, Statement: oneLine(cand.Statement), Sources: sources(cand.Occurrences)},
+				Proposed: &kb.Claim{Value: cand.Value, Statement: oneLine(cand.Statement), Privacy: mostPrivate("", cand.Occurrences), Sources: sources(cand.Occurrences)},
 				Opened:   today,
 			})
 			if err := c.Repo.WriteQueue(q); err != nil {
@@ -370,12 +381,23 @@ func (c *Curator) act(ctx context.Context, st *State, key string, cand *Candidat
 	return st.Save(c.State)
 }
 
-// supported says whether a new value may replace the page's: two
-// independent occurrences, every one newer than the page's evidence
-func (c *Curator) supported(ctx context.Context, rel string, existing *kb.Fact, cand *Candidate) (bool, error) {
-	if independent(cand.Occurrences) < 2 {
-		return false, nil
+// dropKey removes the queue's contradictions about key, reporting whether any went
+func dropKey(q *kb.Queue, key string) bool {
+	n := len(q.Items)
+	out := q.Items[:0]
+	for _, it := range q.Items {
+		if it.Kind != kb.ItemContradiction || it.Key != key {
+			out = append(out, it)
+		}
 	}
+	q.Items = out
+
+	return len(out) != n
+}
+
+// supported says whether a new value may replace the page's: two
+// independent occurrences newer than all of the page's evidence
+func (c *Curator) supported(ctx context.Context, rel string, existing *kb.Fact, cand *Candidate) (bool, error) {
 	evidence := existing.Updated
 	for _, s := range existing.Sources {
 		evidence = max(evidence, s.Date)
@@ -387,13 +409,14 @@ func (c *Curator) supported(ctx context.Context, rel string, existing *kb.Fact, 
 	if !human.IsZero() {
 		evidence = max(evidence, human.UTC().Format(time.DateOnly))
 	}
+	var newer []Occurrence
 	for _, o := range cand.Occurrences {
-		if o.Date <= evidence {
-			return false, nil
+		if o.Date > evidence {
+			newer = append(newer, o)
 		}
 	}
 
-	return true, nil
+	return independent(newer) >= 2, nil
 }
 
 // commit commits paths with the evidence in the message

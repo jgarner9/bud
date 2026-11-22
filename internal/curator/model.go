@@ -157,7 +157,7 @@ func parseFacts(content string) ([]Fact, error) {
 	for _, f := range reply.Facts {
 		f.Value, f.Statement = oneLine(f.Value), oneLine(f.Statement)
 		f.Page, f.Section = oneLine(f.Page), oneLine(f.Section)
-		if _, err := kb.ParseKey(f.Key); err != nil || f.Value == "" || len(f.Value) > 200 || len(f.Statement) > 400 || kbsite.HasSecret(f.Value+" "+f.Statement) {
+		if _, err := kb.ParseKey(f.Key); err != nil || f.Value == "" || len(f.Value) > 200 || len(f.Statement) > 400 || kbsite.HasSecret(strings.Join([]string{f.Key, f.Value, f.Statement, f.Page, f.Section}, "\n")) {
 			continue
 		}
 		out = append(out, f)

@@ -7,10 +7,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"jgarner.dev/bud/internal/kb"
 )
+
+// slugRe is a page or section slug, as in a fact key
+var slugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // Answers to a review item
 const (
@@ -64,35 +68,39 @@ func (c *Curator) Resolve(ctx context.Context, id, answer string) error {
 	default:
 		return fmt.Errorf("%s is a refresh check: answer confirm (the section is still right), or edit the page yourself", id)
 	}
+	// the queue is committed data: its paths must name a page, and a
+	// contradiction's page must be its fact's
+	var k kb.Key
+	if item.Kind == kb.ItemContradiction {
+		if k, err = kb.ParseKey(item.Key); err != nil || k.Path() != item.Page || item.Current == nil || item.Proposed == nil {
+			return fmt.Errorf("review item %s is malformed (key %q, page %q): fix or remove it in %s by hand", id, item.Key, item.Page, kb.QueuePath)
+		}
+	} else if dir, slug := pageID(item.Page); kb.PagePath(dir, slug) != item.Page || !slugRe.MatchString(slug) || !slugRe.MatchString(item.Section) {
+		return fmt.Errorf("review item %s is malformed (page %q, section %q): fix or remove it in %s by hand", id, item.Page, item.Section, kb.QueuePath)
+	}
 	p, err := c.Repo.ReadPage(item.Page)
 	if err != nil {
 		return err
+	}
+	if item.Kind == kb.ItemContradiction {
+		// the page changed since the item was queued: the item is stale
+		if f := p.Meta.Facts[k.Local()]; f == nil || f.Value != item.Current.Value {
+			return fmt.Errorf("%s is stale: the page no longer says %s; the next run drops it from the queue", id, item.Current.Value)
+		}
 	}
 	today := c.today()
 	var subject string
 	switch answer {
 	case Take:
-		k, err := kb.ParseKey(item.Key)
-		if err != nil {
-			return err
-		}
-		if item.Proposed == nil {
-			return fmt.Errorf("%s has no proposed value to take", id)
-		}
 		title := k.Section
 		if s, ok := p.Section(k.Section); ok {
 			title = s.Title
 		}
 		var occ []Occurrence
 		for _, s := range item.Proposed.Sources {
-			occ = append(occ, Occurrence{Record: s.Record, Source: s.Source, Date: s.Date})
+			occ = append(occ, Occurrence{Record: s.Record, Source: s.Source, Date: s.Date, Privacy: item.Proposed.Privacy})
 		}
-		prev := p.Meta.Facts[k.Local()]
 		setFact(p, k, item.Proposed.Value, item.Proposed.Statement, title, occ, today)
-		// the item doesn't carry its sources' tiers: the fact keeps the old one
-		if prev != nil {
-			p.Meta.Facts[k.Local()].Privacy = prev.Privacy
-		}
 		subject = fmt.Sprintf("curator: take %s = %s (Jason, review item %s)", item.Key, item.Proposed.Value, id)
 	default:
 		s := section(p, item.Section)
@@ -118,7 +126,8 @@ func (c *Curator) Resolve(ctx context.Context, id, answer string) error {
 func (c *Curator) Restore(ctx context.Context, target string) error {
 	ref, sec, ok := strings.Cut(target, "#")
 	dir, slug, ok2 := strings.Cut(ref, "/")
-	if !ok || !ok2 || kb.Kinds[strings.TrimSuffix(dir, "s")] != dir || slug == "" || sec == "" {
+	// the same rules as a fact key, so the paths stay inside content/
+	if !ok || !ok2 || kb.Kinds[strings.TrimSuffix(dir, "s")] != dir || !slugRe.MatchString(slug) || !slugRe.MatchString(sec) {
 		return fmt.Errorf("%q isn't <projects|systems>/<page>#<section>, such as systems/archie#old-mail", target)
 	}
 	unlock, err := c.open(ctx)

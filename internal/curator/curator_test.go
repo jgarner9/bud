@@ -417,3 +417,106 @@ func TestRefusesADirtyClone(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestSupportedChangeSettlesItsQueueItem(t *testing.T) {
+	f := newFixture(t)
+	f.mem.add(1, "hermes", days(-3), "P2", key+"=8795")
+	f.mem.add(2, "opencode", days(-2), "P2", key+"=8795")
+	f.run(t)
+	f.mem.add(3, "hermes", days(-3), "P2", key+"=8800")
+	f.mem.add(4, "opencode", days(-1), "P1", key+"=8800")
+	f.run(t)
+	q, _ := f.c.Repo.ReadQueue()
+	if len(q.Items) != 1 || q.Items[0].Proposed.Privacy != "P1" {
+		t.Fatalf("queue %+v", q.Items)
+	}
+	// newer evidence changes the fact, and the item goes in the same commit
+	f.mem.add(5, "hermes", days(1), "P2", key+"=8800")
+	f.mem.add(6, "opencode", days(2), "P2", key+"=8800")
+	if sum := f.run(t); sum.Changed != 1 {
+		t.Fatalf("%+v", sum)
+	}
+	if q, _ := f.c.Repo.ReadQueue(); len(q.Items) != 0 {
+		t.Errorf("queue %+v", q.Items)
+	}
+	if files := f.git(t, "show", "--name-only", "--format=", "HEAD"); !strings.Contains(files, kb.QueuePath) {
+		t.Errorf("the change's commit has %q", files)
+	}
+}
+
+func TestTakeKeepsTheProposalsTier(t *testing.T) {
+	f := newFixture(t)
+	f.mem.add(1, "hermes", days(-3), "P2", key+"=8795")
+	f.mem.add(2, "opencode", days(-2), "P2", key+"=8795")
+	f.run(t)
+	f.mem.add(3, "hermes", days(-3), "P1", key+"=8800")
+	f.mem.add(4, "opencode", days(-1), "P2", key+"=8800")
+	f.run(t)
+	q, _ := f.c.Repo.ReadQueue()
+	if err := f.c.Resolve(context.Background(), q.Items[0].ID, Take); err != nil {
+		t.Fatal(err)
+	}
+	if fact := f.page(t, page).Meta.Facts["router/port"]; fact.Value != "8800" || fact.Privacy != "P1" {
+		t.Errorf("fact %+v", fact)
+	}
+}
+
+func TestTakeRefusesAStaleItem(t *testing.T) {
+	f := newFixture(t)
+	f.mem.add(1, "hermes", days(-3), "P2", key+"=8795")
+	f.mem.add(2, "opencode", days(-2), "P2", key+"=8795")
+	f.run(t)
+	f.mem.add(3, "hermes", days(-3), "P2", key+"=8800")
+	f.mem.add(4, "opencode", days(-1), "P2", key+"=8800")
+	f.run(t)
+	q, _ := f.c.Repo.ReadQueue()
+	p := f.page(t, page)
+	p.Meta.Facts["router/port"].Value = "9000"
+	if err := f.c.Repo.WritePage(page, p); err != nil {
+		t.Fatal(err)
+	}
+	f.git(t, "commit", "--quiet", "-am", "Jason fixes the port")
+	if err := f.c.Resolve(context.Background(), q.Items[0].ID, Take); err == nil || !strings.Contains(err.Error(), "stale") {
+		t.Fatalf("err = %v", err)
+	}
+	if v := f.page(t, page).Meta.Facts["router/port"].Value; v != "9000" {
+		t.Errorf("Jason's edit was overwritten: %s", v)
+	}
+}
+
+func TestQueueAndRestorePathsStayInTheKB(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	q := &kb.Queue{Items: []kb.Item{
+		{ID: "aaaa0001", Kind: kb.ItemContradiction, Page: "../../AGENTS.md", Section: "router", Key: key,
+			Current: &kb.Claim{Value: "1"}, Proposed: &kb.Claim{Value: "2"}, Opened: days(0)},
+		{ID: "aaaa0002", Kind: kb.ItemRefresh, Page: "content/systems/../../x.md", Section: "router", Opened: days(0)},
+	}}
+	if err := f.c.Repo.WriteQueue(q); err != nil {
+		t.Fatal(err)
+	}
+	f.git(t, "add", "-A")
+	f.git(t, "commit", "--quiet", "-m", "a bad queue")
+	for _, id := range []string{"aaaa0001", "aaaa0002"} {
+		answer := Take
+		if id == "aaaa0002" {
+			answer = Confirm
+		}
+		if err := f.c.Resolve(ctx, id, answer); err == nil || !strings.Contains(err.Error(), "malformed") {
+			t.Errorf("%s: err = %v", id, err)
+		}
+	}
+	for _, target := range []string{"systems/../other#router", "systems/home#../x", "systems/Home#router"} {
+		if err := f.c.Restore(ctx, target); err == nil || !strings.Contains(err.Error(), "isn't <projects|systems>") {
+			t.Errorf("restore %q: err = %v", target, err)
+		}
+	}
+	if _, err := f.c.Repo.ReadPage("../AGENTS.md"); err == nil {
+		t.Error("ReadPage left the KB")
+	}
+	// the nightly run drops the contradiction whose page doesn't match its key
+	f.run(t)
+	if q, _ := f.c.Repo.ReadQueue(); q.Find("aaaa0001") != nil {
+		t.Errorf("queue %+v", q.Items)
+	}
+}

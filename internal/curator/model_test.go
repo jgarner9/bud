@@ -43,7 +43,8 @@ func TestParseFacts(t *testing.T) {
 		{"key": "systems/home#router/port", "value": " 8795 ", "statement": "The router\nlistens on 8795.", "page": "Home", "section": "Router"},
 		{"key": "Bad Key", "value": "x"},
 		{"key": "systems/home#router/token", "value": "ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
-		{"key": "systems/home#router/empty", "value": ""}
+		{"key": "systems/home#router/empty", "value": ""},
+		{"key": "systems/home#router/name", "value": "x", "page": "ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 	]}` + "\n```")
 	if err != nil {
 		t.Fatal(err)

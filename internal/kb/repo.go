@@ -237,6 +237,9 @@ func (r Repo) Export(ctx context.Context, commit, dst string) error {
 
 // ReadPage reads the page at rel (a slash path inside the KB)
 func (r Repo) ReadPage(rel string) (*Page, error) {
+	if err := checkPagePath(rel); err != nil {
+		return nil, err
+	}
 	f, err := os.Open(filepath.Join(r.Dir, filepath.FromSlash(rel)))
 	if err != nil {
 		return nil, err
@@ -254,8 +257,22 @@ func (r Repo) ReadPage(rel string) (*Page, error) {
 	return p, nil
 }
 
+// checkPagePath refuses a page path that isn't a clean slash path to a
+// .md file under content/, since paths can come from the committed review
+// queue, which anyone with push access to bud-kb writes
+func checkPagePath(rel string) error {
+	if !fs.ValidPath(rel) || !strings.HasPrefix(rel, "content/") || !strings.HasSuffix(rel, ".md") {
+		return fmt.Errorf("%q isn't a page path: pages are content/<dir>/<slug>.md", rel)
+	}
+
+	return nil
+}
+
 // WritePage writes the page at rel
 func (r Repo) WritePage(rel string, p *Page) error {
+	if err := checkPagePath(rel); err != nil {
+		return err
+	}
 	b, err := p.Bytes()
 	if err != nil {
 		return err
@@ -297,9 +314,11 @@ const QueuePath = "data/review.json"
 
 // Claim is one side of a review item
 type Claim struct {
-	Value     string   `json:"value"`
-	Statement string   `json:"statement,omitempty"`
-	Sources   []Source `json:"sources,omitempty"`
+	Value     string `json:"value"`
+	Statement string `json:"statement,omitempty"`
+	// Privacy is the most private tier among the sources
+	Privacy string   `json:"privacy,omitempty"`
+	Sources []Source `json:"sources,omitempty"`
 }
 
 // Item kinds on the review queue

@@ -83,6 +83,6 @@ func runMCPGateway(g *Globals, args []string, configPath, registryPath string) e
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	g.Logf("mcp-gateway: serving %d servers on %s, %d privacy rules, audit log %s", len(c.Servers), c.Listen, len(rules), logPath)
+	g.Noticef("mcp-gateway: serving %d servers on %s, %d privacy rules, audit log %s", len(c.Servers), c.Listen, len(rules), logPath)
 	return serveGateway(ctx, c, gw)
 }

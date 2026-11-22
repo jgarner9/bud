@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"os"
@@ -44,8 +45,13 @@ func TestMCPGatewayReadsItsConfigAndNeedsItsKeys(t *testing.T) {
 		t.Fatalf("missing key: err = %v", err)
 	}
 	t.Setenv("BUD_TEST_EXA_KEY", "k")
-	if err := runMCPGateway(&Globals{}, nil, "", reg); err != nil {
+	var stderr bytes.Buffer
+	if err := runMCPGateway(&Globals{stderr: &stderr}, nil, "", reg); err != nil {
 		t.Fatal(err)
+	}
+	// without --verbose too, so the journal shows the rules were loaded
+	if !strings.Contains(stderr.String(), " privacy rules") || strings.Contains(stderr.String(), " 0 privacy rules") {
+		t.Errorf("stderr = %q, want the count of privacy rules", stderr.String())
 	}
 	if served == nil || served.Listen != "127.0.0.1:8790" {
 		t.Errorf("served %+v", served)

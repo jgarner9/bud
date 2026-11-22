@@ -103,6 +103,16 @@ func (g *Globals) flags(fs *flag.FlagSet) {
 	fs.StringVar(&g.Layout, "layout", "", "pane layout to open the editor with")
 }
 
+// Noticef writes one line to stderr whatever --verbose says: what a long-
+// running server says once as it starts, so its journal shows it
+func (g *Globals) Noticef(format string, a ...any) {
+	w := g.stderr
+	if w == nil {
+		w = os.Stderr
+	}
+	fmt.Fprintf(w, "bud: "+format+"\n", a...)
+}
+
 // Logf writes one line to stderr when --verbose is on
 func (g *Globals) Logf(format string, a ...any) {
 	if !g.Verbose {

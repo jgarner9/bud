@@ -233,6 +233,10 @@ type Resolved struct {
 	Tiers  map[string]string
 	// TiersWhen are the when rules over Hermes's own tools
 	TiersWhen []argrule.Rule
+	// P0Only are the servers only P0 sessions may use, sorted, every one the
+	// block declares, left out or not, since a runtime elsewhere may still
+	// reach it (Suite D119)
+	P0Only []string
 	// SandboxShell are Hermes's terminal rules, nil when no fragment sets them
 	SandboxShell []ShellRule
 	// Router is the model router's base URL, empty when none is set
@@ -264,6 +268,16 @@ func (r *Resolved) GatewayApprovals() ([]byte, error) {
 	b, err := json.MarshalIndent(map[string]any{"servers": r.Gateway}, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("render the gateway approvals: %w", err)
+	}
+
+	return append(b, '\n'), nil
+}
+
+// RouterP0Servers renders the router's list of P0-only servers
+func (r *Resolved) RouterP0Servers() ([]byte, error) {
+	b, err := json.MarshalIndent(map[string]any{"servers": r.P0Only}, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("render the router's P0 servers: %w", err)
 	}
 
 	return append(b, '\n'), nil
@@ -366,9 +380,13 @@ func (b *Bud) Resolve() (*Resolved, error) {
 	}
 
 	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, TiersWhen: b.TiersWhen, SandboxShell: b.SandboxShell, Router: strings.TrimSuffix(b.Router, "/"), OpenCodeSecrets: b.OpenCodeSecrets}
+	r.P0Only = []string{}
 	for _, name := range sortedKeys(b.MCP) {
 		s := b.MCP[name]
 		at := "bud.mcp." + name
+		if slices.Equal(s.Privacy, []string{"P0"}) {
+			r.P0Only = append(r.P0Only, name)
+		}
 		if !nameRe.MatchString(name) {
 			add("%s: the name must be lowercase letters, digits and '-'", at)
 			continue

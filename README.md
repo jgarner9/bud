@@ -20,7 +20,7 @@
 ![Platforms](https://img.shields.io/badge/macOS%20%7C%20Linux-amd64%20%7C%20arm64-7a6ca3)
 ![Neovim](https://img.shields.io/badge/Neovim-0.12%2B-57A143?logo=neovim&logoColor=white)
 
-**[bud.jgarner.dev](https://bud.jgarner.dev)** · [Setting up](docs/setup.md) · [Keys](docs/keys.md) · [Commands](docs/commands.md) · [Config](docs/config.md)
+**[bud.jgarner.dev](https://bud.jgarner.dev)** · [Setting up](docs/setup.md) · [Architecture](docs/architecture.md) · [Keys](docs/keys.md) · [Commands](docs/commands.md) · [Config](docs/config.md)
 
 </div>
 

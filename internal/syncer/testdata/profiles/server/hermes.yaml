@@ -49,7 +49,7 @@ mcp_servers:
     url: "http://100.64.0.1:8790/mail/mcp"
   memory:
     headers:
-      X-Bud-Privacy: "P1"
+      X-Bud-Privacy: "P0"
     trust: "full"
     url: "http://100.64.0.1:8790/memory/mcp"
   ops:

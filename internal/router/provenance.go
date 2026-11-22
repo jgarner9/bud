@@ -1,13 +1,30 @@
 package router
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
+
+	"jgarner.dev/bud/internal/registry"
 )
 
 // ProvenanceRule names the raise in X-Bud-Privacy-Raised when a P0-only
 // tool's call is in the conversation (Suite D119)
 const ProvenanceRule = "provenance"
+
+// MemoryRule names the raise in X-Bud-Privacy-Raised when a Bud memory
+// search brought a P0 record into the conversation (JGA-389)
+const MemoryRule = "memory"
+
+// recalled says whether a message holds registry.P0Marker, which Bud
+// memory puts on each P0 record it returns. Memory isn't a P0-only server,
+// since most of what it holds may go to the cloud, so tainted can't tell
+// by the tool's name; the marker says a private record actually came back.
+// Any message counts, whatever its role or shape, since a runtime may
+// quote a tool result as text or as content parts
+func recalled(fields map[string]json.RawMessage) bool {
+	return bytes.Contains(fields["messages"], []byte(registry.P0Marker))
+}
 
 // tainted says whether the request's history holds a call to a tool of a
 // server only P0 sessions may use (the calendar, mail), and names the first

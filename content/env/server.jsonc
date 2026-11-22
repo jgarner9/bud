@@ -59,7 +59,9 @@
         "privacy": ["P1", "P2"],
       },
       "context7": { "url": "https://mcp.context7.com/mcp", "privacy": ["P1", "P2"] },
-      "memory": { "privacy": ["P0", "P1", "P2"] },
+      // Bud memory marks each P0 record it returns, so private Hermes reaches
+      // it at P0 and the router keeps a chat that recalls one local (JGA-389)
+      "memory": { "privacy": ["P0", "P1", "P2"], "marks_p0": true },
       // the Bud ops MCP (D83), bud mcp-ops on this machine's loopback;
       // read-only, and its answers never leave the house, so P0 may use it
       "ops": { "url": "http://127.0.0.1:8792/mcp", "privacy": ["P0", "P1", "P2"] },

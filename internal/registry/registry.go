@@ -53,6 +53,13 @@ const PrivacyHeader = "X-Bud-Privacy"
 // MCP gateway both send it
 const RaisedHeader = "X-Bud-Privacy-Raised"
 
+// P0Marker tags each P0 record in a Bud memory search result (JGA-389).
+// The router raises a request whose messages hold it to P0, so a chat
+// that recalls a private record stays local, as a calendar call does. It
+// is letters, digits and '-' only, so it reads the same however a runtime
+// quotes the tool result into its history
+const P0Marker = "bud-p0-record-7c41"
+
 // RequestTier reads a PrivacyHeader value. A missing one is P0, so a client
 // nobody configured fails closed (Suite D81); ok is false for any other
 // value than a tier.

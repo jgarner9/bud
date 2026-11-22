@@ -74,8 +74,9 @@ var skipped = []string{"README.md", FormatName}
 // Format 7 (JGA-379): approval blocks carry when rules, and the bud block
 // carries tiers_when, which an older gateway's strict read refuses.
 // Format 8 (JGA-382): the registry may fill the optional quick role, which
-// an older bud refuses as not a role
-const Format = 8
+// an older bud refuses as not a role. Format 9 (JGA-389): servers carry
+// marks_p0, which an older bud's strict read of the bud block refuses
+const Format = 9
 
 // Manifest is content.json
 type Manifest struct {

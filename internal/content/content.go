@@ -72,8 +72,10 @@ var skipped = []string{"README.md", FormatName}
 // (JGA-377): the bud block carries sandbox_shell, Hermes's terminal rules.
 // Format 6 (JGA-380): privacy rules carry entropy, validate and keywords.
 // Format 7 (JGA-379): approval blocks carry when rules, and the bud block
-// carries tiers_when, which an older gateway's strict read refuses
-const Format = 7
+// carries tiers_when, which an older gateway's strict read refuses.
+// Format 8 (JGA-382): the registry may fill the optional quick role, which
+// an older bud refuses as not a role
+const Format = 8
 
 // Manifest is content.json
 type Manifest struct {

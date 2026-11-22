@@ -138,3 +138,41 @@ func TestTheShippedPrivacyRulesMatchWhatTheyShould(t *testing.T) {
 		}
 	}
 }
+
+// Suite D117, D121: a P1 chat on the manager or quick role picks a cloud
+// model first, and a P0 one only a local model
+func TestTheShippedChatRolesPutTheCloudFirstForP1(t *testing.T) {
+	reg, err := Load(filepath.Join("..", "..", "content", "env", "registry.jsonc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := func(role, tier string) Model {
+		for _, id := range reg.Roles[role].Members() {
+			if m := reg.Models[id]; m.Allows(tier) {
+				return m
+			}
+		}
+		t.Fatalf("role %s has no %s member", role, tier)
+		return Model{}
+	}
+	for _, role := range []string{"manager", "quick"} {
+		if m := first(role, "P1"); reg.Providers[m.Provider].Local {
+			t.Errorf("%s's first P1 member is local (%s)", role, m.Name)
+		}
+		if m := first(role, "P0"); !reg.Providers[m.Provider].Local {
+			t.Errorf("%s's first P0 member isn't local (%s)", role, m.Name)
+		}
+	}
+}
+
+func TestAnOptionalRoleIsARoleAndOthersArent(t *testing.T) {
+	r := valid()
+	r.Roles["quick"] = Role{Model: "big"}
+	if err := r.Validate(); err != nil {
+		t.Fatalf("quick: %v", err)
+	}
+	r.Roles["speedy"] = Role{Model: "big"}
+	if err := r.Validate(); err == nil || !strings.Contains(err.Error(), "roles.speedy: not a role") {
+		t.Fatalf("speedy: %v", err)
+	}
+}

@@ -231,6 +231,8 @@ type Resolved struct {
 	Left   map[string]string
 	Hermes map[string]any
 	Tiers  map[string]string
+	// Privacy is the device's tier, "" when no fragment sets one
+	Privacy string
 	// TiersWhen are the when rules over Hermes's own tools
 	TiersWhen []argrule.Rule
 	// P0Only are the servers only P0 sessions may use, sorted, every one the
@@ -379,7 +381,7 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
-	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, TiersWhen: b.TiersWhen, SandboxShell: b.SandboxShell, Router: strings.TrimSuffix(b.Router, "/"), OpenCodeSecrets: b.OpenCodeSecrets}
+	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Privacy: b.Privacy, Tiers: b.Tiers, TiersWhen: b.TiersWhen, SandboxShell: b.SandboxShell, Router: strings.TrimSuffix(b.Router, "/"), OpenCodeSecrets: b.OpenCodeSecrets}
 	r.P0Only = []string{}
 	for _, name := range sortedKeys(b.MCP) {
 		s := b.MCP[name]

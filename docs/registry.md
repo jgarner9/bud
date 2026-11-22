@@ -31,7 +31,7 @@ JSONC: JSON plus `//` and `/* */` comments and trailing commas. A field bud does
   "roles": {
     "coding":     { "needs": ["tools"], "pool": ["glm-5.3", "qwen-35b"] },
     "classifier": { "needs": ["json"], "pool": ["qwen-35b"] }
-    // ... all nine roles
+    // ... all nine roles, and quick if you want it
   }
 }
 ```
@@ -68,7 +68,7 @@ Facts are what the provider's own model list reports, so `bud registry refresh` 
 
 ### Roles
 
-Every one of the nine roles must be filled, and nothing else can be a role: `manager`, `coding`, `planning`, `classifier`, `fim`, `embedding`, `fallback`, `curator`, `vision`.
+Every one of the nine roles must be filled: `manager`, `coding`, `planning`, `classifier`, `fim`, `embedding`, `fallback`, `curator`, `vision`. One more may be: `quick`, for short questions that want a fast answer (Suite D121), reached through the router as `bud/quick`. Nothing else can be a role. The shipped `manager` pool puts Go models first and Qwen last (Suite D117): Hermes's private chats start at P1 and the router keeps one on Qwen only once a rule or a calendar or mail call raises it to P0, since Qwen's prefill of a long system prompt makes even a short answer slow. Unattended C0 chores keep their own roles (`curator`, `classifier`), which stay local.
 
 | Field | Meaning |
 | --- | --- |

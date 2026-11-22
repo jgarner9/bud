@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"jgarner.dev/bud/internal/adapter/hermes"
 	"jgarner.dev/bud/internal/mcpgateway"
 )
 
@@ -29,7 +28,11 @@ func checkGatewayTrust(tiersPath, gatewayPath string) Result {
 		r.Status, r.Detail, r.Fix = Warn, "no Hermes tiers file at "+tiersPath+", so nothing says which servers Hermes trusts", "bud sync"
 		return r
 	}
-	var t hermes.Tiers
+	// Trusted is a pointer so a file from before D115, which has no
+	// trusted key, isn't read as trusting nothing
+	var t struct {
+		Trusted *[]string `json:"trusted"`
+	}
 	if err == nil {
 		err = json.Unmarshal(b, &t)
 	}
@@ -37,19 +40,29 @@ func checkGatewayTrust(tiersPath, gatewayPath string) Result {
 		r.Status, r.Detail, r.Fix = Fail, fmt.Sprintf("can't read %s: %v", tiersPath, err), "bud sync"
 		return r
 	}
-	if len(t.Trusted) == 0 {
+	if t.Trusted == nil {
+		// a warning, not a failure: right after bud update and before the
+		// sync that follows it, the file is the older bud's, and a failure
+		// here would roll the update back
+		r.Status = Warn
+		r.Detail = tiersPath + " is from a bud before D115, so it doesn't say which gateway servers Hermes trusts and they weren't checked"
+		r.Fix = "bud sync"
+		return r
+	}
+	trusted := *t.Trusted
+	if len(trusted) == 0 {
 		r.Detail = "Hermes trusts no gateway server, so its own prompt covers every gateway write"
 		return r
 	}
 	cfg, err := mcpgateway.Read(gatewayPath)
 	if err != nil {
 		r.Status = Fail
-		r.Detail = fmt.Sprintf("Hermes trusts %s to the gateway's review, and the gateway's config can't be read (%v)", strings.Join(t.Trusted, ", "), err)
+		r.Detail = fmt.Sprintf("Hermes trusts %s to the gateway's review, and the gateway's config can't be read (%v)", strings.Join(trusted, ", "), err)
 		r.Fix = "fix the gateway's config (docs/internals/mcp-gateway.md), then bud doctor again"
 		return r
 	}
 	var unreviewed []string
-	for _, name := range t.Trusted {
+	for _, name := range trusted {
 		s, ok := cfg.Servers[name]
 		if !ok || (s.Approval == nil && !s.ReadOnly) {
 			unreviewed = append(unreviewed, name)
@@ -61,7 +74,7 @@ func checkGatewayTrust(tiersPath, gatewayPath string) Result {
 		r.Fix = "give each an approval block in " + gatewayPath + " (or drop its own one so bud sync's applies), or mark it trust: untrusted in your overlay's bud.hermes.mcp_servers"
 		return r
 	}
-	r.Detail = fmt.Sprintf("the gateway reviews every server Hermes trusts to it: %s", strings.Join(t.Trusted, ", "))
+	r.Detail = fmt.Sprintf("the gateway reviews every server Hermes trusts to it: %s", strings.Join(trusted, ", "))
 
 	return r
 }

@@ -681,7 +681,7 @@ const TrustFull = "full"
 // "untrusted"
 func trustedGateway(tools *env.Resolved, cfg map[string]any) []string {
 	servers, _ := cfg["mcp_servers"].(map[string]any)
-	var out []string
+	out := []string{} // always written, so bud doctor can tell a file from before D115
 	for _, name := range tools.Names() {
 		entry, ok := servers[name].(map[string]any)
 		if !ok || !tools.Servers[name].Gateway {

@@ -37,7 +37,8 @@ func TestTheGatewayReviewsEveryServerHermesTrustsToIt(t *testing.T) {
 		says                 string
 	}{
 		{"reviewed", `{"trusted": ["linear", "exa"]}`, gateway, OK, "linear, exa"},
-		{"none trusted", `{"shell": []}`, "", OK, "trusts no gateway server"},
+		{"none trusted", `{"shell": [], "trusted": []}`, "", OK, "trusts no gateway server"},
+		{"from before D115", `{"shell": []}`, gateway, Warn, "from a bud before D115"},
 		{"not on the gateway", `{"trusted": ["linear", "mail"]}`, gateway, Fail, "writes to mail, because the gateway should"},
 		{"no gateway config", `{"trusted": ["linear"]}`, "", Fail, "can't be read"},
 		{"no tiers", "", gateway, Warn, "no Hermes tiers file"},

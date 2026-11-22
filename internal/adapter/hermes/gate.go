@@ -49,7 +49,7 @@ type Tiers struct {
 	// its own untrusted-server prompt, since the gateway asks at the leaf
 	// (Suite D115). The gate doesn't read it; bud doctor checks each against
 	// the gateway's config
-	Trusted []string `json:"trusted,omitempty"`
+	Trusted []string `json:"trusted"`
 }
 
 // PrivateProfile is the name Hermes gives its default profile, the private

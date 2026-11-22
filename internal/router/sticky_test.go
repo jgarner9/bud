@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -104,4 +105,74 @@ func mustRules(t *testing.T, marker string) []registry.CompiledRule {
 		t.Fatal(err)
 	}
 	return rules
+}
+
+// Copilot on #114: a list that can't be saved holds every conversation at
+// P0 until it can, since a restart would forget the raised ones
+func TestAFailedSaveHoldsEveryConversationUntilASaveWorks(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rig := newProvRigWith(t, Options{StickyPath: filepath.Join(dir, "conv.json")})
+	rig.rt.sticky.path = filepath.Join(blocker, "conv.json") // the disk fails
+	do(t, rig.rt, "POST", "/v1/chat/completions", calendarChat, session("c1"))
+	rig.cloudBytes = 0
+	if w := do(t, rig.rt, "POST", "/v1/chat/completions", compressed, session("other")); w.Header().Get(RaisedHeader) != ConversationRule || rig.cloudBytes != 0 {
+		t.Fatalf("while saves fail: raised %q, cloud bytes %d", w.Header().Get(RaisedHeader), rig.cloudBytes)
+	}
+	rig.rt.sticky.path = filepath.Join(dir, "conv.json") // the disk is back
+	do(t, rig.rt, "POST", "/v1/chat/completions", compressed, session("other"))
+	if w := do(t, rig.rt, "POST", "/v1/chat/completions", compressed, session("third")); w.Header().Get(RaisedHeader) != "" || rig.cloudBytes == 0 {
+		t.Fatalf("after a save worked: raised %q, cloud bytes %d", w.Header().Get(RaisedHeader), rig.cloudBytes)
+	}
+}
+
+// a busy conversation writes the file once a day at most, not per request
+func TestAHeldConversationIsntWrittenOnEveryRequest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "conv.json")
+	now := time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
+	rig := newProvRigWith(t, Options{StickyPath: path, Now: func() time.Time { return now }})
+	do(t, rig.rt, "POST", "/v1/chat/completions", calendarChat, session("c1"))
+	first, _ := os.Stat(path)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(time.Hour)
+	for i := 0; i < 5; i++ {
+		do(t, rig.rt, "POST", "/v1/chat/completions", calendarChat, session("c1"))
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("an hour later the file was written again")
+	}
+	now = now.Add(stickyRefresh)
+	do(t, rig.rt, "POST", "/v1/chat/completions", compressed, session("c1"))
+	if _, err := os.Stat(path); err != nil || first == nil {
+		t.Fatalf("a day later it wasn't written: %v", err)
+	}
+}
+
+// concurrent requests of one conversation, under the race detector
+func TestStickyDecisionsAreSafeAcrossRequests(t *testing.T) {
+	rig := newProvRig(t)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		body := compressed
+		if i%2 == 0 {
+			body = calendarChat
+		}
+		go func() {
+			defer wg.Done()
+			do(t, rig.rt, "POST", "/v1/chat/completions", body, session("c1"))
+		}()
+	}
+	wg.Wait()
+	rig.mu.Lock()
+	rig.cloudBytes = 0
+	rig.mu.Unlock()
+	if w := do(t, rig.rt, "POST", "/v1/chat/completions", compressed, session("c1")); w.Header().Get(RaisedHeader) != ConversationRule {
+		t.Fatalf("raised %q", w.Header().Get(RaisedHeader))
+	}
 }

@@ -358,14 +358,10 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// a conversation raised once stays P0 (Suite D117, D119): its later
 	// requests may carry the same data without the evidence, such as a
 	// compressed history or a title call
-	conv := r.Header.Get(SessionHeader)
-	if tier != "P0" && rt.sticky.has(conv) {
+	if held := rt.sticky.decide(r.Header.Get(SessionHeader), raisedToP0); held && tier != "P0" {
 		rt.logf("router: an earlier request of this conversation was raised, so this %s request is P0 too", tier)
 		w.Header().Set(RaisedHeader, ConversationRule)
-		tier, raisedToP0 = "P0", true
-	}
-	if raisedToP0 {
-		rt.sticky.mark(conv)
+		tier = "P0"
 	}
 	var model string
 	if err := json.Unmarshal(fields["model"], &model); err != nil || model == "" {

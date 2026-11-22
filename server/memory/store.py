@@ -93,6 +93,32 @@ class Store:
             if cursor.rowcount != 1:
                 raise KeyError(record_id)
 
+    def discard(self, record_id):
+        """Delete a record Jason turned down. Only a staged record can go: an
+        approved one may have references and vectors, and stays."""
+        with self.db:
+            state = self.db.execute("SELECT state FROM records WHERE id = ?", (record_id,)).fetchone()
+            if state is None:
+                raise KeyError(record_id)
+            if state[0] != "staged":
+                raise PermissionError(record_id)
+            self.db.execute("DELETE FROM records WHERE id = ? AND state = 'staged'", (record_id,))
+
+    def staged(self, privacy, after=0, limit=20):
+        """List staged records in the allowed tiers, in id order above after."""
+        if not privacy or any(p not in PRIVACY_TIERS for p in privacy):
+            raise ValueError("privacy must specify allowed tiers")
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        if not isinstance(after, int) or isinstance(after, bool) or after < 0:
+            raise ValueError("after must be a record id")
+        marks = ",".join("?" for _ in privacy)
+        return self.db.execute(
+            f"""SELECT id, source, kind, privacy, body, created_at FROM records
+                WHERE state = 'staged' AND privacy IN ({marks}) AND id > ? ORDER BY id LIMIT ?""",
+            (*privacy, after, limit),
+        ).fetchall()
+
     def approved(self, privacy):
         if not privacy or any(p not in ("P0", "P1", "P2") for p in privacy):
             raise ValueError("privacy must specify allowed tiers")

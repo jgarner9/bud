@@ -46,7 +46,7 @@ resolved value has this shape, with real tokens held only in 1Password.
   },
   "reviewer-token-at-least-32-characters": {
     "tiers": ["P0", "P1", "P2"],
-    "actions": ["search", "approve"]
+    "actions": ["search", "staged", "approve", "discard"]
   }
 }
 ```

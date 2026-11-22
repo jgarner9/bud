@@ -66,7 +66,7 @@ type Server struct {
 
 // New serves tools, listed in the order given
 func New(tools []Tool) *Server {
-	return NewReadOnly("bud-ops", "Read-only reports on Bud itself: doctor for health, sync_status for the content and overlay in use and any drift. approvals for the count of requests waiting on Jason, spend for this month's model spend against the top-up cap. reviews isn't built yet and says so.", tools)
+	return NewReadOnly("bud-ops", "Read-only reports on Bud itself: doctor for health, sync_status for the content and overlay in use and any drift. approvals for the count of requests waiting on Jason, spend for this month's model spend against the top-up cap, reviews for the memory records waiting on Jason's review.", tools)
 }
 
 // NewReadOnly serves read-only tools with the same loopback-only MCP transport.

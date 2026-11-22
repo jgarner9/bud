@@ -96,6 +96,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | `bud calendar-mcp` (`internal/calendar`): the calendar MCP server over CalDAV and its unit in `server/calendar-mcp/` | `docs/internals/calendar.md` |
 | `bud mail-mcp` (`internal/mail`): the iCloud mail MCP server over IMAP, with its own IMAP client | `docs/internals/mail.md` |
 | `bud memory-mcp` (`internal/memorymcp`, `internal/memory`): the memory MCP server over the working-memory service and the embedding server, and its unit in `server/memory-mcp/` | `docs/internals/memory-mcp.md` |
+| `bud memory-review` (`internal/memoryreview`): asking on Signal about staged memory records, and its unit in `server/memory-review/` | `docs/internals/memory-review.md` |
 | `bud mcp-ops` (`internal/mcpops`): the Bud ops MCP server and its unit in `server/mcp-ops/` | `docs/internals/mcp-ops.md` |
 | Signal for Hermes: the `bud-signal` plugin in `server/hermes/plugins/`, approvals by reaction or code, signal-cli's unit in `server/signal-cli/` | `docs/internals/signal.md` |
 | `internal/content`: content bundles, `content.json`, `channel.json` and their signatures | `docs/internals/content.md` |

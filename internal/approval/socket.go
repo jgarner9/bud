@@ -33,6 +33,9 @@ type reviewRequest struct {
 type reviewReply struct {
 	ID     string `json:"id"`
 	Choice string `json:"choice"`
+	// Answered is true when Jason gave the choice himself, not a timeout
+	// or the reviewer stopping
+	Answered bool `json:"answered"`
 	// Error is raw so that any error key, even "" or null, refuses
 	Error json.RawMessage `json:"error,omitempty"`
 }
@@ -91,7 +94,7 @@ func SocketReview(socket, secretFile string, scope Scope) Review {
 		}
 		switch c := Choice(r.Choice); c {
 		case AllowOnce, DenyOnce:
-			return Reply{ID: r.ID, Scope: scope, Choice: c}, nil
+			return Reply{ID: r.ID, Scope: scope, Choice: c, Answered: r.Answered}, nil
 		}
 		return Reply{}, ErrReviewMismatch
 	}
@@ -168,6 +171,15 @@ func readSecret(path string) (string, error) {
 	return s, nil
 }
 
+// MaxSummary is the longest prompt text, in characters, the Signal plugin's
+// reviewer sends (MAX_SUMMARY in server/hermes/plugins/bud-signal/reviewer.py).
+// It refuses a longer one rather than cut it
+const MaxSummary = 6000
+
+// Summary is the text SocketReview sends for p, so a caller can tell before
+// asking whether it fits in MaxSummary characters
+func Summary(p Prompt) string { return summarize(p) }
+
 // titles say what a known action asks, in words for a phone, and which of
 // its arguments are only there to bind the approval (hashes, paths) and so
 // aren't worth showing
@@ -187,6 +199,10 @@ var titles = map[string]struct {
 	"mcp:mail/reply_message": {
 		title: func(string) string { return "Send this reply from Jason's iCloud?" },
 		whole: []string{"to", "cc", "subject", "body"},
+	},
+	"memory:approve": {
+		title: func(string) string { return "Save this to Bud memory? A no deletes it." },
+		whole: []string{"body"},
 	},
 	"router:p0-fallback": {
 		title: func(t string) string {

@@ -175,6 +175,43 @@ func (c *Client) PutVector(ctx context.Context, id int64, model string, values [
 	return err
 }
 
+// ErrApproved means a record Discard was given is already approved, so it
+// stays
+var ErrApproved = errors.New("the record is already approved")
+
+// Staged lists up to limit records waiting on review with ids above after,
+// in id order, within the token's tiers; a limit of 0 takes the service's
+// default of 20. Only a reviewer token may list them
+func (c *Client) Staged(ctx context.Context, after int64, limit int) ([]Record, error) {
+	req := map[string]any{}
+	if after > 0 {
+		req["after"] = after
+	}
+	if limit > 0 {
+		req["limit"] = limit
+	}
+	var reply struct {
+		Records []Record `json:"records"`
+	}
+	err := c.post(ctx, "staged", req, &reply)
+	return reply.Records, err
+}
+
+// Approve makes a staged record searchable
+func (c *Client) Approve(ctx context.Context, id int64) error {
+	return c.post(ctx, "approve", map[string]any{"id": id}, nil)
+}
+
+// Discard deletes a staged record Jason turned down, or returns
+// ErrApproved when it was approved meanwhile
+func (c *Client) Discard(ctx context.Context, id int64) error {
+	err := c.post(ctx, "discard", map[string]any{"id": id}, nil)
+	if se, ok := errors.AsType[*StatusError](err); ok && se.Status == http.StatusConflict {
+		return fmt.Errorf("memory discard: record %d: %w", id, ErrApproved)
+	}
+	return err
+}
+
 func (c *Client) post(ctx context.Context, action string, body, reply any) error {
 	b, err := json.Marshal(body)
 	if err != nil {

@@ -3,7 +3,9 @@ Signal through this plugin. Standard library only; adapter.py supplies the Signa
 
 Protocol, newline-delimited JSON over a unix socket (internal/approval/socket.go is the client):
 the client sends one line {id, summary, expires_at, secret} and holds the connection open; the plugin
-answers one line {id, choice} with choice "once" or "deny", or {id, error} to refuse. The client
+answers one line {id, choice} with choice "once" or "deny", or {id, error} to refuse. A choice Jason
+gave himself carries "answered": true; a deny without it is a timeout or the plugin stopping, which a
+client may treat differently (bud memory-review deletes a record only on his own no). The client
 closing the connection withdraws the prompt. Every failure denies: nothing here ever approves unless a
 sender the allowlist names said so.
 """
@@ -249,7 +251,7 @@ class ReviewServer:
             done, _ = await asyncio.wait({handle.review, gone}, timeout=wait, return_when=asyncio.FIRST_COMPLETED)
             if handle.review in done:
                 choice = handle.review.result()
-                await self._say(writer, {"id": rid, "choice": "once" if choice == "once" else "deny"})
+                await self._say(writer, {"id": rid, "choice": "once" if choice == "once" else "deny", "answered": True})
                 await self.host.close_review(handle, None)
             elif gone in done:
                 await self.host.close_review(handle, "That approval was withdrawn by the requester.")

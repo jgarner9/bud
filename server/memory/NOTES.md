@@ -22,5 +22,6 @@ Each service is single-threaded and supports bounded JSON requests and
 responses from the storage API. Store startup and migration happen in the
 server thread. Deployment must handle availability, retries, database backup,
 and safe privilege separation before connecting a runtime. The API covers
-stage, literal FTS search, reviewer approval, vector search, export, references,
+stage, literal FTS search, the reviewer's staged listing, approval and
+discard (deleting a staged record Jason turned down), vector search, export, references,
 and recovery backup/restore. It does not yet provide an audit log.

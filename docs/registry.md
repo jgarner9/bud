@@ -93,7 +93,7 @@ Privacy rules raise a request's privacy tier when its text matches (Suite D23, D
 | --- | --- |
 | `match` | A regular expression in Go's RE2 syntax, matched against each message's text on its own, not the whole conversation. Use `(?i)` for any case. |
 | `tier` | `P0` or `P1`: what a matching request becomes. `P2` is refused, since it can't raise anything. |
-| `entropy` | Optional: the least Shannon entropy, in bits per character, the matched secret must have, as in gitleaks' rules, so a placeholder such as `AKIAAAAAAAAAAAAAAAAA` doesn't count. The secret is the group named `secret`, else the first group that took part, else the whole match. |
+| `entropy` | Optional: the Shannon entropy, in bits per character, the matched secret must be over (strictly, as in gitleaks' rules), so a placeholder such as `AKIAAAAAAAAAAAAAAAAA` doesn't count. The secret is the group named `secret`, else the first group that took part and isn't empty, else the whole match. |
 | `validate` | Optional: a check the matched text must also pass. `luhn` is a card number (13 to 19 digits passing the Luhn checksum, not all one digit), `iban` an IBAN (country, check digits, mod-97 remainder 1), `ssn` a US Social Security number in the ranges ever issued (not area 000, 666 or 900 and up, group 00 or serial 0000, nor the well-known sample numbers), and `phone` a phone number (`+` and 8 to 15 digits, or a North American number whose area code and exchange start 2 to 9). |
 | `keywords` | Optional, lowercase: one must be in the text, in any case, before the pattern is tried. A substring check is far cheaper than a regular expression, and it is what keeps the whole pack at about 1.5 ms for a 40-message chat (`BenchmarkTheShippedRulesOverAChat`), under the router's 5 ms budget. |
 

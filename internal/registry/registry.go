@@ -94,8 +94,8 @@ type PrivacyRule struct {
 	// Tier is P0 or P1: what a matching request becomes, unless it is
 	// already more private
 	Tier string `json:"tier"`
-	// Entropy, when set, is the least Shannon entropy in bits per character
-	// the matched secret must have, as in gitleaks' rules, so a placeholder
+	// Entropy, when set, is the Shannon entropy in bits per character the
+	// matched secret must be over, as in gitleaks' rules, so a placeholder
 	// such as AKIAXXXXXXXXXXXXXXXX doesn't count (Suite D118)
 	Entropy float64 `json:"entropy,omitempty"`
 	// Validate, when set, names a check in Validators the matched text must

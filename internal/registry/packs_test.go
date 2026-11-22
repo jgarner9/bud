@@ -48,7 +48,7 @@ func packSamples() map[string][2]string {
 		"private-key": {"-----BEGIN OPENSSH PRIVATE KEY-----", "a public key"},
 
 		"pii-card":  {"card 4111 1111 1111 1111 exp 12/29", "card 4111 1111 1111 1112, or epoch ms 1763800000000"},
-		"pii-iban":  {"pay GB82 WEST 1234 5698 7654 32 today", "pay GB82 WEST 1234 5698 7654 33 today"},
+		"pii-iban":  {"pay GB82 WEST 1234 5698 7654 32 today, or de89370400440532013000", "pay GB82 WEST 1234 5698 7654 33 today"},
 		"pii-ssn":   {"ssn 123-45-6788", "ssn 000-12-3456, 666-12-3456, 900-12-3456, 123-45-6789, date 2026-11-22"},
 		"pii-phone": {"call (415) 555-2671 or +44 20 7946 0958", "call (015) 555-2671 at 1.2.3, or build 123-456-7890"},
 
@@ -188,6 +188,26 @@ func TestABadEntropyValidatorOrKeywordIsRefused(t *testing.T) {
 		if c.bad != (len(got) > 0) {
 			t.Errorf("%+v: problems %q", c.rule, got)
 		}
+	}
+}
+
+// a match passes only past the entropy, every match is tried, and the
+// secret is the first group that took part and isn't empty
+func TestMatchesPicksTheSecretAndTriesEveryMatch(t *testing.T) {
+	r := CompiledRule{Name: "r", Tier: "P0", Re: regexp.MustCompile(`k(x*)=([a-z0-9]+);`), Entropy: 2}
+	if r.Matches("k=abcd;") {
+		t.Error("abcd has entropy 2 exactly, which isn't over 2")
+	}
+	if !r.Matches("k=abcde;") {
+		t.Error("abcde is over 2 and is the first non-empty group")
+	}
+	card := CompiledRule{Name: "c", Tier: "P0", Re: regexp.MustCompile(`\d{16}`), Check: Luhn}
+	text := strings.Repeat("4111111111111112 ", 100) + "4111111111111111"
+	if !card.Matches(text) {
+		t.Error("the valid number after 100 near misses should count")
+	}
+	if card.Matches(strings.Repeat("4111111111111112 ", 100)) {
+		t.Error("100 near misses aren't a hit")
 	}
 }
 

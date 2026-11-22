@@ -137,7 +137,7 @@
     // numbering plan. Names, places and topics that should stay local go in
     // your overlay's registry.jsonc, never here
     "pii-card": { "match": "\\b[3-6]\\d(?:[ -]?\\d){11,17}\\b", "tier": "P0", "validate": "luhn" },
-    "pii-iban": { "match": "\\b[A-Z]{2}\\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\\b", "tier": "P0", "validate": "iban" },
+    "pii-iban": { "match": "(?i)\\b[a-z]{2}\\d{2}(?: ?[a-z0-9]{4}){2,7}(?: ?[a-z0-9]{1,4})?\\b", "tier": "P0", "validate": "iban" },
     "pii-ssn": { "match": "\\b\\d{3}-\\d{2}-\\d{4}\\b", "tier": "P0", "validate": "ssn" },
     "pii-phone": { "match": "\\+\\d[\\d .-]{6,18}\\d|\\(?\\b\\d{3}\\)?[ .-]\\d{3}[ .-]\\d{4}\\b", "tier": "P0", "validate": "phone" },
 

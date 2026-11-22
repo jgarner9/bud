@@ -26,15 +26,12 @@ type CompiledRule struct {
 	Keywords []string
 }
 
-// maxMatches bounds how many matches of one rule in one text are checked
-// against its entropy and validator; a text with more is treated as matched,
-// which only raises the tier
-const maxMatches = 64
-
 // Matches says whether the rule matches text. A rule with neither entropy
 // nor a check matches on its pattern alone. Otherwise one match must meet
 // both: the secret is the group named secret, else the first group that
-// took part, else the whole match, as in gitleaks
+// took part and isn't empty, else the whole match, and its entropy must be
+// over the rule's, as in gitleaks. Every match is tried, so a text full of
+// near misses never counts as one hit
 func (c CompiledRule) Matches(text string) bool { return c.matches(text, strings.ToLower(text)) }
 
 // matches is Matches with the text's lowercase form, made once per text
@@ -45,20 +42,22 @@ func (c CompiledRule) matches(text, lower string) bool {
 	if c.Entropy == 0 && c.Check == nil {
 		return c.Re.MatchString(text)
 	}
-	all := c.Re.FindAllStringSubmatchIndex(text, maxMatches+1)
-	if len(all) > maxMatches {
-		return true
-	}
+	all := c.Re.FindAllStringSubmatchIndex(text, -1)
 	named := c.Re.SubexpIndex("secret")
 	for _, m := range all {
 		secret := text[m[0]:m[1]]
 		switch {
 		case named > 0 && m[2*named] >= 0:
 			secret = text[m[2*named]:m[2*named+1]]
-		case named < 0 && len(m) > 2 && m[2] >= 0:
-			secret = text[m[2]:m[3]]
+		case named < 0:
+			for g := 2; g+1 < len(m); g += 2 {
+				if m[g] >= 0 && m[g+1] > m[g] {
+					secret = text[m[g]:m[g+1]]
+					break
+				}
+			}
 		}
-		if Entropy(secret) >= c.Entropy && (c.Check == nil || c.Check(secret)) {
+		if (c.Entropy == 0 || Entropy(secret) > c.Entropy) && (c.Check == nil || c.Check(secret)) {
 			return true
 		}
 	}

@@ -4,7 +4,7 @@ How to work on this repository. OpenCode reads only this file (Bud Suite D17); `
 
 ## What this is
 
-This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module building one `bud` binary, plus the IDE, home-server units and content that syncs to devices. The [current Suite architecture](docs/internals/suite.md) records decisions that guide work here. The full Suite decision log and build plan live separately. "Suite Dn" refers to that log. `BASE.md` has its own decision numbers for the IDE and CLI.
+This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module building one `bud` binary, plus the IDE, home-server units and content that syncs to devices. The [current Suite architecture](docs/internals/suite.md) records decisions that guide work here. The Suite decision log is [handoff/decisions.md](handoff/decisions.md) and the build plan is `handoff/design/build-plan.md`. "Suite Dn" refers to that log. `BASE.md` has its own decision numbers for the IDE and CLI.
 
 | Path | What it holds |
 | --- | --- |
@@ -17,6 +17,10 @@ This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module
 | `docs/`, `scripts/` | User and internals docs (also the docs site), and build and test scripts |
 
 Nothing personal goes in this public repo: no hostnames, tailnet names, home paths, real `op://` paths or personal skills. Those live in the private overlay (Suite D21, D59).
+
+## Resuming work
+
+Work moved from Claude Code to OpenCode on 2026-11-22. Before starting a task, read [handoff/README.md](handoff/README.md): how Jason works (lead with the answer, plain Unicode and no emoji, options with a recommendation, he decides design), the PR workflow (Copilot review, one comment summarizing the fixes, then merge), and links to the current state, the open items waiting on him and the Suite decision log (D1 onward). Keep `handoff/state.md` and `handoff/revisit.md` current in the same PR as the work. Host names and exact home-server commands are in the private overlay's `handoff/`, never here.
 
 ## The IDE
 

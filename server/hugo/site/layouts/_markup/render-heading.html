@@ -1,0 +1,6 @@
+{{- $status := "" }}
+{{- with .Page.Params.sections }}{{ with index . $.Anchor }}{{ $status = .status }}{{ end }}{{ end -}}
+<h{{ .Level }} id="{{ .Anchor }}">{{ .Text }}
+{{- if eq $status "review" }} <span class="badge review" title="Nothing has referenced this section for 6 months">review</span>{{ end }}
+{{- if eq $status "refresh" }} <span class="badge refresh" title="Evergreen, due its yearly check">refresh</span>{{ end -}}
+</h{{ .Level }}>

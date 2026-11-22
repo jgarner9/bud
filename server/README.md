@@ -13,6 +13,7 @@ Home-server setup and service units for Hermes, the planning OpenCode, the Bud M
 | `mcp-ops/` | The Bud ops MCP server's unit (Suite D83) |
 | `embed/` | The embedding server's unit: llama.cpp with Qwen3-Embedding-0.6B on the CPU, for working memory (Suite D52, JGA-294) |
 | `hermes/` | How Hermes, the manager, is set up; bud renders its config and Hermes installs its own unit (Suite D48). `hermes/plugins/bud-signal/` is the Hermes plugin that lets Signal reactions answer approvals (D30) |
+| `hugo/` | The KB site: Hugo's config and layouts for bud-kb, and the unit for `bud kb-site` (Suite D53, D122) |
 | `signal-cli/` | signal-cli's daemon unit, Signal for Hermes on the bot number (Suite D30) |
 
 ## Ports
@@ -31,3 +32,4 @@ Each service on the home server has its own port, all on loopback except the gat
 | 8796 | `bud mail-mcp` |
 | 8797 | the planning OpenCode (`planning-opencode/`) |
 | 8798 | `bud memory-mcp` (8793 until November 2026, which collided with signal-cli) |
+| 8799 | `bud kb-site`, the KB site (`hugo/`) |

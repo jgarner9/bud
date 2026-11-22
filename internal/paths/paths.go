@@ -241,3 +241,13 @@ func (p *Paths) MemorySocket() string {
 // ReviewSecret is the 0600 file holding the reviewer secret, defense in depth on top of
 // the socket's permissions. It lives in state so it survives a reboot
 func (p *Paths) ReviewSecret() string { return filepath.Join(p.State, "review.secret") }
+
+// KB is the home server's clone of bud-kb, the KB's pages (Suite D20, D122)
+func (p *Paths) KB() string { return filepath.Join(p.Data, "kb") }
+
+// KBSite holds the KB site's builds and the link to the live one
+func (p *Paths) KBSite() string { return filepath.Join(p.State, "kb-site") }
+
+// CuratorState is what the curator has read and promoted, kept outside the
+// KB so a reverted curator commit isn't redone from the same evidence
+func (p *Paths) CuratorState() string { return filepath.Join(p.State, "curator.json") }

@@ -1,0 +1,9 @@
+{{- /* the page's sections that need Jason, as badges */ -}}
+{{- $review := 0 }}{{ $refresh := 0 }}
+{{- with .Params.sections }}{{ range . }}
+  {{- if eq .status "review" }}{{ $review = add $review 1 }}{{ end }}
+  {{- if eq .status "refresh" }}{{ $refresh = add $refresh 1 }}{{ end }}
+{{- end }}{{ end }}
+{{- if .Params.archived }} <span class="badge archived">archived</span>{{ end }}
+{{- if $review }} <span class="badge review">{{ $review }} to review</span>{{ end }}
+{{- if $refresh }} <span class="badge refresh">{{ $refresh }} to refresh</span>{{ end }}

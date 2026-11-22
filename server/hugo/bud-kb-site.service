@@ -1,0 +1,27 @@
+# The KB site (Suite D53, D122), as a systemd user unit:
+#
+#   cp bud-kb-site.service ~/.config/systemd/user/
+#   cp kb-site.env.example ~/.config/bud-server/kb-site.env   # then set the address
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-kb-site
+#
+# It pulls the bud-kb clone in ~/.local/share/bud/kb every minute, builds
+# each new commit with Hugo from the committed tree only, and swaps the
+# build in only when it passes, so a bad commit leaves the last good site
+# up. It serves on the address in kb-site.env: this machine's tailnet IP,
+# never a public one (bud refuses anything else). It holds no secrets.
+[Unit]
+Description=Bud KB site (bud-kb rendered with Hugo, on the tailnet)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/bud-server/kb-site.env
+ExecStart=%h/.local/bin/bud kb-site --listen ${BUD_KB_LISTEN}
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

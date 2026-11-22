@@ -1,0 +1,29 @@
+<style>
+  :root { --bg: #fbfaf7; --fg: #1d1c1a; --muted: #6b6760; --line: #e3dfd6; --accent: #2f5d8a; --warn: #9a5b00; --warn-bg: #fff3dc; --gone: #7a3e3e; --gone-bg: #f8e6e6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #171614; --fg: #ebe8e1; --muted: #a29d93; --line: #33312d; --accent: #8fb6e0; --warn: #f0b860; --warn-bg: #3a2c12; --gone: #e8a0a0; --gone-bg: #3a1f1f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; padding: 1rem; border-bottom: 1px solid var(--line); }
+  header nav { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .brand { font-weight: 600; color: var(--fg); text-decoration: none; }
+  main { max-width: 46rem; margin: 0 auto; padding: 1rem; }
+  a { color: var(--accent); }
+  h1 { font-size: 1.7rem; margin: 1rem 0 .25rem; }
+  h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid var(--line); padding-bottom: .2rem; }
+  .meta { color: var(--muted); font-size: .9rem; }
+  .badge { display: inline-block; font-size: .75rem; font-weight: 600; padding: .05rem .45rem; border-radius: .6rem; vertical-align: middle; text-decoration: none; }
+  .badge.review, .badge.refresh { color: var(--warn); background: var(--warn-bg); }
+  .badge.archived { color: var(--gone); background: var(--gone-bg); }
+  .banner { padding: .6rem .8rem; border-radius: .4rem; margin: 1rem 0; }
+  .banner.archived { color: var(--gone); background: var(--gone-bg); }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; display: block; overflow-x: auto; }
+  th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+  pre { overflow-x: auto; padding: .6rem; border: 1px solid var(--line); border-radius: .4rem; }
+  ul.pages { list-style: none; padding: 0; }
+  ul.pages li { padding: .4rem 0; border-bottom: 1px solid var(--line); }
+  .review-item { border: 1px solid var(--line); border-radius: .4rem; padding: .6rem .8rem; margin: .6rem 0; }
+  .review-item code { word-break: break-all; }
+</style>

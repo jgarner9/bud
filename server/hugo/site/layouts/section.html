@@ -1,0 +1,7 @@
+{{ define "main" }}
+<h1>{{ .Title }}</h1>
+{{ .Content }}
+<ul class="pages">
+{{ range .RegularPagesRecursive.ByTitle }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a>{{ partial "badges.html" . }}{{ with .Params.linear }} · <a href="{{ . }}">Linear</a>{{ end }}</li>{{ else }}<li class="meta">No pages yet.</li>{{ end }}
+</ul>
+{{ end }}

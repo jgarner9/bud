@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} · {{ site.Title }}{{ end }}</title>
+  {{ partial "style.html" . }}
+</head>
+<body>
+  <header>
+    <a class="brand" href="{{ "/" | relURL }}">{{ site.Title }}</a>
+    <nav>
+      {{ with site.GetPage "/projects" }}<a href="{{ .RelPermalink }}">Projects</a>{{ end }}
+      {{ with site.GetPage "/systems" }}<a href="{{ .RelPermalink }}">Systems</a>{{ end }}
+      {{ with site.GetPage "/archive" }}<a href="{{ .RelPermalink }}">Archive</a>{{ end }}
+      {{ with site.Data.review }}{{ with .items }}<a class="badge review" href="{{ "/" | relURL }}#review">{{ len . }} to review</a>{{ end }}{{ end }}
+    </nav>
+  </header>
+  <main>
+    {{ block "main" . }}{{ end }}
+  </main>
+</body>
+</html>

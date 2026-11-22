@@ -104,7 +104,7 @@ func runRouter(g *Globals, args []string, listen, registryPath, spendPath string
 	defer stop()
 	// probes the local providers once before serving, then until ctx ends
 	rt.Start(ctx)
-	g.Logf("router: serving %d models on %s", len(reg.Models), listen)
+	g.Noticef("router: serving %d models on %s, %d privacy rules", len(reg.Models), listen, len(reg.PrivacyRules))
 	return serveRouter(ctx, listen, rt)
 }
 

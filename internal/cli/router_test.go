@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"path/filepath"
@@ -42,11 +44,16 @@ func TestRouterServesTheRegistryAtThePathGiven(t *testing.T) {
 	orig := serveRouter
 	serveRouter = func(_ context.Context, a string, _ http.Handler) error { addr = a; return nil }
 	t.Cleanup(func() { serveRouter = orig })
-	if err := runRouter(&Globals{}, nil, "127.0.0.1:0", path, filepath.Join(t.TempDir(), "spend.json"), 10, 10*time.Minute, false); err != nil {
+	var stderr bytes.Buffer
+	if err := runRouter(&Globals{stderr: &stderr}, nil, "127.0.0.1:0", path, filepath.Join(t.TempDir(), "spend.json"), 10, 10*time.Minute, false); err != nil {
 		t.Fatal(err)
 	}
 	if addr != "127.0.0.1:0" {
 		t.Errorf("served on %q", addr)
+	}
+	// without --verbose too, so the journal shows the rules were loaded
+	if want := fmt.Sprintf("%d privacy rules", len(reg.PrivacyRules)); len(reg.PrivacyRules) == 0 || !strings.Contains(stderr.String(), want) {
+		t.Errorf("stderr = %q, want a line saying %q", stderr.String(), want)
 	}
 }
 

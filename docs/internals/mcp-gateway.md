@@ -33,7 +33,7 @@ One JSON file (D2), by default `~/.local/state/bud/mcp-gateway.json` (`paths.MCP
 
 The gateway refuses a config with an unknown tier, a bad name, a wildcard listen address or a P0 cloud server, and says which field to fix.
 
-The privacy rules come from the model registry, not this file: `--registry <file>`, or by default the synced content's registry with the overlay's merged over it, loaded the way the router and `bud memory-mcp` load theirs (`loadRouterRegistry`). With neither, the gateway doesn't start and says to run `bud sync` or pass `--registry`, so no call goes out unchecked.
+The privacy rules come from the model registry, not this file: `--registry <file>`, or by default the synced content's registry with the overlay's merged over it, loaded the way the router and `bud memory-mcp` load theirs (`loadRouterRegistry`). With neither, the gateway doesn't start and says to run `bud sync` or pass `--registry`, so no call goes out unchecked. As it starts it logs one line, with or without `--verbose`, giving the count of servers and privacy rules, so the journal shows whether the rules loaded (`bud router` logs its own count the same way).
 
 ## A request
 

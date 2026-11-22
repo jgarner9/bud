@@ -69,7 +69,7 @@ func runMemoryReview(g *Globals, args []string, socket string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	g.Logf("memory-review: reviewing %s through %s", socket, p.ReviewSocket())
+	g.Noticef("memory-review: reviewing %s through %s", socket, p.ReviewSocket())
 	runReviewer(ctx, r)
 
 	return nil

@@ -420,8 +420,10 @@ func (b *Bud) Resolve() (*Resolved, error) {
 			add("%s: hermes_only requires P0 and a direct loopback URL, or no URL until configured", at)
 			continue
 		}
-		if s.MarksP0 && !s.P0() {
-			add("%s: marks_p0 needs P0 in privacy", at)
+		if s.MarksP0 && (!s.P0() || s.URL != "" || len(s.Command) > 0) {
+			// only the gateway checks a marked server's tier; reached
+			// directly, a cloud session could get its P0 records
+			add("%s: marks_p0 needs P0 in privacy and a gateway server (gateway true, no url or command)", at)
 			continue
 		}
 		if !s.Gateway && (s.Approval != nil || s.ReadOnly) {

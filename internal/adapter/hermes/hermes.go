@@ -713,6 +713,16 @@ func sendsP0(s env.Server, cloud bool) bool {
 	return !slices.Contains(s.Privacy, tier) || (s.MarksP0 && !cloud)
 }
 
+// cloudTier says whether the cloud profile reaches a server at a tier
+// other than P0: the device's tier is P1 or P2 and the server allows it. A
+// server that marks P0 records is left out of the cloud profile otherwise,
+// since with no header, or with P0 sent for want of a tier it allows, the
+// gateway would hand it P0 records
+func cloudTier(s env.Server) bool {
+	tier := s.Headers[env.PrivacyHeader]
+	return (tier == "P1" || tier == "P2") && slices.Contains(s.Privacy, tier)
+}
+
 // TrustFull is Hermes's trust for a server it calls without asking first;
 // "untrusted" asks before any tool not marked read-only, and an unset trust
 // is full
@@ -762,7 +772,7 @@ func mcpServers(tools *env.Resolved, cloud bool) (map[string]any, []string) {
 	var left []string
 	for _, name := range tools.Names() {
 		s := tools.Servers[name]
-		if cloud && privateOnly(s) {
+		if cloud && (privateOnly(s) || (s.MarksP0 && !cloudTier(s))) {
 			left = append(left, name)
 			continue
 		}

@@ -285,3 +285,16 @@ func TestAPrivateRecordCarriesTheMarkerFirst(t *testing.T) {
 		t.Errorf("the marker should come before the record's other fields:\n%s", text)
 	}
 }
+
+// Copilot on #116: only a P0 record may carry the marker, so a P1 record
+// can't hold a chat local by quoting it
+func TestOnlyAP0RecordMayCarryTheMarker(t *testing.T) {
+	s, _, stager, _ := newServer()
+	if _, errText := callTool(t, s, "P1", "memory_stage", `{"source":"hermes","kind":"fact","body":"see `+registry.P0Marker+`"}`); !strings.Contains(errText, "marker") {
+		t.Fatalf("a P1 record with the marker: %q", errText)
+	}
+	if _, errText := callTool(t, s, "P0", "memory_stage", `{"source":"hermes","kind":"fact","body":"see `+registry.P0Marker+`"}`); errText != "" {
+		t.Fatalf("a P0 record with the marker: %q", errText)
+	}
+	_ = stager
+}

@@ -382,6 +382,9 @@ func (s *Server) stage(ctx context.Context, tier string, raw json.RawMessage) (a
 		return nil, fmt.Errorf("body: at most %d characters; save a summary instead", maxBodyText)
 	case !slices.Contains(registry.Tiers, a.Privacy):
 		return nil, fmt.Errorf("privacy: %q isn't P0, P1 or P2", a.Privacy)
+	case a.Privacy != "P0" && strings.Contains(a.Body, registry.P0Marker):
+		// the marker says a P0 record came back, so only P0 may carry it
+		return nil, fmt.Errorf("body: holds %s, the marker of a private record; save it as P0, or leave the marker out", registry.P0Marker)
 	case rank(a.Privacy) > rank(tier):
 		// a P0 session's text may hold private data, so it can't be saved
 		// where a cloud session would read it

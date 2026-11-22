@@ -358,3 +358,26 @@ func TestBadWhenRulesAreReported(t *testing.T) {
 		}
 	}
 }
+
+// JGA-389, Copilot on #116: only the gateway checks a marked server's tier
+func TestMarksP0NeedsP0AndTheGateway(t *testing.T) {
+	all := []string{"P0", "P1", "P2"}
+	for _, tc := range []struct {
+		name   string
+		server Server
+		valid  bool
+	}{
+		{"gateway", Server{MarksP0: true, Gateway: true, Privacy: all}, true},
+		{"not yet configured", Server{MarksP0: true, Privacy: all}, true},
+		{"no P0", Server{MarksP0: true, Gateway: true, Privacy: []string{"P1"}}, false},
+		{"direct URL", Server{MarksP0: true, URL: "http://127.0.0.1:8798/mcp", Privacy: all}, false},
+		{"stdio", Server{MarksP0: true, Command: []string{"bud", "memory-mcp"}, Privacy: all}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := Bud{Gateway: "http://127.0.0.1:8790", MCP: map[string]Server{"memory": tc.server}}
+			if _, err := b.Resolve(); (err == nil) != tc.valid {
+				t.Errorf("Resolve = %v, want validity %t", err, tc.valid)
+			}
+		})
+	}
+}

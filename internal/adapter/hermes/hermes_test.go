@@ -393,6 +393,22 @@ func TestAServerThatMarksP0RecordsGetsP0InThePrivateProfileOnly(t *testing.T) {
 	if got := string(out.Config); !strings.Contains(got, "  memory:\n    headers:\n      X-Bud-Privacy: \"P1\"\n") {
 		t.Errorf("the cloud profile:\n%s", got)
 	}
+	// Copilot on #116: the cloud profile never reaches a marking server at
+	// P0, whether for want of a tier it allows or of any tier
+	for name, src := range map[string]string{
+		"a tier it doesn't allow": `{"bud": {"privacy": "P2", "gateway": "http://127.0.0.1:8790", "mcp": {"memory": {"gateway": true, "privacy": ["P0", "P1"], "marks_p0": true}}}}`,
+		"no tier":                 `{"bud": {"gateway": "http://127.0.0.1:8790", "mcp": {"memory": {"gateway": true, "privacy": ["P0", "P1"], "marks_p0": true}}}}`,
+	} {
+		in := input(t, src)
+		in.Cloud = true
+		out, err := Render(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := string(out.Config); strings.Contains(got, "/memory/mcp") {
+			t.Errorf("%s: the cloud profile has memory:\n%s", name, got)
+		}
+	}
 }
 
 func TestAWordYAMLWouldReadAsABoolIsQuoted(t *testing.T) {

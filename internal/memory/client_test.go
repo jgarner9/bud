@@ -169,3 +169,25 @@ func TestClientErrors(t *testing.T) {
 		t.Error("an unreadable reply should be an error")
 	}
 }
+
+func TestExport(t *testing.T) {
+	f := &fakeService{got: map[string]map[string]any{}, replies: map[string]string{
+		"export": `{"format": 2, "records": [{"id": 3, "source": "hermes", "dedupe_key": "k", "kind": "fact", "privacy": "P1", "body": "b", "body_hash": "h", "created_at": "2026-11-21 10:00:00", "state": "approved"}],
+			"references": [{"id": 1, "record_id": 3, "source": "opencode", "reference_key": "r", "referenced_at": "2026-11-22 09:00:00"}]}`,
+	}}
+	got, err := New(serve(t, f), "tok").Export(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &Export{
+		Records:    []ExportedRecord{{ID: 3, Source: "hermes", Kind: "fact", Privacy: "P1", Body: "b", CreatedAt: "2026-11-21 10:00:00", State: "approved"}},
+		References: []Reference{{RecordID: 3, Source: "opencode", ReferencedAt: "2026-11-22 09:00:00"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Export = %+v, want %+v", got, want)
+	}
+	// the service refuses an export with any field in it
+	if len(f.got["export"]) != 0 {
+		t.Errorf("sent %v, want an empty object", f.got["export"])
+	}
+}

@@ -1,0 +1,13 @@
+# Starts the KB curator's nightly run (bud-curator.service). 03:30 is after
+# the day's memory has been reviewed and while nothing else wants the Qwen
+# box. Persistent catches up a night missed while the server was off.
+[Unit]
+Description=Nightly run of the Bud KB curator
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

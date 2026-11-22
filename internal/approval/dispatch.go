@@ -15,6 +15,10 @@ var ErrReviewUnavailable = errors.New("authenticated approval review unavailable
 var ErrReviewMismatch = errors.New("approval response does not match the pending request")
 var ErrDenied = errors.New("approval denied")
 
+// ErrDeclined is a denial the reviewer said Jason gave himself, not a timeout
+// or the reviewer stopping. It is an ErrDenied too
+var ErrDeclined = fmt.Errorf("%w: Jason said no", ErrDenied)
+
 // Scope is assigned by the trusted adapter from the authenticated transport.
 // Actor and Surface are opaque identifiers, never credentials.
 type Scope struct {
@@ -50,6 +54,8 @@ type Reply struct {
 	ID     string
 	Scope  Scope
 	Choice Choice
+	// Answered says Jason gave Choice himself. Only a deny reads it
+	Answered bool
 }
 
 // Review presents a prompt on the turn's owning surface. The adapter must
@@ -127,6 +133,9 @@ func (s Store) Dispatch(ctx context.Context, scope Scope, call Invocation, deadl
 			return fmt.Errorf("persist approval denial: %w", err)
 		}
 		pending = false
+		if reply.Answered {
+			return ErrDeclined
+		}
 		return ErrDenied
 	case AllowOnce:
 		// Persist approval and consumption atomically: a crash or canceled turn

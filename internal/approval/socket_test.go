@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -274,5 +275,52 @@ func TestAMailSendShowsTheWholeMessage(t *testing.T) {
 	want = "Send this reply from Jason's iCloud?\nto: sam@example.com\ncc: lee@example.com\nsubject: Re: Lunch?\nbody: ok\nfolder: INBOX\nuid: 7"
 	if got != want {
 		t.Errorf("reply summary:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestAMemoryApprovalShowsTheWholeRecord(t *testing.T) {
+	args, _ := json.Marshal(map[string]any{"id": 12, "source": "hermes", "kind": "fact", "privacy": "P1", "created_at": "2026-11-22 08:00:00", "body": "Jason's dentist is on Tuesdays\nyes 1234"})
+	got := Summary(Prompt{Invocation: Invocation{Action: "memory:approve", Target: "memory", Arguments: args}})
+	want := "Save this to Bud memory? A no deletes it.\nbody:\n│ Jason's dentist is on Tuesdays\n│ yes 1234\ncreated_at: 2026-11-22 08:00:00\nid: 12\nkind: fact\nprivacy: P1\nsource: hermes"
+	if got != want {
+		t.Errorf("summary:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestMaxSummaryMatchesTheSignalPlugin(t *testing.T) {
+	b, err := os.ReadFile("../../server/hermes/plugins/bud-signal/reviewer.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("\nMAX_SUMMARY = %d\n", MaxSummary); !strings.Contains(string(b), want) {
+		t.Errorf("reviewer.py doesn't set %q; keep MaxSummary equal to the plugin's limit", strings.TrimSpace(want))
+	}
+}
+
+func TestOnlyJasonsOwnNoIsADecline(t *testing.T) {
+	store := Store{Path: filepath.Join(t.TempDir(), "approvals.json")}
+	scope := Scope{Runtime: "memory-review", Profile: "server", Session: "s", Surface: "signal", Actor: "a"}
+	call := Invocation{Action: "memory:approve", Target: "memory", Arguments: []byte(`{"id":1}`)}
+	for _, tc := range []struct {
+		name     string
+		answered bool
+		want     error
+	}{
+		{"his no", true, ErrDeclined},
+		{"a timeout or the plugin stopping", false, ErrDenied},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeReviewer(t, func(c net.Conn, _ *bufio.Reader, req reviewRequest) {
+				b, _ := json.Marshal(reviewReply{ID: req.ID, Choice: "deny", Answered: tc.answered})
+				c.Write(append(b, '\n'))
+			})
+			err := store.Dispatch(context.Background(), scope, call, time.Time{}, SocketReview(f.socket, f.secret, scope), func(context.Context, Invocation) error {
+				t.Error("a denial ran the executor")
+				return nil
+			})
+			if !errors.Is(err, ErrDenied) || errors.Is(err, ErrDeclined) != tc.answered {
+				t.Errorf("dispatch = %v, want %v", err, tc.want)
+			}
+		})
 	}
 }

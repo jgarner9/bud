@@ -1,0 +1,26 @@
+# The home server's memory reviewer (Suite D113), as a systemd user unit:
+#
+#   cp bud-memory-review.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-memory-review
+#
+# op run resolves the memory service's reviewer token in the env file
+# through the Bud vault's service account, whose token the first
+# EnvironmentFile holds; it reaches only this process's environment and
+# never touches disk. It asks Jason through the bud-signal plugin's reviewer
+# socket, so it runs as the user Hermes and the memory service run as, and
+# starts after both. It listens on nothing.
+[Unit]
+Description=Bud memory reviewer (asks on Signal about staged memory records)
+After=bud-memory.service
+
+[Service]
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/memory-review.env -- %h/.local/bin/bud memory-review
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

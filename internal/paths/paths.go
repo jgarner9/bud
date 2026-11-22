@@ -203,6 +203,10 @@ func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }
 // RouterSpend is the router's spend ledger (Suite D24, D64)
 func (p *Paths) RouterSpend() string { return filepath.Join(p.State, "router-spend.json") }
 
+// MemoryReviewStatus is where bud memory-review writes how many memory
+// records wait on review, for the ops reviews tool
+func (p *Paths) MemoryReviewStatus() string { return filepath.Join(p.State, "memory-review.json") }
+
 // MCPGatewayApprovals is the per-server approval tiers bud sync renders from
 // the env fragments; the gateway reads it from beside its own config
 const MCPGatewayApprovalsFile = "mcp-gateway-approvals.json"

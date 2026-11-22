@@ -68,7 +68,7 @@ class ReviewerTest(unittest.IsolatedAsyncioTestCase):
         p = await self.prompt()
         self.assertIn("linear save_issue", self.a.sent[-1][1])
         await self.a._handle_envelope(reaction(UP, p.timestamp))
-        self.assertEqual(await self.reply(r), {"id": "a1", "choice": "once"})
+        self.assertEqual(await self.reply(r), {"id": "a1", "choice": "once", "answered": True})
         self.assertEqual(self.a.reactions, [(JASON, "✅", BOT, p.timestamp)])
         self.assertEqual(self.a.passed, [])
 
@@ -76,17 +76,17 @@ class ReviewerTest(unittest.IsolatedAsyncioTestCase):
         r, _ = await self.ask()
         p = await self.prompt()
         await self.a._handle_envelope(text(f"yes {p.code}"))
-        self.assertEqual(await self.reply(r), {"id": "a1", "choice": "once"})
+        self.assertEqual(await self.reply(r), {"id": "a1", "choice": "once", "answered": True})
 
     async def test_a_thumbs_down_or_no_denies(self):
         r, _ = await self.ask()
         p = await self.prompt()
         await self.a._handle_envelope(reaction(DOWN, p.timestamp))
-        self.assertEqual(await self.reply(r), {"id": "a1", "choice": "deny"})
+        self.assertEqual(await self.reply(r), {"id": "a1", "choice": "deny", "answered": True})
         r, _ = await self.ask("a2")
         p = await self.prompt()
         await self.a._handle_envelope(text(f"no {p.code}"))
-        self.assertEqual(await self.reply(r), {"id": "a2", "choice": "deny"})
+        self.assertEqual(await self.reply(r), {"id": "a2", "choice": "deny", "answered": True})
 
     async def test_a_bad_secret_is_refused_and_nothing_is_sent(self):
         r, _ = await self.ask(secret="wrong")
@@ -245,7 +245,7 @@ class ReviewerTest(unittest.IsolatedAsyncioTestCase):
         review = next(p for p in self.a._prompts._by_code.values() if p.review is not None)
         await self.a._handle_envelope(reaction(UP, review.timestamp))
         self.assertEqual(self.approvals.calls, [])
-        self.assertEqual(await self.reply(r), {"id": "a1", "choice": "once"})
+        self.assertEqual(await self.reply(r), {"id": "a1", "choice": "once", "answered": True})
 
 
 class StartTest(unittest.IsolatedAsyncioTestCase):

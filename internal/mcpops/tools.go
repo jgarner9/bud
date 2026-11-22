@@ -13,6 +13,7 @@ import (
 
 	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/doctor"
+	"jgarner.dev/bud/internal/memoryreview"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/registry"
 	"jgarner.dev/bud/internal/router"
@@ -82,19 +83,68 @@ func Tools(src Sources) []Tool {
 				return pendingApprovals(src.Paths, time.Now())
 			},
 		},
-		notBuilt("reviews", "The review queue: staged skill and memory writes waiting on Jason's review.",
-			"the review queue isn't built yet: staged skill and memory writes come with Hermes (Suite D48) and the memory curator (build plan phase 5)"),
+		{
+			Name:        "reviews",
+			Description: "Counts the memory records waiting on Jason's review (staged by an agent, not yet searchable), by privacy tier, as bud memory-review last counted them, with how many are on his phone now and how many are too long to ask about on Signal. Counts only: no bodies. Hermes's own staged skill writes aren't counted. Read-only.",
+			Run: func(_ context.Context, args json.RawMessage) (any, error) {
+				if err := decodeArgs(args, &struct{}{}); err != nil {
+					return nil, err
+				}
+				return pendingReviews(src.Paths, time.Now())
+			},
+		},
 	}
 }
 
-func notBuilt(name, what, why string) Tool {
-	return Tool{
-		Name:        name,
-		Description: what + " Not built yet: it reports that, rather than an empty queue.",
-		Run: func(context.Context, json.RawMessage) (any, error) {
-			return nil, errors.New(why)
-		},
+// staleReview is how old memory-review's count may be before the tool says
+// it may not be running: it counts every minute
+const staleReview = 5 * time.Minute
+
+type memoryReviews struct {
+	Pending   int            `json:"pending"`
+	ByPrivacy map[string]int `json:"by_privacy"`
+	Asking    int            `json:"asking"`
+	TooLong   int            `json:"too_long"`
+	Oldest    string         `json:"oldest,omitempty"`
+	CountedAt string         `json:"counted_at"`
+}
+
+type reviewsOut struct {
+	// Memory is nil when bud memory-review never counted
+	Memory *memoryReviews `json:"memory"`
+	Note   string         `json:"note,omitempty"`
+	Skills string         `json:"skills"`
+}
+
+// pendingReviews reads the counts bud memory-review writes each minute
+func pendingReviews(resolve func() (*paths.Paths, error), now time.Time) (reviewsOut, error) {
+	p, err := resolve()
+	if err != nil {
+		return reviewsOut{}, err
 	}
+	out := reviewsOut{Skills: "Hermes keeps its own staged skill writes; this tool can't count them yet."}
+	st, ok, err := memoryreview.ReadStatus(p.MemoryReviewStatus())
+	if err != nil {
+		return reviewsOut{}, fmt.Errorf("read memory review's count: %w", err)
+	}
+	if !ok {
+		out.Note = "bud memory-review has never counted on this machine, so the memory count is unknown: start bud-memory-review (server/memory-review/)."
+		return out, nil
+	}
+	out.Memory = &memoryReviews{Pending: st.Pending, ByPrivacy: st.ByPrivacy, Asking: st.Asking, TooLong: st.TooLong, Oldest: st.Oldest, CountedAt: st.UpdatedAt.UTC().Format(time.RFC3339)}
+	if out.Memory.ByPrivacy == nil {
+		out.Memory.ByPrivacy = map[string]int{}
+	}
+	var notes []string
+	if now.Sub(st.UpdatedAt) > staleReview {
+		notes = append(notes, "bud memory-review last counted at "+out.Memory.CountedAt+", so it may not be running (systemctl --user status bud-memory-review).")
+	}
+	if st.TooLong > 0 {
+		notes = append(notes, fmt.Sprintf("%d too long to show whole on Signal, so they wait to be approved by hand.", st.TooLong))
+	}
+	out.Note = strings.Join(notes, " ")
+
+	return out, nil
 }
 
 // decodeArgs reads a tool's arguments into v, refusing names it doesn't

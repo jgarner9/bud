@@ -132,6 +132,67 @@ class ServiceTest(unittest.TestCase):
             self.assertEqual("private orchard", snapshot["records"][0]["body"])
             self.assertEqual(400, request(BACKUP, "/restore", {"snapshot": snapshot})[0])
 
+    def test_reviewer_lists_and_discards_staged_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "memory.sock")
+            ready = threading.Event()
+            holder = []
+
+            def serve():
+                # the store belongs to the thread that made it
+                server = MemoryServer(path, str(Path(tmp) / "memory.db"), {
+                    AGENT: {"actions": ["stage", "search"], "tiers": ["P0", "P1", "P2"]},
+                    REVIEWER: {"actions": ["staged", "approve", "discard", "search"], "tiers": ["P1", "P2"]},
+                })
+                holder.append(server)
+                ready.set()
+                try:
+                    server.serve_forever()
+                finally:
+                    server.server_close()
+
+            thread = threading.Thread(target=serve)
+            thread.start()
+            self.assertTrue(ready.wait(3))
+            self.addCleanup(thread.join, 3)
+            self.addCleanup(holder[0].shutdown)
+
+            def request(token, endpoint, payload):
+                return UnixHTTP(path).post(endpoint, token, payload)
+
+            ids = []
+            for key, privacy, body in (("1", "P0", "private orchard"), ("2", "P1", "orchard plans"), ("3", "P2", "orchard map")):
+                status, data = request(AGENT, "/stage", {"source": "synthetic", "dedupe_key": key, "kind": "fact", "privacy": privacy, "body": body})
+                self.assertEqual(200, status)
+                ids.append(data["id"])
+            self.assertEqual(403, request(AGENT, "/staged", {})[0])
+            self.assertEqual(403, request(AGENT, "/discard", {"id": ids[1]})[0])
+
+            status, data = request(REVIEWER, "/staged", {})
+            self.assertEqual(200, status)
+            # the P0 record is outside the reviewer's tiers
+            self.assertEqual([ids[1], ids[2]], [r["id"] for r in data["records"]])
+            self.assertEqual({"id", "source", "kind", "privacy", "body", "created_at"}, set(data["records"][0]))
+            self.assertEqual([ids[2]], [r["id"] for r in request(REVIEWER, "/staged", {"after": ids[1]})[1]["records"]])
+            self.assertEqual([ids[1]], [r["id"] for r in request(REVIEWER, "/staged", {"limit": 1})[1]["records"]])
+            for bad in ({"limit": 0}, {"after": -1}, {"after": "1"}, {"privacy": ["P0"]}):
+                with self.subTest(payload=bad):
+                    self.assertEqual(400, request(REVIEWER, "/staged", bad)[0])
+
+            self.assertEqual(404, request(REVIEWER, "/discard", {"id": ids[0]})[0])
+            self.assertEqual(400, request(REVIEWER, "/discard", {"id": str(ids[1])})[0])
+            self.assertEqual((200, {"discarded": True}), request(REVIEWER, "/discard", {"id": ids[1]}))
+            self.assertEqual(404, request(REVIEWER, "/discard", {"id": ids[1]})[0])
+            self.assertEqual(200, request(REVIEWER, "/approve", {"id": ids[2]})[0])
+            self.assertEqual(409, request(REVIEWER, "/discard", {"id": ids[2]})[0])
+            self.assertEqual([], request(REVIEWER, "/staged", {})[1]["records"])
+            self.assertEqual(["orchard map"], [r["body"] for r in request(AGENT, "/search", {"query": "orchard"})[1]["records"] if r["privacy"] != "P0"])
+
+            # a discarded record can be staged again, as a new record
+            status, data = request(AGENT, "/stage", {"source": "synthetic", "dedupe_key": "2", "kind": "fact", "privacy": "P1", "body": "orchard plans"})
+            self.assertEqual(200, status)
+            self.assertNotEqual(ids[1], data["id"])
+
     def test_invalid_policy_and_existing_socket_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "memory.sock")
@@ -140,6 +201,9 @@ class ServiceTest(unittest.TestCase):
                 MemoryServer(path, db, {})
             with self.assertRaises(ValueError):
                 MemoryServer(path, db, {AGENT: {"actions": ["stage", "approve"], "tiers": ["P0"]}})
+            for action in ("staged", "discard"):
+                with self.subTest(action=action), self.assertRaises(ValueError):
+                    MemoryServer(path, db, {AGENT: {"actions": ["stage", action], "tiers": ["P0"]}})
             with self.assertRaises(ValueError):
                 MemoryServer(path, db, {AGENT: {"actions": ["backup"], "tiers": ["P0"]}})
             with self.assertRaises(ValueError):

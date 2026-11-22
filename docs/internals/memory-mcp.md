@@ -7,9 +7,9 @@
 | Tool | What it does |
 | --- | --- |
 | `memory_search` | `query` (up to 4,096 characters), optional `source`, `since` and `until` (inclusive `YYYY-MM-DD`) and `limit` (1 to 20, default 8). It embeds the query and calls the service's `/retrieve`, which ranks by text and vector together. Each result carries its id, source, kind, privacy, when it was saved, how it matched and its body. |
-| `memory_stage` | `source` (the runtime saving it, lowercase letters, digits and `-`), `kind` (`observation`, `fact` or `summary`), `body` (up to 16,000 characters) and optional `privacy`. It stages the record for Jason's review; nothing is searchable until the reviewer approves it. The dedupe key is the SHA-256 of kind, privacy and body, so a retry finds the record it already made instead of staging it twice. |
+| `memory_stage` | `source` (the runtime saving it, lowercase letters, digits and `-`), `kind` (`observation`, `fact` or `summary`), `body` (up to 16,000 characters) and optional `privacy`. It stages the record for Jason's review; nothing is searchable until he approves it on Signal, which `bud memory-review` asks him (`docs/internals/memory-review.md`). The dedupe key is the SHA-256 of kind, privacy and body, so a retry finds the record it already made instead of staging it twice. |
 
-There is no approve, edit, delete or export tool: approving stays with the reviewer identity, and the KB stays with the curator and Jason. A tool's failure is an MCP result with `isError: true` and a sentence the model can pass on, such as "Bud memory is unavailable (the memory service isn't running on the home server); nothing was saved, so save it again later". Runtimes never fall back to a file of their own.
+There is no approve, edit, delete or export tool: approving stays with the reviewer identity, which only `bud memory-review` holds, and the KB stays with the curator and Jason. A tool's failure is an MCP result with `isError: true` and a sentence the model can pass on, such as "Bud memory is unavailable (the memory service isn't running on the home server); nothing was saved, so save it again later". Runtimes never fall back to a file of their own.
 
 ## Privacy
 

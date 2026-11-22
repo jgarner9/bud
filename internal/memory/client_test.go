@@ -62,6 +62,9 @@ func TestClientActions(t *testing.T) {
 		"stage":          `{"id": 7}`,
 		"vector_pending": `{"records": [{"id": 1, "privacy": "P2", "body": "x", "body_hash": "h"}]}`,
 		"vector_put":     `{"stored": true}`,
+		"staged":         `{"records": [{"id": 5, "source": "hermes", "kind": "fact", "privacy": "P1", "body": "b", "created_at": "c"}]}`,
+		"approve":        `{"approved": true}`,
+		"discard":        `{"discarded": true}`,
 	}}
 	c := New(serve(t, f), "tok")
 	ctx := context.Background()
@@ -114,6 +117,23 @@ func TestClientActions(t *testing.T) {
 	if got := f.got["vector_put"]; got["id"] != 1.0 || got["model"] != "m" || got["body_hash"] != "h" || len(got["values"].([]any)) != 2 {
 		t.Errorf("vector_put sent %v", got)
 	}
+
+	staged, err := c.Staged(ctx, 4, 10)
+	if err != nil || !reflect.DeepEqual(staged, []Record{{ID: 5, Source: "hermes", Kind: "fact", Privacy: "P1", Body: "b", CreatedAt: "c"}}) {
+		t.Errorf("Staged = %+v, %v", staged, err)
+	}
+	if got := f.got["staged"]; !reflect.DeepEqual(got, map[string]any{"after": 4.0, "limit": 10.0}) {
+		t.Errorf("staged sent %v", got)
+	}
+	if _, err := c.Staged(ctx, 0, 0); err != nil || len(f.got["staged"]) != 0 {
+		t.Errorf("staged sent %v, %v; a zero after and limit should be left out", f.got["staged"], err)
+	}
+	if err := c.Approve(ctx, 5); err != nil || !reflect.DeepEqual(f.got["approve"], map[string]any{"id": 5.0}) {
+		t.Errorf("Approve sent %v, %v", f.got["approve"], err)
+	}
+	if err := c.Discard(ctx, 6); err != nil || !reflect.DeepEqual(f.got["discard"], map[string]any{"id": 6.0}) {
+		t.Errorf("Discard sent %v, %v", f.got["discard"], err)
+	}
 }
 
 func TestClientErrors(t *testing.T) {
@@ -138,6 +158,9 @@ func TestClientErrors(t *testing.T) {
 	f.status = http.StatusConflict
 	if err := New(sock, "tok").PutVector(context.Background(), 1, "m", []float64{1}, "old"); !errors.Is(err, ErrStale) {
 		t.Errorf("a 409 = %v, want ErrStale", err)
+	}
+	if err := New(sock, "tok").Discard(context.Background(), 1); !errors.Is(err, ErrApproved) {
+		t.Errorf("a 409 on discard = %v, want ErrApproved", err)
 	}
 
 	f.status = 0

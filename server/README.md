@@ -8,6 +8,7 @@ Home-server setup and service units for Hermes, the planning OpenCode, the Bud M
 | `calendar-mcp/` | The calendar MCP server's unit, over iCloud CalDAV (Suite D82) |
 | `contacts-mcp/` | Read-only iCloud contacts unit for private Hermes (Suite D88) |
 | `memory-mcp/` | The memory MCP server's unit, how every runtime reaches working memory through the gateway (Suite D102, D108) |
+| `memory-review/` | The memory reviewer's unit: asks Jason on Signal about each staged memory record, a yes approves and a no deletes (Suite D113) |
 | `planning-opencode/` | The planning OpenCode's system unit, running `opencode serve` as its own user `bud-planning` for the IDE's planning chats (Suite D49, D109) |
 | `mcp-ops/` | The Bud ops MCP server's unit (Suite D83) |
 | `embed/` | The embedding server's unit: llama.cpp with Qwen3-Embedding-0.6B on the CPU, for working memory (Suite D52, JGA-294) |

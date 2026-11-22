@@ -17,6 +17,7 @@ import (
 
 	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/doctor"
+	"jgarner.dev/bud/internal/memoryreview"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/registry"
 	"jgarner.dev/bud/internal/syncer"
@@ -135,15 +136,48 @@ func TestDoctorReportsCountsAndResults(t *testing.T) {
 	}
 }
 
-// the queues that aren't built say so as a tool error, never an empty list
-func TestUnbuiltToolsSaySo(t *testing.T) {
-	s := New(Tools(Defaults()))
-	for _, name := range []string{"reviews"} {
-		_, out := post(t, s, call(name, `{}`))
+// reviews counts memory-review's records, never bodies, and says when the
+// count is missing or old
+func TestReviewsToolReadsMemoryReviewsCount(t *testing.T) {
+	dir := t.TempDir()
+	src := Defaults()
+	src.Paths = func() (*paths.Paths, error) { return &paths.Paths{State: dir}, nil }
+	s := New(Tools(src))
+	reviews := func() reviewsOut {
+		t.Helper()
+		_, out := post(t, s, call("reviews", `{}`))
 		text, isErr := toolText(t, out)
-		if !isErr || !strings.Contains(text, "isn't built yet") {
-			t.Errorf("%s: %q %v", name, text, isErr)
+		if isErr {
+			t.Fatalf("error: %s", text)
 		}
+		var got reviewsOut
+		if err := json.Unmarshal([]byte(text), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	if got := reviews(); got.Memory != nil || !strings.Contains(got.Note, "never counted") {
+		t.Errorf("no count yet: %+v", got)
+	}
+
+	write := func(st memoryreview.Status) {
+		b, _ := json.Marshal(st)
+		if err := os.WriteFile(filepath.Join(dir, "memory-review.json"), b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(memoryreview.Status{UpdatedAt: time.Now(), Pending: 3, ByPrivacy: map[string]int{"P0": 1, "P1": 2}, Asking: 2, Oldest: "2026-11-22 08:00:00"})
+	got := reviews()
+	if got.Memory == nil || got.Memory.Pending != 3 || got.Memory.ByPrivacy["P1"] != 2 || got.Memory.Asking != 2 || got.Note != "" || got.Skills == "" {
+		t.Errorf("a fresh count: %+v", got)
+	}
+
+	write(memoryreview.Status{UpdatedAt: time.Now().Add(-time.Hour), Pending: 1, TooLong: 1})
+	if got := reviews(); !strings.Contains(got.Note, "may not be running") || !strings.Contains(got.Note, "1 too long") {
+		t.Errorf("an old count: %+v", got)
+	}
+	if _, out := post(t, s, call("reviews", `{"x":1}`)); errCode(out) != -32602 {
+		t.Errorf("an unknown argument: %v", out)
 	}
 }
 

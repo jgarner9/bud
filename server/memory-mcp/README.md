@@ -4,7 +4,7 @@ The home server's memory MCP server (Suite D102, D108): `bud memory-mcp` behind 
 
 | File | What it is |
 | --- | --- |
-| `bud-memory-mcp.service` | The user unit. It runs the server under `op run` on `127.0.0.1:8793`, so the tokens reach it as environment variables. |
+| `bud-memory-mcp.service` | The user unit. It runs the server under `op run` on `127.0.0.1:8798`, so the tokens reach it as environment variables. |
 | `memory-mcp.env.example` | The five `op://` references `op run` resolves, with placeholder vault paths. |
 
 ## Setting it up

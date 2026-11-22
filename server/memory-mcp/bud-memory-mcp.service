@@ -19,7 +19,7 @@ Wants=network-online.target
 
 [Service]
 EnvironmentFile=%h/.config/bud-server/op-service-account.env
-ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/memory-mcp.env -- %h/.local/bin/bud memory-mcp --listen 127.0.0.1:8793
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/memory-mcp.env -- %h/.local/bin/bud memory-mcp --listen 127.0.0.1:8798
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=yes

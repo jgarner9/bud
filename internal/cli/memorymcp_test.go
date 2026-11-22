@@ -24,28 +24,28 @@ func TestMemoryMCPChecksItsSetup(t *testing.T) {
 		t.Setenv(name, "")
 	}
 	t.Setenv("BUD_MEMORY_TOKEN_P0", "t0")
-	err := runMemoryMCP(&Globals{}, nil, "127.0.0.1:8793", "/run/m.sock", reg, true)
+	err := runMemoryMCP(&Globals{}, nil, "127.0.0.1:8798", "/run/m.sock", reg, true)
 	if err == nil || !strings.Contains(err.Error(), "BUD_MEMORY_TOKEN_P1, BUD_MEMORY_TOKEN_P2, BUD_MEMORY_TOKEN_STAGE, BUD_MEMORY_TOKEN_EMBED are empty") {
 		t.Fatalf("missing tokens: err = %v", err)
 	}
 	for _, name := range memoryTokens {
 		t.Setenv(name, "tok-"+name)
 	}
-	if err := runMemoryMCP(&Globals{}, nil, "100.64.0.1:8793", "/run/m.sock", reg, true); err == nil || !strings.Contains(err.Error(), "memory through the MCP gateway") {
+	if err := runMemoryMCP(&Globals{}, nil, "100.64.0.1:8798", "/run/m.sock", reg, true); err == nil || !strings.Contains(err.Error(), "memory through the MCP gateway") {
 		t.Errorf("a tailnet listen address: %v", err)
 	}
-	if err := runMemoryMCP(&Globals{}, []string{"x"}, "127.0.0.1:8793", "/run/m.sock", reg, true); err == nil {
+	if err := runMemoryMCP(&Globals{}, []string{"x"}, "127.0.0.1:8798", "/run/m.sock", reg, true); err == nil {
 		t.Error("an argument was accepted")
 	}
 	t.Setenv("XDG_RUNTIME_DIR", "")
-	if err := runMemoryMCP(&Globals{}, nil, "127.0.0.1:8793", "", reg, true); err == nil || !strings.Contains(err.Error(), "pass --socket") {
+	if err := runMemoryMCP(&Globals{}, nil, "127.0.0.1:8798", "", reg, true); err == nil || !strings.Contains(err.Error(), "pass --socket") {
 		t.Errorf("no runtime dir and no --socket: %v", err)
 	}
 
-	if err := runMemoryMCP(&Globals{}, nil, "127.0.0.1:8793", "/run/m.sock", reg, true); err != nil {
+	if err := runMemoryMCP(&Globals{}, nil, "127.0.0.1:8798", "/run/m.sock", reg, true); err != nil {
 		t.Fatal(err)
 	}
-	if served != "127.0.0.1:8793" {
+	if served != "127.0.0.1:8798" {
 		t.Errorf("served on %q", served)
 	}
 }

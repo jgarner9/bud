@@ -22,7 +22,7 @@ Reminders are events with alarms, which ring on Jason's phone, and reminder text
 | `move_event` | no | A new `start` (and optional `end`, else the length is kept) for an event that doesn't repeat. |
 | `delete_event` | no | Deletes an event that doesn't repeat. |
 
-Times are RFC 3339, a local `2026-11-18T14:30`, or a date. An event's id is its resource path from `list_events`. The read-only tools carry `readOnlyHint: true` and the rest `false`, and `content/env/server.jsonc` marks the server `trust: untrusted` for Hermes, which then asks before every tool that isn't read-only; Hermes's approvals by phone (D48, JGA-290) are what make a write wait for Jason. A tool's failure comes back as a result with `isError` and a sentence saying what to fix, not as a JSON-RPC error.
+Times are RFC 3339, a local `2026-11-18T14:30`, or a date. An event's id is its resource path from `list_events`. The read-only tools carry `readOnlyHint: true` and the rest `false`, and the gateway's approval tiers (`bud.mcp.calendar.approval` in `content/env/server.jsonc`) make a create, move or delete wait for Jason's answer on Signal (D103). Hermes trusts the server, so that is the only prompt (Suite D115). A tool's failure comes back as a result with `isError` and a sentence saying what to fix, not as a JSON-RPC error.
 
 ## CalDAV
 

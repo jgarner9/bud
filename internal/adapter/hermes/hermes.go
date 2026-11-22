@@ -286,7 +286,7 @@ func Render(in Input) (*Output, error) {
 	}
 	out.Config = []byte(b.String())
 
-	t := Tiers{Shell: shell, Tools: tools.Tiers, Private: privateTools(tools)}
+	t := Tiers{Shell: shell, Tools: tools.Tiers, Private: privateTools(tools), Trusted: trustedGateway(tools, cfg)}
 	if t.Shell == nil {
 		t.Shell = []Rule{}
 	}
@@ -671,6 +671,30 @@ func sendsP0(s env.Server) bool {
 	return s.Gateway && tier != "" && !slices.Contains(s.Privacy, tier) && s.P0()
 }
 
+// TrustFull is Hermes's trust for a server it calls without asking first;
+// "untrusted" asks before any tool not marked read-only, and an unset trust
+// is full
+const TrustFull = "full"
+
+// trustedGateway are the gateway servers in the rendered config that Hermes
+// trusts, sorted: those whose trust, after the fragments' extras, isn't
+// "untrusted"
+func trustedGateway(tools *env.Resolved, cfg map[string]any) []string {
+	servers, _ := cfg["mcp_servers"].(map[string]any)
+	out := []string{} // always written, so bud doctor can tell a file from before D115
+	for _, name := range tools.Names() {
+		entry, ok := servers[name].(map[string]any)
+		if !ok || !tools.Servers[name].Gateway {
+			continue
+		}
+		if trust, _ := entry["trust"].(string); trust == "" || trust == TrustFull {
+			out = append(out, name)
+		}
+	}
+
+	return out
+}
+
 // privateTools are the tool patterns of the servers only private sessions
 // may use, which the gate refuses outside the private profile
 func privateTools(tools *env.Resolved) []string {
@@ -702,6 +726,12 @@ func mcpServers(tools *env.Resolved, cloud bool) (map[string]any, []string) {
 		var entry map[string]any
 		if s.Remote() {
 			entry = map[string]any{"url": hermesRefs(s.URL)}
+			if s.Gateway && s.Approval != nil {
+				// the gateway asks for this server's writes, bound to the
+				// exact arguments (D103), so Hermes's own untrusted-server
+				// prompt would only ask a second time (Suite D115)
+				entry["trust"] = TrustFull
+			}
 			headers := s.Headers
 			if sendsP0(s) {
 				headers = maps.Clone(headers)

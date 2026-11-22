@@ -153,8 +153,9 @@
       "browser_dialog": "ask",
       "browser_vault": "deny",
       "computer_use": "deny",
-      // MCP tools run alone here: Hermes itself asks before any tool on an
-      // untrusted server (below) that isn't marked read-only
+      // MCP tools run alone here: the gateway asks for Linear, calendar
+      // and mail writes, and Hermes itself before any GitHub tool that isn't
+      // marked read-only (below)
       "mcp__*": "allow",
     },
     "hermes": {
@@ -169,16 +170,13 @@
         "cron": ["terminal", "file", "code_execution", "web", "browser", "session_search", "skills", "cronjob", "delegation", "todo", "vision"],
       },
       "web": { "backend": "exa", "search_backend": "searxng", "extract_backend": "exa", "keyless_fallback": false },
-      // Hermes asks before any tool on these that isn't marked read-only
+      // Hermes asks before any tool on these that isn't marked read-only.
+      // Linear, the calendar and mail aren't listed: the gateway asks for
+      // their writes, bound to the exact arguments, so bud sync renders them
+      // trusted and each write asks once (D115). GitHub doesn't go through
+      // the gateway, so Hermes keeps asking for it
       "mcp_servers": {
-        "linear": { "trust": "untrusted" },
         "github": { "trust": "untrusted" },
-        // reads are marked read-only and run alone; creating, moving and
-        // deleting events ask by phone (D82)
-        "calendar": { "trust": "untrusted" },
-        // reads, moves to the trash and restores are marked read-only and
-        // run alone; sends and replies ask (D31, D36)
-        "mail": { "trust": "untrusted" },
       },
     },
   },

@@ -463,3 +463,44 @@ func TestWithARouterThePrivateProfileAsksItForTheManager(t *testing.T) {
 		t.Errorf("the cloud profile still names its providers itself:\n%s", c)
 	}
 }
+
+// Suite D115: a gateway server with an approval block is trusted in Hermes,
+// so a write asks once, at the gateway. Others keep their trust, and a
+// fragment can still mark one untrusted
+func TestGatewayReviewedServersAreTrustedInHermes(t *testing.T) {
+	out, err := Render(input(t, `{"bud": {
+		"privacy": "P1",
+		"gateway": "http://127.0.0.1:8790",
+		"mcp": {
+			"linear": {"gateway": true, "privacy": ["P1"], "approval": {"tools": {"linear_get_*": "allow"}}},
+			"calendar": {"gateway": true, "privacy": ["P0"], "approval": {"tools": {"calendar_list_*": "allow"}}},
+			"exa": {"gateway": true, "privacy": ["P1"], "read_only": true},
+			"github": {"url": "https://api.example.com/mcp", "privacy": ["P1"]}
+		},
+		"hermes": {"mcp_servers": {"github": {"trust": "untrusted"}}}
+	}}`, `{"bud": {"hermes": {"mcp_servers": {"calendar": {"trust": "untrusted"}}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out.Config)
+	for _, want := range []string{
+		"  linear:\n    headers:\n      X-Bud-Privacy: \"P1\"\n    trust: \"full\"\n",
+		"  calendar:\n    headers:\n      X-Bud-Privacy: \"P0\"\n    trust: \"untrusted\"\n", // the overlay's choice stands
+		"  github:\n    trust: \"untrusted\"\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lacks:\n%s\nin:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "  exa:\n    headers:\n      X-Bud-Privacy: \"P1\"\n    trust:") {
+		t.Errorf("a read_only server has no review at the gateway, so it keeps Hermes's default:\n%s", got)
+	}
+	var tiers Tiers
+	if err := json.Unmarshal(out.Tiers, &tiers); err != nil {
+		t.Fatal(err)
+	}
+	// exa has no trust set, which Hermes reads as full, so doctor checks it too
+	if !slices.Equal(tiers.Trusted, []string{"exa", "linear"}) {
+		t.Errorf("trusted: %q", tiers.Trusted)
+	}
+}

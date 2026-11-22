@@ -60,7 +60,7 @@ func checkSync(p *paths.Paths, cfg config.Settings, opts Options) []Result {
 	prof, profResult := checkDevice(p, cfg.Device)
 	results := []Result{profResult}
 	if prof != nil && prof.Has("server") {
-		results = append(results, checkReviewChannel(p), checkSignalDaemon())
+		results = append(results, checkReviewChannel(p), checkSignalDaemon(), checkGatewayTrust(p.HermesTiers(), p.MCPGateway()))
 		if !opts.Quick {
 			results = append(results, checkHermesVersion())
 		}

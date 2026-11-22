@@ -47,11 +47,12 @@ mcp_servers:
   linear:
     headers:
       X-Bud-Privacy: "P1"
-    trust: "untrusted"
+    trust: "full"
     url: "http://100.64.0.1:8790/linear/mcp"
   memory:
     headers:
       X-Bud-Privacy: "P1"
+    trust: "full"
     url: "http://100.64.0.1:8790/memory/mcp"
   ops:
     url: "http://127.0.0.1:8792/mcp"

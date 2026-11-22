@@ -42,6 +42,11 @@ type Tiers struct {
 	// use (the calendar): refused to any profile but Hermes's private one,
 	// whatever Tools says (Suite D95)
 	Private []string `json:"private"`
+	// Trusted are the servers Hermes reaches through the MCP gateway without
+	// its own untrusted-server prompt, since the gateway asks at the leaf
+	// (Suite D115). The gate doesn't read it; bud doctor checks each against
+	// the gateway's config
+	Trusted []string `json:"trusted,omitempty"`
 }
 
 // PrivateProfile is the name Hermes gives its default profile, the private

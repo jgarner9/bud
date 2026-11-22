@@ -15,6 +15,6 @@ metadata:
 
 - PR #88: internal/memory Go client (R4 slice 1). Staging needs a token covering the record's tier, so the design uses a separate all-tier stager token. JGA-294 left In Progress for the home server install.
 
-- PR #89 merged (D108 gateway tier forwarding; key.header may not be X-Bud-Privacy). PR #90 (merged 2026-11-21): bud memory-mcp; retrieve works text-only without model/values, vector_pending takes an after cursor (internal/memorymcp, port 8793 loopback, five BUD_MEMORY_TOKEN_* tokens P0/P1/P2/STAGE/EMBED, backfill loop). Open for Jason: the home server install + 1Password tokens, overlay mcp.memory gateway:true, turning off Hermes built-in memory.
+- PR #89 merged (D108 gateway tier forwarding; key.header may not be X-Bud-Privacy). PR #90 (merged 2026-11-21): bud memory-mcp; retrieve works text-only without model/values, vector_pending takes an after cursor (internal/memorymcp, port 8793 loopback at the time, moved to 8798 in PR #101 because signal-cli holds 8793, five BUD_MEMORY_TOKEN_* tokens P0/P1/P2/STAGE/EMBED, backfill loop). Open for Jason: the home server install + 1Password tokens, overlay mcp.memory gateway:true, turning off Hermes built-in memory.
 
 Related: [[bud-suite-roadmap]]

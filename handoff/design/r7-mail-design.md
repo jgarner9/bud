@@ -1,5 +1,7 @@
 # R7: `bud mail-mcp`, iCloud mail behind the gateway
 
+> **Historical status (handoff note, 2026-11-22).** Built: slices 1 to 4 merged in PRs #81 to #84, and mail runs on the home server (live since 2026-11-22). What's left is the `--record` output and the ingestion work in JGA-317. Current docs: `docs/internals/mail.md`.
+
 Status: approved by Jason 2026-11-21; building in the slice order below. Nothing here is built yet. Already decided and not reopened: standard library only, own IMAP subset, net/smtp with STARTTLS on 587 (Suite D106, D1); mail is for reading, every send and reply asks (D31); cleanup only moves to Deleted Messages, runs alone and is reported in a digest (D36, D54); mail is P0, Qwen only (D23); the app-specific password is an `op://` reference in the Bud vault and the agent never reads it (D7); approvals are enforced at the gateway's leaf through the bud-signal flow (D97, D101, D103). Linear: JGA-315 (this server), JGA-317 (isolated ingestion, a later slice).
 
 ## Shape

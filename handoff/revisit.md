@@ -139,7 +139,7 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 ### Memory privacy (JGA-389, Suite D130, PR #116)
 
 29. **the home server steps once PR #116 is merged** (after item 22's steps):
-    1. `bud update`, then `bud sync`. Check that `~/.hermes/config.yaml` shows `X-Bud-Privacy: "P0"` under `mcp_servers.memory.headers`.
+    1. Update bud from main again (the nightly or a build from main, as in item 22; no release includes #116 yet), promote the edge content cut from the #116 merge (format 9) with `gh workflow run content.yml -R jgarner9/bud -f mode=promote -f version=<v>`, then `bud sync`. Check that `~/.hermes/config.yaml` shows `X-Bud-Privacy: "P0"` under `mcp_servers.memory.headers`.
     2. Restart the router, then Hermes, so both pick up the change. Restart memory-mcp too, so its answers carry the marker.
     3. Re-check the records you've already approved, since Hermes saved them at P1, even ones from chats that read your calendar. You can see them with a `memory_search` from Hermes once it's at P0, since each result shows its tier. The memory service has no action yet to re-tier or remove an approved record (`discard` works only on staged ones), so a private one needs a hand edit of the SQLite file, or a small new action. Say if you want the action built.
     4. Test: in a Signal chat, ask Hermes something that recalls a P0 record. The router log should say "a private Bud memory record in the history raised a P1 request to P0", and the reply should come from Qwen.

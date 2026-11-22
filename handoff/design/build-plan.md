@@ -1,5 +1,7 @@
 # Bud Suite build plan
 
+> **Historical status (handoff note, 2026-11-22).** The status line below is from 2026-11-15. Every phase 1 PR it lists is merged, and the pinned OpenCode install landed in the 2026-11-18 to 20 work. Current status is the "Roadmap from 2026-11-20" section at the end and `handoff/state.md`.
+
 Status: **approved by Jason, 2026-11-15. Phase 1 merged 2026-11-15 13:24Z (PRs #3-#9, #11-#15); the pinned OpenCode install from 1.7 is still to do.** Built so far, as open PRs on jgarner9/bud: 1.1, 1.2, 1.3, 1.5, 1.6, 1.7 and the leak-check half of 1.10 (PR #7). Refines section 11 of `bud-suite-architecture.html` into phases of small, shippable tasks. Tracked in Linear under Jason's Bud 2.0 milestone (project Bud Suite): each task heading names its issue, and phases 2 to 7 map onto the phase parents JGA-335 to JGA-341. Decisions are cited by number from that doc's log (D1 to D90).
 
 ## How this differs from section 11

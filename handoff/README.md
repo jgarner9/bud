@@ -13,7 +13,7 @@ Written 2026-11-22 by the Claude Code project thread "Hand off Bud project to Op
 
 Personal and host details (the real host names, tailnet IPs, real `op://` paths and the exact paste blocks for the home server) are in the private overlay, `jgarner9/bud-overlay`, under `handoff/`. That folder isn't synced to devices; `bud sync` reads only the overlay's `profiles/`, `env/` and `content/`. Here the machines are named by role: **the home server** runs Hermes, the gateway, the router and the other Bud services; **the Qwen box** runs the local model and sleeps; **the laptop** is Jason's dev machine.
 
-The design docs and memory files were copied as they were, with host names replaced by roles. They still cite paths like `/mnt/project-files/architecture/<name>`, which was the Claude project's shared folder: read those as `handoff/design/<name>`, and `/mnt/project-files/revisit-*.md` as [revisit.md](revisit.md).
+The design docs and memory files were copied as they were, with host names replaced by roles. They still cite paths like `/mnt/project-files/architecture/<name>`, which was the Claude project's shared folder: read those as `handoff/design/<name>`, `/mnt/project-files/notes/<name>` and `/mnt/project-files/handoff/<name>` as `handoff/notes/<name>` (the old project-side `handoff/HANDOFF.md` and `architecture/HANDOFF.md` are `handoff/notes/project-handoff-2026-11-21.md`), and `/mnt/project-files/revisit-*.md` as [revisit.md](revisit.md). Status lines inside the design docs are as they were when each was written; [state.md](state.md) is what's current.
 
 ## How Jason works
 

@@ -35,6 +35,17 @@ func TestFromServerMatchesWithAndWithoutTheRuntimePrefix(t *testing.T) {
 			t.Errorf("%s: got %v, want %v", name, got, want)
 		}
 	}
+	// a server named mcp matches its unprefixed tools and its prefixed ones
+	for name, want := range map[string]bool{
+		"mcp_list":       true,
+		"mcp__mcp__list": true,
+		"mcp_mcp_list":   true,
+		"mcpx_list":      false,
+	} {
+		if got := fromServer(name, []string{"mcp"}); got != want {
+			t.Errorf("server mcp, %s: got %v, want %v", name, got, want)
+		}
+	}
 }
 
 func TestTaintedReadsEveryPlaceAToolNameSits(t *testing.T) {
@@ -194,7 +205,7 @@ func TestReadP0Servers(t *testing.T) {
 	if got, err := ReadP0Servers(write(`{"servers": []}`)); err != nil || got == nil {
 		t.Errorf("an empty list is fine: %q, %v", got, err)
 	}
-	for _, bad := range []string{`{}`, `{"servers": ["Cal endar"]}`, `{"servers": [], "x": 1}`, `nope`} {
+	for _, bad := range []string{`{}`, `{"servers": ["Cal endar"]}`, `{"servers": [], "x": 1}`, `nope`, `{"servers": []} garbage`, `{"servers": []}{"servers": ["calendar"]}`} {
 		if _, err := ReadP0Servers(write(bad)); err == nil || !strings.Contains(err.Error(), "bud sync") {
 			t.Errorf("%s: err = %v", bad, err)
 		}

@@ -63,15 +63,20 @@ func tainted(fields map[string]json.RawMessage, servers []string) (string, bool)
 // mcp__calendar__list_events or mcp_calendar_list_events. A server name's
 // '-' may be '_' in the tool name. Case doesn't count
 func fromServer(name string, servers []string) bool {
-	n := strings.ToLower(name)
-	if rest, ok := strings.CutPrefix(n, "mcp"); ok && strings.HasPrefix(rest, "_") {
-		n = strings.TrimLeft(rest, "_")
+	full := strings.ToLower(name)
+	// the name as written, and without a runtime's mcp prefix, so a server
+	// that is itself named mcp still matches its unprefixed tools
+	names := []string{full}
+	if rest, ok := strings.CutPrefix(full, "mcp"); ok && strings.HasPrefix(rest, "_") {
+		names = append(names, strings.TrimLeft(rest, "_"))
 	}
 	for _, s := range servers {
 		s = strings.ToLower(s)
 		for _, form := range []string{s, strings.ReplaceAll(s, "-", "_")} {
-			if strings.HasPrefix(n, form+"_") || n == form {
-				return true
+			for _, n := range names {
+				if strings.HasPrefix(n, form+"_") || n == form {
+					return true
+				}
 			}
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"regexp"
@@ -28,7 +29,11 @@ func ReadP0Servers(path string) ([]string, error) {
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&f); err != nil || f.Servers == nil {
+	err = dec.Decode(&f)
+	if err == nil && dec.Decode(new(json.RawMessage)) != io.EOF {
+		err = errors.New("more after the list")
+	}
+	if err != nil || f.Servers == nil {
 		return nil, fmt.Errorf("%s is damaged (%v): run bud sync", path, err)
 	}
 	for _, s := range f.Servers {

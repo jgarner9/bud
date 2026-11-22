@@ -62,5 +62,51 @@
   });
 })();
 </script>
+<script type="module">
+// ```mermaid blocks (docs/architecture.md) are drawn in the browser, so the
+// Markdown stays the one source that GitHub draws too. Mermaid loads only on
+// a page that has one. Kramdown wraps a fenced block in a .language-mermaid
+// div (or puts the class on the code), and the text inside is the source.
+const blocks = document.querySelectorAll("div.language-mermaid, pre > code.language-mermaid");
+if (blocks.length) {
+  for (const block of blocks) {
+    const box = block.tagName === "CODE" ? block.parentElement : block;
+    const pre = document.createElement("pre");
+    pre.className = "mermaid";
+    pre.textContent = block.textContent;
+    box.replaceWith(pre);
+  }
+  const { default: mermaid } = await import("https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs");
+  const css = getComputedStyle(document.documentElement);
+  const v = (name) => css.getPropertyValue(name).trim();
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "strict",
+    theme: "base",
+    fontFamily: v("--sans"),
+    themeVariables: {
+      background: v("--base"),
+      primaryColor: v("--surface"),
+      primaryTextColor: v("--text"),
+      primaryBorderColor: v("--blue"),
+      secondaryColor: v("--mantle"),
+      tertiaryColor: v("--mantle"),
+      clusterBkg: v("--mantle"),
+      clusterBorder: v("--line"),
+      lineColor: v("--dim"),
+      textColor: v("--text"),
+      edgeLabelBackground: v("--base"),
+      actorBkg: v("--surface"),
+      actorBorder: v("--blue"),
+      actorTextColor: v("--text"),
+      signalColor: v("--dim"),
+      signalTextColor: v("--text"),
+      noteBkgColor: v("--mantle"),
+      noteTextColor: v("--text"),
+    },
+  });
+  await mermaid.run({ querySelector: "pre.mermaid" });
+}
+</script>
 </body>
 </html>

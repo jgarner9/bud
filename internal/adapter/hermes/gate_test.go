@@ -2,6 +2,8 @@ package hermes
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -221,5 +223,140 @@ func TestATerminalAskCarriesTheWholeCommand(t *testing.T) {
 	// readable on the card: && and > aren't escaped
 	if v := testTiers().Decide(terminal("go test ./... && git push > log")); !strings.Contains(v.Reason, `"go test ./... && git push > log"`) {
 		t.Errorf("the command should read as typed: %s", v.Reason)
+	}
+}
+
+// shippedSandbox renders the shipped base and server fragments' tiers, as
+// a server device's sync does
+func shippedSandbox(t *testing.T) *Tiers {
+	t.Helper()
+	var frags []string
+	for _, name := range []string{"base", "server"} {
+		b, err := os.ReadFile(filepath.Join("..", "..", "..", "content", "env", name+".jsonc"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		frags = append(frags, string(b))
+	}
+	out, err := Render(input(t, frags...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tiers Tiers
+	if err := json.Unmarshal(out.Tiers, &tiers); err != nil {
+		t.Fatal(err)
+	}
+
+	return &tiers
+}
+
+// Suite D114: Hermes's sandboxed terminal runs alone, and only commands
+// that reach out of the sandbox ask, however they're wrapped
+func TestTheSandboxedTerminalAsksOnlyForTheAskList(t *testing.T) {
+	tiers := shippedSandbox(t)
+	for cmd, want := range map[string]string{
+		// sandbox-local work runs alone
+		"ls -la":                             Allow,
+		"cat notes.txt | grep todo":          Allow,
+		"curl -s https://example.com | jq .": Allow,
+		"python3 script.py > out.txt":        Allow, // a redirect alone no longer asks
+		"echo $(date) `whoami`":              Allow,
+		"pip install requests":               Allow,
+		"git status && git commit -m x":      Allow, // commits stay in the sandbox
+		// every ask-list entry
+		"git push":                     Ask,
+		"git push origin main":         Ask,
+		"ssh archie":                   Ask,
+		"ssh":                          Ask,
+		"scp a host:b":                 Ask,
+		"sftp host":                    Ask,
+		"rsync -a . host:dir":          Ask,
+		"npm publish":                  Ask,
+		"npm publish --tag next":       Ask,
+		"pnpm publish --access x":      Ask,
+		"yarn publish --new-version 1": Ask,
+		"cargo publish --dry-run":      Ask,
+		"twine upload dist/*":          Ask,
+		"docker push img:1":            Ask,
+		"gh release create v1":         Ask,
+		// the bare forms, with no arguments
+		"pnpm publish":  Ask,
+		"yarn publish":  Ask,
+		"cargo publish": Ask,
+		"docker push":   Ask,
+		"gh release":    Ask,
+		// wrapper options that take a value
+		"sudo -u root git push":      Ask,
+		"nice -n 10 ssh host":        Ask,
+		"timeout -s KILL 5 ssh host": Ask,
+		"env -u HOME git push":       Ask,
+		"xargs -I {} scp {} host:":   Ask,
+		// shell options before -c, long ones and ones that take a value
+		"bash --noprofile -c 'op read x'":     Deny,
+		"bash -o pipefail -c 'git push'":      Ask,
+		"bash --norc --noprofile -ec 'ssh h'": Ask,
+		"bash script.sh":                      Allow,
+		// compound commands: the strictest part wins
+		"ls; git push":           Ask,
+		"go test ./... && ssh x": Ask,
+		"ls | xargs scp a host:": Ask,
+		// subshells and substitutions are read into
+		"echo $(git push)":          Ask,
+		"echo \"$(ssh host ls)\"":   Ask,
+		"echo `git push`":           Ask,
+		"(cd x && git push)":        Ask,
+		"diff <(ssh h cat a) b":     Ask,
+		"bash -c 'git push origin'": Ask,
+		"sh -ec \"ssh host\"":       Ask,
+		"eval git push":             Ask,
+		// wrappers and assignments don't hide the command
+		"env GIT_SSH=x git push": Ask,
+		"FOO=1 git push":         Ask,
+		"sudo -n git push":       Ask,
+		"nohup ssh host &":       Ask,
+		"timeout 5 ssh host":     Ask,
+		"command git push":       Ask,
+		// a path-qualified program is read by its base name too
+		"./git push":             Ask,
+		"/usr/bin/ssh host":      Ask,
+		"/usr/local/bin/op read": Deny,
+		// op stays refused, wherever it hides
+		"op read op://vault/item/field": Deny,
+		"echo $(op read x)":             Deny,
+		"bash -c 'op item get'":         Deny,
+		"env op whoami":                 Deny,
+		// quotes and backslashes the shell removes
+		`"git" push`:               Ask,
+		`g''it push`:               Ask,
+		`\ssh host`:                Ask,
+		`bash -c "git push \"x\""`: Ask,
+	} {
+		if got := tiers.Decide(terminal(cmd)); got.Effect != want {
+			t.Errorf("%q: got %s (%s), want %s", cmd, got.Effect, got.Reason, want)
+		}
+	}
+	// a sh -c nested past the limit asks rather than running unread
+	deep := strings.Repeat("eval ", maxDepth+1) + "ls"
+	if got := tiers.Decide(terminal(deep)); got.Effect != Ask {
+		t.Errorf("a deeply nested sh -c: got %s, want ask", got.Effect)
+	}
+}
+
+// The coding rules' default is ask, so a path-qualified program still
+// isn't the bare one: ./go test isn't go test's allow
+func TestAPathQualifiedProgramIsNeverTheBareOnesAllow(t *testing.T) {
+	for cmd, want := range map[string]string{
+		"./go test ./...":      Ask,
+		"/usr/bin/git status":  Ask,
+		"env go test ./...":    Ask, // the wrapper's own match is ask
+		"/opt/op/op read x":    Deny,
+		"bash -c 'op read x'":  Deny,
+		"sudo git push origin": Ask,
+		"go test ./... | cat":  Ask,
+		"FOO=1 git status":     Ask,
+	} {
+		if got := testTiers().Decide(terminal(cmd)); got.Effect != want {
+			t.Errorf("%q: got %s (%s), want %s", cmd, got.Effect, got.Reason, want)
+		}
 	}
 }

@@ -463,3 +463,62 @@ func TestWithARouterThePrivateProfileAsksItForTheManager(t *testing.T) {
 		t.Errorf("the cloud profile still names its providers itself:\n%s", c)
 	}
 }
+
+// Suite D114: bud.sandbox_shell replaces the permission shell rules in the
+// gate's tiers, while Hermes still refuses every shell deny of both sets
+func TestTheSandboxShellReplacesTheShellRulesForTheGate(t *testing.T) {
+	out, err := Render(input(t, `{"permissions": [
+		{"action": "shell", "resource": "*", "effect": "ask"},
+		{"action": "shell", "resource": "op *", "effect": "deny"}
+	]}`, `{"bud": {"sandbox_shell": [
+		{"resource": "*", "effect": "allow"},
+		{"resource": "git push *", "effect": "ask"},
+		{"resource": "op *", "effect": "deny"},
+		{"resource": "rm -rf /", "effect": "deny"}
+	]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tiers Tiers
+	if err := json.Unmarshal(out.Tiers, &tiers); err != nil {
+		t.Fatal(err)
+	}
+	want := []Rule{{"shell", "*", Allow}, {"shell", "git push *", Ask}, {"shell", "op *", Deny}, {"shell", "rm -rf /", Deny}}
+	if !slices.Equal(tiers.Shell, want) {
+		t.Errorf("the tiers' shell rules: %+v, want %+v", tiers.Shell, want)
+	}
+	if got := string(out.Config); !strings.Contains(got, "  deny:\n    - \"op *\"\n    - \"rm -rf /\"\n") {
+		t.Errorf("Hermes should refuse each deny once:\n%s", got)
+	}
+}
+
+func TestABadSandboxShellRuleIsRefused(t *testing.T) {
+	for src, want := range map[string]string{
+		`{"bud": {"sandbox_shell": [{"resource": "ls", "effect": "maybe"}]}}`: `"maybe" isn't allow, ask or deny`,
+		`{"bud": {"sandbox_shell": [{"resource": " ", "effect": "ask"}]}}`:    "the resource is a command glob",
+		`{"bud": {"sandbox_shell": [{"command": "ls", "effect": "ask"}]}}`:    "unknown field",
+	} {
+		if _, err := Render(input(t, src)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: got %v, want %q", src, err, want)
+		}
+	}
+}
+
+// an empty sandbox_shell keeps the permission shell rules, as an unset one does
+func TestAnEmptySandboxShellKeepsTheShellRules(t *testing.T) {
+	out, err := Render(input(t, `{"permissions": [
+		{"action": "shell", "resource": "*", "effect": "ask"},
+		{"action": "shell", "resource": "op *", "effect": "deny"}
+	]}`, `{"bud": {"sandbox_shell": []}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tiers Tiers
+	if err := json.Unmarshal(out.Tiers, &tiers); err != nil {
+		t.Fatal(err)
+	}
+	want := []Rule{{"shell", "*", Ask}, {"shell", "op *", Deny}}
+	if !slices.Equal(tiers.Shell, want) {
+		t.Errorf("the tiers' shell rules: %+v, want %+v", tiers.Shell, want)
+	}
+}

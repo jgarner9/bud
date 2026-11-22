@@ -107,9 +107,10 @@ func TestTheShippedContentSyncsOnADevMachine(t *testing.T) {
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-// personalEnv stands in for an overlay's env/personal.jsonc: the gateway and
-// the memory server by tailnet IP (Suite D72, D74). Example addresses only
-const personalEnv = `{"bud": {"gateway": "http://100.64.0.1:8790", "mcp": {"memory": {"url": "http://100.64.0.1:8798/mcp"}}}}`
+// personalEnv stands in for an overlay's env/personal.jsonc: the gateway by
+// tailnet IP (Suite D72, D74) and Bud memory through it with its approval
+// tiers (JGA-313). Example address only
+const personalEnv = `{"bud": {"gateway": "http://100.64.0.1:8790", "mcp": {"memory": {"gateway": true, "approval": {"tools": {"memory_memory_search": "allow", "memory_memory_stage": "allow"}}}}}}`
 
 // JGA-358: each example profile, synced with the shipped content and an
 // overlay that adds a personal fragment, renders the golden configs: the MCP

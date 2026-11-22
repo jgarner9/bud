@@ -281,8 +281,8 @@ func TestOpRefsAllowSpacesInsideNamesButNotAtTheEdges(t *testing.T) {
 		want bool
 	}{
 		{"op://vault/item/field", true},
-		{"op://My Vault/API Key/credential", true},
-		{"op://My Vault/Mail/section/password", true},
+		{"op://example vault/API Key/credential", true},
+		{"op://vault/Mail Login/section/password", true},
 		{"op://vault/item", false},
 		{"op://vault /item/field", false},
 		{"op://vault/ item/field", false},

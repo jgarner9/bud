@@ -293,7 +293,7 @@ func merged[V any](base, top map[string]V) map[string]V {
 var (
 	idRe  = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 	envRe = regexp.MustCompile(`^\{env:[A-Z_][A-Z0-9_]*\}$`)
-	// 1Password names may hold single spaces ("op://My Vault/API Key/credential"),
+	// 1Password names may hold single spaces ("op://example vault/API Key/credential"),
 	// which op run reads unquoted; no segment starts or ends with one
 	opRefRe  = regexp.MustCompile("^op:" + "//" + `[^/\s]+( [^/\s]+)*/[^/\s]+( [^/\s]+)*(/[^/\s]+( [^/\s]+)*)+$`)
 	errorSep = "\n  "

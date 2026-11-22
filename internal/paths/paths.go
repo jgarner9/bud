@@ -205,6 +205,12 @@ func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }
 // (Suite D119)
 func (p *Paths) RouterP0Servers() string { return filepath.Join(p.State, "router-p0-servers.json") }
 
+// RouterP0Conversations lists the conversations the router holds at P0
+// (Suite D117), by a hash of their id
+func (p *Paths) RouterP0Conversations() string {
+	return filepath.Join(p.State, "router-p0-conversations.json")
+}
+
 // RouterSpend is the router's spend ledger (Suite D24, D64)
 func (p *Paths) RouterSpend() string { return filepath.Join(p.State, "router-spend.json") }
 

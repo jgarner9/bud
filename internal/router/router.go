@@ -71,6 +71,8 @@ type Router struct {
 	provKey      map[string]string
 	approvals    *Approvals
 	p0Servers    []string
+	// sticky holds the conversations raised to P0 (Suite D117)
+	sticky *sticky
 	// p0Held bounds the P0 requests held for approval at once, so held
 	// bodies (up to 10 MiB each) can't pile up while the local model is down
 	p0Held chan struct{}
@@ -107,6 +109,10 @@ type Options struct {
 	// fragments (bud sync renders them): a conversation holding a call to
 	// one of their tools is raised to P0 (Suite D119)
 	P0Servers []string
+	// StickyPath keeps the conversations a rule or the provenance check
+	// raised to P0, so they stay P0 across a restart; "" keeps them in
+	// memory only
+	StickyPath string
 }
 
 type ctxKey struct{}
@@ -150,6 +156,9 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 	now := opts.Now
 	if now == nil {
 		now = time.Now
+	}
+	if rt.sticky, err = openSticky(opts.StickyPath, now, rt.logf); err != nil {
+		return nil, err
 	}
 	rt.provURL, rt.provKey = map[string]*url.URL{}, keys
 	probed := map[string]bool{}
@@ -338,12 +347,25 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(RaisedHeader, rule)
 		tier = raised
 	}
+	raisedToP0 := tier == "P0" && w.Header().Get(RaisedHeader) != ""
 	if tier != "P0" {
 		if tool, ok := tainted(fields, rt.p0Servers); ok {
 			rt.logf("router: a call to %s in the history raised a %s request to P0", tool, tier)
 			w.Header().Set(RaisedHeader, ProvenanceRule)
-			tier = "P0"
+			tier, raisedToP0 = "P0", true
 		}
+	}
+	// a conversation raised once stays P0 (Suite D117, D119): its later
+	// requests may carry the same data without the evidence, such as a
+	// compressed history or a title call
+	conv := r.Header.Get(SessionHeader)
+	if tier != "P0" && rt.sticky.has(conv) {
+		rt.logf("router: an earlier request of this conversation was raised, so this %s request is P0 too", tier)
+		w.Header().Set(RaisedHeader, ConversationRule)
+		tier, raisedToP0 = "P0", true
+	}
+	if raisedToP0 {
+		rt.sticky.mark(conv)
 	}
 	var model string
 	if err := json.Unmarshal(fields["model"], &model); err != nil || model == "" {

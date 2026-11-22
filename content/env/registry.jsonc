@@ -104,8 +104,15 @@
   // Pools are in preference order; the router filters each by privacy, needs,
   // context, health and allowance left, then ranks by grade (Suite D64)
   "roles": {
-    // Qwen first: routine chores stay on C0 (Suite D24)
-    "manager": { "needs": ["tools"], "pool": ["qwen-35b", "glm-5.3-flash", "qwen3.8-flash", "mimo-v2.6-pro", "glm-5.3", "kimi-k3.1-pro"] },
+    // Go first (Suite D117, D121): Hermes's private chats start at P1 and
+    // get a fast cloud model, since Qwen's prefill of Hermes's long system
+    // prompt makes even a short answer slow. A P0 chat (a rule or a calendar
+    // or mail call raised it) skips every member but Qwen, and P1 falls to
+    // Qwen when Go is down or out of allowance
+    "manager": { "needs": ["tools"], "pool": ["glm-5.3-flash", "qwen3.8-flash", "mimo-v2.6-pro", "glm-5.3", "kimi-k3.1-pro", "qwen-35b"] },
+    // short questions that want a fast answer (Suite D121): a Go flash
+    // model, Qwen for P0 and when Go is down
+    "quick": { "pool": ["glm-5.3-flash", "qwen3.8-flash", "qwen-35b"] },
     "coding": { "needs": ["tools"], "pool": ["glm-5.3", "kimi-k2.7-code", "minimax-m3", "glm-5.2", "glm-5.3-flash", "minimax-m3.1-flash", "qwen-35b"] },
     "planning": { "needs": ["reasoning"], "pool": ["kimi-k3.1-pro", "glm-5.3", "qwen3.8-max", "gemini-4-argon", "qwen3.7-plus", "qwen-35b"] },
     // the home server's classifier, then the Qwen box when it's awake (Suite D67)

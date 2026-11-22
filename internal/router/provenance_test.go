@@ -84,6 +84,13 @@ type provRig struct {
 
 func newProvRig(t *testing.T) *provRig {
 	t.Helper()
+	return newProvRigWith(t, Options{})
+}
+
+// newProvRigWith is newProvRig with more options; Logf and P0Servers are
+// always the rig's
+func newProvRigWith(t *testing.T, opts Options) *provRig {
+	t.Helper()
 	rig := &provRig{}
 	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rig.mu.Lock()
@@ -120,7 +127,8 @@ func newProvRig(t *testing.T) *provRig {
 		},
 		Roles: map[string]registry.Role{"manager": {Pool: []string{"p1", "local"}}},
 	}
-	rt, err := New(reg, env(nil), Options{Logf: quiet, P0Servers: []string{"calendar", "mail"}})
+	opts.Logf, opts.P0Servers = quiet, []string{"calendar", "mail"}
+	rt, err := New(reg, env(nil), opts)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -89,7 +89,7 @@ func runRouter(g *Globals, args []string, listen, registryPath, spendPath string
 	if err != nil {
 		return err
 	}
-	opts := router.Options{Ledger: led, TopUpCap: topUpCap, P0Wait: p0Wait, P0Servers: p0Servers}
+	opts := router.Options{Ledger: led, TopUpCap: topUpCap, P0Wait: p0Wait, P0Servers: p0Servers, StickyPath: p.RouterP0Conversations()}
 	if !noP0Fallback {
 		// wired as bud mcp-ops wires it; the router must run as the user that can read the review secret
 		opts.Approvals = &router.Approvals{

@@ -11,10 +11,14 @@
 // rest (the built-in toolsets per platform and the web backends, D77, D85).
 //
 // Hermes runs as two profiles (Suite D23, D95). The default profile is
-// private: its config lists only the providers and models allowed P0, so
-// neither its own fallbacks nor a model Jason picks with /model can send a
-// chat to the cloud, and that is what lets it read P0 data such as the
-// calendar. It owns Signal and the reminders. The cloud profile
+// private. With a router (the home server), it lists one provider, the
+// router, and its chats start at P1 (Suite D117, superseding D95's P0-only
+// models): the router raises a chat to P0 and keeps it local when a rule
+// matches or a calendar or mail call is in it (D118, D119), which is what
+// lets the profile read P0 data such as the calendar. Without a router,
+// its config lists only the providers and models allowed P0, so neither
+// its own fallbacks nor a model Jason picks with /model can send a chat to
+// the cloud. It owns Signal and the reminders. The cloud profile
 // (~/.hermes/profiles/cloud, `hermes -p cloud`) lists every chat model and
 // none of the servers only P0 may use, keeps its own memory and sessions,
 // and stays out of the private profile's gateway process.
@@ -107,11 +111,13 @@ type Output struct {
 	RouterP0Servers []byte
 	// Notes say what was left out and why
 	Notes []string
-	// CloudKeys are the variables that hold the keys of the providers left
-	// out for having no model allowed P0. Hermes's own built-in providers
-	// read some of them (OPENCODE_GO_API_KEY among them), so one set in
-	// Hermes's environment would let /model reach a cloud model again; bud
-	// sync refuses a ~/.hermes/.env that sets one (Suite D95)
+	// CloudKeys are the variables that hold the keys of the providers the
+	// private config leaves out: every provider when it goes through the
+	// router, else those with no model allowed P0. Hermes's own built-in
+	// providers read some of them (OPENCODE_GO_API_KEY among them), so one
+	// set in Hermes's environment would let /model reach a cloud model
+	// around the router's privacy rules; bud sync refuses a ~/.hermes/.env
+	// that sets one (Suite D95, still needed under D117)
 	CloudKeys []string
 }
 
@@ -161,7 +167,9 @@ func Render(in Input) (*Output, error) {
 		// the router serves a P0 request only from a local model, and moves
 		// it to a P1 one only once Jason approves (Suite D104), so the
 		// private profile keeps its boundary while gaining the fallback
-		cfg, notes = routed(in.Registry, tools.Router), []string{fmt.Sprintf("Hermes's private profile asks the router at %s for %s, which falls back when a local model is down", tools.Router, RouterModel)}
+		tier := ChatTier(tools.Privacy)
+		cfg = routed(in.Registry, tools.Router, tier)
+		notes = []string{fmt.Sprintf("Hermes's private profile asks the router at %s for %s at %s; the router keeps a chat local when its rules or a calendar or mail call say so (Suite D117)", tools.Router, RouterModel, tier)}
 	}
 	out.Notes = append(out.Notes, notes...)
 
@@ -402,28 +410,47 @@ const (
 	RouterModel    = "bud/manager"
 )
 
+// ChatTier is the tier the private profile's chats start at (Suite D117,
+// superseding D95's P0-only models): P1, so a plain chat gets a fast cloud
+// model, and the router raises it to P0 on evidence (the #private marker,
+// the secret and PII rules, a P0-only tool in the conversation). A device
+// whose fragments set P0 keeps every chat P0
+func ChatTier(device string) string {
+	if device == "P0" || device == "" {
+		return "P0"
+	}
+	return "P1"
+}
+
 // routed renders the private profile's model settings for the router at
 // base: the manager role as its one model, with no fallbacks of Hermes's
-// own, since the router does the falling back. Hermes sends no privacy
-// header, which the router takes as P0, and sends its conversation id as
-// x-opencode-session, which the router passes on to OpenCode Go. The context is the smallest of the
-// manager members the router may pick for it (P0, or P1 once approved), so
-// Hermes never packs more than the fallback can take
-func routed(r *registry.Registry, base string) map[string]any {
+// own, since the router does the falling back. A P1 profile sends
+// X-Bud-Privacy: P1 on every request to the router, auxiliary calls such as
+// compression and titles included; a P0 one sends no header, which the
+// router takes as P0. Hermes sends its conversation id as
+// x-opencode-session, which the router passes on to OpenCode Go and uses to
+// keep a raised conversation P0. The context is the smallest of the manager
+// members the router may pick for it (P0 or P1), so Hermes never packs more
+// than the local model can take once a chat is raised
+func routed(r *registry.Registry, base, tier string) map[string]any {
 	entry := map[string]any{}
 	if c := managerContext(r); c > 0 {
 		entry["context_length"] = c
 	}
+	provider := map[string]any{
+		"api":       base + "/v1",
+		"transport": "chat_completions",
+		"models":    map[string]any{RouterModel: entry},
+		// Hermes sends its conversation id under this name, which the
+		// router passes on: OpenCode Go refuses a request without one
+		"session_affinity_header": "x-opencode-session",
+	}
+	if tier != "P0" {
+		provider["extra_headers"] = map[string]any{env.PrivacyHeader: tier}
+	}
 	return map[string]any{
-		"model": map[string]any{"default": RouterModel, "provider": "custom:" + RouterProvider},
-		"providers": map[string]any{RouterProvider: map[string]any{
-			"api":       base + "/v1",
-			"transport": "chat_completions",
-			"models":    map[string]any{RouterModel: entry},
-			// Hermes sends its conversation id under this name, which the
-			// router passes on: OpenCode Go refuses a request without one
-			"session_affinity_header": "x-opencode-session",
-		}},
+		"model":              map[string]any{"default": RouterModel, "provider": "custom:" + RouterProvider},
+		"providers":          map[string]any{RouterProvider: provider},
 		"fallback_providers": []any{},
 	}
 }
@@ -717,8 +744,9 @@ func privateTools(tools *env.Resolved) []string {
 // mcpServers is Hermes's mcp_servers for the resolved servers, and the
 // names of those it left out. In the private profile a server only private
 // sessions may use gets P0 in X-Bud-Privacy instead of the device's tier
-// (Suite D95): that profile's config lists only models allowed P0 (see
-// models), so what it reads there stays with them. The cloud profile leaves
+// (Suite D95): what it reads there stays local, since the router raises any
+// chat holding a call to it to P0 (Suite D119), or, without a router, the
+// profile's config lists only models allowed P0 (see models). The cloud profile leaves
 // such a server out. Every other server keeps the device's tier
 func mcpServers(tools *env.Resolved, cloud bool) (map[string]any, []string) {
 	servers := map[string]any{}

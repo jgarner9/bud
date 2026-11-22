@@ -18,8 +18,6 @@ command_allowlist: []
 curator:
   consolidate: false
 fallback_providers:
-  - model: "glm-5.3-flash"
-    provider: "custom:go"
   - model: "qwen3.8-flash"
     provider: "custom:go"
   - model: "mimo-v2.6-pro"
@@ -28,6 +26,8 @@ fallback_providers:
     provider: "custom:go"
   - model: "kimi-k3.1-pro"
     provider: "custom:go"
+  - model: "qwen-35b"
+    provider: "custom:qwen"
 gateway:
   standalone: true
 hooks:
@@ -59,8 +59,8 @@ mcp_servers:
 memory:
   write_approval: true
 model:
-  default: "qwen-35b"
-  provider: "custom:qwen"
+  default: "glm-5.3-flash"
+  provider: "custom:go"
 platform_toolsets:
   api_server:
     - "terminal"

@@ -592,3 +592,29 @@ func TestTheRouterGetsTheP0OnlyServers(t *testing.T) {
 		t.Errorf("with no servers: %s", got)
 	}
 }
+
+// Suite D117: on a P1 device the private profile's chats start at P1, so
+// Hermes sends the tier on every request to the router, which raises a
+// chat to P0 on evidence; a P0 device sends none, so every chat stays P0
+func TestThePrivateProfileSendsTheRouterItsChatTier(t *testing.T) {
+	for privacy, want := range map[string]string{`"P1"`: "P1", `"P2"`: "P1", `"P0"`: "", `""`: ""} {
+		out, err := Render(input(t, `{"bud": {"privacy": `+privacy+`, "router": "http://100.64.0.5:8795"}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := string(out.Config)
+		has := strings.Contains(got, "    extra_headers:\n      X-Bud-Privacy: \"P1\"\n")
+		if (want == "P1") != has || (want == "" && strings.Contains(got, "extra_headers")) {
+			t.Errorf("privacy %s: extra_headers %v in:\n%s", privacy, has, got)
+		}
+		in := input(t, `{"bud": {"privacy": `+privacy+`, "router": "http://100.64.0.5:8795"}}`)
+		in.Cloud = true
+		cloud, err := Render(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(cloud.Config), "extra_headers") {
+			t.Errorf("privacy %s: the cloud profile got the router's header", privacy)
+		}
+	}
+}

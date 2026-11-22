@@ -27,6 +27,11 @@ const Version = 1
 // every runtime config point at a role, never at a model name
 var Roles = []string{"manager", "coding", "planning", "classifier", "fim", "embedding", "fallback", "curator", "vision"}
 
+// OptionalRoles may be filled, and nothing names them unless they are:
+// quick answers short questions on a fast cloud model (Suite D121), since
+// the local model's prefill makes even a short answer slow
+var OptionalRoles = []string{"quick"}
+
 // privateRoles see everything unclassified or personal, so every model they
 // may use has to be allowed P0 data (Suite D23): the classifier reads a
 // prompt before its tier is known, the curator writes personal KB pages, and
@@ -415,8 +420,8 @@ func (r *Registry) Validate() error {
 	}
 	for name, role := range r.Roles {
 		at := "roles." + name
-		if !slices.Contains(Roles, name) {
-			add("%s: not a role; the roles are %s", at, strings.Join(Roles, ", "))
+		if !slices.Contains(Roles, name) && !slices.Contains(OptionalRoles, name) {
+			add("%s: not a role; the roles are %s, and optionally %s", at, strings.Join(Roles, ", "), strings.Join(OptionalRoles, ", "))
 			continue
 		}
 		checkRole(r, name, role, add)

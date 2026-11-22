@@ -102,8 +102,9 @@
       "process_manage": "allow",
       "execute_code": "allow",
       "delegate_task": "allow",
-      // writes Hermes stages for Jason's review itself (D48)
-      "memory": "allow",
+      // Hermes's own memory is off (JGA-313): it remembers through Bud
+      // memory (mcp__memory__*), one store for every runtime
+      "memory": "deny",
       "skill_manage": "allow",
       // creating or changing a job asks first (tool map); one tool does both
       // reading and writing jobs, so it all asks
@@ -122,12 +123,13 @@
     "hermes": {
       // the built-in toolsets per platform, from the tool map. Off: tts,
       // computer_use, image_gen, video, x_search, kanban, discord, feishu,
-      // debugging. clarify is left out where nobody can answer (the API and cron)
+      // debugging, and memory (JGA-313: Bud memory's memory_search and
+      // memory_stage instead, which the overlay reaches through the gateway). clarify is left out where nobody can answer (the API and cron)
       "platform_toolsets": {
-        "cli": ["terminal", "file", "code_execution", "web", "browser", "memory", "session_search", "skills", "cronjob", "delegation", "todo", "clarify", "vision"],
-        "signal": ["terminal", "file", "code_execution", "web", "browser", "memory", "session_search", "skills", "cronjob", "delegation", "todo", "clarify", "vision"],
-        "api_server": ["terminal", "file", "code_execution", "web", "browser", "memory", "session_search", "skills", "cronjob", "delegation", "todo", "vision"],
-        "cron": ["terminal", "file", "code_execution", "web", "browser", "memory", "session_search", "skills", "cronjob", "delegation", "todo", "vision"],
+        "cli": ["terminal", "file", "code_execution", "web", "browser", "session_search", "skills", "cronjob", "delegation", "todo", "clarify", "vision"],
+        "signal": ["terminal", "file", "code_execution", "web", "browser", "session_search", "skills", "cronjob", "delegation", "todo", "clarify", "vision"],
+        "api_server": ["terminal", "file", "code_execution", "web", "browser", "session_search", "skills", "cronjob", "delegation", "todo", "vision"],
+        "cron": ["terminal", "file", "code_execution", "web", "browser", "session_search", "skills", "cronjob", "delegation", "todo", "vision"],
       },
       "web": { "backend": "exa", "search_backend": "searxng", "extract_backend": "exa", "keyless_fallback": false },
       // Hermes asks before any tool on these that isn't marked read-only

@@ -50,7 +50,7 @@ mcp_servers:
     trust: "untrusted"
     url: "http://100.64.0.1:8790/linear/mcp"
   memory:
-    url: "http://100.64.0.1:8791/mcp"
+    url: "http://100.64.0.1:8798/mcp"
   ops:
     url: "http://127.0.0.1:8792/mcp"
 memory:

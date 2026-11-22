@@ -66,12 +66,12 @@ func TestServersMissingTheirAddressAreLeftOutAndNamed(t *testing.T) {
 func TestALaterFragmentFillsInAServer(t *testing.T) {
 	r, err := resolve(t,
 		`{"bud": {"mcp": {"memory": {"privacy": ["P0", "P1"]}}}}`,
-		`{"bud": {"mcp": {"memory": {"url": "http://100.64.0.1:8791/mcp"}}}}`,
+		`{"bud": {"mcp": {"memory": {"url": "http://100.64.0.1:8798/mcp"}}}}`,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := r.Servers["memory"]; s.URL != "http://100.64.0.1:8791/mcp" || !s.P0() {
+	if s := r.Servers["memory"]; s.URL != "http://100.64.0.1:8798/mcp" || !s.P0() {
 		t.Fatalf("got %+v", s)
 	}
 }

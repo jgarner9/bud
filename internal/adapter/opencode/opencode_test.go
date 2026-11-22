@@ -276,7 +276,7 @@ func TestTheLaptopsOwnWebsearchIsOff(t *testing.T) {
 // denies every server that isn't allowed P0, after every global rule
 func TestThePrivateAgentDeniesEveryCloudTool(t *testing.T) {
 	in := withCoding(t)
-	in.Env = append(in.Env, Fragment{Name: "overlay/personal", Src: []byte(`{"bud": {"gateway": "http://127.0.0.1:8790", "mcp": {"memory": {"url": "http://127.0.0.1:8791/mcp"}}}}`)})
+	in.Env = append(in.Env, Fragment{Name: "overlay/personal", Src: []byte(`{"bud": {"gateway": "http://127.0.0.1:8790", "mcp": {"memory": {"url": "http://127.0.0.1:8798/mcp"}}}}`)})
 	out, err := Render(in)
 	if err != nil {
 		t.Fatal(err)

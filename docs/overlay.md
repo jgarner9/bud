@@ -34,7 +34,7 @@ The public fragments list the MCP servers each profile uses, but not the address
     // gateway answers only its IP address, so a MagicDNS name is refused here
     "gateway": "http://100.64.0.1:8790",
     "mcp": {
-      "memory": { "url": "http://100.64.0.1:8791/mcp" },
+      "memory": { "url": "http://100.64.0.1:8798/mcp" },
     },
   },
 }

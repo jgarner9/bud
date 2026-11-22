@@ -1,0 +1,26 @@
+# The KB curator (Suite D123, D124), as a systemd user oneshot that
+# bud-curator.timer starts every night:
+#
+#   cp bud-curator.service bud-curator.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-curator.timer
+#
+# op run resolves the memory service's curator token in the env file
+# through the Bud vault's service account, whose token the first
+# EnvironmentFile holds; it reaches only this process's environment and
+# never touches disk. The token may only export, within P1 and P2. The
+# curator asks the registry's curator role on local providers only, never
+# the router, and commits to the bud-kb clone in ~/.local/share/bud/kb,
+# pushing with the clone's own deploy key. It listens on nothing.
+[Unit]
+Description=Bud KB curator (promotes working memory into bud-kb)
+After=bud-memory.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=3h
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/curator.env -- %h/.local/bin/bud curator run
+NoNewPrivileges=yes
+PrivateTmp=yes

@@ -104,7 +104,7 @@ flowchart TB
     direction LR
     review["memory-review"]
     improve["improve"]
-    curator["KB curator"]:::planned
+    curator["KB curator"]
   end
 
   hermes --> gw
@@ -117,10 +117,11 @@ flowchart TB
   mem --> memory
   review --> memsvc
   review -- "ask" --> signal
-  curator -.-> memsvc
+  curator -- "export" --> memsvc
+  curator -- "local models only" --> models
 ```
 
-**What it shows.** What runs on the home server and who calls whom. The two runtimes, Hermes and the planning OpenCode, reach tools only through the MCP gateway. Hermes's private profile gets its models through the router; the planning OpenCode and Hermes's cloud profile call the registry's providers directly. Bud's own MCP servers (memory, calendar, mail, ops) are upstreams behind the gateway and listen on loopback only. The timers, `bud memory-review` and `bud improve`, run on their own and never talk to an agent.
+**What it shows.** What runs on the home server and who calls whom. The two runtimes, Hermes and the planning OpenCode, reach tools only through the MCP gateway. Hermes's private profile gets its models through the router; the planning OpenCode and Hermes's cloud profile call the registry's providers directly. Bud's own MCP servers (memory, calendar, mail, ops) are upstreams behind the gateway and listen on loopback only. The timers, `bud memory-review`, `bud improve` and the nightly `bud curator`, run on their own and never talk to an agent.
 
 **Why.** The gateway is the single place that holds keys (from `op run`, Suite D7), writes the audit log and applies the privacy tier to every tool call (Suite D81, D112), so no runtime or upstream has to be trusted to do it. Bud owns these leaves, so it can enforce approvals there; it ships no patched Hermes or OpenCode (Suite D97). The reviewer socket in the bud-signal plugin is the one place approvals are answered, which keeps the decision channel out of any agent's reach (Suite D101, D103).
 
@@ -207,18 +208,22 @@ flowchart TB
   review{"bud memory-review<br/>asks Jason on Signal"}:::gate
   gone["Deleted"]
   approved["Approved records<br/>embedded, searchable"]
-  curator["Nightly curator<br/>local models only"]:::planned
-  kb["bud-kb<br/>git-backed Markdown and its site"]:::planned
+  curator["Nightly curator<br/>local models only"]
+  kb["bud-kb<br/>git-backed Markdown and its site"]
+  queue{"Review queue<br/>bud curator resolve"}:::gate
 
   agents <-- "stage, search within the session's tier" --> mcp
   mcp -- "stage" --> staged --> review
   review -- "no" --> gone
   review -- "yes" --> approved
   mcp -- "search" --> approved
-  approved -.-> curator -.-> kb
+  approved -- "export, P1 and P2" --> curator
+  curator -- "two independent records agree" --> kb
+  curator -- "contradictions, refresh checks" --> queue
+  queue --> kb
 ```
 
-**What it shows.** Two layers of memory (Suite D9, D13). Working memory is a SQLite store behind `bud memory-mcp`: agents stage what they want remembered, and nothing becomes searchable until Jason approves it on Signal (Suite D51, D113). Search ranks by text and vectors together and only returns records within the session's privacy tier. A planned nightly curator will promote lasting facts into bud-kb, a private Git repository of Markdown pages with its own site.
+**What it shows.** Two layers of memory (Suite D9, D13). Working memory is a SQLite store behind `bud memory-mcp`: agents stage what they want remembered, and nothing becomes searchable until Jason approves it on Signal (Suite D51, D113). Search ranks by text and vectors together and only returns records within the session's privacy tier. A nightly curator promotes lasting facts into bud-kb, a private Git repository of Markdown pages with its own site on the tailnet: a fact goes in once two independent records agree on it, a contradiction waits on Jason in the review queue, and sections nothing references are flagged at 6 months and archived at 12 (Suite D122 to D124).
 
 **Why.** Every runtime shares the same memory, so none keeps a store of its own and the laptop and the manager know the same things (Suite D102). Staging keeps an agent from writing something wrong or private into memory for good. The curator uses local models only, and keeps P0 facts out of the KB while its remote is GitHub (Suite D123).
 

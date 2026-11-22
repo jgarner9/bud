@@ -1,0 +1,27 @@
+{{ define "main" }}
+<h1>{{ site.Title }}</h1>
+{{ .Content }}
+
+{{ with site.Data.review }}{{ with .items }}
+<h2 id="review">Waiting on review</h2>
+<p class="meta">Clear these with <code>bud curator resolve &lt;id&gt; keep|take|confirm</code> on the home server, or edit the page yourself.</p>
+{{ range . }}{{ $item := . }}
+<div class="review-item">
+  <div><span class="badge review">{{ .kind }}</span> <code>{{ .id }}</code> · {{ with site.GetPage (printf "/%s" (strings.TrimSuffix ".md" (strings.TrimPrefix "content/" .page))) }}<a href="{{ .RelPermalink }}#{{ $item.section }}">{{ .Title }}</a>{{ else }}{{ .page }}{{ end }}{{ with .section }} · {{ . }}{{ end }} <span class="meta">opened {{ .opened }}</span></div>
+  {{ with .key }}<div class="meta">fact <code>{{ . }}</code></div>{{ end }}
+  {{ with .current }}<div>Page says: <strong>{{ .value }}</strong>{{ with .statement }} ({{ . }}){{ end }}</div>{{ end }}
+  {{ with .proposed }}<div>Memory says: <strong>{{ .value }}</strong>{{ with .statement }} ({{ . }}){{ end }}{{ with .sources }} <span class="meta">from {{ range $i, $s := . }}{{ if $i }}, {{ end }}record {{ $s.record }} ({{ $s.source }}, {{ $s.date }}){{ end }}</span>{{ end }}</div>{{ end }}
+  {{ with .note }}<div class="meta">{{ . }}</div>{{ end }}
+</div>
+{{ end }}
+{{ end }}{{ end }}
+
+{{ range slice "/projects" "/systems" }}
+{{ with site.GetPage . }}
+<h2>{{ .Title }}</h2>
+<ul class="pages">
+{{ range .RegularPages.ByTitle }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a>{{ partial "badges.html" . }}</li>{{ end }}
+</ul>
+{{ end }}
+{{ end }}
+{{ end }}

@@ -212,6 +212,41 @@ func (c *Client) Discard(ctx context.Context, id int64) error {
 	return err
 }
 
+// ExportedRecord is an approved record as the export action lists it
+type ExportedRecord struct {
+	ID        int64  `json:"id"`
+	Source    string `json:"source"`
+	Kind      string `json:"kind"`
+	Privacy   string `json:"privacy"`
+	Body      string `json:"body"`
+	CreatedAt string `json:"created_at"`
+	State     string `json:"state"`
+}
+
+// Reference is one time something used an approved record
+type Reference struct {
+	RecordID     int64  `json:"record_id"`
+	Source       string `json:"source"`
+	ReferencedAt string `json:"referenced_at"`
+}
+
+// Export is every approved record within the token's tiers, with the
+// references to them
+type Export struct {
+	Records    []ExportedRecord `json:"records"`
+	References []Reference      `json:"references"`
+}
+
+// Export reads every approved record the token may see, and the references
+// to them, in id order. The curator reads working memory this way
+func (c *Client) Export(ctx context.Context) (*Export, error) {
+	var reply Export
+	if err := c.post(ctx, "export", map[string]any{}, &reply); err != nil {
+		return nil, err
+	}
+	return &reply, nil
+}
+
 func (c *Client) post(ctx context.Context, action string, body, reply any) error {
 	b, err := json.Marshal(body)
 	if err != nil {

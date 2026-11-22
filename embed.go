@@ -13,10 +13,12 @@ import (
 //
 // all:plugins keeps .claude-plugin/, which a plain directory pattern would drop
 //
+// all:server/hugo/site keeps the layouts' _markup/ and _partials/
+//
 // the Hermes plugin's files are named by glob, so __init__.py comes along
 // and a __pycache__ left by its tests doesn't
 //
-//go:embed ide/nvim ide/languages/*.lua ide/layouts/*.lua ide/migrations/*.lua ide/bundles ide/tools all:ide/plugins profiles/*.json server/hermes/plugins/bud-signal/*.py server/hermes/plugins/bud-signal/plugin.yaml
+//go:embed ide/nvim ide/languages/*.lua ide/layouts/*.lua ide/migrations/*.lua ide/bundles ide/tools all:ide/plugins profiles/*.json server/hermes/plugins/bud-signal/*.py server/hermes/plugins/bud-signal/plugin.yaml all:server/hugo/site
 var repoFS embed.FS
 
 // Config returns what bud syncs into ~/.config/bud: the repo's nvim/ directory
@@ -32,6 +34,12 @@ func Config() fs.FS {
 // release changes layout or paths (BASE.md 5.7 step 3)
 func Migrations() fs.FS {
 	return sub("ide/migrations")
+}
+
+// KBSite returns the Hugo site the KB is rendered with: its config and
+// layouts, which bud kb-site puts beside the KB's committed pages (Suite D122)
+func KBSite() fs.FS {
+	return sub("server/hugo/site")
 }
 
 // Bundles returns the app bundle templates bud bundle builds from (BASE.md 5.6)

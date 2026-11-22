@@ -1,0 +1,10 @@
+{
+  "baseURL": "/",
+  "title": "Bud KB",
+  "languageCode": "en",
+  "disableKinds": ["taxonomy", "term", "rss", "sitemap", "robotsTXT"],
+  "refLinksErrorLevel": "ERROR",
+  "markup": {
+    "goldmark": { "renderer": { "unsafe": false } }
+  }
+}

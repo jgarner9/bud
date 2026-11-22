@@ -100,6 +100,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | `bud memory-review` (`internal/memoryreview`): asking on Signal about staged memory records, and its unit in `server/memory-review/` | `docs/internals/memory-review.md` |
 | `bud mcp-ops` (`internal/mcpops`): the Bud ops MCP server and its unit in `server/mcp-ops/` | `docs/internals/mcp-ops.md` |
 | Signal for Hermes: the `bud-signal` plugin in `server/hermes/plugins/`, approvals by reaction or code, signal-cli's unit in `server/signal-cli/` | `docs/internals/signal.md` |
+| bud-kb, its curator and its site: the page format (`internal/kb`), `bud curator` (`internal/curator`) and its timer in `server/curator/`, `bud kb-site` (`internal/kbsite`) and the Hugo layouts in `server/hugo/` | `docs/internals/kb.md` |
 | `internal/content`: content bundles, `content.json`, `channel.json` and their signatures | `docs/internals/content.md` |
 | `bud sync` (`internal/syncer`): fetching, layering, rendering, the ledger and rollback; the adapters (`internal/adapter/opencode`, `hermes`) and the env fragments' `bud` block (`internal/adapter/env`) | `docs/internals/sync.md` |
 

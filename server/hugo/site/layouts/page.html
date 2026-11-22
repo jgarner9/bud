@@ -1,0 +1,26 @@
+{{ define "main" }}
+<h1>{{ .Title }}{{ partial "badges.html" . }}</h1>
+<p class="meta">
+  {{ with .Params.page_kind }}{{ . }}{{ end }}{{ if .Params.evergreen }} · evergreen{{ end }}
+  {{ with .Params.linear }} · <a href="{{ . }}">status in Linear</a>{{ end }}
+</p>
+{{ if .Params.archived }}<div class="banner archived">Archived: nothing referenced these sections for a year. Restore one with git revert of its archive commit, or by moving it back by hand.</div>{{ end }}
+{{ .Content }}
+
+{{ with .Params.facts }}
+<h2 id="sources">Sources</h2>
+<table>
+  <thead><tr><th>Fact</th><th>Value</th><th>Updated</th><th>Memory records</th></tr></thead>
+  <tbody>
+  {{ range $key, $f := . }}
+    <tr>
+      <td><code>{{ $key }}</code></td>
+      <td>{{ $f.value }}</td>
+      <td>{{ $f.updated }}</td>
+      <td>{{ range $i, $s := $f.sources }}{{ if $i }}<br>{{ end }}#{{ $s.record }} {{ $s.source }}, {{ $s.date }}{{ end }}</td>
+    </tr>
+  {{ end }}
+  </tbody>
+</table>
+{{ end }}
+{{ end }}

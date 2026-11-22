@@ -198,11 +198,14 @@ func (r *Reviewer) ask(ctx context.Context, rec memory.Record) {
 	case errors.Is(err, approval.ErrDeclined):
 		// only his own no deletes; a timeout or a stopping plugin is a
 		// plain denial and leaves the record staged
-		if derr := r.Records.Discard(context.WithoutCancel(ctx), rec.ID); derr != nil && !errors.Is(derr, memory.ErrApproved) {
+		switch derr := r.Records.Discard(context.WithoutCancel(ctx), rec.ID); {
+		case derr == nil:
+			r.logf("memory-review: Jason turned down record %d; deleted", rec.ID)
+		case errors.Is(derr, memory.ErrApproved):
+			r.logf("memory-review: Jason turned down record %d, but it was approved meanwhile, so it stays", rec.ID)
+		default:
 			r.logf("memory-review: Jason turned down record %d, but it couldn't be deleted: %v", rec.ID, derr)
 			rest = r.retry()
-		} else {
-			r.logf("memory-review: Jason turned down record %d; deleted", rec.ID)
 		}
 	case ctx.Err() != nil:
 		// stopping: the record is asked again after a restart

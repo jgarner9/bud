@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // MorePrivate reports whether tier a is more private than b (P0 > P1 > P2)
@@ -17,6 +18,51 @@ func MorePrivate(a, b string) bool {
 type CompiledRule struct {
 	Name, Tier string
 	Re         *regexp.Regexp
+	// Entropy and Check are the rule's entropy and validate, both met by
+	// the matched text (its secret group when it has one)
+	Entropy float64
+	Check   func(string) bool
+	// Keywords are lowercase; one must be in the text before Re is tried
+	Keywords []string
+}
+
+// Matches says whether the rule matches text. A rule with neither entropy
+// nor a check matches on its pattern alone. Otherwise one match must meet
+// both: the secret is the group named secret, else the first group that
+// took part and isn't empty, else the whole match, and its entropy must be
+// over the rule's, as in gitleaks. Every match is tried, so a text full of
+// near misses never counts as one hit
+func (c CompiledRule) Matches(text string) bool { return c.matches(text, strings.ToLower(text)) }
+
+// matches is Matches with the text's lowercase form, made once per text
+func (c CompiledRule) matches(text, lower string) bool {
+	if len(c.Keywords) > 0 && !slices.ContainsFunc(c.Keywords, func(k string) bool { return strings.Contains(lower, k) }) {
+		return false
+	}
+	if c.Entropy == 0 && c.Check == nil {
+		return c.Re.MatchString(text)
+	}
+	all := c.Re.FindAllStringSubmatchIndex(text, -1)
+	named := c.Re.SubexpIndex("secret")
+	for _, m := range all {
+		secret := text[m[0]:m[1]]
+		switch {
+		case named > 0 && m[2*named] >= 0:
+			secret = text[m[2*named]:m[2*named+1]]
+		case named < 0:
+			for g := 2; g+1 < len(m); g += 2 {
+				if m[g] >= 0 && m[g+1] > m[g] {
+					secret = text[m[g]:m[g+1]]
+					break
+				}
+			}
+		}
+		if (c.Entropy == 0 || Entropy(secret) > c.Entropy) && (c.Check == nil || c.Check(secret)) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // CompileRules compiles the registry's rules sorted by name; an error
@@ -34,7 +80,15 @@ func (r *Registry) CompileRules() ([]CompiledRule, error) {
 		if err != nil {
 			return nil, fmt.Errorf("privacy rule %s: match doesn't compile: %w", name, err)
 		}
-		out = append(out, CompiledRule{Name: name, Tier: rule.Tier, Re: re})
+		c := CompiledRule{Name: name, Tier: rule.Tier, Re: re, Entropy: rule.Entropy, Keywords: rule.Keywords}
+		if rule.Validate != "" {
+			check, ok := Validators[rule.Validate]
+			if !ok {
+				return nil, fmt.Errorf("privacy rule %s: no validator %q", name, rule.Validate)
+			}
+			c.Check = check
+		}
+		out = append(out, c)
 	}
 
 	return out, nil
@@ -45,11 +99,18 @@ func (r *Registry) CompileRules() ([]CompiledRule, error) {
 // that gave that tier, or "" when no rule raised it
 func Raise(tier string, rules []CompiledRule, texts []string) (string, string) {
 	got, by := tier, ""
+	var lower []string
 	for _, rule := range rules {
 		if !MorePrivate(rule.Tier, got) {
 			continue
 		}
-		if slices.ContainsFunc(texts, rule.Re.MatchString) {
+		if lower == nil {
+			lower = make([]string, len(texts))
+			for i, t := range texts {
+				lower[i] = strings.ToLower(t)
+			}
+		}
+		if matchesAny(rule, texts, lower) {
 			got, by = rule.Tier, rule.Name
 			if got == "P0" {
 				break
@@ -58,4 +119,14 @@ func Raise(tier string, rules []CompiledRule, texts []string) (string, string) {
 	}
 
 	return got, by
+}
+
+func matchesAny(rule CompiledRule, texts, lower []string) bool {
+	for i, t := range texts {
+		if rule.matches(t, lower[i]) {
+			return true
+		}
+	}
+
+	return false
 }

@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"path"
+	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -183,35 +186,183 @@ func askCommand(line, why string) Verdict {
 }
 
 // command tiers a shell command line. Each simple command in it is tiered
-// on its own and the strictest wins; anything the split can't see into
-// (substitutions, redirections, subshells) needs approval at least
+// on its own and the strictest wins. Under rules whose default is ask (the
+// coding rules), anything the split can't see into (substitutions,
+// redirections, subshells) needs approval at least. Under rules whose
+// default is allow (Hermes's sandbox, Suite D114) it asks only when a
+// command inside it does, so the line is split again into every command it
+// could run
 func (t *Tiers) command(line string) Verdict {
-	parts, opaque := splitCommand(line)
-	worst := Allow
-	var why string
-	for _, part := range parts {
-		effect, ok := t.shell(part)
-		if !ok {
-			effect = Ask
-		}
-		if rank(effect) > rank(worst) {
-			worst, why = effect, part
-		}
-	}
-	if opaque && rank(worst) < rank(Ask) {
+	worst, why, opaque := t.lineEffect(line, 0)
+	if opaque && t.defaultShell() != Allow && rank(worst) < rank(Ask) {
 		return askCommand(line, "It uses substitution, redirection or a subshell, which bud can't tier, so it needs your approval.")
 	}
 	switch worst {
 	case Allow:
 		return Verdict{Allow, ""}
 	case Ask:
-		if len(parts) == 1 {
+		if why == strings.Join(strings.Fields(line), " ") {
 			return askCommand(line, "It needs your approval (Suite D10).")
 		}
 		return askCommand(line, fmt.Sprintf("Its part %q needs your approval (Suite D10).", why))
 	}
 
 	return verdict(worst, fmt.Sprintf("the command %q", why))
+}
+
+// maxDepth bounds how many sh -c and eval layers the gate unwraps; a deeper
+// one asks
+const maxDepth = 4
+
+// lineEffect returns the strictest effect of the commands in a line, the
+// part that gave it, and whether the line holds anything opaque
+func (t *Tiers) lineEffect(line string, depth int) (worst, why string, opaque bool) {
+	parts, opaque := splitCommand(line, false)
+	if opaque && t.defaultShell() == Allow {
+		deep, _ := splitCommand(line, true)
+		parts = append(parts, deep...)
+	}
+	worst = Allow
+	for _, part := range parts {
+		effect := t.partEffect(part, depth)
+		if rank(effect) > rank(worst) {
+			worst, why = effect, part
+		}
+	}
+
+	return worst, why, opaque
+}
+
+// partEffect tiers one simple command: the strictest of the command as
+// written and as it runs once wrappers are taken off (variable assignments,
+// env, command, exec, nohup, time, sudo, xargs, nice, timeout, stdbuf), with
+// a path-qualified program (./git, /usr/bin/git) also read by its base name,
+// and the words also read with their quotes removed. A path never dodges a
+// rule for the bare name, and is never matched as the bare one for an
+// allow, since the strictest wins. A wrapper's options can take values
+// (sudo -u root, nice -n 10), which can't be told from the command without
+// knowing each wrapper, so every word after a wrapper is tried as the start
+// of the command it runs. sh -c and eval run their argument as a line of its
+// own, tiered the same way
+func (t *Tiers) partEffect(part string, depth int) string {
+	worst := Allow
+	raise := func(e string) {
+		if rank(e) > rank(worst) {
+			worst = e
+		}
+	}
+	match := func(cmd string) {
+		e, ok := t.shell(cmd)
+		if !ok {
+			e = Ask
+		}
+		raise(e)
+	}
+	words := strings.Fields(part)
+	if plain := dequote(words); !slices.Equal(plain, words) {
+		// as the shell reads it once quotes are removed: "g"it, \git
+		raise(t.partEffect(strings.Join(plain, " "), depth))
+	}
+	// each start is where a command may begin: 0, and every word after an
+	// assignment or a wrapper; seen keeps the work linear in the words
+	seen := make([]bool, len(words))
+	starts := []int{0}
+	for len(starts) > 0 {
+		i := starts[0]
+		starts = starts[1:]
+		if i >= len(words) || seen[i] {
+			continue
+		}
+		seen[i] = true
+		cmd := words[i:]
+		match(strings.Join(cmd, " "))
+		prog := cmd[0]
+		if strings.Contains(prog, "/") {
+			prog = path.Base(prog)
+			match(strings.Join(append([]string{prog}, cmd[1:]...), " "))
+		}
+		if script, ok := inlineScript(prog, cmd[1:]); ok {
+			if depth >= maxDepth {
+				raise(Ask)
+			} else {
+				e, _, _ := t.lineEffect(unquote(script), depth+1)
+				raise(e)
+			}
+		}
+		switch {
+		case assignment.MatchString(cmd[0]):
+			starts = append(starts, i+1)
+		case slices.Contains(wrappers, prog):
+			for j := i + 1; j < len(words); j++ {
+				starts = append(starts, j)
+			}
+		}
+	}
+
+	return worst
+}
+
+var assignment = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+
+// wrappers run a command given after their own options
+var wrappers = []string{"env", "command", "exec", "nohup", "time", "sudo", "xargs", "nice", "timeout", "stdbuf"}
+
+var shells = []string{"sh", "bash", "zsh", "dash", "ksh"}
+
+// shortC is a cluster of short options holding c, such as -c, -ec or -lc
+var shortC = regexp.MustCompile(`^-[A-Za-z]*c[A-Za-z]*$`)
+
+// inlineScript finds the line a shell's -c or eval runs. A shell's other
+// options, long ones and ones that take a value (-o pipefail) among them,
+// may come before -c, so any short-option cluster holding c counts, wherever
+// it is; reading one too many as -c only ever adds a check
+func inlineScript(prog string, args []string) (string, bool) {
+	if prog == "eval" {
+		return strings.Join(args, " "), len(args) > 0
+	}
+	if !slices.Contains(shells, prog) {
+		return "", false
+	}
+	for i, a := range args {
+		if shortC.MatchString(a) && i+1 < len(args) {
+			return strings.Join(args[i+1:], " "), true
+		}
+	}
+
+	return "", false
+}
+
+// dequote removes quotes and backslashes from each word, the shell's own
+// quote removal, roughly
+func dequote(words []string) []string {
+	out := make([]string, len(words))
+	for i, w := range words {
+		out[i] = strings.NewReplacer(`\`, "", `"`, "", "'", "").Replace(w)
+	}
+
+	return out
+}
+
+// unquote takes one pair of matching outer quotes off s
+func unquote(s string) string {
+	if len(s) >= 2 && (s[0] == '\'' || s[0] == '"') && s[len(s)-1] == s[0] {
+		return s[1 : len(s)-1]
+	}
+
+	return s
+}
+
+// defaultShell is the effect the shell rules give a command no other rule
+// names: that of the last "*" rule, ask without one
+func (t *Tiers) defaultShell() string {
+	effect := Ask
+	for _, r := range t.Shell {
+		if r.Resource == "*" {
+			effect = r.Effect
+		}
+	}
+
+	return effect
 }
 
 func rank(effect string) int {
@@ -227,8 +378,10 @@ func rank(effect string) int {
 
 // splitCommand splits a command line at ;, &, |, && and || and new lines,
 // outside quotes. opaque says the line holds something whose effect the
-// parts don't show: $( ), backticks, <( ), >( ), redirections or ( )
-func splitCommand(line string) (parts []string, opaque bool) {
+// parts don't show: $( ), backticks, <( ), >( ), redirections or ( ). deep
+// splits at those too, inside double quotes as well, so every command the
+// line could run is a part of its own
+func splitCommand(line string, deep bool) (parts []string, opaque bool) {
 	var cur strings.Builder
 	flush := func() {
 		if s := strings.Join(strings.Fields(cur.String()), " "); s != "" {
@@ -256,11 +409,22 @@ func splitCommand(line string) (parts []string, opaque bool) {
 					i++
 					c = rs[i]
 				}
-			case '`':
-				opaque = true
+			case '`', ')':
+				if c == '`' {
+					opaque = true
+				}
+				if deep {
+					flush()
+					continue
+				}
 			case '$':
 				if i+1 < len(rs) && rs[i+1] == '(' {
 					opaque = true
+					if deep {
+						flush()
+						i++
+						continue
+					}
 				}
 			}
 			cur.WriteRune(c)
@@ -277,9 +441,18 @@ func splitCommand(line string) (parts []string, opaque bool) {
 			flush()
 		case c == '`' || c == '(' || c == ')' || c == '<' || c == '>':
 			opaque = true
+			if deep {
+				flush()
+				continue
+			}
 			cur.WriteRune(c)
 		case c == '$' && i+1 < len(rs) && rs[i+1] == '(':
 			opaque = true
+			if deep {
+				flush()
+				i++
+				continue
+			}
 			cur.WriteRune(c)
 		default:
 			cur.WriteRune(c)

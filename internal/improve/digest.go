@@ -2,6 +2,7 @@ package improve
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -15,6 +16,21 @@ type Rendered struct {
 	Text     string
 	Shown    []string
 	Reported []string
+	// lines are the text each reported key showed as, so a key whose line
+	// a cut dropped isn't recorded as reported
+	lines map[string]string
+}
+
+// Visible keeps the reported keys whose lines are still in text after a
+// cut, so a regression or promotion Jason never saw is reported again
+func (d Rendered) Visible(text string) []string {
+	var out []string
+	for _, k := range d.Reported {
+		if strings.Contains(text, d.lines[k]) {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // maxCandidates bounds the landscape lines
@@ -31,7 +47,7 @@ const digestBudget = approval.MaxSummary - 400
 // Render writes the weekly digest from the state. edgeNow is the content
 // version edge offers now, which is the only one promote takes
 func Render(st *State, edgeNow string) Rendered {
-	var d Rendered
+	d := Rendered{lines: map[string]string{}}
 	var b strings.Builder
 	var news []Proposal
 	for _, p := range st.Proposals {
@@ -82,16 +98,24 @@ func Render(st *State, edgeNow string) Rendered {
 		switch {
 		case p.Status == Regressed:
 			key := "regressed:" + p.ID
-			regressed = append(regressed, fmt.Sprintf("%s (%s): a revert is proposed above or was already", p.Title, p.ID))
-			d.Reported = append(d.Reported, key)
+			if slices.Contains(st.Digest.Reported, key) {
+				continue
+			}
+			line := fmt.Sprintf("%s (%s): a revert is proposed above or was already", p.Title, p.ID)
+			regressed = append(regressed, line)
+			d.Reported, d.lines[key] = append(d.Reported, key), line
 		case p.Target == Public && (p.Status == Passed || p.Status == Unmeasured) && p.Edge != "" && p.Stable == "" && edgeNow != "":
 			key := "promote:" + p.ID + ":" + edgeNow
+			if slices.Contains(st.Digest.Reported, key) {
+				continue
+			}
 			how := "held its numbers"
 			if p.Status == Unmeasured {
 				how = "couldn't be measured (" + p.Note + ")"
 			}
-			promote = append(promote, fmt.Sprintf("%s (%s) %s on edge.", p.Title, p.ID, how))
-			d.Reported = append(d.Reported, key)
+			line := fmt.Sprintf("%s (%s) %s on edge.", p.Title, p.ID, how)
+			promote = append(promote, line)
+			d.Reported, d.lines[key] = append(d.Reported, key), line
 		case p.Status == Stale && p.Note != "a newer scan replaced it":
 			stale = append(stale, fmt.Sprintf("%s (%s): %s", p.Title, p.ID, p.Note))
 		}
@@ -133,6 +157,7 @@ func Render(st *State, edgeNow string) Rendered {
 	if utf8.RuneCountInString(d.Text) > digestBudget {
 		d.Text = string([]rune(d.Text)[:digestBudget]) + "\n...cut; bud improve show has the whole digest."
 	}
+	d.Reported = d.Visible(d.Text)
 
 	return d
 }

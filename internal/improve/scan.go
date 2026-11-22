@@ -3,8 +3,10 @@ package improve
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -135,7 +137,7 @@ func RunScan(ctx context.Context, in ScanInput, now time.Time) (Scan, []Proposal
 			r.Error = err.Error()
 		} else {
 			r.Latest = strings.TrimSpace(tag + " " + name)
-			r.Newer = !strings.Contains(" "+tag+" "+name+" ", rp.Pinned)
+			r.Newer = newer(name, tag, rp.Pinned)
 		}
 		sc.Runtimes = append(sc.Runtimes, r)
 	}
@@ -203,4 +205,30 @@ func candidate(reg *registry.Registry, provider string, l registry.Listing) Cand
 	sort.Strings(c.Roles)
 
 	return c
+}
+
+// releaseRe finds a release version such as v0.24.0. The v is required,
+// since Hermes's titles also carry a date that looks like a version
+var releaseRe = regexp.MustCompile(`\bv(\d+)\.(\d+)\.(\d+)\b`)
+
+// newer says whether the release, read from its title first and then its
+// tag, is past pinned (X.Y.Z). One with no version it can read counts as
+// newer, so the digest names it for a look
+func newer(name, tag, pinned string) bool {
+	m := releaseRe.FindStringSubmatch(name)
+	if m == nil {
+		m = releaseRe.FindStringSubmatch(tag)
+	}
+	p := releaseRe.FindStringSubmatch("v" + pinned)
+	if m == nil || p == nil {
+		return true
+	}
+	for i := 1; i <= 3; i++ {
+		a, _ := strconv.Atoi(m[i])
+		b, _ := strconv.Atoi(p[i])
+		if a != b {
+			return a > b
+		}
+	}
+	return false
 }

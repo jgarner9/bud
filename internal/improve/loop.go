@@ -301,20 +301,27 @@ func (l *Loop) due(st *State, now time.Time, edgeNow string) *digestAsk {
 	if last.IsZero() {
 		last = now.Add(-7 * 24 * time.Hour)
 	}
-	if now.Before(nextSlot(last, l.DigestDay, l.DigestHour)) {
+	// a digest asked and not answered since is asked again the next day,
+	// whatever the weekday
+	pending := st.Digest.Asked.After(st.Digest.Answered)
+	if !pending && now.Before(nextSlot(last, l.DigestDay, l.DigestHour)) {
+		return nil
+	}
+	if pending && local.Hour() < l.DigestHour {
 		return nil
 	}
 	if a := st.Digest.Asked.In(time.Local); !st.Digest.Asked.IsZero() && a.Year() == local.Year() && a.YearDay() == local.YearDay() {
 		return nil
 	}
 	d := Render(st, edgeNow)
-	if len(d.Shown) == 0 && !slices.ContainsFunc(d.Reported, func(k string) bool { return !slices.Contains(st.Digest.Reported, k) }) {
+	if len(d.Shown) == 0 && len(d.Reported) == 0 {
 		st.Digest.Answered = now
 		return nil
 	}
 	st.Digest.Asked = now
+	text := Fit(d.Text, d.Shown)
 
-	return &digestAsk{text: Fit(d.Text, d.Shown), shown: d.Shown, reported: d.Reported}
+	return &digestAsk{text: text, shown: d.Shown, reported: d.Visible(text)}
 }
 
 // Fit cuts the digest until its prompt fits approval.MaxSummary, which the

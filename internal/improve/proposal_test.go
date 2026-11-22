@@ -199,3 +199,54 @@ func TestOpenGoesStaleWhenMainMoved(t *testing.T) {
 		t.Fatalf("status %s, %d pull requests", p.Status, len(gh.prs))
 	}
 }
+
+func TestNewerComparesVersions(t *testing.T) {
+	for _, c := range []struct {
+		name, tag string
+		want      bool
+	}{
+		{"Hermes Agent v0.23.2 (2026.9.24)", "v2026.9.24", false},
+		{"Hermes Agent v0.23.20 (2026.11.1)", "v2026.11.1", true},
+		{"Hermes Agent v0.24.0", "", true},
+		{"Hermes Agent v0.22.9", "", false},
+		{"", "v0.23.2", false},
+		{"a release", "nightly", true},
+	} {
+		if got := newer(c.name, c.tag, "0.23.2"); got != c.want {
+			t.Errorf("newer(%q, %q) = %v, want %v", c.name, c.tag, got, c.want)
+		}
+	}
+}
+
+func TestRenderSkipsWhatWasReported(t *testing.T) {
+	st := &State{Proposals: []Proposal{{ID: "p-1", Title: "Bad", Target: Public, Status: Regressed}}}
+	d := Render(st, "")
+	if len(d.Reported) != 1 || !strings.Contains(d.Text, "Got worse") {
+		t.Fatalf("first: %+v", d)
+	}
+	st.Digest.Reported = d.Reported
+	if d := Render(st, ""); len(d.Reported) != 0 || strings.Contains(d.Text, "Got worse") {
+		t.Fatalf("again: %+v", d)
+	}
+	if got := d.Visible("nothing"); len(got) != 0 {
+		t.Errorf("a cut line counted as reported: %v", got)
+	}
+}
+
+func TestFirstUnansweredDigestIsAskedTheNextDay(t *testing.T) {
+	old := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() { time.Local = old })
+	l := &Loop{DigestDay: time.Sunday, DigestHour: 10}
+	st := &State{Proposals: []Proposal{{ID: "p-1", Title: "x", Evidence: "y", Target: Public, Status: New}}}
+	sun := time.Date(2026, 11, 22, 11, 0, 0, 0, time.UTC)
+	if l.due(st, sun, "") == nil {
+		t.Fatal("not asked on Sunday")
+	}
+	if l.due(st, sun.Add(time.Hour), "") != nil {
+		t.Fatal("asked twice on Sunday")
+	}
+	if l.due(st, sun.Add(24*time.Hour), "") == nil {
+		t.Fatal("not asked again on Monday")
+	}
+}

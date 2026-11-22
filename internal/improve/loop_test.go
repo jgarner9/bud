@@ -316,3 +316,25 @@ func TestLoopEndToEnd(t *testing.T) {
 		t.Errorf("the digest after a regression:\n%s", args.Digest)
 	}
 }
+
+func TestOpenPRDeletesTheBranchWhenItFails(t *testing.T) {
+	var deleted string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET":
+			_ = json.NewEncoder(w).Encode(map[string]any{"object": map[string]string{"sha": "h"}})
+		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/git/refs"):
+			w.WriteHeader(201)
+		case r.Method == "PUT":
+			http.Error(w, "nope", 422)
+		case r.Method == "DELETE":
+			deleted = r.URL.Path
+		}
+	}))
+	t.Cleanup(srv.Close)
+	g := &GitHub{API: srv.URL}
+	_, err := g.OpenPR(t.Context(), "o/r", "main", "bud-proposal/p-1", "t", "b", Label, []File{{Path: "content/x", After: strp("y")}}, nil)
+	if err == nil || deleted != "/repos/o/r/git/refs/heads/bud-proposal/p-1" {
+		t.Fatalf("err %v, deleted %q", err, deleted)
+	}
+}

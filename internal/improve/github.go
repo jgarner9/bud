@@ -171,6 +171,14 @@ func (g *GitHub) OpenPR(ctx context.Context, repo, base, branch, title, body, la
 	if err := g.do(ctx, http.MethodPost, "/repos/"+repo+"/git/refs", map[string]string{"ref": "refs/heads/" + branch, "sha": head}, nil); err != nil {
 		return PullRequest{}, err
 	}
+	opened := false
+	defer func() {
+		if !opened {
+			// a half-written branch would block the next try, so it goes;
+			// the proposal stays new and is opened again on the next yes
+			_ = g.do(context.WithoutCancel(ctx), http.MethodDelete, "/repos/"+repo+"/git/refs/heads/"+escapePath(branch), nil, nil)
+		}
+	}()
 	for _, f := range files {
 		msg := "bud improve: " + title
 		p := "/repos/" + repo + "/contents/" + escapePath(f.Path)
@@ -191,6 +199,7 @@ func (g *GitHub) OpenPR(ctx context.Context, repo, base, branch, title, body, la
 	if err := g.do(ctx, http.MethodPost, "/repos/"+repo+"/pulls", map[string]any{"title": title, "head": branch, "base": base, "body": body, "draft": true}, &pr); err != nil {
 		return PullRequest{}, err
 	}
+	opened = true
 	if label != "" {
 		// a missing label is cosmetic; the draft PR stands
 		_ = g.do(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/issues/%d/labels", repo, pr.Number), map[string][]string{"labels": {label}}, nil)

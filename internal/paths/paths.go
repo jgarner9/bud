@@ -207,6 +207,11 @@ func (p *Paths) RouterSpend() string { return filepath.Join(p.State, "router-spe
 // records wait on review, for the ops reviews tool
 func (p *Paths) MemoryReviewStatus() string { return filepath.Join(p.State, "memory-review.json") }
 
+// ImproveState is bud improve's queue of proposals, daily measurements and
+// digest state (Suite D125), private since overlay proposals hold the
+// overlay's files
+func (p *Paths) ImproveState() string { return filepath.Join(p.State, "improve.json") }
+
 // MCPGatewayApprovals is the per-server approval tiers bud sync renders from
 // the env fragments; the gateway reads it from beside its own config
 const MCPGatewayApprovalsFile = "mcp-gateway-approvals.json"

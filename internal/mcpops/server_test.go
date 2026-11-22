@@ -179,6 +179,17 @@ func TestReviewsToolReadsMemoryReviewsCount(t *testing.T) {
 	if _, out := post(t, s, call("reviews", `{"x":1}`)); errCode(out) != -32602 {
 		t.Errorf("an unknown argument: %v", out)
 	}
+
+	if got := reviews(); got.Proposals != nil {
+		t.Errorf("proposals before bud improve ran: %v", got.Proposals)
+	}
+	st := `{"proposals": [{"id": "p-1", "status": "new"}, {"id": "p-2", "status": "new"}, {"id": "p-3", "status": "open"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "improve.json"), []byte(st), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := reviews(); got.Proposals["new"] != 2 || got.Proposals["open"] != 1 {
+		t.Errorf("proposals: %v", got.Proposals)
+	}
 }
 
 func TestProtocolErrors(t *testing.T) {

@@ -1,0 +1,14 @@
+# Starts bud improve's daily round (bud-improve.service). The digest is
+# asked on the first round from Sunday 10:00 local time, so a 10:30 start
+# asks it on Sunday morning. Persistent catches up a round missed while the
+# server was off.
+[Unit]
+Description=Daily round of the Bud self-improvement loop
+
+[Timer]
+OnCalendar=*-*-* 10:30:00
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

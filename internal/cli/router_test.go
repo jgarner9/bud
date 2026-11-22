@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,6 +41,14 @@ func TestRouterServesTheRegistryAtThePathGiven(t *testing.T) {
 			t.Setenv(v, "test-key")
 		}
 	}
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	if err := os.MkdirAll(filepath.Join(state, "bud"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(state, "bud", "router-p0-servers.json"), []byte(`{"servers": ["calendar", "mail"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	var addr string
 	orig := serveRouter
 	serveRouter = func(_ context.Context, a string, _ http.Handler) error { addr = a; return nil }
@@ -52,7 +61,7 @@ func TestRouterServesTheRegistryAtThePathGiven(t *testing.T) {
 		t.Errorf("served on %q", addr)
 	}
 	// without --verbose too, so the journal shows the rules were loaded
-	if want := fmt.Sprintf("%d privacy rules", len(reg.PrivacyRules)); len(reg.PrivacyRules) == 0 || !strings.Contains(stderr.String(), want) {
+	if want := fmt.Sprintf("%d privacy rules, 2 P0-only servers", len(reg.PrivacyRules)); len(reg.PrivacyRules) == 0 || !strings.Contains(stderr.String(), want) {
 		t.Errorf("stderr = %q, want a line saying %q", stderr.String(), want)
 	}
 }
@@ -86,5 +95,25 @@ func TestRouterRefusesAP0WaitOutsideZeroToAnHour(t *testing.T) {
 		if !errors.As(err, &ue) {
 			t.Errorf("%v: err = %v, want a usage error", d, err)
 		}
+	}
+}
+
+// Suite D119: without the synced list of P0-only servers the router won't
+// start, since a calendar result couldn't keep a chat local
+func TestRouterWithoutTheP0ServersSaysToSync(t *testing.T) {
+	path := filepath.Join("..", "..", "content", "env", "registry.jsonc")
+	reg, err := models.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for pid, p := range reg.Providers {
+		if v := models.KeyVar(pid, p.Key); v != "" {
+			t.Setenv(v, "test-key")
+		}
+	}
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	err = runRouter(&Globals{}, nil, "127.0.0.1:0", path, filepath.Join(t.TempDir(), "spend.json"), 10, 10*time.Minute, false)
+	if err == nil || !strings.Contains(err.Error(), "run bud sync") || !strings.Contains(err.Error(), "P0-only") {
+		t.Errorf("err = %v", err)
 	}
 }

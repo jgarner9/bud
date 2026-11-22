@@ -412,6 +412,8 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 			want{filepath.Join(p.HermesCloud(), "config.yaml"), cloud.Config, 0o600, "config", "rendered"},
 			want{p.HermesTiers(), out.Tiers, 0o600, "config", "rendered"},
 		)
+		// the router (this machine's) reads the P0-only servers from here
+		wants = append(wants, want{p.RouterP0Servers(), out.RouterP0Servers, 0o600, "config", "rendered"})
 		if out.GatewayApprovals != nil {
 			// the gateway (this machine's) reads its approval tiers from here
 			wants = append(wants, want{p.MCPGatewayApprovals(), out.GatewayApprovals, 0o600, "config", "rendered"})

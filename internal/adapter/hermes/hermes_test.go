@@ -563,3 +563,32 @@ func TestGatewayReviewedServersAreTrustedInHermes(t *testing.T) {
 		t.Errorf("trusted: %q", tiers.Trusted)
 	}
 }
+
+// Suite D119: the router's list holds every server only P0 may use, left
+// out of this device or not, and nothing a P1 session may use
+func TestTheRouterGetsTheP0OnlyServers(t *testing.T) {
+	out, err := Render(input(t, `{"bud": {
+		"privacy": "P1",
+		"gateway": "http://127.0.0.1:8790",
+		"mcp": {
+			"calendar": {"gateway": true, "privacy": ["P0"]},
+			"mail": {"gateway": true, "privacy": ["P0"], "disabled": true},
+			"notes": {"privacy": ["P0"]},
+			"memory": {"gateway": true, "privacy": ["P0", "P1", "P2"]},
+			"linear": {"gateway": true, "privacy": ["P1"]}
+		}
+	}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(out.RouterP0Servers), "{\n  \"servers\": [\n    \"calendar\",\n    \"mail\",\n    \"notes\"\n  ]\n}\n"; got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	empty, err := Render(input(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(empty.RouterP0Servers); got != "{\n  \"servers\": []\n}\n" {
+		t.Errorf("with no servers: %s", got)
+	}
+}

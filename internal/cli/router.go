@@ -85,7 +85,11 @@ func runRouter(g *Globals, args []string, listen, registryPath, spendPath string
 	if err != nil {
 		return err
 	}
-	opts := router.Options{Ledger: led, TopUpCap: topUpCap, P0Wait: p0Wait}
+	p0Servers, err := router.ReadP0Servers(p.RouterP0Servers())
+	if err != nil {
+		return err
+	}
+	opts := router.Options{Ledger: led, TopUpCap: topUpCap, P0Wait: p0Wait, P0Servers: p0Servers}
 	if !noP0Fallback {
 		// wired as bud mcp-ops wires it; the router must run as the user that can read the review secret
 		opts.Approvals = &router.Approvals{
@@ -104,7 +108,7 @@ func runRouter(g *Globals, args []string, listen, registryPath, spendPath string
 	defer stop()
 	// probes the local providers once before serving, then until ctx ends
 	rt.Start(ctx)
-	g.Noticef("router: serving %d models on %s, %d privacy rules", len(reg.Models), listen, len(reg.PrivacyRules))
+	g.Noticef("router: serving %d models on %s, %d privacy rules, %d P0-only servers", len(reg.Models), listen, len(reg.PrivacyRules), len(p0Servers))
 	return serveRouter(ctx, listen, rt)
 }
 

@@ -205,6 +205,11 @@ type Server struct {
 	// ReadOnly says every tool on a gateway server only reads, so the
 	// gateway needs no approval block for it
 	ReadOnly bool `json:"read_only,omitempty"`
+	// MarksP0 says the server tags each P0 record it returns with
+	// registry.P0Marker, as Bud memory does (JGA-389). The router keeps a
+	// chat that receives one local, so the private Hermes profile may reach
+	// a gateway server like this at P0 and see every tier
+	MarksP0 bool `json:"marks_p0,omitempty"`
 }
 
 // Approval is a server's tool tiers, in the shape of the gateway's
@@ -413,6 +418,12 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 		if s.HermesOnly && (!slices.Equal(s.Privacy, []string{"P0"}) || s.Gateway || len(s.Command) > 0 || (s.URL != "" && !loopbackService(s.URL))) {
 			add("%s: hermes_only requires P0 and a direct loopback URL, or no URL until configured", at)
+			continue
+		}
+		if s.MarksP0 && (!s.P0() || s.URL != "" || len(s.Command) > 0) {
+			// only the gateway checks a marked server's tier; reached
+			// directly, a cloud session could get its P0 records
+			add("%s: marks_p0 needs P0 in privacy and a gateway server (gateway true, no url or command)", at)
 			continue
 		}
 		if !s.Gateway && (s.Approval != nil || s.ReadOnly) {

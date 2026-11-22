@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -174,5 +175,36 @@ func TestStickyDecisionsAreSafeAcrossRequests(t *testing.T) {
 	rig.mu.Unlock()
 	if w := do(t, rig.rt, "POST", "/v1/chat/completions", compressed, session("c1")); w.Header().Get(RaisedHeader) != ConversationRule {
 		t.Fatalf("raised %q", w.Header().Get(RaisedHeader))
+	}
+}
+
+// JGA-389: a memory search that brought back a P0 record keeps the chat
+// local, however the runtime quoted the result, and the conversation stays
+// held; one that brought back only P1 and P2 records goes to the cloud
+func TestARecalledPrivateMemoryRecordKeepsTheChatLocal(t *testing.T) {
+	result := func(privacy, marker string) string {
+		rec := `{"id":4,"source":"hermes","kind":"fact","privacy":"` + privacy + `","body":"dentist on Tuesdays"}`
+		if marker != "" {
+			rec = `{"marker":"` + marker + `","id":4,"source":"hermes","kind":"fact","privacy":"` + privacy + `","body":"dentist on Tuesdays"}`
+		}
+		text, _ := json.Marshal("{\n  \"results\": [" + rec + "]\n}")
+		return string(text)
+	}
+	chat := func(content string) string {
+		return `{"model":"bud/manager","messages":[{"role":"user","content":"when's the dentist"},{"role":"assistant","content":null,"tool_calls":[{"id":"1","type":"function","function":{"name":"mcp_memory_memory_search","arguments":"{}"}}]},{"role":"tool","tool_call_id":"1","content":` + content + `}]}`
+	}
+	rig := newProvRig(t)
+	if w := do(t, rig.rt, "POST", "/v1/chat/completions", chat(result("P1", "")), session("c1")); w.Header().Get(RaisedHeader) != "" || rig.cloudBytes == 0 {
+		t.Fatalf("a P1 record: raised %q, cloud bytes %d", w.Header().Get(RaisedHeader), rig.cloudBytes)
+	}
+	rig.cloudBytes = 0
+	parts := `[{"type":"text","text":` + result("P0", registry.P0Marker) + `}]`
+	for name, content := range map[string]string{"a string": result("P0", registry.P0Marker), "content parts": parts} {
+		if w := do(t, rig.rt, "POST", "/v1/chat/completions", chat(content), session("c-"+name)); w.Code != 200 || w.Header().Get(RaisedHeader) != MemoryRule || rig.cloudBytes != 0 {
+			t.Fatalf("%s: code %d, raised %q, cloud bytes %d", name, w.Code, w.Header().Get(RaisedHeader), rig.cloudBytes)
+		}
+	}
+	if w := do(t, rig.rt, "POST", "/v1/chat/completions", compressed, session("c-a string")); w.Header().Get(RaisedHeader) != ConversationRule || rig.cloudBytes != 0 {
+		t.Fatalf("compressed after: raised %q, cloud bytes %d", w.Header().Get(RaisedHeader), rig.cloudBytes)
 	}
 }

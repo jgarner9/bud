@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"jgarner.dev/bud/internal/memory"
+	"jgarner.dev/bud/internal/registry"
 )
 
 // fakeMemory is one memory-service identity
@@ -250,4 +251,50 @@ func TestRequestsAreChecked(t *testing.T) {
 	if _, errText := callTool(t, s, "P1", "memory_delete", `{}`); !strings.Contains(errText, `no tool is named "memory_delete"`) {
 		t.Errorf("an unknown tool: %q", errText)
 	}
+}
+
+// JGA-389: each P0 record starts with the marker the router raises on, in
+// the text a runtime quotes into its history; other records carry none
+func TestAPrivateRecordCarriesTheMarkerFirst(t *testing.T) {
+	s, tiers, _, _ := newServer()
+	tiers["P0"].recs = []memory.Record{
+		{ID: 4, Source: "hermes", Kind: "fact", Privacy: "P0", Body: "dentist on Tuesdays"},
+		{ID: 5, Source: "hermes", Kind: "fact", Privacy: "P1", Body: "likes plain text"},
+	}
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"memory_search","arguments":{"query":"x"}}}`
+	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	r.Host = "127.0.0.1:8798"
+	r.Header.Set("X-Bud-Privacy", "P0")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, r)
+	var resp struct {
+		Result struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || len(resp.Result.Content) != 1 {
+		t.Fatalf("%v: %s", err, w.Body)
+	}
+	text := resp.Result.Content[0].Text
+	if strings.Count(text, registry.P0Marker) != 1 {
+		t.Fatalf("want the marker once, on the P0 record:\n%s", text)
+	}
+	if m, id := strings.Index(text, registry.P0Marker), strings.Index(text, `"id": 4`); m < 0 || id < m {
+		t.Errorf("the marker should come before the record's other fields:\n%s", text)
+	}
+}
+
+// Copilot on #116: only a P0 record may carry the marker, so a P1 record
+// can't hold a chat local by quoting it
+func TestOnlyAP0RecordMayCarryTheMarker(t *testing.T) {
+	s, _, stager, _ := newServer()
+	if _, errText := callTool(t, s, "P1", "memory_stage", `{"source":"hermes","kind":"fact","body":"see `+registry.P0Marker+`"}`); !strings.Contains(errText, "marker") {
+		t.Fatalf("a P1 record with the marker: %q", errText)
+	}
+	if _, errText := callTool(t, s, "P0", "memory_stage", `{"source":"hermes","kind":"fact","body":"see `+registry.P0Marker+`"}`); errText != "" {
+		t.Fatalf("a P0 record with the marker: %q", errText)
+	}
+	_ = stager
 }

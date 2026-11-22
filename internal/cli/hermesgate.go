@@ -54,6 +54,9 @@ func runHermesGate(in io.Reader, out io.Writer, tiersPath string) error {
 	}
 	var p hermes.Payload
 	dec := json.NewDecoder(io.LimitReader(in, 16<<20))
+	// numbers stay as written, so an argument rule's equals compares a
+	// large id exactly (Suite D116)
+	dec.UseNumber()
 	if err := dec.Decode(&p); err != nil {
 		return reply(hermes.Verdict{Effect: hermes.Deny, Reason: fmt.Sprintf("bud: can't read the tool call (%v)", err)})
 	}

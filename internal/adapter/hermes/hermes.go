@@ -289,7 +289,7 @@ func Render(in Input) (*Output, error) {
 	}
 	out.Config = []byte(b.String())
 
-	t := Tiers{Shell: shell, Tools: tools.Tiers, Private: privateTools(tools), Trusted: trustedGateway(tools, cfg)}
+	t := Tiers{Shell: shell, Tools: tools.Tiers, When: tools.TiersWhen, Private: privateTools(tools), Trusted: trustedGateway(tools, cfg)}
 	if t.Shell == nil {
 		t.Shell = []Rule{}
 	}

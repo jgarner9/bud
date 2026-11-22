@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"jgarner.dev/bud/internal/argrule"
 )
 
 func testTiers() *Tiers {
@@ -357,6 +359,58 @@ func TestAPathQualifiedProgramIsNeverTheBareOnesAllow(t *testing.T) {
 	} {
 		if got := testTiers().Decide(terminal(cmd)); got.Effect != want {
 			t.Errorf("%q: got %s (%s), want %s", cmd, got.Effect, got.Reason, want)
+		}
+	}
+}
+
+// Suite D116: a when rule decides over the tool's tier by its arguments,
+// but never loosens a deny, and a field it can't read asks
+func TestWhenRulesTierAToolByItsArguments(t *testing.T) {
+	tiers := testTiers()
+	tiers.When = []argrule.Rule{
+		{Tool: "cronjob_manage", Effect: Allow, Args: map[string]argrule.Condition{"action": {Equals: json.RawMessage(`"list"`)}}},
+		{Tool: "browser_vault", Effect: Allow},
+		{Tool: "read_file", Effect: Ask, Args: map[string]argrule.Condition{"path": {Glob: ptr("/run/secrets/*")}}},
+	}
+	for _, c := range []struct {
+		name, tool string
+		input      map[string]any
+		want       string
+	}{
+		{"list jobs", "cronjob_manage", map[string]any{"action": "list"}, Allow},
+		{"create a job", "cronjob_manage", map[string]any{"action": "create", "schedule": "30m"}, Ask},
+		{"no action", "cronjob_manage", nil, Ask},
+		{"a deny stays", "browser_vault", nil, Deny},
+		{"a forbid tightens an allow", "read_file", map[string]any{"path": "/run/secrets/op"}, Ask},
+		{"elsewhere it reads", "read_file", map[string]any{"path": "/work/a.go"}, Allow},
+		{"an unreadable path asks", "read_file", map[string]any{"path": []any{"/work/a.go"}}, Ask},
+	} {
+		if got := tiers.Decide(Payload{Event: "pre_tool_call", Tool: c.tool, Input: c.input}); got.Effect != c.want {
+			t.Errorf("%s: %s, want %s", c.name, got.Effect, c.want)
+		}
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+// Suite D116: with the shipped fragments, listing cron jobs runs alone and
+// every other action asks, read from the payload Hermes sends
+func TestTheShippedTiersLetOnlyAJobListingRunAlone(t *testing.T) {
+	tiers := shippedSandbox(t)
+	for input, want := range map[string]string{
+		`{"action":"list"}`:                                 Allow,
+		`{"action":"list","include_disabled":true}`:         Allow,
+		`{"action":"create","schedule":"30m","prompt":"x"}`: Ask,
+		`{"action":"remove","job_id":"a1"}`:                 Ask,
+		`{"action":" list"}`:                                Ask,
+		`{}`:                                                Ask,
+	} {
+		var p Payload
+		if err := json.Unmarshal([]byte(`{"hook_event_name":"pre_tool_call","tool_name":"cronjob_manage","tool_input":`+input+`}`), &p); err != nil {
+			t.Fatal(err)
+		}
+		if got := tiers.Decide(p); got.Effect != want {
+			t.Errorf("%s: %s, want %s", input, got.Effect, want)
 		}
 	}
 }

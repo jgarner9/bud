@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"jgarner.dev/bud/internal/argrule"
 	"jgarner.dev/bud/internal/paths"
 	models "jgarner.dev/bud/internal/registry"
 	"jgarner.dev/bud/internal/tailnet"
@@ -50,13 +51,21 @@ type Server struct {
 // Approval says which of a server's tools need a review before the call goes
 // upstream. Tools maps upstream tool-name globs (path.Match syntax, e.g.
 // "get_*") to "allow" or "ask"; a tool no glob names asks, so a new upstream
-// tool fails closed. When several globs match, "ask" wins
+// tool fails closed. When several globs match, "ask" wins. When rules
+// (Suite D116) look at the call's arguments too: one whose conditions hold
+// decides over the globs, the strictest of them winning, and one whose
+// field can't be read asks
 type Approval struct {
 	Tools map[string]string `json:"tools,omitempty"`
+	When  []argrule.Rule    `json:"when,omitempty"`
 }
 
-// Asks says whether a call to tool needs a review
-func (a *Approval) Asks(tool string) bool {
+// Asks says whether a call to tool with these arguments (the raw JSON the
+// client sent) needs a review
+func (a *Approval) Asks(tool string, args json.RawMessage) bool {
+	if effect, ok := argrule.Apply(a.When, tool, args); ok {
+		return effect != argrule.Allow
+	}
 	allowed := false
 	for _, glob := range sortedKeys(a.Tools) {
 		if ok, _ := path.Match(glob, tool); !ok {
@@ -131,6 +140,7 @@ func (c *Config) mergeApprovals(file string) error {
 	var f struct {
 		Servers map[string]struct {
 			Tools    map[string]string `json:"tools"`
+			When     []argrule.Rule    `json:"when"`
 			ReadOnly bool              `json:"read_only"`
 		} `json:"servers"`
 	}
@@ -140,7 +150,7 @@ func (c *Config) mergeApprovals(file string) error {
 		return fmt.Errorf("%s: %w", file, err)
 	}
 	for name, a := range f.Servers {
-		if a.ReadOnly && a.Tools != nil {
+		if a.ReadOnly && (a.Tools != nil || a.When != nil) {
 			return fmt.Errorf("%s: servers.%s: set read_only or tools, not both; run bud sync to render it again", file, name)
 		}
 		s, ok := c.Servers[name]
@@ -151,7 +161,7 @@ func (c *Config) mergeApprovals(file string) error {
 			if a.ReadOnly {
 				s.ReadOnly = true
 			} else if a.Tools != nil {
-				s.Approval = &Approval{Tools: a.Tools}
+				s.Approval = &Approval{Tools: a.Tools, When: a.When}
 			}
 			c.Servers[name] = s
 		}
@@ -221,6 +231,7 @@ func (c *Config) Validate() error {
 					add("%s.approval.tools.%s: %q isn't allow or ask", at, glob, v)
 				}
 			}
+			errs = append(errs, argrule.Check(at+".approval.when", a.When, []string{argrule.Allow, argrule.Ask}, nil)...)
 		}
 		if u != nil && u.RawQuery != "" && s.Approval != nil {
 			add("%s.url: has a query string, which an approval review would show; put credentials in the key header (key.header, key.env) instead", at)

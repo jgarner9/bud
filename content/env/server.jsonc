@@ -64,11 +64,16 @@
       // read-only, and its answers never leave the house, so P0 may use it
       "ops": { "url": "http://127.0.0.1:8792/mcp", "privacy": ["P0", "P1", "P2"] },
       // bud calendar-mcp, server/calendar-mcp/ (D82)
-      // listing runs alone; creating, moving and deleting events ask
+      // listing runs alone; creating, moving and deleting events ask. An
+      // event with no attendees runs alone (Suite D116), since it sends no
+      // invites; one with attendees, or a field the gateway can't read, asks
       "calendar": {
         "gateway": true,
         "privacy": ["P0"],
-        "approval": { "tools": { "calendar_list_*": "allow", "calendar_create_*": "ask", "calendar_move_*": "ask", "calendar_delete_*": "ask" } },
+        "approval": {
+          "tools": { "calendar_list_*": "allow", "calendar_create_*": "ask", "calendar_move_*": "ask", "calendar_delete_*": "ask" },
+          "when": [{ "tool": "calendar_create_event", "effect": "allow", "args": { "attendees": { "empty": true } } }],
+        },
       },
       // bud mail-mcp, server/mail-mcp/ (D106): reading, moving to Deleted
       // Messages and restoring run alone (D36); every send and reply asks
@@ -144,7 +149,8 @@
       "memory": "deny",
       "skill_manage": "allow",
       // creating or changing a job asks first (tool map); one tool does both
-      // reading and writing jobs, so it all asks
+      // reading and writing jobs, so it asks unless tiers_when below lets
+      // its listing through
       "cronjob_manage": "ask",
       // one tool both reads pages and submits forms, so it asks; the vault
       // stays off (D10)
@@ -158,6 +164,13 @@
       // marked read-only (below)
       "mcp__*": "allow",
     },
+    // when rules over the tiers above (Suite D116): a rule whose argument
+    // conditions hold decides over the tool's tier, the strictest winning,
+    // and nothing loosens a deny. Listing cron jobs only reads, so it runs
+    // alone; any other action, or an action the gate can't read, still asks
+    "tiers_when": [
+      { "tool": "cronjob_manage", "effect": "allow", "args": { "action": { "equals": "list" } } },
+    ],
     "hermes": {
       // the built-in toolsets per platform, from the tool map. Off: tts,
       // computer_use, image_gen, video, x_search, kanban, discord, feishu,

@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strings"
 
+	"jgarner.dev/bud/internal/argrule"
 	"jgarner.dev/bud/internal/registry"
 )
 
@@ -55,7 +56,10 @@ func Merge(frags []Fragment) (map[string]any, error) {
 var replacedLists = []string{"privacy", "command", "approval"}
 
 // replaceServerLists drops from out each list in replacedLists that frag
-// sets for the same server, so the merge that follows replaces it
+// sets for the same server, so the merge that follows replaces it. An
+// approval block that sets only when rules (Suite D116) keeps the earlier
+// tools and adds its rules after the earlier ones, so an overlay can add a
+// rule, such as mail to Jason's own address, without copying the tools
 func replaceServerLists(out, frag map[string]any) {
 	next := serverMap(frag)
 	cur := serverMap(out)
@@ -69,11 +73,22 @@ func replaceServerLists(out, frag map[string]any) {
 			continue
 		}
 		for _, k := range replacedLists {
-			if _, ok := ns[k]; ok {
+			if _, ok := ns[k]; ok && !(k == "approval" && onlyWhen(ns[k])) {
 				delete(cs, k)
 			}
 		}
 	}
+}
+
+// onlyWhen says whether an approval block sets when rules and nothing else
+func onlyWhen(v any) bool {
+	a, ok := v.(map[string]any)
+	if !ok || len(a) != 1 {
+		return false
+	}
+	_, ok = a["when"]
+
+	return ok
 }
 
 func serverMap(m map[string]any) map[string]any {
@@ -135,6 +150,11 @@ type Bud struct {
 	// then "*". A later fragment sets a key over an earlier one's. Terminal
 	// commands are tiered by the shell permission rules instead
 	Tiers map[string]string `json:"tiers,omitempty"`
+	// TiersWhen are when rules over Hermes's own tools (Suite D116): one
+	// whose argument conditions hold decides over Tiers, the strictest
+	// winning, though nothing loosens a deny. Tool names as in Tiers. A
+	// later fragment's rules come after an earlier one's
+	TiersWhen []argrule.Rule `json:"tiers_when,omitempty"`
 	// SandboxShell tiers the commands Hermes's terminal runs in its Docker
 	// sandbox (Suite D114), in place of the permission rules' shell rules,
 	// which stay the coding devices'. Same globs, and the last match wins; a
@@ -191,6 +211,9 @@ type Server struct {
 // approval block
 type Approval struct {
 	Tools map[string]string `json:"tools,omitempty"`
+	// When are argument rules (Suite D116), their tool globs with the
+	// runtime's <name>_ prefix like Tools' keys
+	When []argrule.Rule `json:"when,omitempty"`
 }
 
 // Remote says whether the resolved server is reached over HTTP
@@ -208,6 +231,8 @@ type Resolved struct {
 	Left   map[string]string
 	Hermes map[string]any
 	Tiers  map[string]string
+	// TiersWhen are the when rules over Hermes's own tools
+	TiersWhen []argrule.Rule
 	// P0Only are the servers only P0 sessions may use, sorted, every one the
 	// block declares, left out or not, since a runtime elsewhere may still
 	// reach it (Suite D119)
@@ -230,6 +255,7 @@ type GatewayServer struct {
 	// Tools are upstream tool-name globs, allow or ask. An empty block is
 	// kept as {} (every tool asks), so only a server with no block omits it
 	Tools    *map[string]string `json:"tools,omitempty"`
+	When     []argrule.Rule     `json:"when,omitempty"`
 	ReadOnly bool               `json:"read_only,omitempty"`
 }
 
@@ -325,6 +351,16 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
+	errs = append(errs, argrule.Check("bud.tiers_when", b.TiersWhen, []string{"allow", "ask", "deny"}, func(tool string) string {
+		switch {
+		case !toolRe.MatchString(tool):
+			return "a tool name or pattern is lowercase letters, digits, '_', '-', and * or ? as wildcards"
+		case tool == "terminal" || tool == "*":
+			return "the terminal is tiered by sandbox_shell or the shell rules; name another tool"
+		}
+		return ""
+	})...)
+
 	for i, r := range b.SandboxShell {
 		if strings.TrimSpace(r.Resource) == "" {
 			add("bud.sandbox_shell[%d]: the resource is a command glob, such as \"git push *\"", i)
@@ -343,7 +379,7 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
-	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, SandboxShell: b.SandboxShell, Router: strings.TrimSuffix(b.Router, "/"), OpenCodeSecrets: b.OpenCodeSecrets}
+	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, TiersWhen: b.TiersWhen, SandboxShell: b.SandboxShell, Router: strings.TrimSuffix(b.Router, "/"), OpenCodeSecrets: b.OpenCodeSecrets}
 	r.P0Only = []string{}
 	for _, name := range sortedKeys(b.MCP) {
 		s := b.MCP[name]
@@ -387,7 +423,7 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 		if gs, bad := gatewayServer(name, s); len(bad) > 0 {
 			for _, m := range bad {
-				add("%s.approval.tools: %s", at, m)
+				add("%s.approval.%s", at, m)
 			}
 			continue
 		} else if s.Gateway && !s.Disabled {
@@ -440,18 +476,31 @@ func gatewayServer(name string, s Server) (GatewayServer, []string) {
 		up, ok := strings.CutPrefix(k, name+"_")
 		switch {
 		case !ok || up == "":
-			bad = append(bad, fmt.Sprintf("%q must start with %s_, as the permission rules' tool names do", k, name))
+			bad = append(bad, fmt.Sprintf("tools: %q must start with %s_, as the permission rules' tool names do", k, name))
 			continue
 		}
 		if _, err := path.Match(up, ""); err != nil || !toolRe.MatchString(up) {
-			bad = append(bad, fmt.Sprintf("%q isn't a valid tool-name glob", k))
+			bad = append(bad, fmt.Sprintf("tools: %q isn't a valid tool-name glob", k))
 			continue
 		}
 		if v := s.Approval.Tools[k]; v != "allow" && v != "ask" {
-			bad = append(bad, fmt.Sprintf("%s: %q isn't allow or ask", k, v))
+			bad = append(bad, fmt.Sprintf("tools: %s: %q isn't allow or ask", k, v))
 			continue
 		}
 		tools[up] = s.Approval.Tools[k]
+	}
+	prefix := func(tool string) string {
+		if up, ok := strings.CutPrefix(tool, name+"_"); !ok || up == "" || !toolRe.MatchString(up) {
+			return fmt.Sprintf("%q must start with %s_, as the permission rules' tool names do", tool, name)
+		}
+		return ""
+	}
+	bad = append(bad, argrule.Check("when", s.Approval.When, []string{"allow", "ask"}, prefix)...)
+	if len(bad) == 0 {
+		for _, r := range s.Approval.When {
+			r.Tool = strings.TrimPrefix(r.Tool, name+"_")
+			gs.When = append(gs.When, r)
+		}
 	}
 
 	return gs, bad

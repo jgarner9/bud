@@ -698,10 +698,19 @@ func privateOnly(s env.Server) bool {
 
 // sendsP0 says whether the private profile sends P0 instead of the
 // device's tier to a server: a gateway server the device's tier may not use
-// but P0 may
-func sendsP0(s env.Server) bool {
+// but P0 may, or one that marks the P0 records it returns (JGA-389), such
+// as Bud memory. Memory reached at the device's tier would save a record
+// from a chat that read the calendar at P1, where a later P1 chat could
+// recall it on a cloud model; at P0 it saves at P0 by default, and a P0
+// record it returns makes the router keep that chat local. The cloud
+// profile reaches a marking server at the device's tier, since its chats
+// are never meant to hold P0 data
+func sendsP0(s env.Server, cloud bool) bool {
 	tier := s.Headers[env.PrivacyHeader]
-	return s.Gateway && tier != "" && !slices.Contains(s.Privacy, tier) && s.P0()
+	if !s.Gateway || tier == "" || tier == "P0" || !s.P0() {
+		return false
+	}
+	return !slices.Contains(s.Privacy, tier) || (s.MarksP0 && !cloud)
 }
 
 // TrustFull is Hermes's trust for a server it calls without asking first;
@@ -767,7 +776,7 @@ func mcpServers(tools *env.Resolved, cloud bool) (map[string]any, []string) {
 				entry["trust"] = TrustFull
 			}
 			headers := s.Headers
-			if sendsP0(s) {
+			if sendsP0(s, cloud) {
 				headers = maps.Clone(headers)
 				headers[env.PrivacyHeader] = "P0"
 			}

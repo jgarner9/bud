@@ -353,6 +353,10 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rt.logf("router: a call to %s in the history raised a %s request to P0", tool, tier)
 			w.Header().Set(RaisedHeader, ProvenanceRule)
 			tier, raisedToP0 = "P0", true
+		} else if recalled(fields) {
+			rt.logf("router: a private Bud memory record in the history raised a %s request to P0", tier)
+			w.Header().Set(RaisedHeader, MemoryRule)
+			tier, raisedToP0 = "P0", true
 		}
 	}
 	// a conversation raised once stays P0 (Suite D117, D119): its later

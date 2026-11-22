@@ -373,6 +373,28 @@ func TestAGatewayServerOnlyP0MayUseGetsAP0Header(t *testing.T) {
 	}
 }
 
+// JGA-389: memory marks its P0 records, so private Hermes reaches it at P0
+// and can recall every tier, while the cloud profile keeps the device's tier
+func TestAServerThatMarksP0RecordsGetsP0InThePrivateProfileOnly(t *testing.T) {
+	src := `{"bud": {
+		"privacy": "P1",
+		"gateway": "http://127.0.0.1:8790",
+		"mcp": {"memory": {"gateway": true, "privacy": ["P0", "P1", "P2"], "marks_p0": true}}
+	}}`
+	if got := render(t, src); !strings.Contains(got, "  memory:\n    headers:\n      X-Bud-Privacy: \"P0\"\n") {
+		t.Errorf("the private profile:\n%s", got)
+	}
+	in := input(t, src)
+	in.Cloud = true
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(out.Config); !strings.Contains(got, "  memory:\n    headers:\n      X-Bud-Privacy: \"P1\"\n") {
+		t.Errorf("the cloud profile:\n%s", got)
+	}
+}
+
 func TestAWordYAMLWouldReadAsABoolIsQuoted(t *testing.T) {
 	got := render(t, `{"bud": {"hermes": {"x": {"on": 1, "no": "yes", "a b": [], "e": {}}}}}`)
 	for _, want := range []string{`  "on": 1`, `  "no": "yes"`, `  "a b": []`, `  e: {}`} {

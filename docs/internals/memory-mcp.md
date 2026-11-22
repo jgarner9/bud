@@ -25,7 +25,9 @@ memory-mcp holds five memory-service tokens (`BUD_MEMORY_TOKEN_P0`, `_P1`, `_P2`
 | STAGE | P0, P1, P2 | stage | every stage |
 | EMBED | P0, P1, P2 | vector_pending, vector_put | the backfill |
 
-A search uses the token of the session's tier, so the service, not memory-mcp, decides what comes back, and filters before anything leaves it. Staging uses one all-tier token, because the service refuses a record outside a token's tiers and a session may stage a record more private than itself: memory-mcp checks first that the requested privacy is the session's or more private (P0 is the most private), and refuses one less private, since a P0 session's text may hold private data.
+A search uses the token of the session's tier, so the service, not memory-mcp, decides what comes back, and filters before anything leaves it. Each P0 record in a search result starts with `"marker": "bud-p0-record-7c41"` (`registry.P0Marker`), so the router keeps a chat that recalls one local (JGA-389, `router.md`). That is why Hermes's private profile may search at P0: the env fragment marks memory `marks_p0`, and Hermes sends it `P0` instead of the home server's P1, so its chats can recall every tier and what they save is P0 unless the model sets it lower, which the Signal review shows. Before this, Hermes reached memory at P1, so a record saved in a chat that had read the calendar was P1 and a later P1 chat could recall it on Go; records approved before then are worth a look for that.
+
+Staging uses one all-tier token, because the service refuses a record outside a token's tiers and a session may stage a record more private than itself: memory-mcp checks first that the requested privacy is the session's or more private (P0 is the most private), and refuses one less private, since a P0 session's text may hold private data.
 
 ## Embedding
 

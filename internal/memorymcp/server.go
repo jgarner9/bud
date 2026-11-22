@@ -260,7 +260,7 @@ var toolList = []tool{
 			"source":  str("Who is saving it: the runtime, such as hermes or opencode. Lowercase letters, digits and '-'."),
 			"kind":    map[string]any{"type": "string", "enum": []string{"observation", "fact", "summary"}, "description": "observation (something seen), fact (something true to keep) or summary (of a longer exchange)."},
 			"body":    str("The record, written to stand on its own."),
-			"privacy": map[string]any{"type": "string", "enum": registry.Tiers, "description": "P0 private, P1 internal, P2 public. Default this session's tier."},
+			"privacy": map[string]any{"type": "string", "enum": registry.Tiers, "description": "P0 private, P1 internal, P2 public. Default this session's tier. A P0 record comes back only into chats that stay on local models, so give a fact that isn't private P1."},
 		}),
 		Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "idempotentHint": true},
 	},
@@ -268,6 +268,10 @@ var toolList = []tool{
 
 // Result is one search result
 type Result struct {
+	// Marker is registry.P0Marker on a P0 record and empty otherwise. It
+	// comes first, so a runtime that cuts a long result short keeps it
+	// with every record it keeps
+	Marker  string   `json:"marker,omitempty"`
 	ID      int64    `json:"id"`
 	Source  string   `json:"source"`
 	Kind    string   `json:"kind"`
@@ -341,7 +345,11 @@ func (s *Server) search(ctx context.Context, tier string, raw json.RawMessage) (
 func results(recs []memory.Record) []Result {
 	out := []Result{}
 	for _, r := range recs {
-		out = append(out, Result{ID: r.ID, Source: r.Source, Kind: r.Kind, Privacy: r.Privacy, Saved: r.CreatedAt, Matched: r.Matches, Body: r.Body})
+		marker := ""
+		if r.Privacy == "P0" {
+			marker = registry.P0Marker
+		}
+		out = append(out, Result{Marker: marker, ID: r.ID, Source: r.Source, Kind: r.Kind, Privacy: r.Privacy, Saved: r.CreatedAt, Matched: r.Matches, Body: r.Body})
 	}
 
 	return out

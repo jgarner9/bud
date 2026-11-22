@@ -27,6 +27,12 @@
         "search_*": "allow",
         "send_*": "ask"
       }
+    },
+    "memory": {
+      "tools": {
+        "memory_search": "allow",
+        "memory_stage": "allow"
+      }
     }
   }
 }

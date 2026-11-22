@@ -50,7 +50,9 @@ mcp_servers:
     trust: "untrusted"
     url: "http://100.64.0.1:8790/linear/mcp"
   memory:
-    url: "http://100.64.0.1:8798/mcp"
+    headers:
+      X-Bud-Privacy: "P1"
+    url: "http://100.64.0.1:8790/memory/mcp"
   ops:
     url: "http://127.0.0.1:8792/mcp"
 memory:
@@ -65,7 +67,6 @@ platform_toolsets:
     - "code_execution"
     - "web"
     - "browser"
-    - "memory"
     - "session_search"
     - "skills"
     - "cronjob"
@@ -78,7 +79,6 @@ platform_toolsets:
     - "code_execution"
     - "web"
     - "browser"
-    - "memory"
     - "session_search"
     - "skills"
     - "cronjob"
@@ -92,7 +92,6 @@ platform_toolsets:
     - "code_execution"
     - "web"
     - "browser"
-    - "memory"
     - "session_search"
     - "skills"
     - "cronjob"
@@ -105,7 +104,6 @@ platform_toolsets:
     - "code_execution"
     - "web"
     - "browser"
-    - "memory"
     - "session_search"
     - "skills"
     - "cronjob"

@@ -92,9 +92,12 @@
         "url": "http://100.64.0.1:8790/linear/mcp"
       },
       "memory": {
+        "headers": {
+          "X-Bud-Privacy": "P1"
+        },
         "oauth": false,
         "type": "remote",
-        "url": "http://100.64.0.1:8798/mcp"
+        "url": "http://100.64.0.1:8790/memory/mcp"
       },
       "ops": {
         "headers": {

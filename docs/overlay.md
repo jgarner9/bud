@@ -25,7 +25,7 @@ content/plugins/<name>/  personal plugins
 
 ## Your MCP addresses
 
-The public fragments list the MCP servers each profile uses, but not the addresses only your tailnet has: the MCP gateway and Bud memory. Put them in an env fragment such as `env/personal.jsonc`, and add `personal` to each profile's `env` list after the public fragments:
+The public fragments list the MCP servers each profile uses, but not the address only your tailnet has: the MCP gateway's. Bud memory is reached through it, with its approval tiers set here too. Put them in an env fragment such as `env/personal.jsonc`, and add `personal` to each profile's `env` list after the public fragments:
 
 ```jsonc
 {
@@ -34,7 +34,8 @@ The public fragments list the MCP servers each profile uses, but not the address
     // gateway answers only its IP address, so a MagicDNS name is refused here
     "gateway": "http://100.64.0.1:8790",
     "mcp": {
-      "memory": { "url": "http://100.64.0.1:8798/mcp" },
+      // keys carry the "memory_" server prefix, which bud sync strips
+      "memory": { "gateway": true, "approval": { "tools": { "memory_memory_search": "allow", "memory_memory_stage": "allow" } } },
     },
   },
 }

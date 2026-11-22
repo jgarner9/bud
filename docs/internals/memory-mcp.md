@@ -41,5 +41,5 @@ On the cloud build machine (4 vCPUs), with the memory service, the embedding ser
 
 ## Not yet
 
-- Hermes and OpenCode still have their own memory: Hermes's built-in `memory` toolset is on in `content/env/server.jsonc`, with writes staged. Turning it off in favour of these tools, and the cross-runtime check on the home server, are the rest of JGA-313.
-- Devices reach memory through the gateway once the overlay sets `mcp.memory` to `"gateway": true`; the public fragments leave it unset, since the overlay knows the address.
+- Hermes's built-in `memory` toolset is off in `content/env/server.jsonc` (JGA-313), so it remembers through these tools. The cross-runtime check on the home server is the rest of JGA-313.
+- Devices reach memory through the gateway once the overlay sets `mcp.memory` to `"gateway": true` with its `approval` tiers; the public fragments leave it unset, since the overlay knows the address. Hermes has no memory at all without that overlay setting, now that its own is off.

@@ -117,6 +117,13 @@ func TestBuildFollowsCommitsAndReverts(t *testing.T) {
 	if changed, err := b.Build(ctx, false); err != nil || changed {
 		t.Fatalf("an unchanged HEAD rebuilt: %v %v", changed, err)
 	}
+	// a live build that's gone is rebuilt, though status.json still names it
+	if err := os.Remove(b.Current()); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := b.Build(ctx, false); err != nil || !changed || !strings.Contains(live(t, b), "port 8795") {
+		t.Fatalf("a missing live site wasn't rebuilt: %v %v", changed, err)
+	}
 
 	commit(t, r, map[string]string{"content/systems/archie.md": strings.Replace(page, "VERSION", "port 8800", 1)}, "edit")
 	if _, err := b.Build(ctx, false); err != nil {

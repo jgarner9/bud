@@ -177,6 +177,17 @@ func (r Repo) LastHumanEdit(ctx context.Context, file string) (time.Time, error)
 	return time.Time{}, nil
 }
 
+// LastCommit is when anyone, the curator included, last committed to the
+// file, or the zero time when nobody has
+func (r Repo) LastCommit(ctx context.Context, file string) (time.Time, error) {
+	out, err := r.Git(ctx, "log", "-1", "--format=%aI", "--", file)
+	if err != nil || out == "" {
+		return time.Time{}, err
+	}
+
+	return time.Parse(time.RFC3339, out)
+}
+
 // Export writes the content/ and data/ trees of commit into dst, so a build
 // sees only what was committed
 func (r Repo) Export(ctx context.Context, commit, dst string) error {
@@ -257,8 +268,9 @@ func (r Repo) WritePage(rel string, p *Page) error {
 	return atomicfile.WriteFile(target, b, 0o644)
 }
 
-// Pages lists the project and system pages, by path, sorted. A page that
-// doesn't parse is an error, so the curator never rewrites what it can't read
+// Pages lists the project and system pages, by path, sorted. It doesn't
+// parse them: callers read each with ReadPage, which fails on a page that
+// doesn't parse, so the curator never rewrites what it can't read
 func (r Repo) Pages() ([]string, error) {
 	var out []string
 	for _, dir := range Kinds {

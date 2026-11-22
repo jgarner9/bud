@@ -91,6 +91,12 @@ type Status struct {
 // Current is the live site's directory, a link the builder swaps
 func (b *Builder) Current() string { return filepath.Join(b.Dir, "current") }
 
+// live reports whether current points at a build that's there
+func (b *Builder) live() bool {
+	_, err := os.Stat(filepath.Join(b.Current(), "index.html"))
+	return err == nil
+}
+
 func (b *Builder) statusPath() string { return filepath.Join(b.Dir, "status.json") }
 
 // ReadStatus reads the last build's status; none yet is the zero Status
@@ -139,7 +145,8 @@ func (b *Builder) Build(ctx context.Context, force bool) (bool, error) {
 	st.LastChecked = time.Now().UTC()
 	// a commit that failed is tried again after an hour, in case what it
 	// needed (hugo, say) has been fixed since
-	if !force && (head == st.Commit || head == st.Failed && time.Since(st.FailedAt) < retryFailed) {
+	// a live site that's gone (its build removed by hand, say) is rebuilt
+	if !force && (head == st.Commit && b.live() || head == st.Failed && time.Since(st.FailedAt) < retryFailed) {
 		return false, b.writeStatus(st)
 	}
 
@@ -246,6 +253,18 @@ var secretRes = []*regexp.Regexp{
 	regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{20,}`),
 	regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),
 	regexp.MustCompile(`\blin_api_[A-Za-z0-9]{30,}`),
+}
+
+// HasSecret says whether text looks like it holds a credential, so the
+// curator never writes what the site would refuse to publish
+func HasSecret(text string) bool {
+	for _, re := range secretRes {
+		if re.MatchString(text) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // scanSecrets fails on the first file under root/dirs that looks like it holds a secret

@@ -6,7 +6,18 @@
         "delete_*": "ask",
         "list_*": "allow",
         "move_*": "ask"
-      }
+      },
+      "when": [
+        {
+          "tool": "create_event",
+          "effect": "allow",
+          "args": {
+            "attendees": {
+              "empty": true
+            }
+          }
+        }
+      ]
     },
     "linear": {
       "tools": {

@@ -58,6 +58,16 @@ The tiers come from the env fragment's `bud.mcp.<name>.approval` (and `read_only
 
 `tools` maps upstream tool-name globs (`path.Match`, against the upstream's own names such as `save_issue`) to `allow` or `ask`. A tool no glob names asks, so a new upstream tool fails closed; when several globs match, `ask` wins. A bad glob or a value other than `allow` or `ask` fails validation.
 
+**Argument rules (Suite D116).** An optional `when` list tiers a call by its arguments as well as its name. Each rule is `{"tool": <glob>, "effect": "allow" or "ask", "args": {<field>: <condition>}}`, and a condition is one of `{"equals": <JSON value>}` (same type and value; numbers compare by value, lists item by item in order), `{"glob": <glob>}` (a string field), `{"absent": true|false}` (missing or null) or `{"empty": true|false}` (missing, null, `[]` or `""`). A field is a name or a dotted path into nested objects. A rule applies when its tool glob matches and every condition holds; the rules that apply decide over `tools`, the strictest of them winning, so a forbid (`ask`) always beats a permit. A field the matcher can't read (a glob on a number, `empty` on an object, a step of a dotted path that isn't an object) makes the rule ask, and when no rule applies `tools` decides as before. `internal/argrule` is the matcher, shared with the Hermes tier gate, and is a small stdlib one on purpose (the design weighed OPA and Cedar). The arguments it reads are the ones the gateway parsed from the body it forwards byte for byte, a duplicate key's last value included, which is the value every upstream (Go's and Python's JSON) reads too. `equals` is for loosening: a forbid written with `equals` is skipped by any other spelling of the value, so tighten with `glob` or `absent` where that matters. The public `server.jsonc` lets `create_event` with no attendees run alone (the calendar server takes none today, so every create does until it does); an event in a shared calendar notifies the calendar's members, so an overlay with shared calendars adds an `ask` rule naming them. The overlay's mail rule is the other first use, since only it knows Jason's address:
+
+```jsonc
+"mail": { "approval": { "when": [
+  { "tool": "mail_send_message", "effect": "allow", "args": { "to": { "equals": ["me@example.com"] }, "cc": { "empty": true } } }
+] } }
+```
+
+An approval block in a later fragment that sets only `when` adds its rules after the earlier ones and keeps the earlier `tools`; one that sets `tools` replaces the whole block. Needs content format 7.
+
 An asking call goes through `approval.Store.Dispatch` with `approval.SocketReview` (`paths.ReviewSocket`, `paths.ReviewSecret`, the store at `paths.ApprovalStore`), and the HTTP request stays open until Jason answers. The binding is:
 
 - Action `mcp:<server>/<tool>`; target the server name and its upstream URL as scheme://host/path only (no userinfo, query or fragment). Config validation refuses a query string on a server with an `approval` block; put credentials in the `key` header.

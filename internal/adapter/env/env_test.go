@@ -314,3 +314,47 @@ func TestOpenCodeSecretsTakeVariableNamesAndOpReferences(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// Suite D116: when rules render for the gateway with the prefix stripped,
+// and an overlay that sets only when rules adds to the earlier ones and
+// keeps the tools
+func TestWhenRulesStripThePrefixAndAnOverlayAddsToThem(t *testing.T) {
+	r, err := resolve(t,
+		`{"bud": {"mcp": {"mail": {"gateway": true, "privacy": ["P0"], "approval": {
+			"tools": {"mail_read_*": "allow", "mail_send_*": "ask"},
+			"when": [{"tool": "mail_send_*", "effect": "ask", "args": {"bcc": {"absent": false}}}]
+		}}}}}`,
+		`{"bud": {"mcp": {"mail": {"approval": {
+			"when": [{"tool": "mail_send_message", "effect": "allow", "args": {"to": {"equals": ["me@example.com"]}, "cc": {"empty": true}}}]
+		}}}}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.GatewayApprovals()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"read_*": "allow"`, `"send_*": "ask"`, `"tool": "send_*"`, `"tool": "send_message"`, `"me@example.com"`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("missing %s in\n%s", want, b)
+		}
+	}
+	if w := r.Gateway["mail"].When; len(w) != 2 || w[0].Effect != "ask" || w[1].Effect != "allow" {
+		t.Errorf("when = %+v, want the base rule then the overlay's", w)
+	}
+}
+
+func TestBadWhenRulesAreReported(t *testing.T) {
+	for name, c := range map[string]struct{ src, want string }{
+		"no prefix":      {`{"mcp": {"mail": {"gateway": true, "privacy": ["P0"], "approval": {"tools": {}, "when": [{"tool": "send_*", "effect": "allow"}]}}}}`, `bud.mcp.mail.approval.when[0].tool: "send_*" must start with mail_`},
+		"deny":           {`{"mcp": {"mail": {"gateway": true, "privacy": ["P0"], "approval": {"tools": {}, "when": [{"tool": "mail_x", "effect": "deny"}]}}}}`, `when[0].effect: "deny" isn't allow or ask`},
+		"two tests":      {`{"mcp": {"mail": {"gateway": true, "privacy": ["P0"], "approval": {"tools": {}, "when": [{"tool": "mail_x", "effect": "allow", "args": {"to": {"absent": true, "empty": true}}}]}}}}`, `set exactly one`},
+		"tiers terminal": {`{"tiers_when": [{"tool": "terminal", "effect": "allow"}]}`, `bud.tiers_when[0].tool: the terminal is tiered`},
+		"tiers effect":   {`{"tiers_when": [{"tool": "cronjob_manage", "effect": "maybe"}]}`, `bud.tiers_when[0].effect: "maybe" isn't allow or ask or deny`},
+	} {
+		_, err := resolve(t, `{"bud": `+c.src+`}`)
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, c.want)
+		}
+	}
+}

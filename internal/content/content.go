@@ -70,8 +70,10 @@ var skipped = []string{"README.md", FormatName}
 // read of the block refuses. Format 4 (r6b slice 5): servers carry approval
 // and read_only, which render the gateway's approval tiers. Format 5
 // (JGA-377): the bud block carries sandbox_shell, Hermes's terminal rules.
-// Format 6 (JGA-380): privacy rules carry entropy, validate and keywords
-const Format = 6
+// Format 6 (JGA-380): privacy rules carry entropy, validate and keywords.
+// Format 7 (JGA-379): approval blocks carry when rules, and the bud block
+// carries tiers_when, which an older gateway's strict read refuses
+const Format = 7
 
 // Manifest is content.json
 type Manifest struct {

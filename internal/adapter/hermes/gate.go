@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"jgarner.dev/bud/internal/argrule"
 )
 
 // The tier gate (Suite D10, D16, D48): Hermes runs `bud hermes-gate <tiers
@@ -41,6 +43,10 @@ type Tiers struct {
 	// Tools tiers every other tool by name or pattern: an exact name wins,
 	// then the longest pattern that matches, then "*"
 	Tools map[string]string `json:"tools"`
+	// When are argument rules over the same tools (Suite D116): one whose
+	// conditions hold decides over Tools, the strictest winning, and one
+	// whose field can't be read asks. Nothing loosens a deny in Tools
+	When []argrule.Rule `json:"when,omitempty"`
 	// Private are the tool patterns of the servers only private sessions may
 	// use (the calendar): refused to any profile but Hermes's private one,
 	// whatever Tools says (Suite D95)
@@ -112,6 +118,9 @@ func (t *Tiers) Decide(p Payload) Verdict {
 		return t.command(cmd)
 	}
 	effect, ok := t.tool(p.Tool)
+	if when, applies := argrule.ApplyFields(t.When, p.Tool, p.Input); applies && (!ok || effect != Deny) {
+		return verdict(when, p.Tool)
+	}
 	if !ok {
 		return Verdict{Ask, fmt.Sprintf("bud: no tier is set for %s, so it needs your approval", p.Tool)}
 	}

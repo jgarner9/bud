@@ -463,3 +463,132 @@ func TestWithARouterThePrivateProfileAsksItForTheManager(t *testing.T) {
 		t.Errorf("the cloud profile still names its providers itself:\n%s", c)
 	}
 }
+
+// Suite D114: bud.sandbox_shell replaces the permission shell rules in the
+// gate's tiers, while Hermes still refuses every shell deny of both sets
+func TestTheSandboxShellReplacesTheShellRulesForTheGate(t *testing.T) {
+	out, err := Render(input(t, `{"permissions": [
+		{"action": "shell", "resource": "*", "effect": "ask"},
+		{"action": "shell", "resource": "op *", "effect": "deny"}
+	]}`, `{"bud": {"sandbox_shell": [
+		{"resource": "*", "effect": "allow"},
+		{"resource": "git push *", "effect": "ask"},
+		{"resource": "op *", "effect": "deny"},
+		{"resource": "rm -rf /", "effect": "deny"}
+	]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tiers Tiers
+	if err := json.Unmarshal(out.Tiers, &tiers); err != nil {
+		t.Fatal(err)
+	}
+	want := []Rule{{"shell", "*", Allow}, {"shell", "git push *", Ask}, {"shell", "op *", Deny}, {"shell", "rm -rf /", Deny}}
+	if !slices.Equal(tiers.Shell, want) {
+		t.Errorf("the tiers' shell rules: %+v, want %+v", tiers.Shell, want)
+	}
+	if got := string(out.Config); !strings.Contains(got, "  deny:\n    - \"op *\"\n    - \"rm -rf /\"\n") {
+		t.Errorf("Hermes should refuse each deny once:\n%s", got)
+	}
+}
+
+func TestABadSandboxShellRuleIsRefused(t *testing.T) {
+	for src, want := range map[string]string{
+		`{"bud": {"sandbox_shell": [{"resource": "ls", "effect": "maybe"}]}}`: `"maybe" isn't allow, ask or deny`,
+		`{"bud": {"sandbox_shell": [{"resource": " ", "effect": "ask"}]}}`:    "the resource is a command glob",
+		`{"bud": {"sandbox_shell": [{"command": "ls", "effect": "ask"}]}}`:    "unknown field",
+	} {
+		if _, err := Render(input(t, src)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: got %v, want %q", src, err, want)
+		}
+	}
+}
+
+// an empty sandbox_shell keeps the permission shell rules, as an unset one does
+func TestAnEmptySandboxShellKeepsTheShellRules(t *testing.T) {
+	out, err := Render(input(t, `{"permissions": [
+		{"action": "shell", "resource": "*", "effect": "ask"},
+		{"action": "shell", "resource": "op *", "effect": "deny"}
+	]}`, `{"bud": {"sandbox_shell": []}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tiers Tiers
+	if err := json.Unmarshal(out.Tiers, &tiers); err != nil {
+		t.Fatal(err)
+	}
+	want := []Rule{{"shell", "*", Ask}, {"shell", "op *", Deny}}
+	if !slices.Equal(tiers.Shell, want) {
+		t.Errorf("the tiers' shell rules: %+v, want %+v", tiers.Shell, want)
+	}
+}
+
+// Suite D115: a gateway server with an approval block is trusted in Hermes,
+// so a write asks once, at the gateway. Others keep their trust, and a
+// fragment can still mark one untrusted
+func TestGatewayReviewedServersAreTrustedInHermes(t *testing.T) {
+	out, err := Render(input(t, `{"bud": {
+		"privacy": "P1",
+		"gateway": "http://127.0.0.1:8790",
+		"mcp": {
+			"linear": {"gateway": true, "privacy": ["P1"], "approval": {"tools": {"linear_get_*": "allow"}}},
+			"calendar": {"gateway": true, "privacy": ["P0"], "approval": {"tools": {"calendar_list_*": "allow"}}},
+			"exa": {"gateway": true, "privacy": ["P1"], "read_only": true},
+			"github": {"url": "https://api.example.com/mcp", "privacy": ["P1"]}
+		},
+		"hermes": {"mcp_servers": {"github": {"trust": "untrusted"}}}
+	}}`, `{"bud": {"hermes": {"mcp_servers": {"calendar": {"trust": "untrusted"}}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out.Config)
+	for _, want := range []string{
+		"  linear:\n    headers:\n      X-Bud-Privacy: \"P1\"\n    trust: \"full\"\n",
+		"  calendar:\n    headers:\n      X-Bud-Privacy: \"P0\"\n    trust: \"untrusted\"\n", // the overlay's choice stands
+		"  github:\n    trust: \"untrusted\"\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lacks:\n%s\nin:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "  exa:\n    headers:\n      X-Bud-Privacy: \"P1\"\n    trust:") {
+		t.Errorf("a read_only server has no review at the gateway, so it keeps Hermes's default:\n%s", got)
+	}
+	var tiers Tiers
+	if err := json.Unmarshal(out.Tiers, &tiers); err != nil {
+		t.Fatal(err)
+	}
+	// exa has no trust set, which Hermes reads as full, so doctor checks it too
+	if !slices.Equal(tiers.Trusted, []string{"exa", "linear"}) {
+		t.Errorf("trusted: %q", tiers.Trusted)
+	}
+}
+
+// Suite D119: the router's list holds every server only P0 may use, left
+// out of this device or not, and nothing a P1 session may use
+func TestTheRouterGetsTheP0OnlyServers(t *testing.T) {
+	out, err := Render(input(t, `{"bud": {
+		"privacy": "P1",
+		"gateway": "http://127.0.0.1:8790",
+		"mcp": {
+			"calendar": {"gateway": true, "privacy": ["P0"]},
+			"mail": {"gateway": true, "privacy": ["P0"], "disabled": true},
+			"notes": {"privacy": ["P0"]},
+			"memory": {"gateway": true, "privacy": ["P0", "P1", "P2"]},
+			"linear": {"gateway": true, "privacy": ["P1"]}
+		}
+	}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(out.RouterP0Servers), "{\n  \"servers\": [\n    \"calendar\",\n    \"mail\",\n    \"notes\"\n  ]\n}\n"; got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	empty, err := Render(input(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(empty.RouterP0Servers); got != "{\n  \"servers\": []\n}\n" {
+		t.Errorf("with no servers: %s", got)
+	}
+}

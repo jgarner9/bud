@@ -64,11 +64,16 @@
       // read-only, and its answers never leave the house, so P0 may use it
       "ops": { "url": "http://127.0.0.1:8792/mcp", "privacy": ["P0", "P1", "P2"] },
       // bud calendar-mcp, server/calendar-mcp/ (D82)
-      // listing runs alone; creating, moving and deleting events ask
+      // listing runs alone; creating, moving and deleting events ask. An
+      // event with no attendees runs alone (Suite D116), since it sends no
+      // invites; one with attendees, or a field the gateway can't read, asks
       "calendar": {
         "gateway": true,
         "privacy": ["P0"],
-        "approval": { "tools": { "calendar_list_*": "allow", "calendar_create_*": "ask", "calendar_move_*": "ask", "calendar_delete_*": "ask" } },
+        "approval": {
+          "tools": { "calendar_list_*": "allow", "calendar_create_*": "ask", "calendar_move_*": "ask", "calendar_delete_*": "ask" },
+          "when": [{ "tool": "calendar_create_event", "effect": "allow", "args": { "attendees": { "empty": true } } }],
+        },
       },
       // bud mail-mcp, server/mail-mcp/ (D106): reading, moving to Deleted
       // Messages and restoring run alone (D36); every send and reply asks
@@ -79,10 +84,47 @@
         "approval": { "tools": { "mail_list_*": "allow", "mail_search_*": "allow", "mail_read_*": "allow", "mail_move_to_trash": "allow", "mail_restore_*": "allow", "mail_cleanup_*": "allow", "mail_send_*": "ask", "mail_reply_*": "ask" } },
       },
     },
+    // Hermes's terminal runs in its Docker sandbox, which can't reach the
+    // host, the vault or bud's files, so a command runs alone unless it
+    // reaches out of the sandbox (D114): pushes, remote shells and copies,
+    // and publishing. The coding devices keep base.jsonc's shell rules.
+    // bud hermes-gate also reads a command through env, sudo, sh -c, eval,
+    // $( ) and a path such as /usr/bin/git, so those don't dodge a rule.
+    // Your overlay's rules come after these, and the last match wins
+    "sandbox_shell": [
+      { "resource": "*", "effect": "allow" },
+      { "resource": "git push", "effect": "ask" },
+      { "resource": "git push *", "effect": "ask" },
+      { "resource": "ssh", "effect": "ask" },
+      { "resource": "ssh *", "effect": "ask" },
+      { "resource": "scp", "effect": "ask" },
+      { "resource": "scp *", "effect": "ask" },
+      { "resource": "sftp", "effect": "ask" },
+      { "resource": "sftp *", "effect": "ask" },
+      { "resource": "rsync", "effect": "ask" },
+      { "resource": "rsync *", "effect": "ask" },
+      { "resource": "npm publish", "effect": "ask" },
+      { "resource": "npm publish *", "effect": "ask" },
+      { "resource": "pnpm publish", "effect": "ask" },
+      { "resource": "pnpm publish *", "effect": "ask" },
+      { "resource": "yarn publish", "effect": "ask" },
+      { "resource": "yarn publish *", "effect": "ask" },
+      { "resource": "cargo publish", "effect": "ask" },
+      { "resource": "cargo publish *", "effect": "ask" },
+      { "resource": "twine upload", "effect": "ask" },
+      { "resource": "twine upload *", "effect": "ask" },
+      { "resource": "docker push", "effect": "ask" },
+      { "resource": "docker push *", "effect": "ask" },
+      { "resource": "gh release", "effect": "ask" },
+      { "resource": "gh release *", "effect": "ask" },
+      // never: the agent doesn't touch the secrets store (D7)
+      { "resource": "op", "effect": "deny" },
+      { "resource": "op *", "effect": "deny" },
+    ],
     // Hermes's own tools by action tier (D10, D48), read by bud hermes-gate
-    // before every call; terminal commands follow the shell rules in
-    // base.jsonc. allow runs alone, ask waits for Jason's approval, deny is
-    // refused. A tool not listed asks
+    // before every call; terminal commands follow sandbox_shell above.
+    // allow runs alone, ask waits for Jason's approval, deny is refused. A
+    // tool not listed asks
     "tiers": {
       "*": "ask",
       // reading, searching and planning
@@ -107,7 +149,8 @@
       "memory": "deny",
       "skill_manage": "allow",
       // creating or changing a job asks first (tool map); one tool does both
-      // reading and writing jobs, so it all asks
+      // reading and writing jobs, so it asks unless tiers_when below lets
+      // its listing through
       "cronjob_manage": "ask",
       // one tool both reads pages and submits forms, so it asks; the vault
       // stays off (D10)
@@ -116,10 +159,18 @@
       "browser_dialog": "ask",
       "browser_vault": "deny",
       "computer_use": "deny",
-      // MCP tools run alone here: Hermes itself asks before any tool on an
-      // untrusted server (below) that isn't marked read-only
+      // MCP tools run alone here: the gateway asks for Linear, calendar
+      // and mail writes, and Hermes itself before any GitHub tool that isn't
+      // marked read-only (below)
       "mcp__*": "allow",
     },
+    // when rules over the tiers above (Suite D116): a rule whose argument
+    // conditions hold decides over the tool's tier, the strictest winning,
+    // and nothing loosens a deny. Listing cron jobs only reads, so it runs
+    // alone; any other action, or an action the gate can't read, still asks
+    "tiers_when": [
+      { "tool": "cronjob_manage", "effect": "allow", "args": { "action": { "equals": "list" } } },
+    ],
     "hermes": {
       // the built-in toolsets per platform, from the tool map. Off: tts,
       // computer_use, image_gen, video, x_search, kanban, discord, feishu,
@@ -132,16 +183,13 @@
         "cron": ["terminal", "file", "code_execution", "web", "browser", "session_search", "skills", "cronjob", "delegation", "todo", "vision"],
       },
       "web": { "backend": "exa", "search_backend": "searxng", "extract_backend": "exa", "keyless_fallback": false },
-      // Hermes asks before any tool on these that isn't marked read-only
+      // Hermes asks before any tool on these that isn't marked read-only.
+      // Linear, the calendar and mail aren't listed: the gateway asks for
+      // their writes, bound to the exact arguments, so bud sync renders them
+      // trusted and each write asks once (D115). GitHub doesn't go through
+      // the gateway, so Hermes keeps asking for it
       "mcp_servers": {
-        "linear": { "trust": "untrusted" },
         "github": { "trust": "untrusted" },
-        // reads are marked read-only and run alone; creating, moving and
-        // deleting events ask by phone (D82)
-        "calendar": { "trust": "untrusted" },
-        // reads, moves to the trash and restores are marked read-only and
-        // run alone; sends and replies ask (D31, D36)
-        "mail": { "trust": "untrusted" },
       },
     },
   },

@@ -287,6 +287,18 @@ func TestAMemoryApprovalShowsTheWholeRecord(t *testing.T) {
 	}
 }
 
+// the weekly digest is shown whole, however long, and the proposal ids
+// that only bind the approval are left out
+func TestTheImproveDigestShowsTheWholeDigest(t *testing.T) {
+	digest := strings.Repeat("a proposal line that is long enough ", 8) + "\nyes 1234"
+	args, _ := json.Marshal(map[string]any{"digest": digest, "proposals": []string{"p1", "p2"}})
+	got := Summary(Prompt{Invocation: Invocation{Action: "improve:digest", Target: "github", Arguments: args}})
+	want := "Open this week's Bud proposals as draft PRs?\ndigest:\n│ " + strings.Split(digest, "\n")[0] + "\n│ yes 1234"
+	if got != want {
+		t.Errorf("summary:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestMaxSummaryMatchesTheSignalPlugin(t *testing.T) {
 	b, err := os.ReadFile("../../server/hermes/plugins/bud-signal/reviewer.py")
 	if err != nil {

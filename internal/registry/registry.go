@@ -94,6 +94,17 @@ type PrivacyRule struct {
 	// Tier is P0 or P1: what a matching request becomes, unless it is
 	// already more private
 	Tier string `json:"tier"`
+	// Entropy, when set, is the Shannon entropy in bits per character the
+	// matched secret must be over, as in gitleaks' rules, so a placeholder
+	// such as AKIAXXXXXXXXXXXXXXXX doesn't count (Suite D118)
+	Entropy float64 `json:"entropy,omitempty"`
+	// Validate, when set, names a check in Validators the matched text must
+	// also pass: luhn (card numbers), iban, ssn or phone (Suite D118)
+	Validate string `json:"validate,omitempty"`
+	// Keywords, when set, are words one of which must be in the text, in
+	// any case, before the pattern is tried, as in gitleaks' rules: a
+	// substring check is far cheaper than a regular expression
+	Keywords []string `json:"keywords,omitempty"`
 }
 
 // Provider is an endpoint models are served from
@@ -433,6 +444,17 @@ func checkPrivacyRule(name string, rule PrivacyRule, add func(string, ...any)) {
 		add("%s: match is empty; give it a regular expression", at)
 	} else if _, err := regexp.Compile(rule.Match); err != nil {
 		add("%s: match doesn't compile: %v; it is Go's RE2 syntax", at, err)
+	}
+	if rule.Entropy < 0 || rule.Entropy > 8 {
+		add("%s: entropy is %v; it is bits per character, between 0 and 8", at, rule.Entropy)
+	}
+	for _, k := range rule.Keywords {
+		if k == "" || k != strings.ToLower(k) {
+			add("%s: keyword %q must be lowercase and not empty; they match in any case", at, k)
+		}
+	}
+	if _, ok := Validators[rule.Validate]; rule.Validate != "" && !ok {
+		add("%s: validate is %q; use luhn, iban, ssn or phone", at, rule.Validate)
 	}
 	switch rule.Tier {
 	case "P0", "P1":

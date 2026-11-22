@@ -200,12 +200,22 @@ func (p *Paths) MailActions() string { return filepath.Join(p.State, "mail-actio
 // RunLogs holds private logs from bud run.
 func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }
 
+// RouterP0Servers lists the MCP servers only P0 sessions may use, which bud
+// sync renders from the env fragments for the router's provenance rule
+// (Suite D119)
+func (p *Paths) RouterP0Servers() string { return filepath.Join(p.State, "router-p0-servers.json") }
+
 // RouterSpend is the router's spend ledger (Suite D24, D64)
 func (p *Paths) RouterSpend() string { return filepath.Join(p.State, "router-spend.json") }
 
 // MemoryReviewStatus is where bud memory-review writes how many memory
 // records wait on review, for the ops reviews tool
 func (p *Paths) MemoryReviewStatus() string { return filepath.Join(p.State, "memory-review.json") }
+
+// ImproveState is bud improve's queue of proposals, daily measurements and
+// digest state (Suite D125), private since overlay proposals hold the
+// overlay's files
+func (p *Paths) ImproveState() string { return filepath.Join(p.State, "improve.json") }
 
 // MCPGatewayApprovals is the per-server approval tiers bud sync renders from
 // the env fragments; the gateway reads it from beside its own config

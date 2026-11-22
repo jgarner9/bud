@@ -204,6 +204,13 @@ var titles = map[string]struct {
 		title: func(string) string { return "Save this to Bud memory? A no deletes it." },
 		whole: []string{"body"},
 	},
+	// the weekly self-improvement digest (internal/improve): the whole
+	// digest, since a yes opens every proposal it lists as a draft PR
+	"improve:digest": {
+		title: func(string) string { return "Open this week's Bud proposals as draft PRs?" },
+		whole: []string{"digest"},
+		hide:  []string{"proposals"},
+	},
 	"router:p0-fallback": {
 		title: func(t string) string {
 			return "The local model is down. Send this private (P0) chat to " + t + " instead?"

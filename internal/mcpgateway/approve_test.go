@@ -2,6 +2,7 @@ package mcpgateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -13,17 +14,22 @@ import (
 	"time"
 
 	"jgarner.dev/bud/internal/approval"
+	"jgarner.dev/bud/internal/argrule"
 )
 
 // approvalGateway is newGateway with an approval block: get_* is allowed and
 // everything else asks. review stands in for the Signal reviewer
 func approvalGateway(t *testing.T, upstreamURL string, review approval.Review) (*Gateway, string, approval.Store) {
 	t.Helper()
+	return approvalGatewayWith(t, upstreamURL, review, &Approval{Tools: map[string]string{"get_*": "allow", "list_*": "allow"}})
+}
+
+// approvalGatewayWith is approvalGateway with the approval block given; the
+// server is still named linear, at P1
+func approvalGatewayWith(t *testing.T, upstreamURL string, review approval.Review, appr *Approval) (*Gateway, string, approval.Store) {
+	t.Helper()
 	c := &Config{Listen: "127.0.0.1:0", Servers: map[string]Server{
-		"linear": {
-			URL: upstreamURL + "/mcp", Privacy: []string{"P1"},
-			Approval: &Approval{Tools: map[string]string{"get_*": "allow", "list_*": "allow"}},
-		},
+		"linear": {URL: upstreamURL + "/mcp", Privacy: []string{"P1"}, Approval: appr},
 	}}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
@@ -263,7 +269,7 @@ func TestServerWithoutAnApprovalBlockIsUnchanged(t *testing.T) {
 func TestApprovalGlobsFailClosedAndAskWins(t *testing.T) {
 	a := &Approval{Tools: map[string]string{"get_*": "allow", "get_secret": "ask", "list_*": "allow"}}
 	for tool, want := range map[string]bool{"get_issue": false, "get_secret": true, "list_x": false, "save_issue": true, "": true} {
-		if got := a.Asks(tool); got != want {
+		if got := a.Asks(tool, nil); got != want {
 			t.Errorf("Asks(%q) = %v, want %v", tool, got, want)
 		}
 	}
@@ -303,5 +309,67 @@ func TestReviewTargetExcludesUserinfoQueryAndFragment(t *testing.T) {
 	}
 	if got, want := (&upstream{url: u}).publicURL(), "https://example.com/mcp"; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// Suite D116: a when rule lets an event with no attendees, or mail only to
+// Jason, through unreviewed; anything else still waits for a review, which
+// is down here, so it's refused
+func TestWhenRulesLetOnlyTheNamedArgumentShapesThroughUnreviewed(t *testing.T) {
+	yes := true
+	appr := &Approval{
+		Tools: map[string]string{"list_*": "allow", "create_*": "ask", "send_*": "ask"},
+		When: []argrule.Rule{
+			{Tool: "create_event", Effect: argrule.Allow, Args: map[string]argrule.Condition{"attendees": {Empty: &yes}}},
+			{Tool: "send_message", Effect: argrule.Allow, Args: map[string]argrule.Condition{
+				"to": {Equals: json.RawMessage(`["me@example.com"]`)},
+				"cc": {Empty: &yes},
+			}},
+		},
+	}
+	cases := []struct {
+		name, args string
+		tool       string
+		through    bool
+	}{
+		{"event alone", `{"title":"Dentist","start":"2026-11-23T09:00"}`, "create_event", true},
+		{"event with attendees", `{"title":"Lunch","attendees":["sam@example.com"]}`, "create_event", false},
+		{"event with odd attendees", `{"title":"Lunch","attendees":"sam@example.com"}`, "create_event", false},
+		{"mail to me", `{"to":["me@example.com"],"subject":"s","body":"b"}`, "send_message", true},
+		{"mail to me, cc sam", `{"to":["me@example.com"],"cc":["sam@example.com"],"subject":"s","body":"b"}`, "send_message", false},
+		{"mail to sam", `{"to":["sam@example.com"],"subject":"s","body":"b"}`, "send_message", false},
+		{"mail to me, then sam", `{"to":["me@example.com"],"to":["sam@example.com"],"subject":"s","body":"b"}`, "send_message", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			up, got := fakeUpstream(t)
+			g, logPath, _ := approvalGatewayWith(t, up.URL, nil, appr)
+			body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + c.tool + `","arguments":` + c.args + `}}`
+			w := call(g, "P1", body)
+			if !c.through {
+				noUpstream(t, got)
+				wantRefusal(t, w, "unavailable")
+				if d := lastDecision(t, logPath); d != "unavailable" {
+					t.Errorf("decision %q", d)
+				}
+				return
+			}
+			if s := <-got; s.body != body {
+				t.Errorf("upstream got %q, want %q", s.body, body)
+			}
+		})
+	}
+}
+
+func TestAConfigWithABadWhenRuleIsRefused(t *testing.T) {
+	c := &Config{Listen: "127.0.0.1:0", Servers: map[string]Server{
+		"linear": {URL: "http://127.0.0.1:1/mcp", Privacy: []string{"P1"}, Approval: &Approval{
+			Tools: map[string]string{"*": "ask"},
+			When:  []argrule.Rule{{Tool: "save_issue", Effect: "deny"}},
+		}},
+	}}
+	err := c.Validate()
+	if err == nil || !strings.Contains(err.Error(), `servers.linear.approval.when[0].effect: "deny" isn't allow or ask`) {
+		t.Fatalf("err = %v", err)
 	}
 }

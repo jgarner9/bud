@@ -68,8 +68,12 @@ var skipped = []string{"README.md", FormatName}
 // older bud would pass into opencode.jsonc as it is. Format 3 (JGA-290): the
 // bud block carries tiers, Hermes's tool tiers, which an older bud's strict
 // read of the block refuses. Format 4 (r6b slice 5): servers carry approval
-// and read_only, which render the gateway's approval tiers
-const Format = 4
+// and read_only, which render the gateway's approval tiers. Format 5
+// (JGA-377): the bud block carries sandbox_shell, Hermes's terminal rules.
+// Format 6 (JGA-380): privacy rules carry entropy, validate and keywords.
+// Format 7 (JGA-379): approval blocks carry when rules, and the bud block
+// carries tiers_when, which an older gateway's strict read refuses
+const Format = 7
 
 // Manifest is content.json
 type Manifest struct {

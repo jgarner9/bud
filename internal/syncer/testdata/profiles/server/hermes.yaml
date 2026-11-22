@@ -28,7 +28,7 @@ mcp_servers:
   calendar:
     headers:
       X-Bud-Privacy: "P0"
-    trust: "untrusted"
+    trust: "full"
     url: "http://100.64.0.1:8790/calendar/mcp"
   context7:
     url: "https://mcp.context7.com/mcp"
@@ -40,16 +40,17 @@ mcp_servers:
   linear:
     headers:
       X-Bud-Privacy: "P1"
-    trust: "untrusted"
+    trust: "full"
     url: "http://100.64.0.1:8790/linear/mcp"
   mail:
     headers:
       X-Bud-Privacy: "P0"
-    trust: "untrusted"
+    trust: "full"
     url: "http://100.64.0.1:8790/mail/mcp"
   memory:
     headers:
       X-Bud-Privacy: "P1"
+    trust: "full"
     url: "http://100.64.0.1:8790/memory/mcp"
   ops:
     url: "http://127.0.0.1:8792/mcp"

@@ -35,7 +35,13 @@ func (g *Gateway) holdForApproval(w http.ResponseWriter, r *http.Request, up *up
 	}
 	var asked []message
 	for _, m := range msgs {
-		if m.Method == "tools/call" && up.approval.Asks(m.Params.Name) {
+		if m.Method != "tools/call" {
+			continue
+		}
+		// the parse kept each argument's raw bytes, and a duplicate key's
+		// last value, as the upstream reads it
+		args, _ := json.Marshal(m.Params.Arguments)
+		if up.approval.Asks(m.Params.Name, args) {
 			asked = append(asked, m)
 		}
 	}

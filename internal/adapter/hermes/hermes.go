@@ -102,6 +102,9 @@ type Output struct {
 	Tiers  []byte
 	// GatewayApprovals is the MCP gateway's approvals file (env.Resolved.GatewayApprovals), nil when no gateway server is declared
 	GatewayApprovals []byte
+	// RouterP0Servers is the router's list of the servers only P0 sessions
+	// may use (env.Resolved.RouterP0Servers, Suite D119)
+	RouterP0Servers []byte
 	// Notes say what was left out and why
 	Notes []string
 	// CloudKeys are the variables that hold the keys of the providers left
@@ -162,14 +165,25 @@ func Render(in Input) (*Output, error) {
 	}
 	out.Notes = append(out.Notes, notes...)
 
+	// the gate tiers the sandboxed terminal by bud.sandbox_shell when a
+	// fragment sets it (Suite D114), else by the permission shell rules.
+	// Hermes itself refuses every shell deny in either set
 	var shell []Rule
 	denied := []any{}
 	for _, r := range rules {
 		if r.Action != "shell" {
 			continue
 		}
-		shell = append(shell, r)
+		if len(tools.SandboxShell) == 0 {
+			shell = append(shell, r)
+		}
 		if r.Effect == Deny {
+			denied = append(denied, r.Resource)
+		}
+	}
+	for _, r := range tools.SandboxShell {
+		shell = append(shell, Rule{Action: "shell", Resource: r.Resource, Effect: r.Effect})
+		if r.Effect == Deny && !slices.Contains(denied, any(r.Resource)) {
 			denied = append(denied, r.Resource)
 		}
 	}
@@ -275,7 +289,7 @@ func Render(in Input) (*Output, error) {
 	}
 	out.Config = []byte(b.String())
 
-	t := Tiers{Shell: shell, Tools: tools.Tiers, Private: privateTools(tools)}
+	t := Tiers{Shell: shell, Tools: tools.Tiers, When: tools.TiersWhen, Private: privateTools(tools), Trusted: trustedGateway(tools, cfg)}
 	if t.Shell == nil {
 		t.Shell = []Rule{}
 	}
@@ -288,6 +302,9 @@ func Render(in Input) (*Output, error) {
 	}
 	out.Tiers = append(tb, '\n')
 	if out.GatewayApprovals, err = tools.GatewayApprovals(); err != nil {
+		return nil, err
+	}
+	if out.RouterP0Servers, err = tools.RouterP0Servers(); err != nil {
 		return nil, err
 	}
 
@@ -660,6 +677,30 @@ func sendsP0(s env.Server) bool {
 	return s.Gateway && tier != "" && !slices.Contains(s.Privacy, tier) && s.P0()
 }
 
+// TrustFull is Hermes's trust for a server it calls without asking first;
+// "untrusted" asks before any tool not marked read-only, and an unset trust
+// is full
+const TrustFull = "full"
+
+// trustedGateway are the gateway servers in the rendered config that Hermes
+// trusts, sorted: those whose trust, after the fragments' extras, isn't
+// "untrusted"
+func trustedGateway(tools *env.Resolved, cfg map[string]any) []string {
+	servers, _ := cfg["mcp_servers"].(map[string]any)
+	out := []string{} // always written, so bud doctor can tell a file from before D115
+	for _, name := range tools.Names() {
+		entry, ok := servers[name].(map[string]any)
+		if !ok || !tools.Servers[name].Gateway {
+			continue
+		}
+		if trust, _ := entry["trust"].(string); trust == "" || trust == TrustFull {
+			out = append(out, name)
+		}
+	}
+
+	return out
+}
+
 // privateTools are the tool patterns of the servers only private sessions
 // may use, which the gate refuses outside the private profile
 func privateTools(tools *env.Resolved) []string {
@@ -691,6 +732,12 @@ func mcpServers(tools *env.Resolved, cloud bool) (map[string]any, []string) {
 		var entry map[string]any
 		if s.Remote() {
 			entry = map[string]any{"url": hermesRefs(s.URL)}
+			if s.Gateway && s.Approval != nil {
+				// the gateway asks for this server's writes, bound to the
+				// exact arguments (D103), so Hermes's own untrusted-server
+				// prompt would only ask a second time (Suite D115)
+				entry["trust"] = TrustFull
+			}
 			headers := s.Headers
 			if sendsP0(s) {
 				headers = maps.Clone(headers)

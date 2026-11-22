@@ -151,7 +151,7 @@ func TestAnEmptyRenderedToolsBlockAsksEverything(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !c.Servers["linear"].Approval.Asks("get_issue") {
+	if !c.Servers["linear"].Approval.Asks("get_issue", nil) {
 		t.Error("an empty tools block let a call through without asking")
 	}
 }
@@ -167,7 +167,7 @@ func TestReadLaysTheRenderedApprovalsOverTheServers(t *testing.T) {
 	if _, err := Read(p); err == nil || !strings.Contains(err.Error(), "servers.linear.approval") {
 		t.Fatalf("before sync: %v", err)
 	}
-	rendered := `{"servers":{"linear":{"tools":{"get_*":"allow"}},"exa":{"read_only":true},"gone":{"read_only":true}}}`
+	rendered := `{"servers":{"linear":{"tools":{"get_*":"allow"},"when":[{"tool":"save_issue","effect":"allow","args":{"id":{"absent":false}}}]},"exa":{"read_only":true},"gone":{"read_only":true}}}`
 	if err := os.WriteFile(filepath.Join(dir, "mcp-gateway-approvals.json"), []byte(rendered), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,11 @@ func TestReadLaysTheRenderedApprovalsOverTheServers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Servers["linear"].Approval.Asks("get_issue") || !c.Servers["linear"].Approval.Asks("save_issue") || !c.Servers["exa"].ReadOnly {
+	if c.Servers["linear"].Approval.Asks("get_issue", nil) || !c.Servers["linear"].Approval.Asks("save_issue", nil) || !c.Servers["exa"].ReadOnly {
+		t.Errorf("servers %+v", c.Servers)
+	}
+	// the when rule came through too
+	if c.Servers["linear"].Approval.Asks("save_issue", []byte(`{"id":"X-1"}`)) {
 		t.Errorf("servers %+v", c.Servers)
 	}
 }

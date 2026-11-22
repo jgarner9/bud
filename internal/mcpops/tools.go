@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/doctor"
+	"jgarner.dev/bud/internal/improve"
 	"jgarner.dev/bud/internal/memoryreview"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/registry"
@@ -85,7 +87,7 @@ func Tools(src Sources) []Tool {
 		},
 		{
 			Name:        "reviews",
-			Description: "Counts the memory records waiting on Jason's review (staged by an agent, not yet searchable), by privacy tier, as bud memory-review last counted them, with how many are on his phone now and how many are too long to ask about on Signal. Counts only: no bodies. Hermes's own staged skill writes aren't counted. Read-only.",
+			Description: "Counts the memory records waiting on Jason's review (staged by an agent, not yet searchable), by privacy tier, as bud memory-review last counted them, with how many are on his phone now and how many are too long to ask about on Signal. Counts only: no bodies. Also counts bud improve's proposals by status (new ones wait for the weekly digest, open ones are draft pull requests waiting on Jason). Hermes's own staged skill writes aren't counted. Read-only.",
 			Run: func(_ context.Context, args json.RawMessage) (any, error) {
 				if err := decodeArgs(args, &struct{}{}); err != nil {
 					return nil, err
@@ -114,6 +116,9 @@ type reviewsOut struct {
 	Memory *memoryReviews `json:"memory"`
 	Note   string         `json:"note,omitempty"`
 	Skills string         `json:"skills"`
+	// Proposals counts bud improve's proposals by status; nil before it
+	// ever ran
+	Proposals map[string]int `json:"proposals"`
 }
 
 // pendingReviews reads the counts bud memory-review writes each minute
@@ -123,6 +128,16 @@ func pendingReviews(resolve func() (*paths.Paths, error), now time.Time) (review
 		return reviewsOut{}, err
 	}
 	out := reviewsOut{Skills: "Hermes keeps its own staged skill writes; this tool can't count them yet."}
+	if _, err := os.Stat(p.ImproveState()); err == nil {
+		st, err := improve.Load(p.ImproveState())
+		if err != nil {
+			return reviewsOut{}, err
+		}
+		out.Proposals = map[string]int{}
+		for _, pr := range st.Proposals {
+			out.Proposals[pr.Status]++
+		}
+	}
 	st, ok, err := memoryreview.ReadStatus(p.MemoryReviewStatus())
 	if err != nil {
 		return reviewsOut{}, fmt.Errorf("read memory review's count: %w", err)

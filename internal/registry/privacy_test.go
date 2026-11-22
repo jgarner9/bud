@@ -2,6 +2,7 @@ package registry
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -44,7 +45,7 @@ func TestAnOverlayPrivacyRuleReplacesByNameAndNewOnesAreAdded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.PrivacyRules["keep"].Match != "a" || got.PrivacyRules["replace"] != (PrivacyRule{Match: "c", Tier: "P0"}) || got.PrivacyRules["new"].Match != "d" {
+	if got.PrivacyRules["keep"].Match != "a" || !reflect.DeepEqual(got.PrivacyRules["replace"], PrivacyRule{Match: "c", Tier: "P0"}) || got.PrivacyRules["new"].Match != "d" {
 		t.Fatalf("rules = %+v", got.PrivacyRules)
 	}
 	if base.PrivacyRules["replace"].Match != "b" {

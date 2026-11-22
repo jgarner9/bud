@@ -86,6 +86,18 @@ func TestChatExtractorFallsThrough(t *testing.T) {
 		t.Fatalf("facts %+v, err %v, asked %v", facts, err, asked)
 	}
 
+	// a redirect is never followed, so a record can't leave for another host
+	var away bool
+	cloud := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { away = true }))
+	defer cloud.Close()
+	moved := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, cloud.URL+"/v1/chat/completions", http.StatusTemporaryRedirect)
+	}))
+	defer moved.Close()
+	if _, err := ChatExtractor([]Endpoint{{URL: moved.URL + "/v1", Model: "m"}}, nil)(context.Background(), rec, nil); err == nil || away {
+		t.Errorf("redirect: err %v, reached the other host %v", err, away)
+	}
+
 	ex = ChatExtractor([]Endpoint{{URL: srv.URL + "/v1", Model: "down"}, {URL: "http://127.0.0.1:1/v1", Model: "gone"}}, nil)
 	if _, err := ex(context.Background(), rec, nil); !errors.Is(err, ErrNoModel) {
 		t.Errorf("err = %v, want ErrNoModel", err)

@@ -75,7 +75,7 @@ func (c *Curator) Resolve(ctx context.Context, id, answer string) error {
 		if k, err = kb.ParseKey(item.Key); err != nil || k.Path() != item.Page || item.Current == nil || item.Proposed == nil {
 			return fmt.Errorf("review item %s is malformed (key %q, page %q): fix or remove it in %s by hand", id, item.Key, item.Page, kb.QueuePath)
 		}
-	} else if dir, slug := pageID(item.Page); kb.PagePath(dir, slug) != item.Page || !slugRe.MatchString(slug) || !slugRe.MatchString(item.Section) {
+	} else if dir, slug := pageID(item.Page); kb.PagePath(dir, slug) != item.Page || kb.Kinds[strings.TrimSuffix(dir, "s")] != dir || !slugRe.MatchString(slug) || !slugRe.MatchString(item.Section) {
 		return fmt.Errorf("review item %s is malformed (page %q, section %q): fix or remove it in %s by hand", id, item.Page, item.Section, kb.QueuePath)
 	}
 	p, err := c.Repo.ReadPage(item.Page)

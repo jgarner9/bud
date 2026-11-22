@@ -71,6 +71,10 @@ func ChatExtractor(endpoints []Endpoint, client *http.Client) Extractor {
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Minute}
 	}
+	// a redirect could send the record to a host that isn't local: never follow one
+	noRedirect := *client
+	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	client = &noRedirect
 	return func(ctx context.Context, rec memory.ExportedRecord, known []string) ([]Fact, error) {
 		if len(known) > maxKnown {
 			known = known[:maxKnown]

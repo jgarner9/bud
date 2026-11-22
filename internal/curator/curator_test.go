@@ -491,15 +491,16 @@ func TestQueueAndRestorePathsStayInTheKB(t *testing.T) {
 		{ID: "aaaa0001", Kind: kb.ItemContradiction, Page: "../../AGENTS.md", Section: "router", Key: key,
 			Current: &kb.Claim{Value: "1"}, Proposed: &kb.Claim{Value: "2"}, Opened: days(0)},
 		{ID: "aaaa0002", Kind: kb.ItemRefresh, Page: "content/systems/../../x.md", Section: "router", Opened: days(0)},
+		{ID: "aaaa0003", Kind: kb.ItemRefresh, Page: "content/other/x.md", Section: "router", Opened: days(0)},
 	}}
 	if err := f.c.Repo.WriteQueue(q); err != nil {
 		t.Fatal(err)
 	}
 	f.git(t, "add", "-A")
 	f.git(t, "commit", "--quiet", "-m", "a bad queue")
-	for _, id := range []string{"aaaa0001", "aaaa0002"} {
+	for _, id := range []string{"aaaa0001", "aaaa0002", "aaaa0003"} {
 		answer := Take
-		if id == "aaaa0002" {
+		if id != "aaaa0001" {
 			answer = Confirm
 		}
 		if err := f.c.Resolve(ctx, id, answer); err == nil || !strings.Contains(err.Error(), "malformed") {

@@ -135,6 +135,12 @@ type Bud struct {
 	// then "*". A later fragment sets a key over an earlier one's. Terminal
 	// commands are tiered by the shell permission rules instead
 	Tiers map[string]string `json:"tiers,omitempty"`
+	// SandboxShell tiers the commands Hermes's terminal runs in its Docker
+	// sandbox (Suite D114), in place of the permission rules' shell rules,
+	// which stay the coding devices'. Same globs, and the last match wins; a
+	// later fragment's rules come after an earlier one's. Empty keeps the
+	// permission rules' shell rules for Hermes too
+	SandboxShell []ShellRule `json:"sandbox_shell,omitempty"`
 	// OpenCodeSecrets are environment variables op run fills for OpenCode,
 	// each an op:// reference, written to opencode.env beside the registry's
 	// provider keys: the fragments' own keys, such as EXA_API_KEY for
@@ -142,6 +148,12 @@ type Bud struct {
 	// name the vault, so they belong in the overlay. A later fragment sets a
 	// variable over an earlier one's
 	OpenCodeSecrets map[string]string `json:"opencode_secrets,omitempty"`
+}
+
+// ShellRule is one sandbox shell rule: a command glob and its effect
+type ShellRule struct {
+	Resource string `json:"resource"`
+	Effect   string `json:"effect"`
 }
 
 // Server is one MCP server. Exactly one of Gateway, URL and Command says how
@@ -196,6 +208,8 @@ type Resolved struct {
 	Left   map[string]string
 	Hermes map[string]any
 	Tiers  map[string]string
+	// SandboxShell are Hermes's terminal rules, nil when no fragment sets them
+	SandboxShell []ShellRule
 	// Router is the model router's base URL, empty when none is set
 	Router string
 	// OpenCodeSecrets are the op:// references OpenCode's env file adds
@@ -297,6 +311,15 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
+	for i, r := range b.SandboxShell {
+		if strings.TrimSpace(r.Resource) == "" {
+			add("bud.sandbox_shell[%d]: the resource is a command glob, such as \"git push *\"", i)
+		}
+		if r.Effect != "allow" && r.Effect != "ask" && r.Effect != "deny" {
+			add("bud.sandbox_shell[%d]: %q isn't allow, ask or deny", i, r.Effect)
+		}
+	}
+
 	for _, v := range sortedKeys(b.OpenCodeSecrets) {
 		if !envVarRe.MatchString(v) {
 			add("bud.opencode_secrets.%s: a variable name is uppercase letters, digits and '_', not starting with a digit", v)
@@ -306,7 +329,7 @@ func (b *Bud) Resolve() (*Resolved, error) {
 		}
 	}
 
-	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, Router: strings.TrimSuffix(b.Router, "/"), OpenCodeSecrets: b.OpenCodeSecrets}
+	r := &Resolved{Servers: map[string]Server{}, Left: map[string]string{}, Gateway: map[string]GatewayServer{}, Hermes: b.Hermes, Tiers: b.Tiers, SandboxShell: b.SandboxShell, Router: strings.TrimSuffix(b.Router, "/"), OpenCodeSecrets: b.OpenCodeSecrets}
 	for _, name := range sortedKeys(b.MCP) {
 		s := b.MCP[name]
 		at := "bud.mcp." + name

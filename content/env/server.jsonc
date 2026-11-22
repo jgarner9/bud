@@ -79,10 +79,38 @@
         "approval": { "tools": { "mail_list_*": "allow", "mail_search_*": "allow", "mail_read_*": "allow", "mail_move_to_trash": "allow", "mail_restore_*": "allow", "mail_cleanup_*": "allow", "mail_send_*": "ask", "mail_reply_*": "ask" } },
       },
     },
+    // Hermes's terminal runs in its Docker sandbox, which can't reach the
+    // host, the vault or bud's files, so a command runs alone unless it
+    // reaches out of the sandbox (D114): pushes, remote shells and copies,
+    // and publishing. The coding devices keep base.jsonc's shell rules.
+    // bud hermes-gate also reads a command through env, sudo, sh -c, eval,
+    // $( ) and a path such as /usr/bin/git, so those don't dodge a rule.
+    // Your overlay's rules come after these, and the last match wins
+    "sandbox_shell": [
+      { "resource": "*", "effect": "allow" },
+      { "resource": "git push", "effect": "ask" },
+      { "resource": "git push *", "effect": "ask" },
+      { "resource": "ssh", "effect": "ask" },
+      { "resource": "ssh *", "effect": "ask" },
+      { "resource": "scp *", "effect": "ask" },
+      { "resource": "sftp *", "effect": "ask" },
+      { "resource": "rsync *", "effect": "ask" },
+      { "resource": "npm publish", "effect": "ask" },
+      { "resource": "npm publish *", "effect": "ask" },
+      { "resource": "pnpm publish *", "effect": "ask" },
+      { "resource": "yarn publish *", "effect": "ask" },
+      { "resource": "cargo publish *", "effect": "ask" },
+      { "resource": "twine upload *", "effect": "ask" },
+      { "resource": "docker push *", "effect": "ask" },
+      { "resource": "gh release *", "effect": "ask" },
+      // never: the agent doesn't touch the secrets store (D7)
+      { "resource": "op", "effect": "deny" },
+      { "resource": "op *", "effect": "deny" },
+    ],
     // Hermes's own tools by action tier (D10, D48), read by bud hermes-gate
-    // before every call; terminal commands follow the shell rules in
-    // base.jsonc. allow runs alone, ask waits for Jason's approval, deny is
-    // refused. A tool not listed asks
+    // before every call; terminal commands follow sandbox_shell above.
+    // allow runs alone, ask waits for Jason's approval, deny is refused. A
+    // tool not listed asks
     "tiers": {
       "*": "ask",
       // reading, searching and planning

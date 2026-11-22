@@ -162,14 +162,25 @@ func Render(in Input) (*Output, error) {
 	}
 	out.Notes = append(out.Notes, notes...)
 
+	// the gate tiers the sandboxed terminal by bud.sandbox_shell when a
+	// fragment sets it (Suite D114), else by the permission shell rules.
+	// Hermes itself refuses every shell deny in either set
 	var shell []Rule
 	denied := []any{}
 	for _, r := range rules {
 		if r.Action != "shell" {
 			continue
 		}
-		shell = append(shell, r)
+		if tools.SandboxShell == nil {
+			shell = append(shell, r)
+		}
 		if r.Effect == Deny {
+			denied = append(denied, r.Resource)
+		}
+	}
+	for _, r := range tools.SandboxShell {
+		shell = append(shell, Rule{Action: "shell", Resource: r.Resource, Effect: r.Effect})
+		if r.Effect == Deny && !slices.Contains(denied, any(r.Resource)) {
 			denied = append(denied, r.Resource)
 		}
 	}

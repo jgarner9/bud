@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -26,8 +27,13 @@ func TestMemoryReviewChecksItsSetup(t *testing.T) {
 	if err := runMemoryReview(&Globals{}, []string{"x"}, "/run/m.sock"); err == nil {
 		t.Error("an argument was accepted")
 	}
-	if err := runMemoryReview(&Globals{}, nil, "/run/m.sock"); err != nil {
+	var stderr bytes.Buffer
+	if err := runMemoryReview(&Globals{stderr: &stderr}, nil, "/run/m.sock"); err != nil {
 		t.Fatal(err)
+	}
+	// without --verbose too, so the journal shows it started
+	if !strings.Contains(stderr.String(), "memory-review: reviewing /run/m.sock") {
+		t.Errorf("stderr = %q, want the start line", stderr.String())
 	}
 	if got == nil || !strings.HasSuffix(got.Status, "bud/memory-review.json") || got.Review == nil {
 		t.Errorf("reviewer = %+v", got)

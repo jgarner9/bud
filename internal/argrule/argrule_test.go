@@ -108,6 +108,9 @@ func TestEachConditionTestsWhatItSays(t *testing.T) {
 		{"equals an object with more", Condition{Equals: json.RawMessage(`{"a":1}`)}, `{"f":{"a":1,"b":2}}`, no},
 		{"equals a list in order", Condition{Equals: json.RawMessage(`["a","b"]`)}, `{"f":["b","a"]}`, no},
 		{"equals true", Condition{Equals: json.RawMessage(`true`)}, `{"f":true}`, yes},
+		{"equals a large id exactly", Condition{Equals: json.RawMessage(`9007199254740992`)}, `{"f":9007199254740993}`, no},
+		{"equals a large id", Condition{Equals: json.RawMessage(`9007199254740993`)}, `{"f":9007199254740993}`, yes},
+		{"equals 1e2 and 100", Condition{Equals: json.RawMessage(`1e2`)}, `{"f":100}`, yes},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -132,10 +135,22 @@ func TestADottedFieldReadsNestedObjects(t *testing.T) {
 		`{"event":{}}`:                  "",
 		`{}`:                            "",
 		`{"event":"reminder"}`:          Ask, // event isn't an object
+		`{"event":null}`:                Ask, // null isn't an object either
 	} {
 		if got, _ := Apply(rules, "t", json.RawMessage(args)); got != want {
 			t.Errorf("%s: %q, want %q", args, got, want)
 		}
+	}
+}
+
+// Copilot on #113: a null step can't pass for an absent field
+func TestANullStepIsntAnAbsentField(t *testing.T) {
+	rules := []Rule{{Tool: "t", Effect: Allow, Args: map[string]Condition{"event.kind": {Absent: ptr(true)}}}}
+	if got, _ := Apply(rules, "t", json.RawMessage(`{"event":null}`)); got != Ask {
+		t.Fatalf("got %q, want ask", got)
+	}
+	if got, _ := Apply(rules, "t", json.RawMessage(`{}`)); got != Allow {
+		t.Fatalf("a missing event: got %q, want allow", got)
 	}
 }
 
@@ -146,6 +161,13 @@ func TestApplyFieldsComparesHermesNumbersByValue(t *testing.T) {
 	}
 	if _, ok := ApplyFields(rules, "t", map[string]any{"n": float64(3)}); ok {
 		t.Fatal("3 matched 2")
+	}
+	big := []Rule{{Tool: "t", Effect: Allow, Args: map[string]Condition{"n": {Equals: json.RawMessage(`9007199254740993`)}}}}
+	if _, ok := ApplyFields(big, "t", map[string]any{"n": json.Number("9007199254740992")}); ok {
+		t.Fatal("a json.Number one off matched")
+	}
+	if got, _ := ApplyFields(big, "t", map[string]any{"n": json.Number("9007199254740993")}); got != Allow {
+		t.Fatalf("the same json.Number: %q", got)
 	}
 }
 

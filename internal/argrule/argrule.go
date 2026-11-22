@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"path"
 	"reflect"
 	"slices"
@@ -150,8 +151,8 @@ func Apply(rules []Rule, tool string, args json.RawMessage) (effect string, ok b
 }
 
 // ApplyFields is Apply for arguments already decoded into a map, as Hermes
-// hands its shell hook. Numbers decoded as float64 compare with equals by
-// value
+// hands its shell hook. Decode them with UseNumber: a float64 has already
+// lost the digits past 2^53, so equals compares it as the rounded value
 func ApplyFields(rules []Rule, tool string, fields map[string]any) (effect string, ok bool) {
 	return apply(rules, tool, fields, true)
 }
@@ -209,15 +210,16 @@ func holds(conds map[string]Condition, fields map[string]any) result {
 	return out
 }
 
-// lookup follows a dotted path. ok is false when a step on the way is
-// there but isn't an object
+// lookup follows a dotted path. A step that's missing makes the field
+// absent; ok is false when a step on the way is there but isn't an object,
+// null included, so {"event": null} can't pass for an absent event.kind
 func lookup(fields map[string]any, field string) (v any, present, ok bool) {
 	cur := fields
 	parts := strings.Split(field, ".")
 	for i, p := range parts {
 		v, present = cur[p]
-		if !present || v == nil {
-			return nil, present, true
+		if !present {
+			return nil, false, true
 		}
 		if i == len(parts)-1 {
 			return v, true, true
@@ -276,14 +278,14 @@ func test(c Condition, v any, present bool) result {
 	return unreadable // Check refuses a condition with no test
 }
 
-// equal compares decoded JSON, numbers by value whether they came as
-// json.Number or float64
+// equal compares decoded JSON, numbers exactly by value whether they came
+// as json.Number or float64, so 1 equals 1.0 but 9007199254740993 doesn't
+// equal 9007199254740992
 func equal(a, b any) bool {
 	switch x := a.(type) {
-	case json.Number:
-		return number(x) == number(b)
-	case float64:
-		return number(x) == number(b)
+	case json.Number, float64:
+		p, q := number(a), number(b)
+		return p != nil && q != nil && p.Cmp(q) == 0
 	case []any:
 		y, ok := b.([]any)
 		if !ok || len(x) != len(y) {
@@ -312,23 +314,20 @@ func equal(a, b any) bool {
 	return reflect.DeepEqual(a, b)
 }
 
-// number gives a JSON number's canonical text, or "" for anything else
-func number(v any) string {
-	var f float64
+// number gives a JSON number's exact value, or nil for anything else
+func number(v any) *big.Rat {
 	switch x := v.(type) {
 	case json.Number:
-		var err error
-		if f, err = x.Float64(); err != nil {
-			return "bad:" + string(x)
+		r, ok := new(big.Rat).SetString(string(x))
+		if !ok {
+			return nil
 		}
+		return r
 	case float64:
-		f = x
-	default:
-		return ""
+		return new(big.Rat).SetFloat64(x) // nil for NaN and the infinities
 	}
-	b, _ := json.Marshal(f)
 
-	return string(b)
+	return nil
 }
 
 func stricter(a, b string) string {

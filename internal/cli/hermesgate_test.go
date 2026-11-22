@@ -46,3 +46,21 @@ func TestHermesGateTakesOneArgument(t *testing.T) {
 		t.Error("no argument was accepted")
 	}
 }
+
+// Copilot on #113: the gate keeps a tool call's numbers as written, so an
+// argument rule's equals tells two large ids apart
+func TestHermesGateComparesLargeNumbersExactly(t *testing.T) {
+	tiers := filepath.Join(t.TempDir(), "tiers.json")
+	if err := os.WriteFile(tiers, []byte(`{"tools": {"*": "ask"}, "when": [{"tool": "job_run", "effect": "allow", "args": {"id": {"equals": 9007199254740993}}}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]string{"9007199254740993": "{}\n", "9007199254740992": `"action":"approve"`} {
+		var out bytes.Buffer
+		if err := runHermesGate(strings.NewReader(`{"hook_event_name": "pre_tool_call", "tool_name": "job_run", "tool_input": {"id": `+id+`}}`), &out, tiers); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("id %s: got %s, want %s", id, out.String(), want)
+		}
+	}
+}

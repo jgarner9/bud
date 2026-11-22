@@ -59,8 +59,8 @@ type Section struct {
 // Meta is the front matter bud reads. Keys it doesn't know are kept
 type Meta struct {
 	Title string `json:"title"`
-	// Kind is project or system
-	Kind string `json:"kind"`
+	// Kind is project or system. Hugo reserves "kind", hence page_kind
+	Kind string `json:"page_kind"`
 	// Linear links a project page to its Linear project, where status lives (D8)
 	Linear string `json:"linear,omitempty"`
 	// Evergreen pages hold long-standing facts: their sections get a refresh
@@ -73,7 +73,7 @@ type Meta struct {
 }
 
 // metaKeys are the front matter keys Meta owns
-var metaKeys = []string{"title", "kind", "linear", "evergreen", "archived", "sections", "facts"}
+var metaKeys = []string{"title", "page_kind", "linear", "evergreen", "archived", "sections", "facts"}
 
 // Page is one Markdown page of the KB
 type Page struct {

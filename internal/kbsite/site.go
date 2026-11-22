@@ -31,12 +31,16 @@ type Hugo func(ctx context.Context, src, dst string) error
 // ExecHugo runs the hugo binary at bin
 func ExecHugo(bin string) Hugo {
 	return func(ctx context.Context, src, dst string) error {
-		cmd := exec.CommandContext(ctx, bin, "--source", src, "--destination", dst, "--quiet")
+		cmd := exec.CommandContext(ctx, bin, "--source", src, "--destination", dst, "--logLevel", "error")
 		// no module downloads or other network: the site is all local
 		cmd.Env = append(os.Environ(), "HUGO_ENVIRONMENT=production", "HUGO_MODULE_PROXY=off")
+		// --quiet would drop hugo's errors along with its build stats
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			msg := strings.TrimSpace(string(out))
+			msg := hugoErrors(string(out))
+			if msg == "" {
+				msg = err.Error()
+			}
 			if errors.Is(err, exec.ErrNotFound) {
 				msg = "hugo isn't installed: install Hugo 0.146 or newer (server/hugo/README.md)"
 			}
@@ -44,6 +48,22 @@ func ExecHugo(bin string) Hugo {
 		}
 		return nil
 	}
+}
+
+// hugoErrors keeps the error lines of hugo's output, dropping its banner
+// and build stats; with none it keeps the whole output
+func hugoErrors(out string) string {
+	var errs []string
+	for l := range strings.SplitSeq(out, "\n") {
+		if t := strings.TrimSpace(l); strings.HasPrefix(t, "Error:") || strings.HasPrefix(t, "ERROR") {
+			errs = append(errs, t)
+		}
+	}
+	if len(errs) == 0 {
+		return strings.TrimSpace(out)
+	}
+
+	return strings.Join(errs, "; ")
 }
 
 // Builder builds the site for one KB clone into Dir

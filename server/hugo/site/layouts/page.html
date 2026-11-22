@@ -1,7 +1,7 @@
 {{ define "main" }}
 <h1>{{ .Title }}{{ partial "badges.html" . }}</h1>
 <p class="meta">
-  {{ with .Params.kind }}{{ . }}{{ end }}{{ if .Params.evergreen }} · evergreen{{ end }}
+  {{ with .Params.page_kind }}{{ . }}{{ end }}{{ if .Params.evergreen }} · evergreen{{ end }}
   {{ with .Params.linear }} · <a href="{{ . }}">status in Linear</a>{{ end }}
 </p>
 {{ if .Params.archived }}<div class="banner archived">Archived: nothing referenced these sections for a year. Restore one with git revert of its archive commit, or by moving it back by hand.</div>{{ end }}

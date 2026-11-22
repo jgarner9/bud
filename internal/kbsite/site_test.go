@@ -87,7 +87,7 @@ func fakeHugo(ctx context.Context, src, dst string) error {
 	})
 }
 
-const page = "{\n  \"title\": \"archie\",\n  \"kind\": \"system\"\n}\n\n## Router\n\nVERSION\n"
+const page = "{\n  \"title\": \"archie\",\n  \"page_kind\": \"system\"\n}\n\n## Router\n\nVERSION\n"
 
 func live(t *testing.T, b *Builder) string {
 	t.Helper()
@@ -238,7 +238,7 @@ func TestRealHugo(t *testing.T) {
 	commit(t, r, map[string]string{
 		"content/_index.md": "{\"title\": \"Bud KB\"}\n\nJason's systems and projects.\n",
 		"content/systems/archie.md": `{
-  "title": "archie", "kind": "system", "evergreen": true,
+  "title": "archie", "page_kind": "system", "evergreen": true,
   "sections": {"router": {"status": "review"}},
   "facts": {"router/port": {"section": "router", "value": "8795", "updated": "2026-11-22",
     "sources": [{"record": 12, "source": "hermes", "date": "2026-11-21"}]}}
@@ -248,8 +248,8 @@ func TestRealHugo(t *testing.T) {
 
 - The router listens on 8795. <!-- fact:router/port -->
 `,
-		"content/projects/bud.md":           "{\"title\": \"Bud\", \"kind\": \"project\", \"linear\": \"https://linear.app/example/project/bud\"}\n\nThe Suite.\n",
-		"content/archive/systems/archie.md": "{\"title\": \"archie (archived)\", \"kind\": \"system\", \"archived\": true}\n\n## Old mail\n\nGone.\n",
+		"content/projects/bud.md":           "{\"title\": \"Bud\", \"page_kind\": \"project\", \"linear\": \"https://linear.app/example/project/bud\"}\n\nThe Suite.\n",
+		"content/archive/systems/archie.md": "{\"title\": \"archie (archived)\", \"page_kind\": \"system\", \"archived\": true}\n\n## Old mail\n\nGone.\n",
 		"data/review.json":                  `{"items": [{"id": "ab12cd34", "kind": "contradiction", "page": "content/systems/archie.md", "section": "router", "key": "systems/archie#router/port", "current": {"value": "8795"}, "proposed": {"value": "8800"}, "opened": "2026-11-22"}]}`,
 	}, "fixture")
 	b := &Builder{Repo: r, Site: bud.KBSite(), Hugo: ExecHugo(bin), Dir: t.TempDir()}
@@ -270,7 +270,7 @@ func TestRealHugo(t *testing.T) {
 		}
 	}
 	archie := read("systems/archie/index.html")
-	for _, want := range []string{`id="router"`, "badge review", "#12 hermes", "The router listens on 8795."} {
+	for _, want := range []string{"system · evergreen", `id="router"`, "badge review", "#12 hermes", "The router listens on 8795."} {
 		if !strings.Contains(archie, want) {
 			t.Errorf("archie lacks %q", want)
 		}
@@ -280,5 +280,21 @@ func TestRealHugo(t *testing.T) {
 	}
 	if !strings.Contains(read("archive/systems/archie/index.html"), "banner archived") {
 		t.Error("no archive banner")
+	}
+}
+
+// With hugo installed, a page Hugo can't read fails the build with Hugo's
+// own message, and the live site stays
+func TestRealHugoError(t *testing.T) {
+	bin, err := exec.LookPath("hugo")
+	if err != nil {
+		t.Skip("hugo isn't installed")
+	}
+	r := gitRepo(t)
+	commit(t, r, map[string]string{"content/systems/archie.md": "{\"title\": \"archie\", \"kind\": \"system\"}\n\nx\n"}, "reserved key")
+	b := &Builder{Repo: r, Site: bud.KBSite(), Hugo: ExecHugo(bin), Dir: t.TempDir()}
+	_, err = b.Build(context.Background(), false)
+	if err == nil || !strings.Contains(err.Error(), `unknown kind "system"`) {
+		t.Fatalf("err = %v, want hugo's message", err)
 	}
 }

@@ -7,7 +7,7 @@ import (
 
 const samplePage = `{
   "title": "archie",
-  "kind": "system",
+  "page_kind": "system",
   "weight": 3,
   "sections": {"router": {"referenced": "2026-11-01"}}
 }

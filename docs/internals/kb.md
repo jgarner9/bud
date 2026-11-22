@@ -9,7 +9,7 @@ The KB's tree is in `server/hugo/README.md`. A page is a JSON object (its front 
 | Key | Meaning |
 | --- | --- |
 | `title` | The page's title |
-| `kind` | `project` or `system`; the page lives under `content/projects/` or `content/systems/` |
+| `page_kind` | `project` or `system` (Hugo reserves `kind`); the page lives under `content/projects/` or `content/systems/` |
 | `linear` | A project page's Linear project URL. Status lives there, never in the KB (D8) |
 | `evergreen` | Long-standing facts: every section gets a refresh check at 12 months instead of being archived (D39) |
 | `archived` | Set on pages under `content/archive/` |

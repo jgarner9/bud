@@ -24,7 +24,7 @@
       "approval": { "tools": { "list_*": "allow", "search_*": "allow", "read_*": "allow", "move_to_trash": "allow", "restore_*": "allow", "cleanup_*": "allow", "send_*": "ask", "reply_*": "ask" } }
     },
     "memory": {
-      "url": "http://127.0.0.1:8793/mcp",
+      "url": "http://127.0.0.1:8798/mcp",
       "privacy": ["P0", "P1", "P2"],
       "approval": { "tools": { "memory_search": "allow", "memory_stage": "allow" } }
     },

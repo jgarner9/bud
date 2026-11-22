@@ -64,7 +64,7 @@ func callTool(t *testing.T, s *Server, tier, name, args string) (map[string]any,
 	t.Helper()
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":%q,"arguments":%s}}`, name, args)
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
-	r.Host = "127.0.0.1:8793"
+	r.Host = "127.0.0.1:8798"
 	if tier != "" {
 		r.Header.Set("X-Bud-Privacy", tier)
 	}
@@ -232,19 +232,19 @@ func TestRequestsAreChecked(t *testing.T) {
 		return w.Code
 	}
 	list := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
-	if c := post("127.0.0.1:8793", "P1", "", list); c != http.StatusOK {
+	if c := post("127.0.0.1:8798", "P1", "", list); c != http.StatusOK {
 		t.Errorf("tools/list = %d", c)
 	}
-	if c := post("evil.example:8793", "P1", "", list); c != http.StatusForbidden {
+	if c := post("evil.example:8798", "P1", "", list); c != http.StatusForbidden {
 		t.Errorf("a rebound Host = %d, want 403", c)
 	}
-	if c := post("127.0.0.1:8793", "P1", "http://evil.example", list); c != http.StatusForbidden {
+	if c := post("127.0.0.1:8798", "P1", "http://evil.example", list); c != http.StatusForbidden {
 		t.Errorf("an Origin = %d, want 403", c)
 	}
-	if c := post("127.0.0.1:8793", "P9", "", list); c != http.StatusBadRequest {
+	if c := post("127.0.0.1:8798", "P9", "", list); c != http.StatusBadRequest {
 		t.Errorf("a bad tier = %d, want 400", c)
 	}
-	if c := post("127.0.0.1:8793", "P1", "", `{"jsonrpc":"2.0","method":"notifications/initialized"}`); c != http.StatusAccepted {
+	if c := post("127.0.0.1:8798", "P1", "", `{"jsonrpc":"2.0","method":"notifications/initialized"}`); c != http.StatusAccepted {
 		t.Errorf("a notification = %d, want 202", c)
 	}
 	if _, errText := callTool(t, s, "P1", "memory_delete", `{}`); !strings.Contains(errText, `no tool is named "memory_delete"`) {

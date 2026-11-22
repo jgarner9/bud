@@ -94,7 +94,7 @@
       "memory": {
         "oauth": false,
         "type": "remote",
-        "url": "http://100.64.0.1:8791/mcp"
+        "url": "http://100.64.0.1:8798/mcp"
       },
       "ops": {
         "oauth": false,

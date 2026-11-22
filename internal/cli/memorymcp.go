@@ -30,7 +30,7 @@ func MemoryMCP() *Command {
 		Name:  "memory-mcp",
 		Usage: "Runs the home server's memory MCP server over the working-memory service, behind the MCP gateway",
 		Flags: func(fs *flag.FlagSet) {
-			fs.StringVar(&listen, "listen", "127.0.0.1:8793", "the loopback host:port to serve MCP on, at /mcp")
+			fs.StringVar(&listen, "listen", "127.0.0.1:8798", "the loopback host:port to serve MCP on, at /mcp")
 			fs.StringVar(&socket, "socket", "", "the memory service's socket (default $XDG_RUNTIME_DIR/bud-memory/memory.sock)")
 			fs.StringVar(&registryPath, "registry", "", "a registry.jsonc (default: the synced content's registry, with the overlay's merged over it)")
 			fs.BoolVar(&noBackfill, "no-backfill", false, "don't embed approved records in the background")

@@ -1,0 +1,25 @@
+# The home server's self-improvement loop (Suite D47, D125 to D129), as a
+# systemd user oneshot that bud-improve.timer starts once a day:
+#
+#   cp bud-improve.service bud-improve.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-improve.timer
+#
+# op run resolves the GitHub token in the env file through the Bud vault's
+# service account, whose token the first EnvironmentFile holds; it reaches
+# only this process's environment and never touches disk. The weekly digest
+# asks Jason through the bud-signal plugin's reviewer socket, so it runs as
+# the user Hermes runs as. A round that asks the digest waits up to an hour
+# for his answer, hence the long start timeout. It listens on nothing.
+[Unit]
+Description=Bud self-improvement loop (measures, scans models, asks a weekly digest)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=2h
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/improve.env -- %h/.local/bin/bud improve run
+NoNewPrivileges=yes
+PrivateTmp=yes

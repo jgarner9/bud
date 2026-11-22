@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -106,6 +107,9 @@ func Update(file string, fn func(*State) error) error {
 }
 
 func lockFile(path string) (func(), error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("lock the improve state: %w", err)
+	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("lock the improve state: %w", err)

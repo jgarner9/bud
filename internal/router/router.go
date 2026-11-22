@@ -70,6 +70,7 @@ type Router struct {
 	provURL      map[string]*url.URL // by provider id
 	provKey      map[string]string
 	approvals    *Approvals
+	p0Servers    []string
 	// p0Held bounds the P0 requests held for approval at once, so held
 	// bodies (up to 10 MiB each) can't pile up while the local model is down
 	p0Held chan struct{}
@@ -102,6 +103,10 @@ type Options struct {
 	ProbeInterval, ProbeTimeout time.Duration
 	// Now is the clock; nil means time.Now
 	Now func() time.Time
+	// P0Servers are the MCP servers only P0 sessions may use, from the env
+	// fragments (bud sync renders them): a conversation holding a call to
+	// one of their tools is raised to P0 (Suite D119)
+	P0Servers []string
 }
 
 type ctxKey struct{}
@@ -128,7 +133,7 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 	if rt.logf == nil {
 		rt.logf = log.Printf
 	}
-	rt.approvals, rt.p0Wait = opts.Approvals, opts.P0Wait
+	rt.approvals, rt.p0Wait, rt.p0Servers = opts.Approvals, opts.P0Wait, opts.P0Servers
 	rt.p0Held = make(chan struct{}, maxP0Held)
 	rt.p0Turns = map[string]time.Time{}
 	rt.p0Asking = map[string]chan struct{}{}
@@ -332,6 +337,13 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.logf("router: rule %s raised a %s request to %s", rule, tier, raised)
 		w.Header().Set(RaisedHeader, rule)
 		tier = raised
+	}
+	if tier != "P0" {
+		if tool, ok := tainted(fields, rt.p0Servers); ok {
+			rt.logf("router: a call to %s in the history raised a %s request to P0", tool, tier)
+			w.Header().Set(RaisedHeader, ProvenanceRule)
+			tier = "P0"
+		}
 	}
 	var model string
 	if err := json.Unmarshal(fields["model"], &model); err != nil || model == "" {

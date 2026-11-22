@@ -102,6 +102,9 @@ type Output struct {
 	Tiers  []byte
 	// GatewayApprovals is the MCP gateway's approvals file (env.Resolved.GatewayApprovals), nil when no gateway server is declared
 	GatewayApprovals []byte
+	// RouterP0Servers is the router's list of the servers only P0 sessions
+	// may use (env.Resolved.RouterP0Servers, Suite D119)
+	RouterP0Servers []byte
 	// Notes say what was left out and why
 	Notes []string
 	// CloudKeys are the variables that hold the keys of the providers left
@@ -299,6 +302,9 @@ func Render(in Input) (*Output, error) {
 	}
 	out.Tiers = append(tb, '\n')
 	if out.GatewayApprovals, err = tools.GatewayApprovals(); err != nil {
+		return nil, err
+	}
+	if out.RouterP0Servers, err = tools.RouterP0Servers(); err != nil {
 		return nil, err
 	}
 

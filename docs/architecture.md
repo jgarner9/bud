@@ -120,7 +120,7 @@ flowchart TB
   curator -.-> memsvc
 ```
 
-**What it shows.** What runs on the home server and who calls whom. The two runtimes, Hermes and the planning OpenCode, reach tools only through the MCP gateway and models through the router. Bud's own MCP servers (memory, calendar, mail, ops) are upstreams behind the gateway and listen on loopback only. The timers, `bud memory-review` and `bud improve`, run on their own and never talk to an agent.
+**What it shows.** What runs on the home server and who calls whom. The two runtimes, Hermes and the planning OpenCode, reach tools only through the MCP gateway. Hermes's private profile gets its models through the router; the planning OpenCode and Hermes's cloud profile call the registry's providers directly. Bud's own MCP servers (memory, calendar, mail, ops) are upstreams behind the gateway and listen on loopback only. The timers, `bud memory-review` and `bud improve`, run on their own and never talk to an agent.
 
 **Why.** The gateway is the single place that holds keys (from `op run`, Suite D7), writes the audit log and applies the privacy tier to every tool call (Suite D81, D112), so no runtime or upstream has to be trusted to do it. Bud owns these leaves, so it can enforce approvals there; it ships no patched Hermes or OpenCode (Suite D97). The reviewer socket in the bud-signal plugin is the one place approvals are answered, which keeps the decision channel out of any agent's reach (Suite D101, D103).
 
@@ -142,7 +142,7 @@ flowchart TB
   goinc["OpenCode Go<br/>P1, P2 · C1 included"]
   topup["Go top-up<br/>C2, capped each month"]
 
-  p0wait["P0 with local down:<br/>ask Jason on Signal<br/>for this one request"]:::gate
+  p0wait["P0 with local down:<br/>ask Jason on Signal<br/>to allow cloud for this turn"]:::gate
   refuse["503: no local model"]
 
   req --> tier --> rules --> pool --> filter --> pick
@@ -157,7 +157,7 @@ flowchart TB
 
 **What it shows.** How `bud router` picks a model for one request. The tier comes from the `X-Bud-Privacy` header, and a request without one is P0, so a client that isn't set up fails closed (Suite D23, D81). Privacy rules, such as a message starting with `#private`, can raise the tier but never lower it (Suite D112). The role's pool is then filtered by tier, provider health and allowance, and the first model left serves it.
 
-**Why.** P0 text should never leave the house by accident, so only local models allow P0. When the model box is asleep, a P0 request is held while Jason is asked on Signal to send that one request to a cloud model, and is refused if there is no answer (Suite D104, D105). Cost is tiered too: local first, then the Go plan's included allowance, then a top-up capped at about $10 a month (Suite D11). The header is a guard against leaks, not authentication; the tailnet is the authentication (Suite D100).
+**Why.** P0 text should never leave the house by accident, so only local models allow P0. When the model box is asleep, a P0 request is held while Jason is asked on Signal to let it go to a cloud model, and is refused if there is no answer (Suite D104). A yes covers the rest of that turn, so the agent's next calls in the same turn don't ask again (Suite D105). Cost is tiered too: local first, then the Go plan's included allowance, then a top-up capped at about $10 a month (Suite D11). The header is a guard against leaks, not authentication; the tailnet is the authentication (Suite D100).
 
 ## 4. Approvals
 
@@ -244,7 +244,8 @@ flowchart TB
     update{"bud update<br/>verify, swap, roll back on failure"}:::gate
     sync{"bud sync<br/>verify, refuse downgrades"}:::gate
     render["Render each runtime's config<br/>from the registry"]
-    runtimes["OpenCode, Hermes, Neovim"]
+    runtimes["OpenCode, Hermes"]
+    nvim["Bud Neovim config<br/>embedded in the binary"]
     doctor["bud doctor<br/>catches drift"]
   end
 
@@ -252,10 +253,11 @@ flowchart TB
   content --> bundle --> sync
   overlay -- "SSH, fast-forward only" --> sync
   update --> sync --> render --> runtimes
+  update --> nvim
   doctor -.-> runtimes
 ```
 
-**What it shows.** How code and content reach a device. Code and content are released separately: a `VERSION` bump on main cuts a signed binary release (D80), and a change under `content/` cuts a signed content bundle (Suite D57). `channel.json` says which version each channel offers; the laptop follows edge and the home server stable. `bud sync` layers the private overlay over the public content and renders every runtime's config from one model registry (Suite D46, D58).
+**What it shows.** How code and content reach a device. Code and content are released separately: a `VERSION` bump on main cuts a signed binary release (D80), and a change under `content/` cuts a signed content bundle (Suite D57). `channel.json` says which version each channel offers; the laptop follows edge and the home server stable. `bud sync` layers the private overlay over the public content and renders the OpenCode and Hermes configs from one model registry (Suite D46, D58). The Bud Neovim config is embedded in the binary, so `bud update` brings it along (D5).
 
 **Why.** A device refuses anything unsigned and any version older than the one it has, so an old signed bundle can't roll it back; going back is an explicit `bud sync --rollback` (Suite D60). The overlay is unsigned but comes over SSH from a private repository Jason controls (Suite D59). Rendering from one registry means swapping a model for a role is one edit, and `bud doctor` catches a config that drifted.
 

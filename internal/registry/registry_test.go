@@ -274,3 +274,25 @@ func TestProviderKeyVariableCollisions(t *testing.T) {
 		})
 	}
 }
+
+func TestOpRefsAllowSpacesInsideNamesButNotAtTheEdges(t *testing.T) {
+	for _, tc := range []struct {
+		ref  string
+		want bool
+	}{
+		{"op://vault/item/field", true},
+		{"op://example vault/API Key/credential", true},
+		{"op://vault/Mail Login/section/password", true},
+		{"op://vault/item", false},
+		{"op://vault /item/field", false},
+		{"op://vault/ item/field", false},
+		{"op://vault/item/field ", false},
+		{"op://vault/two  spaces/field", false},
+		{"op://vault/item/field\nEXTRA=1", false},
+		{"sk-live-123", false},
+	} {
+		if got := IsOpRef(tc.ref); got != tc.want {
+			t.Errorf("IsOpRef(%q) = %v, want %v", tc.ref, got, tc.want)
+		}
+	}
+}

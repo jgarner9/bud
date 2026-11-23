@@ -9,7 +9,7 @@ Every tool call resends the whole conversation, so the cost of a task is the siz
 
 ## One task per context
 
-One issue, one context. When a task is committed, stop and tell Jason to `/clear` (or `/compact` when the next task needs what was learned) before the next one.
+One issue, one context. When a task is committed, stop and tell Jason to `/clear` (or `/compact` when the next task needs what was learned) before the next one. As the context grows, watch its size and recommend a `/handoff` and a new session before every turn gets expensive.
 
 ## The loop
 

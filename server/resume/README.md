@@ -5,7 +5,7 @@ Starts the next OpenCode orchestrator session after one hands off (JGA-394, Suit
 | File | What it is |
 | --- | --- |
 | `bud-resume.service` | The oneshot unit that runs `bud resume run`. |
-| `bud-resume.timer` | Starts it two minutes after boot and two minutes after each run. |
+| `bud-resume.timer` | Starts it two minutes after boot and two minutes after each start, failed runs included. |
 
 ## What you need first
 

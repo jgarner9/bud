@@ -6,6 +6,8 @@ Where Bud stands at the handoff from Claude Code to OpenCode. Linear (team JGA, 
 
 Working tree: `bud agent` uses the synced 1Password reference file when launching OpenCode. The profile must supply OpenCode references for sync to produce the file.
 
+The shared OpenCode shell rules now allow exact workspace inspection commands and common pipeline filters, including `rg --files`, `git branch --show-current`, `git worktree list`, `wc -l` and `sort -u`.
+
 - **Code on main:** everything through PR #116 (see below). `VERSION` is still 1.1.0 (the last tag is v1.1.0); no release has been cut since the Suite work began, and the home server runs bud built from main. A release is a `bud:release` run in Claude Code, or Jason's call.
 - **Content:** format 9 since PR #116 (an older bud refuses it). Edge content is cut on every push to main that changes `content/`; the home server is on stable 2026.11.22.1 and needs the newer edge cut promoted during its rollout (revisit item 22).
 - **Diagrams:** `docs/architecture.md` (six Mermaid levels, PR #111). Update it in the same change as the code it draws.

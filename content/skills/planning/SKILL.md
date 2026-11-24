@@ -34,6 +34,7 @@ For anything bigger than one issue, write a design doc. The template is in [temp
 - One task is one commit with its own check. Order tasks by dependency, critical path first.
 - A task names the files it touches and how to tell it's done.
 - An idea that comes up mid-task becomes a new task or issue, not extra scope, unless he says to do it now.
+- Write the plan so a build session on `glm-5.3` can hand each task to a sub-agent and check it: each task is self-contained, names its files and its check, and is ordered by dependency. The plan is the spec; the build agent doesn't re-derive it.
 
 ## 4. Issues and progress
 

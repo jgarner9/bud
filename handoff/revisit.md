@@ -144,3 +144,10 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
     3. Re-check the records you've already approved, since Hermes saved them at P1, even ones from chats that read your calendar. You can see them with a `memory_search` from Hermes once it's at P0, since each result shows its tier. The memory service has no action yet to re-tier or remove an approved record (`discard` works only on staged ones), so a private one needs a hand edit of the SQLite file, or a small new action. Say if you want the action built.
     4. Test: in a Signal chat, ask Hermes something that recalls a P0 record. The router log should say "a private Bud memory record in the history raised a P1 request to P0", and the reply should come from Qwen.
     5. Then take out the item 24 hold (remove `qwen-35b` from the front of the overlay's `roles.manager.pool`), and `bud sync` again.
+
+### Orchestrator handoffs (JGA-394, Suite D131)
+
+30. **Starting the next orchestrator after a handoff.** Set up with the steps in `server/resume/README.md` (tmux, opencode, a checkout with push access and `gh`, then the timer). Two calls for you:
+    - **tmux or headless.** Built as tmux on the recommendation: asks wait for you to attach and are refused after 10 minutes. Headless `opencode run` would reject every ask, so the session couldn't commit or push.
+    - **Whether `bud resume queue` runs alone.** The base rules ask for it like any unlisted command, so an unattended session's `/handoff` times out and prints the prompt instead of queueing it. Recommendation: an overlay rule `{ "action": "shell", "resource": "bud resume queue *", "effect": "allow" }`, since queueing only starts a session that keeps every other gate, and the runner caps starts at eight a day. It loosens a permission, so it's yours to add.
+

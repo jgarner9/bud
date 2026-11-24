@@ -1,0 +1,12 @@
+# Starts bud-resume.service every two minutes. A run with nothing queued
+# exits at once, and a queued prompt waits two minutes (--min-age) before it
+# starts, so the session that queued it can finish its last reply.
+[Unit]
+Description=Check for a queued Bud orchestrator handoff
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=2min
+
+[Install]
+WantedBy=timers.target

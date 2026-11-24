@@ -1,6 +1,6 @@
-# Bud Suite decisions, D1 to D130
+# Bud Suite decisions, D1 to D131
 
-The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D130. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
+The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D131. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
 
 Rules for the log: it's append-only. A new decision takes the next number at the end. An entry is never renumbered, deleted or rewritten; a decision that changes is marked "Superseded by Dn" with its old text struck through, and the new decision gets the next number. When you add one, add it here and in the design doc it came from, and tell Jason the number.
 
@@ -166,3 +166,9 @@ Taken on recommendation 2026-11-22 (thread "Build self-improvement proposals and
 | # | Decision | Date | Notes |
 | --- | --- | --- | --- |
 | D130 | Hermes's private profile reaches Bud memory at P0 (a gateway server marked `marks_p0`), so the records it saves default to P0 and it can recall every tier; the cloud profile keeps the device tier. memory-mcp marks each P0 record in a `memory_search` result with `"marker": "bud-p0-record-7c41"` (`registry.P0Marker`), and the router raises any request whose messages hold the marker to P0 (`X-Bud-Privacy-Raised: memory`), after which the sticky P0 list holds the conversation. P1 chats still recall P1 and P2 records on Go. Content format 9. | 2026-11-22 | Jason, 2026-11-22 18:39 UTC, on the decision card for JGA-389: chose "Save at P0, raise on P0 recall" over "save at P0, search at P1" (Hermes could never recall a private record) and "memory is P0-only" (most chats would go back to Qwen). Matches D119's evidence-based rule. Built in PR #116. Open: records approved before it were saved at P1, and there's no action to re-tier an approved record (revisit item 29). |
+
+## D131: starting the next orchestrator after a handoff
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D131 | A session that hands off queues its resume prompt (`/handoff`, `bud resume queue`), and a systemd user timer on the home server (`server/resume/`) claims it once and starts the next OpenCode orchestrator in the detached tmux session `bud-orchestrator`, replacing the one that queued it. One queued prompt at a time, a lock on the runner, at most eight starts in 24 hours, and `bud resume off` as the kill switch. The session never auto-approves: asks wait for Jason in tmux and the unattended-deny plugin (D111) refuses one left for 10 minutes. | 2026-11-24 | JGA-394, from the coordinator's brief on Jason's blocker list. tmux over `opencode run` was recommended on a decision card (`opencode run` rejects every ask, so a resumed session could never commit or push); building on the recommendation while Jason decides. Whether `bud resume queue` runs alone is his call (revisit item 30). Detail in `docs/internals/resume.md`. |

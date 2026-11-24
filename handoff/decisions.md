@@ -166,3 +166,15 @@ Taken on recommendation 2026-11-22 (thread "Build self-improvement proposals and
 | # | Decision | Date | Notes |
 | --- | --- | --- | --- |
 | D130 | Hermes's private profile reaches Bud memory at P0 (a gateway server marked `marks_p0`), so the records it saves default to P0 and it can recall every tier; the cloud profile keeps the device tier. memory-mcp marks each P0 record in a `memory_search` result with `"marker": "bud-p0-record-7c41"` (`registry.P0Marker`), and the router raises any request whose messages hold the marker to P0 (`X-Bud-Privacy-Raised: memory`), after which the sticky P0 list holds the conversation. P1 chats still recall P1 and P2 records on Go. Content format 9. | 2026-11-22 | Jason, 2026-11-22 18:39 UTC, on the decision card for JGA-389: chose "Save at P0, raise on P0 recall" over "save at P0, search at P1" (Hermes could never recall a private record) and "memory is P0-only" (most chats would go back to Qwen). Matches D119's evidence-based rule. Built in PR #116. Open: records approved before it were saved at P1, and there's no action to re-tier an approved record (revisit item 29). |
+
+## D131: mail summarizer is a direct router call
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D131 | JGA-317's untrusted-mail summarizer is a direct router call with no `tools` field — the router forwards every field except `model`, so a no-tools request structurally cannot invoke a tool — rather than a tool-less Hermes profile. | 2026-11-23 | On recommendation: the handoff already recorded this shape (revisit item 12), and the router's pass-through of non-model fields confirms it. Gated on Jason's `bud mail-mcp --record` output. |
+
+## D132: JGA-348's runtime adapters are superseded by D97
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D132 | JGA-348's "runtime adapters" half is superseded by D97 (no patched runtimes; approvals enforced at Bud-owned leaves). Close JGA-348 and fold the one remaining piece — a single shared audit log — into a narrow follow-up. | 2026-11-23 | On recommendation: the lifecycle, store, SocketReview, Signal reviewer and the three leaves (gateway, router P0 fallback, ops) are all built; only the fragmented audit logs remain. |

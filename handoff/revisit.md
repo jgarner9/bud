@@ -2,6 +2,43 @@
 
 This is the Claude project's revisit list as of 2026-11-22 18:45 UTC, with host names replaced by roles and `op://` paths by placeholders. The exact home-server commands, with the real vault, IPs and host names, are in the overlay's `handoff/home-server.md`. Strike an item when it's done, and add new ones at the end with the next number.
 
+## Decisions for you — drafted 2026-11-23
+
+Drafted overnight so you can clear them in one sitting. Options and a recommendation each; nothing is built. Two were clear enough to take on recommendation (D131, D132) — reverse either if you disagree.
+
+### JGA-390 — a delegated subagent stays P0 when its parent is P0
+
+The router's sticky P0 keys on `X-Opencode-Session` (30-day TTL, hashed). A delegated Hermes subagent gets its own fresh conversation id and carries no parent id, so P0 data the parent writes into its task prompt isn't held.
+
+- **A — always-P0 subagent path (recommended).** Give the subagent its own router provider entry that sends P0 (a missing header already defaults to P0). Small bud change, fails closed. Over-broad: every subagent is P0 even when the parent is P1/P2 — the conservative direction.
+- **B — child carries the parent's id.** If Hermes 0.23.2 delegation can inherit the parent's `x-opencode-session`, the existing sticky machinery works with zero bud change. Cleanest and precise, but gated on checking Hermes's delegation config (not confirmable from this repo).
+- **C — map a parent-id header in the router.** Only if Hermes sends the parent id under a different header. More moving parts.
+
+Check Hermes 0.23.2 first: if the child can carry a parent id, take B; else A.
+
+### Memory retier — re-tier or remove an already-approved record
+
+Approved records were saved at P1 before D130; nothing can change a record's `privacy` today (`discard` only touches staged ones).
+
+- **A — reviewer-only `retier` action (recommended).** `POST /retier {id, privacy}` → `UPDATE records SET privacy`. Reviewer token, asked on Signal the way memory-review approves. One-line update (the FTS index doesn't rebuild on privacy). Add a `memory:retier` title; enumerate via `export` or a lean `approved` list.
+- **B — also "remove".** Deleting an approved record is heavier: references and per-model vector tables don't cascade, so removal needs explicit cleanup or `export_recovery` breaks. Defer; model as a `retier` sentinel later.
+
+Build A now; defer B. Say the word and I'll file + build it.
+
+### JGA-348 — close as superseded by D97 (D132, on recommendation)
+
+The "runtime adapters" half was deliberately abandoned by D97 (no patched runtimes; approvals at Bud-owned leaves). Lifecycle, store, SocketReview, Signal reviewer and the three leaves (gateway, router P0 fallback, ops) are all built. The only real remainder is the one shared audit log — today it's fragmented (`mcp-audit.jsonl`, `approvals.json`, `mail-actions.jsonl`, `router-spend.json`).
+
+Close JGA-348 and spin a narrow "consolidate the audit logs" follow-up.
+
+### JGA-317 / JGA-318 — mail isolation and the digest
+
+- **Summarizer shape (D131, on recommendation).** A direct router call with no `tools`. The router forwards every field except `model`, so a no-tools request structurally can't call a tool; a tool-less Hermes profile adds a whole runtime for the same result.
+- **JGA-317** builds a deterministic `bud mail-ingest` timer + a tool-less P0 summarizer, marking extracted content untrusted (today it's labeling only).
+- **JGA-318** gathers mail/task changes, approvals, queued work and system health deterministically, summarizes locally, configurable cadence/delivery.
+
+Both are gated on your `bud mail-mcp --record` output (UIDVALIDITY / new-mail behavior), still unshared. Share it and I'll proceed.
+
 ## Open, in the order to do them
 
 Home-server rollouts Jason hasn't done yet. Each one changes how the home server behaves, so they're his to run; give him paste blocks, never run them for him.

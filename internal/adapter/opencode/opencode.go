@@ -180,6 +180,9 @@ func Render(in Input) (*Output, error) {
 	}
 
 	frags := map[string]any{}
+	// Remember the source of each mapping before MergeInto drops layer
+	// information. Sync supplies the layer in the fragment name.
+	overlayRefs := map[string]string{}
 	for _, f := range in.Env {
 		frag, err := env.Merge([]Fragment{f})
 		if err != nil {
@@ -188,6 +191,14 @@ func Render(in Input) (*Output, error) {
 		if _, ok := frag["update"]; ok {
 			return nil, fmt.Errorf("env fragment %s sets update, which bud owns so only bud update moves OpenCode's pin; drop it", f.Name)
 		}
+		block, _ := frag["bud"].(map[string]any)
+		refs, _ := block["opencode_secrets"].(map[string]any)
+		for v, value := range refs {
+			delete(overlayRefs, v)
+			if strings.HasPrefix(f.Name, "overlay/") {
+				overlayRefs[v], _ = value.(string)
+			}
+		}
 		env.MergeInto(frags, frag)
 	}
 	tools, err := env.Take(frags)
@@ -195,18 +206,20 @@ func Render(in Input) (*Output, error) {
 		return nil, err
 	}
 	out.Notes = tools.Notes()
-	// a provider's key variable is the registry's, whether op run or the
-	// environment fills it, so a fragment can't point it elsewhere
-	keyVars := map[string]string{}
-	for pid, p := range r.Providers {
-		if v := registry.KeyVar(pid, p.Key); v != "" {
-			keyVars[v] = pid
-		}
-	}
 	for _, v := range sortedKeys(tools.OpenCodeSecrets) {
 		ref := tools.OpenCodeSecrets[v]
-		if pid, ok := keyVars[v]; ok && out.Secrets[v] != ref {
-			return nil, fmt.Errorf("bud.opencode_secrets.%s: the registry's provider %s reads its key from %s; drop it from the fragment or change the provider's key", v, pid, v)
+		for _, pid := range sortedKeys(r.Providers) {
+			key := r.Providers[pid].Key
+			if registry.KeyVar(pid, key) != v {
+				continue
+			}
+			if key == ref && out.Secrets[v] == ref {
+				continue
+			}
+			if key == "{env:"+v+"}" && overlayRefs[v] == ref && providers[pid] != nil {
+				continue
+			}
+			return nil, fmt.Errorf("bud.opencode_secrets.%s: provider %s needs a matching registry reference or a selected overlay mapping for its environment key; check the fragment", v, pid)
 		}
 		out.Secrets[v] = ref
 	}

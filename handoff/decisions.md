@@ -1,4 +1,4 @@
-# Bud Suite decisions, D1 to D136
+# Bud Suite decisions, D1 to D137
 
 The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D136. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
 
@@ -202,3 +202,9 @@ Taken on recommendation 2026-11-22 (thread "Build self-improvement proposals and
 | # | Decision | Date | Notes |
 | --- | --- | --- | --- |
 | D136 | A reviewer-only `retier` action in the memory service (`POST /retier {id, privacy}`) re-tiers an approved record, asked on Signal the way memory-review approves, so records saved at P1 before D130 can move to P0. Removing an approved record is deferred: references and per-model vector tables don't cascade, so removal needs explicit cleanup or `export_recovery` breaks. | 2026-11-24 | Jason chose A (build `retier`) over also building remove. Revisit item 29 step 3. |
+
+## D137: supply an OpenCode provider environment key per profile
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D137 | A selected private-overlay fragment may supply the 1Password reference for a rendered OpenCode provider whose registry key is `{env:VAR}`. | 2026-11-24 | Jason approved this so one profile can supply a launch credential without changing the shared registry. Public fragments cannot opt a provider in, and explicit registry references remain authoritative. |

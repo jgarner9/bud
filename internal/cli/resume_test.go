@@ -164,3 +164,12 @@ func TestStartChildReportsFailures(t *testing.T) {
 		t.Fatalf("wait = %v", err)
 	}
 }
+
+func TestResumeRunRejectsNegativeFlags(t *testing.T) {
+	if err := resumeRunRun(&Globals{}, nil, "tmux", "opencode", -time.Second, 8); err == nil || !strings.Contains(err.Error(), "--min-age") {
+		t.Errorf("negative --min-age: %v", err)
+	}
+	if err := resumeRunRun(&Globals{}, nil, "tmux", "opencode", time.Minute, -1); err == nil || !strings.Contains(err.Error(), "--max-per-day") {
+		t.Errorf("negative --max-per-day: %v", err)
+	}
+}

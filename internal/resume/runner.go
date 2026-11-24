@@ -120,7 +120,18 @@ func (r *Runner) start(e *Entry, path string) error {
 		return err
 	}
 
-	return r.waitLaunch(e, path)
+	if err := r.waitLaunch(e, path); err != nil {
+		// a pane that's still up past a failed start could report later and
+		// leave an orchestrator running that status calls failed: stop it
+		if r.Tmux.HasSession(r.session()) {
+			if kerr := r.Tmux.KillSession(r.session()); kerr != nil {
+				return fmt.Errorf("%w (and stopping its tmux session failed: %v)", err, kerr)
+			}
+		}
+		return err
+	}
+
+	return nil
 }
 
 // waitLaunch waits for launch to record that it reached opencode, or why it

@@ -309,6 +309,9 @@ func TestRunReportsALaunchThatFails(t *testing.T) {
 			if err != nil || last == nil || last.Started() || !strings.Contains(last.Error, tc.want) {
 				t.Fatalf("Last = %+v, %v", last, err)
 			}
+			if tm.sessions[Session] {
+				t.Error("the failed start's tmux session is still running")
+			}
 			if msg, _ := r.Run(); msg != "nothing queued" {
 				t.Errorf("retried: %q", msg)
 			}

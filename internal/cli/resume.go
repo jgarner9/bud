@@ -151,6 +151,9 @@ func resumeRunRun(g *Globals, args []string, tmux, opencode string, minAge time.
 	if maxPerDay < 0 {
 		return usageErrorf("--max-per-day must be 0 or more")
 	}
+	if minAge < 0 {
+		return usageErrorf("--min-age must be 0 or more")
+	}
 	q, err := resumeQueue()
 	if err != nil {
 		return err

@@ -22,7 +22,8 @@ Where Bud stands at the handoff from Claude Code to OpenCode. Linear (team JGA, 
 | JGA-311, JGA-312 | bud-kb page format, `bud curator`, `bud kb-site` and the Hugo layouts | #115 | D122 to D124 |
 | JGA-388 | Architecture diagrams | #111 | |
 | JGA-389 | Hermes reaches memory at P0; a recalled P0 record keeps the chat local | #116 | D130 |
-| | This handoff folder | this PR | |
+| | This handoff folder | #117 | |
+| JGA-391 | Spend views: model prices in `opencode.jsonc` for `opencode stats --cost`; `ops_spend` adds tokens and 5-hour and 7-day windows against Go's limits (2026-11-24) | this PR | |
 
 Earlier in the same run (2026-11-21 and the night after): R6b approvals at Bud-owned leaves (#71 to #75), the router and its tiers, spend cap and fallback (#66, #68, #70, #76, #79), mail (#83, #84), memory for the runtimes (#86 to #90), the planning OpenCode (#92, #93), the unattended-deny plugin (#94), registry privacy rules (#95, #96), memory review on Signal (#104) and start lines (#105). `design/build-plan.md` has the roadmap (R1 to R9) with each PR.
 
@@ -58,6 +59,7 @@ None of the 2026-11-22 builds are rolled out there yet. **Jason hasn't done revi
 | JGA-352 | Backlog | Local-first autocomplete (Qwen FIM, MiMo fallback, never on P0) | The Qwen box |
 | JGA-295 | Backlog | Measure token use, evaluate Headroom | |
 | JGA-291 | Backlog | Verify Hermes, OpenCode and provider contracts | |
+| JGA-393 | Backlog | Whether laptop OpenCode goes through the router (D70) | Jason, later (chose 2026-11-24) |
 | JGA-322 | Backlog | Back up Suite state and prove recovery | The home server |
 | JGA-292, JGA-354 | Backlog | Herdr desktop and mobile | Herdr |
 | JGA-375 | Backlog | Custom TUI for phone use | Design session with Jason first; end of 2.0 |

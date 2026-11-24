@@ -454,6 +454,35 @@ func TestSpendToolReportsTheMonthAgainstTheCapAndAllowances(t *testing.T) {
 	}
 }
 
+func TestSpendToolReportsTokensAndGoWindows(t *testing.T) {
+	// a fixed clock, so the ledger's month and hours can't drift from the
+	// read's across a boundary
+	now := time.Date(2026, 3, 5, 15, 10, 0, 0, time.UTC)
+	month, hour := now.Format("2006-01"), now.Format("2006-01-02T15")
+	old := now.Add(-48 * time.Hour).Format("2006-01-02T15")
+	reg := func() (*registry.Registry, error) {
+		return &registry.Registry{Models: map[string]registry.Model{"go-kimi": {Cost: "C1", Allowance: 10}}}, nil
+	}
+	ledger := `{"month":"` + month + `","spent":{"go-kimi":3},"topup":0,"cap":10,` +
+		`"tokens":{"go-kimi":{"requests":4,"in":1200,"out":300}},` +
+		`"hours":{"go-kimi":{"` + hour + `":1,"` + old + `":2},"last-week":{"` + old + `":0.5}}}`
+	got, err := routerSpend(spendSources(t, ledger, reg), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Models) != 2 || got.Models[0].ID != "go-kimi" || got.Models[1].ID != "last-week" {
+		t.Fatalf("models %+v", got.Models)
+	}
+	k := got.Models[0]
+	if k.Requests != 4 || k.InputTokens != 1200 || k.OutputTokens != 300 || k.Last5h != 1 || k.Last7d != 3 || *k.Limit5h != 2 || *k.Limit7d != 5 {
+		t.Errorf("kimi %+v", k)
+	}
+	// a model with spend only in an earlier month's days still shows its week
+	if w := got.Models[1]; w.Spent != 0 || w.Last7d != 0.5 || w.Limit5h != nil {
+		t.Errorf("last-week %+v", w)
+	}
+}
+
 func TestSpendToolWithNoLedgerOrAnOldMonthOrNoRegistry(t *testing.T) {
 	got := spendCall(t, spendSources(t, "", nil))
 	if got.TopUp != 0 || got.Cap != nil || len(got.Models) != 0 || !strings.Contains(got.Note, "hasn't charged") {

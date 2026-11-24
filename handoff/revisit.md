@@ -15,6 +15,7 @@ Home-server rollouts Jason hasn't done yet. Each one changes how the home server
 | 5 | 21 | Self-improvement rollout (JGA-321): GitHub token, `bud-proposal` label in both repos, the `bud-improve` timer | nothing |
 | 6 | 27 | KB curator and site rollout (JGA-311, JGA-312): Hugo, bud-kb repo and deploy key, kb-site unit, curator token and timer | nothing |
 | - | 7 | Laptop: live test of the opencode.nvim chat keys | nothing |
+| - | 30 | Spend views (JGA-391): update bud on the laptop and the home server, `bud sync`, restart the router and mcp-ops | the PR merged |
 
 Decisions waiting on him (bring them up with a recommendation; don't decide them):
 
@@ -25,6 +26,7 @@ Decisions waiting on him (bring them up with a recommendation; don't decide them
 - **Item 11:** R9, the custom TUI (JGA-375): a design session before any code.
 - **Item 12:** JGA-317 summarizer shape (recommended: a direct router call with no tools); waits on the mail `--record` output.
 - **Item 13:** the stale branch `claude/hermes-router` can be deleted.
+- **JGA-393:** whether laptop OpenCode goes through the router (Suite D70) for one spend meter and the same privacy rules, at the cost of coding needing the home server. Jason chose on 2026-11-24 to decide it later.
 - **Item 16:** router spend past the $10 cap (recommended: hold and ask on Signal, one yes covers one request or the rest of that turn, never a raised cap).
 - **Item 28:** moving bud-kb's remote onto the home server so P0 facts can reach the KB (recommended: wait a few weeks).
 - Older open items from the 2026-11-22 handoff: the JGA-368 hard-kill and backup-restore checks, the mail `--record` output for JGA-317, and a separate vault for the memory reviewer token and the bud-planning service account (both can read the whole Bud vault today).
@@ -144,3 +146,9 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
     3. Re-check the records you've already approved, since Hermes saved them at P1, even ones from chats that read your calendar. You can see them with a `memory_search` from Hermes once it's at P0, since each result shows its tier. The memory service has no action yet to re-tier or remove an approved record (`discard` works only on staged ones), so a private one needs a hand edit of the SQLite file, or a small new action. Say if you want the action built.
     4. Test: in a Signal chat, ask Hermes something that recalls a P0 record. The router log should say "a private Bud memory record in the history raised a P1 request to P0", and the reply should come from Qwen.
     5. Then take out the item 24 hold (remove `qwen-35b` from the front of the overlay's `roles.manager.pool`), and `bud sync` again.
+
+### Spend views (JGA-391)
+
+30. **After the JGA-391 PR merges and the next nightly:**
+    1. On the laptop: `bud update`, then `bud sync`. `~/.config/opencode/opencode.jsonc` now has a `cost` block on each Go model, and `opencode stats --cost --models --days 7` shows dollars per model.
+    2. On the home server: update bud from main as in item 22, then restart `bud-router` and `bud-mcp-ops`. The ledger gains `tokens` and `hours` with the router's next charge; until then `ops_spend` shows zero tokens and windows.

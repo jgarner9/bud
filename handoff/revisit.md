@@ -15,6 +15,7 @@ Home-server rollouts Jason hasn't done yet. Each one changes how the home server
 | 5 | 21 | Self-improvement rollout (JGA-321): GitHub token, `bud-proposal` label in both repos, the `bud-improve` timer | nothing |
 | 6 | 27 | KB curator and site rollout (JGA-311, JGA-312): Hugo, bud-kb repo and deploy key, kb-site unit, curator token and timer | nothing |
 | - | 7 | Laptop: live test of the opencode.nvim chat keys | nothing |
+| - | 30 | Spend views (JGA-391): update bud on the laptop and the home server, `bud sync`, restart the router and mcp-ops | the PR merged |
 
 Decisions waiting on him (bring them up with a recommendation; don't decide them):
 
@@ -25,6 +26,7 @@ Decisions waiting on him (bring them up with a recommendation; don't decide them
 - **Item 11:** R9, the custom TUI (JGA-375): a design session before any code.
 - **Item 12:** JGA-317 summarizer shape (recommended: a direct router call with no tools); waits on the mail `--record` output.
 - **Item 13:** the stale branch `claude/hermes-router` can be deleted.
+- **JGA-393:** whether laptop OpenCode goes through the router (Suite D70) for one spend meter and the same privacy rules, at the cost of coding needing the home server. Jason chose on 2026-11-24 to decide it later.
 - **Item 16:** router spend past the $10 cap (recommended: hold and ask on Signal, one yes covers one request or the rest of that turn, never a raised cap).
 - **Item 28:** moving bud-kb's remote onto the home server so P0 facts can reach the KB (recommended: wait a few weeks).
 - Older open items from the 2026-11-22 handoff: the JGA-368 hard-kill and backup-restore checks, the mail `--record` output for JGA-317, and a separate vault for the memory reviewer token and the bud-planning service account (both can read the whole Bud vault today).
@@ -115,7 +117,7 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
          - "What's on my calendar today" followed by a follow-up shows "a call to mcp_calendar_... raised", then "an earlier request of this conversation".
        - If every chat still logs as P0, Hermes 0.23.2 lacks `extra_headers`. That fails closed, so tell me and I'll find another way.
 23. **Overlay rules for you to add** (they need your address and calendars, so they can't live in the public repo):
-    - **Mail to yourself runs alone:** under `bud.mcp.mail.approval.when` add `{ "tool": "mail_send_message", "effect": "allow", "args": { "to": { "equals": ["<your address>"] }, "cc": { "empty": true } } }`. An approval block with only `when` adds to the public tools.
+    - **Mail to yourself runs alone (Suite D131, JGA-392):** the overlay PR adds `{ "tool": "mail_send_message", "effect": "allow", "args": { "to": { "equals": ["<your address>"] }, "cc": { "empty": true }, "bcc": { "absent": true } } }` under `bud.mcp.mail.approval.when` in `env/personal.jsonc`. Fill in the `email` field of the 1Password item "iCloud" before merging (exactly as written there, lower case, no name), then `bud sync` and restart `bud-mcp-gateway`. An approval block with only `when` adds to the public tools. Check: a note to yourself sends with no prompt, and one that copies anyone else still asks.
     - **Shared calendars:** if you have any, add an `ask` rule on `calendar_create_event` with `"calendar": { "glob": "<name>" }`, since a shared calendar notifies its members.
 24. **To hold P1 back** after updating, put `qwen-35b` first in the overlay's `roles.manager.pool`. P1 chats then stay on Qwen, while everything else ships. **Chosen 2026-11-22 18:33 UTC ("Merge, hold P1 on the home server"):** #114 is merged as 39bdd7a; do this overlay change before the step 3 sync, and keep it until memory records carry a tier.
 25. **Known gaps after #114 (decision; my recommendation follows each):**
@@ -145,8 +147,14 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
     4. Test: in a Signal chat, ask Hermes something that recalls a P0 record. The router log should say "a private Bud memory record in the history raised a P1 request to P0", and the reply should come from Qwen.
     5. Then take out the item 24 hold (remove `qwen-35b` from the front of the overlay's `roles.manager.pool`), and `bud sync` again.
 
-### Orchestrator handoffs (JGA-394, Suite D131)
+### Spend views (JGA-391)
 
-30. **Starting the next orchestrator after a handoff.** Set up with the steps in `server/resume/README.md` (tmux, opencode, a checkout with push access and `gh`, then the timer). Two calls for you:
+30. **After the JGA-391 PR merges and the next nightly:**
+    1. On the laptop: `bud update`, then `bud sync`. `~/.config/opencode/opencode.jsonc` now has a `cost` block on each Go model, and `opencode stats --cost --models --days 7` shows dollars per model.
+    2. On the home server: update bud from main as in item 22, then restart `bud-router` and `bud-mcp-ops`. The ledger gains `tokens` and `hours` with the router's next charge; until then `ops_spend` shows zero tokens and windows.
+
+### Orchestrator handoffs (JGA-394, Suite D132)
+
+31. **Starting the next orchestrator after a handoff.** Set up with the steps in `server/resume/README.md` (tmux, opencode, a checkout with push access and `gh`, then the timer). Two calls for you:
     - **tmux or headless.** Built as tmux on the recommendation: asks wait for you to attach and are refused after 10 minutes. Headless `opencode run` would reject every ask, so the session couldn't commit or push.
     - **Whether `bud resume queue` runs alone.** The base rules ask for it like any unlisted command, so an unattended session's `/handoff` would time out and print the prompt instead of queueing it. **You said yes on 2026-11-24:** jgarner9/bud-overlay#11 adds `{ "action": "shell", "resource": "bud resume queue *", "effect": "allow" }` to the overlay's `env/personal.jsonc`, for you to merge after #122, then `bud sync`.

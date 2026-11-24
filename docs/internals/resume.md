@@ -1,6 +1,6 @@
 # Orchestrator handoffs (`bud resume`)
 
-A long-running OpenCode orchestrator session eventually fills its context. Before this, it ran `/handoff`, printed a resume prompt and stopped, and the work waited until Jason pasted that prompt into a new session. `bud resume` (JGA-394, Suite D131) starts that next session itself: the old session queues its prompt, a timer claims it once and starts OpenCode with it in a tmux session Jason can attach to.
+A long-running OpenCode orchestrator session eventually fills its context. Before this, it ran `/handoff`, printed a resume prompt and stopped, and the work waited until Jason pasted that prompt into a new session. `bud resume` (JGA-394, Suite D132) starts that next session itself: the old session queues its prompt, a timer claims it once and starts OpenCode with it in a tmux session Jason can attach to.
 
 ## The pieces
 
@@ -37,7 +37,7 @@ Everything lives in `paths.Resume()`, `~/.local/state/bud/resume/`, mode 0700:
 
 Starting a session is a local action, so it needs no approval, but the session it starts keeps every gate. `Argv` never adds `--auto`, `--yolo` or `--dangerously-skip-permissions` (a test checks), so the orchestrator's asks (`git commit`, `git push`, Linear writes and the rest of `content/env/base.jsonc`'s ask list) go to the TUI. Jason can answer them by attaching with `tmux attach -t bud-orchestrator`, over SSH from the laptop or the phone; the `bud-unattended-deny` plugin (Suite D111) refuses any ask left for 10 minutes, so an unattended session gets a denial and carries on instead of hanging. That's the reason for tmux over `opencode run`: `opencode run` rejects every ask at once (Suite D99), so a resumed session could never commit or push.
 
-The `/handoff` command's `bud resume queue` goes through the normal shell permission flow too: the base rules ask for any command they don't list. In an unattended chain that ask times out and the session prints the prompt instead, so the first queue of a run needs Jason or an overlay rule that lets `bud resume queue *` run alone (revisit item 30).
+The `/handoff` command's `bud resume queue` goes through the normal shell permission flow too: the base rules ask for any command they don't list. In an unattended chain that ask times out and the session prints the prompt instead, so the first queue of a run needs Jason or an overlay rule that lets `bud resume queue *` run alone (revisit item 31).
 
 ## The unit
 

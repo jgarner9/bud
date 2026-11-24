@@ -5,7 +5,7 @@ What syncs to every device that runs OpenCode (Suite D17, D57): generic instruct
 | Path | What goes there | Lands in |
 | --- | --- | --- |
 | `AGENTS.md` | Global instructions, generic only; the persona lives in the overlay | built (task 1.11) |
-| `skills/<id>/SKILL.md` | Skills, one directory each: `bud-dev`, `file-issue` | built (task 1.11) |
+| `skills/<id>/SKILL.md` | Skills, one directory each; a skill may hold helper files it links to (`code-style`, `learn`, `planning` and `tools` do): `add-provider`, `bootstrap-project`, `bud-dev`, `build`, `code-style`, `debugging`, `file-issue`, `learn`, `mail`, `planning`, `release`, `tools`, `verify` | built (task 1.11) |
 | `agents/*.md` | Agents as Markdown with front matter: `chat` | built (task 1.11) |
 | `commands/*.md` | Commands, with fixed, trusted command lines only | phase 4 |
 | `plugins/<name>/` | OpenCode plugins, one directory each: `bud-unattended-deny`, which rejects a permission ask nobody answers within 10 minutes (Suite D111). Every profile that runs OpenCode takes them unless it lists `plugins` | built (Suite D111) |

@@ -62,7 +62,7 @@ The tiers come from the env fragment's `bud.mcp.<name>.approval` (and `read_only
 
 ```jsonc
 "mail": { "approval": { "when": [
-  { "tool": "mail_send_message", "effect": "allow", "args": { "to": { "equals": ["me@example.com"] }, "cc": { "empty": true } } }
+  { "tool": "mail_send_message", "effect": "allow", "args": { "to": { "equals": ["me@example.com"] }, "cc": { "empty": true }, "bcc": { "absent": true } } }
 ] } }
 ```
 

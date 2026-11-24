@@ -1,6 +1,6 @@
 # server/resume/
 
-Starts the next OpenCode orchestrator session after one hands off (JGA-394, Suite D131). A session whose context is nearly full runs `/handoff`, which queues its resume prompt with `bud resume queue`; this timer runs `bud resume run` every two minutes, which claims the prompt once and starts OpenCode with it in the detached tmux session `bud-orchestrator`. How it works is in [docs/internals/resume.md](https://github.com/jgarner9/bud/blob/main/docs/internals/resume.md).
+Starts the next OpenCode orchestrator session after one hands off (JGA-394, Suite D132). A session whose context is nearly full runs `/handoff`, which queues its resume prompt with `bud resume queue`; this timer runs `bud resume run` every two minutes, which claims the prompt once and starts OpenCode with it in the detached tmux session `bud-orchestrator`. How it works is in [docs/internals/resume.md](https://github.com/jgarner9/bud/blob/main/docs/internals/resume.md).
 
 | File | What it is |
 | --- | --- |

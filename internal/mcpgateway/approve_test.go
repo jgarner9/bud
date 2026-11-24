@@ -318,12 +318,13 @@ func TestReviewTargetExcludesUserinfoQueryAndFragment(t *testing.T) {
 func TestWhenRulesLetOnlyTheNamedArgumentShapesThroughUnreviewed(t *testing.T) {
 	yes := true
 	appr := &Approval{
-		Tools: map[string]string{"list_*": "allow", "create_*": "ask", "send_*": "ask"},
+		Tools: map[string]string{"list_*": "allow", "create_*": "ask", "send_*": "ask", "reply_*": "ask"},
 		When: []argrule.Rule{
 			{Tool: "create_event", Effect: argrule.Allow, Args: map[string]argrule.Condition{"attendees": {Empty: &yes}}},
 			{Tool: "send_message", Effect: argrule.Allow, Args: map[string]argrule.Condition{
-				"to": {Equals: json.RawMessage(`["me@example.com"]`)},
-				"cc": {Empty: &yes},
+				"to":  {Equals: json.RawMessage(`["me@example.com"]`)},
+				"cc":  {Empty: &yes},
+				"bcc": {Absent: &yes},
 			}},
 		},
 	}
@@ -339,6 +340,15 @@ func TestWhenRulesLetOnlyTheNamedArgumentShapesThroughUnreviewed(t *testing.T) {
 		{"mail to me, cc sam", `{"to":["me@example.com"],"cc":["sam@example.com"],"subject":"s","body":"b"}`, "send_message", false},
 		{"mail to sam", `{"to":["sam@example.com"],"subject":"s","body":"b"}`, "send_message", false},
 		{"mail to me, then sam", `{"to":["me@example.com"],"to":["sam@example.com"],"subject":"s","body":"b"}`, "send_message", false},
+		// Suite D131: only Jason's bare address, alone, runs alone
+		{"mail to me, empty cc", `{"to":["me@example.com"],"cc":[],"subject":"s","body":"b"}`, "send_message", true},
+		{"mail to me and sam", `{"to":["me@example.com","sam@example.com"],"subject":"s","body":"b"}`, "send_message", false},
+		{"mail to me twice", `{"to":["me@example.com","me@example.com"],"subject":"s","body":"b"}`, "send_message", false},
+		{"mail to me, bcc sam", `{"to":["me@example.com"],"bcc":["sam@example.com"],"subject":"s","body":"b"}`, "send_message", false},
+		{"mail to me by name", `{"to":["Me <me@example.com>"],"subject":"s","body":"b"}`, "send_message", false},
+		{"mail to me in capitals", `{"to":["ME@example.com"],"subject":"s","body":"b"}`, "send_message", false},
+		{"mail to me as text", `{"to":"me@example.com","subject":"s","body":"b"}`, "send_message", false},
+		{"reply to me", `{"uid":1,"to":["me@example.com"],"subject":"Re: s","body":"b"}`, "reply_message", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

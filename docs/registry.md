@@ -58,7 +58,7 @@ JSONC: JSON plus `//` and `/* */` comments and trailing commas. A field bud does
 | `inputs` | What it can be given: `text`, `image`, `video`, `audio`, `pdf`. A fact. |
 | `caps` | What it can do beyond chat: `tools` (tool calling), `reasoning`, `json` (answers that follow a JSON schema), `fim` (fill-in-the-middle), `embed`. The first three are facts; `fim` and `embed` are declared by hand. |
 | `context`, `output` | Its context window and longest answer, in tokens. Facts. |
-| `price` | `{ "in": ..., "out": ... }`, dollars per million tokens. A fact. |
+| `price` | `{ "in": ..., "out": ... }`, dollars per million tokens. A fact. The router charges by it, and `bud sync` renders it as the model's `cost` in `opencode.jsonc`, so `opencode stats --cost` reports real dollars. |
 | `grade` | `top`, `mid` or `light`: how hard a task it is worth spending on. The router matches it to a request's difficulty. Kept by hand. |
 | `allowance` | The plan's included spend on it, in dollars a month (Go Plus sets one per model). Kept by hand. |
 | `retention` | Days the provider keeps requests, `0` for none. Kept by hand. A model kept longer than 0 days may see only `P2` (Suite D65). |

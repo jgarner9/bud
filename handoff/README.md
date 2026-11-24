@@ -7,7 +7,7 @@ Written 2026-11-22 by the Claude Code project thread "Hand off Bud project to Op
 | this README | How Jason works, the PR workflow, the rules, and the resume prompt |
 | [state.md](state.md) | Where everything stands: what's merged, what's in flight, what's next, in order |
 | [revisit.md](revisit.md) | Everything waiting on Jason: home-server rollouts he hasn't done, and decisions |
-| [decisions.md](decisions.md) | The Suite decision log, D1 to D131, with the reason for each |
+| [decisions.md](decisions.md) | The Suite decision log, D1 to D132, with the reason for each |
 | [design/](design/) | The design docs the decisions came from (listed below) |
 | [memory/](memory/) | The Claude project's memory, one file per subject (`MEMORY.md` is the index) |
 

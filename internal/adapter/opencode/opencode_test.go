@@ -227,6 +227,23 @@ func TestAnOutputLimitNeedsNoContext(t *testing.T) {
 	}
 }
 
+func TestAPricedModelCarriesItsCost(t *testing.T) {
+	out, err := Render(shipped(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	providers := decode(t, out.Config)["providers"].(map[string]any)
+	glm := providers["go"].(map[string]any)["models"].(map[string]any)["glm-5.3"].(map[string]any)
+	cost, _ := glm["cost"].(map[string]any)
+	if cost["input"] != 1.4 || cost["output"] != 4.4 {
+		t.Fatalf("want glm-5.3's registry price as cost, got %v", glm["cost"])
+	}
+	qwen := providers["qwen"].(map[string]any)["models"].(map[string]any)["qwen-35b"].(map[string]any)
+	if _, ok := qwen["cost"]; ok {
+		t.Fatalf("an unpriced local model got a cost: %v", qwen["cost"])
+	}
+}
+
 func withCoding(t *testing.T) Input {
 	t.Helper()
 	in := shipped(t)

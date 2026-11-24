@@ -26,7 +26,7 @@ func (r *recTmux) KillSession(string) error {
 }
 func (r *recTmux) NewSession(_, _ string, argv []string) error {
 	r.running, r.argv = true, argv
-	return nil
+	return resume.MarkLaunched(argv[len(argv)-1], time.Now())
 }
 
 func TestResumeQueueRunLaunch(t *testing.T) {
@@ -41,11 +41,14 @@ func TestResumeQueueRunLaunch(t *testing.T) {
 
 	checkout := t.TempDir()
 	if err := resumeQueueRun(&Globals{}, nil, checkout, ""); err == nil {
-		t.Error("queue without - was accepted")
+		t.Error("queue without a file was accepted")
 	}
-	resumeStdin = strings.NewReader("Resume from handoff/README.md.\n")
+	promptFile := filepath.Join(t.TempDir(), "prompt.txt")
+	if err := os.WriteFile(promptFile, []byte("Resume from handoff/README.md.\nBUD_RESUME_PROMPT\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	var out bytes.Buffer
-	if err := resumeQueueRun(&Globals{stdout: &out}, []string{"-"}, checkout, "build"); err != nil {
+	if err := resumeQueueRun(&Globals{stdout: &out}, []string{promptFile}, checkout, "build"); err != nil {
 		t.Fatal(err)
 	}
 	resumeStdin = strings.NewReader("again")
@@ -56,6 +59,10 @@ func TestResumeQueueRunLaunch(t *testing.T) {
 	now = now.Add(3 * time.Minute)
 	out.Reset()
 	if err := resumeRunRun(&Globals{stdout: &out}, nil, "tmux", "opencode", 2*time.Minute, 8); err != nil {
+		t.Fatal(err)
+	}
+	resumeStdin = strings.NewReader("Resume again.")
+	if err := resumeQueueRun(&Globals{}, []string{"-"}, checkout, ""); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "started the orchestrator") || len(tm.argv) != 6 {
@@ -82,7 +89,7 @@ func TestResumeQueueRunLaunch(t *testing.T) {
 	if err := resumeLaunch([]string{entryPath}, bin); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{bin, "--agent", "build", "--prompt", "Resume from handoff/README.md.\n"}
+	want := []string{bin, "--agent", "build", "--prompt", "Resume from handoff/README.md.\nBUD_RESUME_PROMPT\n"}
 	if gotBin != bin || !slices.Equal(gotArgv, want) {
 		t.Errorf("exec %s %q, want %q", gotBin, gotArgv, want)
 	}
@@ -94,7 +101,7 @@ func TestResumeQueueRunLaunch(t *testing.T) {
 	if err := resumeStatus(&Globals{stdout: &out}, nil, "tmux"); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"kill switch: off", "orchestrator: running", "queued: nothing", "last 24 hours: 1", "started"} {
+	for _, want := range []string{"kill switch: off", "orchestrator: running", "queued: 2026-11-24T01:03:00Z", "last 24 hours: 1", "started"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("status lacks %q:\n%s", want, out.String())
 		}
@@ -124,5 +131,23 @@ func TestResumeOffStopsAndOnResumes(t *testing.T) {
 	}
 	if q.Off() {
 		t.Error("the kill switch is still on")
+	}
+}
+
+func TestResumeLaunchRecordsAMissingOpencode(t *testing.T) {
+	q := resume.Queue{Dir: t.TempDir()}
+	if err := q.Add(resume.Entry{Version: resume.Version, Dir: t.TempDir(), Prompt: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	_, path, err := q.Claim(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resumeLaunch([]string{path}, filepath.Join(t.TempDir(), "no-opencode")); err == nil {
+		t.Fatal("launch without opencode succeeded")
+	}
+	e, err := resume.Read(path)
+	if err != nil || e.Started() || !strings.Contains(e.Error, "find opencode") {
+		t.Fatalf("entry = %+v, %v", e, err)
 	}
 }

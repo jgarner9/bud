@@ -50,7 +50,7 @@ func Resume() *Command {
 		Subs: []*Command{
 			{
 				Name:  "queue",
-				Usage: "queue a resume prompt read from stdin: queue [--dir <checkout>] [--agent <name>] -",
+				Usage: "queue a resume prompt from a file, or - for stdin: queue [--dir <checkout>] [--agent <name>] <file|->",
 				Flags: func(fs *flag.FlagSet) {
 					fs.StringVar(&dir, "dir", "", "where the next session starts (default: the current dir)")
 					fs.StringVar(&agent, "agent", "", "the OpenCode agent to start it with (default: OpenCode's)")
@@ -100,8 +100,8 @@ func Resume() *Command {
 }
 
 func resumeQueueRun(g *Globals, args []string, dir, agent string) error {
-	if len(args) != 1 || args[0] != "-" {
-		return usageErrorf("resume queue reads the prompt from stdin: pass - and pipe it in")
+	if len(args) != 1 {
+		return usageErrorf("resume queue takes the prompt's file, or - for stdin")
 	}
 	if dir == "" {
 		wd, err := os.Getwd()
@@ -114,7 +114,16 @@ func resumeQueueRun(g *Globals, args []string, dir, agent string) error {
 	if err != nil {
 		return err
 	}
-	data, err := io.ReadAll(io.LimitReader(resumeStdin, resume.MaxPrompt+1))
+	in := resumeStdin
+	if args[0] != "-" {
+		f, err := os.Open(args[0])
+		if err != nil {
+			return fmt.Errorf("read the prompt: %w", err)
+		}
+		defer f.Close()
+		in = f
+	}
+	data, err := io.ReadAll(io.LimitReader(in, resume.MaxPrompt+1))
 	if err != nil {
 		return fmt.Errorf("read the prompt: %w", err)
 	}
@@ -173,15 +182,29 @@ func resumeLaunch(args []string, opencode string) error {
 	if err := e.Validate(); err != nil {
 		return fmt.Errorf("resume launch: %w", err)
 	}
+	// from here every failure is recorded in the entry, which the runner
+	// waits on, so a launch that dies in its tmux pane still shows in status
+	fail := func(err error) error {
+		if err == nil {
+			return nil
+		}
+		if merr := resume.MarkFailed(args[0], err); merr != nil {
+			return fmt.Errorf("%w (and recording it failed: %v)", err, merr)
+		}
+		return err
+	}
 	bin, err := exec.LookPath(opencode)
 	if err != nil {
-		return fmt.Errorf("find opencode: %w; pass --opencode to bud resume run", err)
+		return fail(fmt.Errorf("find opencode: %w; fix the unit's PATH or pass --opencode to bud resume run", err))
 	}
 	if err := os.Chdir(e.Dir); err != nil {
+		return fail(err)
+	}
+	if err := resume.MarkLaunched(args[0], resumeNow()); err != nil {
 		return err
 	}
 
-	return resumeExec(bin, resume.Argv(bin, e), os.Environ())
+	return fail(resumeExec(bin, resume.Argv(bin, e), os.Environ()))
 }
 
 func resumeStatus(g *Globals, args []string, tmux string) error {
@@ -223,8 +246,11 @@ func resumeStatus(g *Globals, args []string, tmux string) error {
 	}
 	if last != nil && last.ClaimedAt != nil {
 		state := "started"
-		if !last.Started {
+		switch {
+		case last.Error != "":
 			state = "failed: " + last.Error
+		case last.LaunchedAt == nil:
+			state = "claimed, but launch never reported"
 		}
 		fmt.Fprintf(w, "last: %s, %s\n", last.ClaimedAt.Format(time.RFC3339), state)
 	}
@@ -240,6 +266,13 @@ func resumeOff(g *Globals, args []string, tmux string) error {
 	if err != nil {
 		return err
 	}
+	// waits out a run in the middle of a start, so the session it starts is
+	// the one stopped below, not one that comes up after
+	unlock, err := q.LockWait()
+	if err != nil {
+		return fmt.Errorf("take the lock: %w", err)
+	}
+	defer unlock()
 	if err := q.SetOff(true); err != nil {
 		return fmt.Errorf("turn the kill switch on: %w", err)
 	}

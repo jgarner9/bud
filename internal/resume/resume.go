@@ -35,10 +35,13 @@ type Entry struct {
 	Agent    string    `json:"agent,omitempty"` // the OpenCode agent, empty for the default
 	Prompt   string    `json:"prompt"`
 
-	ClaimedAt *time.Time `json:"claimed_at,omitempty"`
-	Started   bool       `json:"started,omitempty"`
-	Error     string     `json:"error,omitempty"`
+	ClaimedAt  *time.Time `json:"claimed_at,omitempty"`
+	LaunchedAt *time.Time `json:"launched_at,omitempty"` // bud resume launch, just before it execs opencode
+	Error      string     `json:"error,omitempty"`
 }
+
+// Started says whether launch reached opencode
+func (e *Entry) Started() bool { return e.LaunchedAt != nil && e.Error == "" }
 
 // Validate checks what queue and run both rely on
 func (e *Entry) Validate() error {
@@ -240,28 +243,41 @@ func (q Queue) SetOff(off bool) error {
 	return os.WriteFile(q.offFile(), []byte("bud resume is off; bud resume on starts orchestrators again\n"), 0o600)
 }
 
-// Lock takes the runner's lock without waiting. ok is false when another
-// runner holds it. The lock goes with the process, so a crash frees it
-func (q Queue) Lock() (unlock func(), ok bool, err error) {
+// LockWait takes the runner's lock, waiting for a run that holds it, so
+// off and on can't land in the middle of a start
+func (q Queue) LockWait() (unlock func(), err error) {
+	return q.lock(syscall.LOCK_EX)
+}
+
+func (q Queue) lock(how int) (func(), error) {
 	if err := os.MkdirAll(q.Dir, 0o700); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	f, err := os.OpenFile(q.lockFile(), os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := syscall.Flock(int(f.Fd()), how); err != nil {
 		f.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, false, nil
-		}
-		return nil, false, err
+		return nil, err
 	}
-
 	return func() {
 		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		f.Close()
-	}, true, nil
+	}, nil
+}
+
+// Lock takes the runner's lock without waiting. ok is false when another
+// runner holds it. The lock goes with the process, so a crash frees it
+func (q Queue) Lock() (unlock func(), ok bool, err error) {
+	unlock, err = q.lock(syscall.LOCK_EX | syscall.LOCK_NB)
+	if errors.Is(err, syscall.EWOULDBLOCK) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return unlock, true, nil
 }
 
 // Read reads one entry file, as bud resume launch does with a consumed one
@@ -271,4 +287,26 @@ func Read(path string) (*Entry, error) {
 		err = fmt.Errorf("%s doesn't exist", path)
 	}
 	return e, err
+}
+
+// MarkLaunched records, from inside the tmux session, that launch is about to
+// exec opencode; the runner waits for it before calling a start good
+func MarkLaunched(path string, now time.Time) error {
+	e, err := Read(path)
+	if err != nil {
+		return err
+	}
+	t := now.UTC()
+	e.LaunchedAt = &t
+	return Queue{}.record(path, e)
+}
+
+// MarkFailed records why launch couldn't start opencode
+func MarkFailed(path string, cause error) error {
+	e, err := Read(path)
+	if err != nil {
+		return err
+	}
+	e.Error = cause.Error()
+	return Queue{}.record(path, e)
 }

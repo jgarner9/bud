@@ -27,6 +27,11 @@ type Runner struct {
 	MinAge    time.Duration // a prompt waits this long, so the session that queued it can finish its last reply
 	MaxPerDay int           // starts allowed in any 24 hours
 	Now       func() time.Time
+	// LaunchWait is how long the runner waits for launch to report from
+	// inside tmux; 10 seconds when zero
+	LaunchWait time.Duration
+	// Sleep is time.Sleep, swappable for tests
+	Sleep func(time.Duration)
 }
 
 // ErrCap is Run's error when the daily cap stops a start; the prompt stays queued
@@ -34,9 +39,6 @@ var ErrCap = errors.New("daily cap reached")
 
 // Run starts the next orchestrator when a prompt is queued, and says what it did
 func (r *Runner) Run() (string, error) {
-	if r.Queue.Off() {
-		return "off: the kill switch is on (bud resume on turns it off)", nil
-	}
 	unlock, ok, err := r.Queue.Lock()
 	if err != nil {
 		return "", fmt.Errorf("take the lock: %w", err)
@@ -45,6 +47,11 @@ func (r *Runner) Run() (string, error) {
 		return "another bud resume run holds the lock", nil
 	}
 	defer unlock()
+	// checked under the lock, which off takes too, so off can't land
+	// between this check and the start
+	if r.Queue.Off() {
+		return "off: the kill switch is on (bud resume on turns it off)", nil
+	}
 
 	e, err := r.Queue.Pending()
 	if err != nil {
@@ -74,15 +81,13 @@ func (r *Runner) Run() (string, error) {
 	}
 	// from here the prompt is consumed: a failure is recorded, never retried
 	if err := r.start(e, path); err != nil {
-		e.Error = err.Error()
-		if rerr := r.Queue.record(path, e); rerr != nil {
-			return "", fmt.Errorf("%w (and recording it failed: %v)", err, rerr)
+		if e.Error == "" {
+			e.Error = err.Error()
+			if rerr := r.Queue.record(path, e); rerr != nil {
+				return "", fmt.Errorf("%w (and recording it failed: %v)", err, rerr)
+			}
 		}
 		return "", fmt.Errorf("%w; the prompt is kept in %s and won't run again on its own", err, path)
-	}
-	e.Started = true
-	if err := r.Queue.record(path, e); err != nil {
-		return "", fmt.Errorf("started, but recording it in %s failed: %w", path, err)
 	}
 
 	return fmt.Sprintf("started the orchestrator in tmux session %s, in %s", r.session(), e.Dir), nil
@@ -109,7 +114,44 @@ func (r *Runner) start(e *Entry, path string) error {
 	// tmux runs bud resume launch, which reads the prompt from the consumed
 	// entry and execs opencode, so the prompt never goes through tmux's
 	// message size limit or a shell
-	return r.Tmux.NewSession(r.session(), e.Dir, []string{r.Bud, "resume", "launch", "--opencode", r.Opencode, path})
+	if err := r.Tmux.NewSession(r.session(), e.Dir, []string{r.Bud, "resume", "launch", "--opencode", r.Opencode, path}); err != nil {
+		return err
+	}
+
+	return r.waitLaunch(e, path)
+}
+
+// waitLaunch waits for launch to record that it reached opencode, or why it
+// didn't. tmux accepting the session only means the command was spawned
+func (r *Runner) waitLaunch(e *Entry, path string) error {
+	wait, sleep := r.LaunchWait, r.Sleep
+	if wait == 0 {
+		wait = 10 * time.Second
+	}
+	if sleep == nil {
+		sleep = time.Sleep
+	}
+	const step = 200 * time.Millisecond
+	for waited := time.Duration(0); ; waited += step {
+		got, err := Read(path)
+		if err != nil {
+			return err
+		}
+		if got.Error != "" {
+			e.Error = got.Error
+			return fmt.Errorf("launch: %s", got.Error)
+		}
+		if got.LaunchedAt != nil {
+			return nil
+		}
+		if !r.Tmux.HasSession(r.session()) {
+			return errors.New("the tmux session ended before bud resume launch reported; check the unit's PATH")
+		}
+		if waited >= wait {
+			return fmt.Errorf("bud resume launch didn't report within %s", wait)
+		}
+		sleep(step)
+	}
 }
 
 // Argv is the command the orchestrator runs. It never carries --auto,

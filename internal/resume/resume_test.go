@@ -22,6 +22,8 @@ type fakeTmux struct {
 	started  [][]string
 	dirs     []string
 	failNew  error
+	// launch stands in for bud resume launch inside the pane; nil marks it launched
+	launch func(path string)
 }
 
 func (f *fakeTmux) HasSession(name string) bool { return f.sessions[name] }
@@ -39,6 +41,11 @@ func (f *fakeTmux) NewSession(name, dir string, argv []string) error {
 	f.sessions[name] = true
 	f.started = append(f.started, argv)
 	f.dirs = append(f.dirs, dir)
+	if f.launch != nil {
+		f.launch(argv[len(argv)-1])
+	} else if err := MarkLaunched(argv[len(argv)-1], t0); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -47,6 +54,7 @@ func runner(t *testing.T, q Queue, tm *fakeTmux, now time.Time) *Runner {
 	return &Runner{
 		Queue: q, Tmux: tm, Bud: "/bin/bud", Opencode: "opencode",
 		MinAge: 2 * time.Minute, MaxPerDay: 2, Now: func() time.Time { return now },
+		LaunchWait: time.Second, Sleep: func(time.Duration) {},
 	}
 }
 
@@ -110,7 +118,7 @@ func TestRunStartsOnceAndReplacesTheOldSession(t *testing.T) {
 		t.Errorf("argv = %v", argv)
 	}
 	got, err := Read(argv[5])
-	if err != nil || !got.Started || got.ClaimedAt == nil || got.Prompt != e.Prompt {
+	if err != nil || !got.Started() || got.ClaimedAt == nil || got.Prompt != e.Prompt {
 		t.Errorf("consumed entry = %+v, %v", got, err)
 	}
 
@@ -205,7 +213,7 @@ func TestRunRecordsAFailedStartAndDoesntRetry(t *testing.T) {
 		t.Fatalf("Run = %v", err)
 	}
 	last, err := q.Last()
-	if err != nil || last == nil || last.Started || last.Error != "no server" {
+	if err != nil || last == nil || last.Started() || last.Error != "no server" {
 		t.Fatalf("Last = %+v, %v", last, err)
 	}
 	tm.failNew = nil
@@ -262,5 +270,74 @@ func TestArgvNeverAutoApproves(t *testing.T) {
 		if a == "--auto" || a == "--yolo" || a == "--dangerously-skip-permissions" {
 			t.Errorf("argv carries %s", a)
 		}
+	}
+}
+
+func TestRunReportsALaunchThatFails(t *testing.T) {
+	for name, tc := range map[string]struct {
+		launch func(*fakeTmux) func(string)
+		want   string
+	}{
+		"launch records an error": {
+			launch: func(*fakeTmux) func(string) {
+				return func(p string) { MarkFailed(p, errors.New("find opencode: not found")) }
+			},
+			want: "find opencode",
+		},
+		"the pane dies before reporting": {
+			launch: func(f *fakeTmux) func(string) { return func(string) { delete(f.sessions, Session) } },
+			want:   "ended before",
+		},
+		"launch never reports": {
+			launch: func(*fakeTmux) func(string) { return func(string) {} },
+			want:   "didn't report",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			q := Queue{Dir: t.TempDir()}
+			if err := q.Add(entry(t, t0)); err != nil {
+				t.Fatal(err)
+			}
+			tm := &fakeTmux{sessions: map[string]bool{}}
+			tm.launch = tc.launch(tm)
+			r := runner(t, q, tm, t0.Add(time.Hour))
+			if _, err := r.Run(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Run = %v, want %q", err, tc.want)
+			}
+			last, err := q.Last()
+			if err != nil || last == nil || last.Started() || !strings.Contains(last.Error, tc.want) {
+				t.Fatalf("Last = %+v, %v", last, err)
+			}
+			if msg, _ := r.Run(); msg != "nothing queued" {
+				t.Errorf("retried: %q", msg)
+			}
+		})
+	}
+}
+
+func TestLockWaitWaitsForARun(t *testing.T) {
+	q := Queue{Dir: t.TempDir()}
+	unlock, ok, err := q.Lock()
+	if err != nil || !ok {
+		t.Fatalf("Lock = %v, %v", ok, err)
+	}
+	got := make(chan struct{})
+	go func() {
+		u, err := q.LockWait()
+		if err == nil {
+			u()
+		}
+		close(got)
+	}()
+	select {
+	case <-got:
+		t.Fatal("LockWait didn't wait")
+	case <-time.After(100 * time.Millisecond):
+	}
+	unlock()
+	select {
+	case <-got:
+	case <-time.After(5 * time.Second):
+		t.Fatal("LockWait never got the lock")
 	}
 }

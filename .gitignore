@@ -7,3 +7,5 @@ nvim.log
 /_site_src/
 /_site/
 __pycache__/
+# the resume prompt /handoff writes before bud resume queue (JGA-394)
+.bud-resume-prompt.txt

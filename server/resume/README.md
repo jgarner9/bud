@@ -18,7 +18,7 @@ On the home server, as the user who will run the orchestrator:
 
 ## Using it
 
-- Start a loop: queue the first prompt by hand, `bud resume queue --dir <checkout> - < prompt.txt`, and the timer starts it within a few minutes.
+- Start a loop: queue the first prompt by hand, `bud resume queue --dir <checkout> prompt.txt`, and the timer starts it within a few minutes.
 - Watch it or answer its asks: `tmux attach -t bud-orchestrator`, and detach with `Ctrl-b d`. An ask nobody answers is refused after 10 minutes.
 - See where it stands: `bud resume status`; `journalctl --user -u bud-resume` shows each start.
 - Stop everything: `bud resume off` stops the running orchestrator and starts no more; `bud resume on` lets the timer start again.

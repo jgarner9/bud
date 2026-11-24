@@ -455,7 +455,9 @@ func TestSpendToolReportsTheMonthAgainstTheCapAndAllowances(t *testing.T) {
 }
 
 func TestSpendToolReportsTokensAndGoWindows(t *testing.T) {
-	now := time.Now().UTC()
+	// a fixed clock, so the ledger's month and hours can't drift from the
+	// read's across a boundary
+	now := time.Date(2026, 3, 5, 15, 10, 0, 0, time.UTC)
 	month, hour := now.Format("2006-01"), now.Format("2006-01-02T15")
 	old := now.Add(-48 * time.Hour).Format("2006-01-02T15")
 	reg := func() (*registry.Registry, error) {
@@ -464,7 +466,10 @@ func TestSpendToolReportsTokensAndGoWindows(t *testing.T) {
 	ledger := `{"month":"` + month + `","spent":{"go-kimi":3},"topup":0,"cap":10,` +
 		`"tokens":{"go-kimi":{"requests":4,"in":1200,"out":300}},` +
 		`"hours":{"go-kimi":{"` + hour + `":1,"` + old + `":2},"last-week":{"` + old + `":0.5}}}`
-	got := spendCall(t, spendSources(t, ledger, reg))
+	got, err := routerSpend(spendSources(t, ledger, reg), now)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got.Models) != 2 || got.Models[0].ID != "go-kimi" || got.Models[1].ID != "last-week" {
 		t.Fatalf("models %+v", got.Models)
 	}

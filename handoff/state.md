@@ -27,6 +27,14 @@ Where Bud stands at the handoff from Claude Code to OpenCode. Linear (team JGA, 
 
 Earlier in the same run (2026-11-21 and the night after): R6b approvals at Bud-owned leaves (#71 to #75), the router and its tiers, spend cap and fallback (#66, #68, #70, #76, #79), mail (#83, #84), memory for the runtimes (#86 to #90), the planning OpenCode (#92, #93), the unattended-deny plugin (#94), registry privacy rules (#95, #96), memory review on Signal (#104) and start lines (#105). `design/build-plan.md` has the roadmap (R1 to R9) with each PR.
 
+## Built on 2026-11-24
+
+| Issue | What | PR | Decisions |
+| --- | --- | --- | --- |
+| JGA-394 | `bud resume`, the `/handoff` command and the timer in `server/resume/`: a session that hands off queues its resume prompt, and the home server starts the next orchestrator in tmux | this PR | D132 |
+
+Not set up on the home server yet: revisit item 31.
+
 ## The home server
 
 Fully set up and verified by Jason as of 2026-11-22 08:20 UTC: gateway, router, Hermes (both profiles), signal-cli and bud-signal, embeddings, the memory service with memory-mcp through the gateway (Hermes's own memory off), calendar, contacts, mail, and the planning OpenCode as the `bud-planning` user.

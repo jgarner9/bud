@@ -1,0 +1,15 @@
+# Starts bud-resume.service every two minutes. A run with nothing queued
+# exits at once, and a queued prompt waits two minutes (--min-age) before it
+# starts, so the session that queued it can finish its last reply.
+# OnUnitActiveSec counts from each start, so a failed run (the daily cap, a
+# failed launch) doesn't stop the timer the way OnUnitInactiveSec can, since
+# a failed unit never goes inactive.
+[Unit]
+Description=Check for a queued Bud orchestrator handoff
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

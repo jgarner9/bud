@@ -1,0 +1,25 @@
+# Starts the next OpenCode orchestrator after a handoff (JGA-394), as a
+# systemd user oneshot that bud-resume.timer starts every two minutes:
+#
+#   cp bud-resume.service bud-resume.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-resume.timer
+#
+# Each run does nothing unless a session queued a resume prompt with
+# bud resume queue. It then claims the prompt once and starts OpenCode with
+# it in the detached tmux session bud-orchestrator, where asks wait for
+# Jason (tmux attach -t bud-orchestrator) and the unattended-deny plugin
+# refuses one left for 10 minutes. bud resume off is the kill switch.
+#
+# KillMode=process keeps the tmux server this run starts alive after the
+# oneshot exits; the default would kill the orchestrator with it. PATH must
+# reach opencode, tmux, git and gh: change it if they live elsewhere.
+[Unit]
+Description=Start the next Bud OpenCode orchestrator after a handoff
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:%h/.opencode/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/bud resume run
+KillMode=process
+NoNewPrivileges=yes

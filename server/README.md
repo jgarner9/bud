@@ -15,6 +15,7 @@ Home-server setup and service units for Hermes, the planning OpenCode, the Bud M
 | `embed/` | The embedding server's unit: llama.cpp with Qwen3-Embedding-0.6B on the CPU, for working memory (Suite D52, JGA-294) |
 | `hermes/` | How Hermes, the manager, is set up; bud renders its config and Hermes installs its own unit (Suite D48). `hermes/plugins/bud-signal/` is the Hermes plugin that lets Signal reactions answer approvals (D30) |
 | `curator/` | The KB curator's nightly timer: promotes approved working memory into bud-kb, queues contradictions, flags and archives stale sections (Suite D123, D124) |
+| `resume/` | The orchestrator handoff timer: starts the next OpenCode orchestrator in tmux when a session hands off with `/handoff` (JGA-394) |
 | `hugo/` | The KB site: Hugo's config and layouts for bud-kb, and the unit for `bud kb-site` (Suite D53, D122) |
 | `signal-cli/` | signal-cli's daemon unit, Signal for Hermes on the bot number (Suite D30) |
 

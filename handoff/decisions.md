@@ -1,6 +1,6 @@
-# Bud Suite decisions, D1 to D130
+# Bud Suite decisions, D1 to D132
 
-The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D130. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
+The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D132. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
 
 Rules for the log: it's append-only. A new decision takes the next number at the end. An entry is never renumbered, deleted or rewritten; a decision that changes is marked "Superseded by Dn" with its old text struck through, and the new decision gets the next number. When you add one, add it here and in the design doc it came from, and tell Jason the number.
 
@@ -172,3 +172,9 @@ Taken on recommendation 2026-11-22 (thread "Build self-improvement proposals and
 | # | Decision | Date | Notes |
 | --- | --- | --- | --- |
 | D131 | A `mail_send_message` whose only recipient is Jason's own send-as address (the `email` field of the 1Password item "iCloud", `BUD_MAIL_FROM`) runs without a Signal prompt, so the news digest and other notes to himself don't ask per send. The rule is a D116 `when` rule in the overlay's `env/personal.jsonc`: `to` equals the one-item list of that address, `cc` empty, `bcc` absent. Every other send asks as before: a second address, a cc or bcc, a display name or a change of case, and every `mail_reply_message`. | 2026-11-24 | JGA-392. Asked for by Jason (revisit item 23, the long-running loop's blocker 3). The address is private, so the rule lives only in bud-overlay; the bud side needed no code, only the test cases in `internal/mcpgateway/approve_test.go`. Mail stays P0-only at the gateway, so a sender must be a P0 session such as Hermes's private profile. |
+
+## D132: starting the next orchestrator after a handoff
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D132 | A session that hands off queues its resume prompt (`/handoff`, `bud resume queue`), and a systemd user timer on the home server (`server/resume/`) claims it once and starts the next OpenCode orchestrator in the detached tmux session `bud-orchestrator`, replacing the one that queued it. One queued prompt at a time, a lock on the runner, at most eight starts in 24 hours, and `bud resume off` as the kill switch. The session never auto-approves: asks wait for Jason in tmux and the unattended-deny plugin (D111) refuses one left for 10 minutes. | 2026-11-24 | JGA-394, from the coordinator's brief on Jason's blocker list. tmux over `opencode run` was recommended on a decision card (`opencode run` rejects every ask, so a resumed session could never commit or push); building on the recommendation while Jason decides. Jason approved letting `bud resume queue *` run alone as an overlay rule on 2026-11-24 (bud-overlay PR #11, revisit item 31). Detail in `docs/internals/resume.md`. |

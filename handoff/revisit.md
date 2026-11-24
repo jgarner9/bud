@@ -152,3 +152,9 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 30. **After the JGA-391 PR merges and the next nightly:**
     1. On the laptop: `bud update`, then `bud sync`. `~/.config/opencode/opencode.jsonc` now has a `cost` block on each Go model, and `opencode stats --cost --models --days 7` shows dollars per model.
     2. On the home server: update bud from main as in item 22, then restart `bud-router` and `bud-mcp-ops`. The ledger gains `tokens` and `hours` with the router's next charge; until then `ops_spend` shows zero tokens and windows.
+
+### Orchestrator handoffs (JGA-394, Suite D132)
+
+31. **Starting the next orchestrator after a handoff.** Set up with the steps in `server/resume/README.md` (tmux, opencode, a checkout with push access and `gh`, then the timer). Two calls for you:
+    - **tmux or headless.** Built as tmux on the recommendation: asks wait for you to attach and are refused after 10 minutes. Headless `opencode run` would reject every ask, so the session couldn't commit or push.
+    - **Whether `bud resume queue` runs alone.** The base rules ask for it like any unlisted command, so an unattended session's `/handoff` would time out and print the prompt instead of queueing it. **You said yes on 2026-11-24:** jgarner9/bud-overlay#11 adds `{ "action": "shell", "resource": "bud resume queue *", "effect": "allow" }` to the overlay's `env/personal.jsonc`, for you to merge after #122, then `bud sync`.

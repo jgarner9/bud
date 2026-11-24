@@ -267,3 +267,7 @@ func (p *Paths) KBSite() string { return filepath.Join(p.State, "kb-site") }
 // CuratorState is what the curator has read and promoted, kept outside the
 // KB so a reverted curator commit isn't redone from the same evidence
 func (p *Paths) CuratorState() string { return filepath.Join(p.State, "curator.json") }
+
+// Resume holds the orchestrator handoff queue (JGA-394): the pending resume
+// prompt, the consumed ones, the kill switch and the runner's lock
+func (p *Paths) Resume() string { return filepath.Join(p.State, "resume") }

@@ -96,7 +96,7 @@ The AI backend is a setting (`ai.backend`); [AI backends](backends.md) says how 
 | Command | What it does |
 | --- | --- |
 | `bud ai status [--json]` | Which backend is set, the command it runs, whether that's installed, and for OpenClaw whether the Gateway at `ai.openclaw.url` answers, with a fix for each problem. |
-| `bud agent [path]` · `bud chat` | On any backend but `claude`, open the backend's own TUI from the shell: OpenClaw's `openclaw tui` on the project's Gateway session (the one the editor uses), or on its one chat session for `bud chat`. With `ai.backend = "claude"` they're Claude Code's, below. |
+| `bud agent [path]` · `bud chat` | Open the backend's own TUI from the shell. With OpenCode, `bud agent` uses `op run` and a private OpenCode server when `bud sync` has written `opencode.env`; otherwise it launches OpenCode directly. With OpenClaw, open the project's Gateway session or the shared chat session. With Claude Code, see below. |
 | `bud ai setup [--yes]` | On the `claude` backend, points you at `bud claude setup`. On the others, installs the backend's command with npm if it's missing (asking first), then for OpenClaw asks for the Gateway's URL and the file holding its token, and saves them. Models sign in on the Gateway host (`openclaw onboard` there). |
 
 ## Claude Code

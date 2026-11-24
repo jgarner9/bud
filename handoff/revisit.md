@@ -4,6 +4,8 @@ This is the Claude project's revisit list as of 2026-11-22 18:45 UTC, with host 
 
 ## Open, in the order to do them
 
+For interactive OpenCode on the server profile, select the intended `bud.opencode_secrets` references in that profile's private overlay fragments, then sync and use the updated `bud agent`.
+
 Home-server rollouts Jason hasn't done yet. Each one changes how the home server behaves, so they're his to run; give him paste blocks, never run them for him.
 
 | Order | Item | What | Waits on |

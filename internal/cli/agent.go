@@ -81,6 +81,30 @@ func agent(g *Globals, args []string) error {
 		return err
 	}
 	s := machineSettings()
+	if s.AI.Backend == "opencode" {
+		p, err := paths.Resolve()
+		if err != nil {
+			return err
+		}
+		file := p.OpenCodeEnv()
+		if _, err := os.Stat(file); err == nil {
+			op, err := exec.LookPath("op")
+			if err != nil {
+				return errors.New("op isn't installed: install the 1Password CLI to launch OpenCode with synced secrets")
+			}
+			bin, err := exec.LookPath("opencode")
+			if err != nil {
+				return errors.New("opencode isn't installed: run bud ai setup")
+			}
+			// A running shared server would keep its original environment.
+			// op needs its service token, but OpenCode only needs the resolved values.
+			argv := []string{op, "run", "--env-file=" + file, "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN", bin, "--standalone", ws.Root}
+			g.Logf("running %q in %s", argv, ws.Root)
+			return execClaude(ws.Root, argv, agentEnv())
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("checking the synced OpenCode environment: %w", err)
+		}
+	}
 	if s.AI.Backend != "claude" {
 		// the backend's own TUI (D131); OpenClaw's on the session the
 		// editor saved for the project (D139)

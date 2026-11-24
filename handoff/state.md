@@ -45,13 +45,13 @@ None of the 2026-11-22 builds are rolled out there yet. **Jason hasn't done revi
 | --- | --- | --- | --- |
 | JGA-390 | Backlog | Subagents stay P0 with a P0 parent | Above |
 | JGA-321 | In Review | Self-improvement loop | Rollout (item 21), then Done |
-| JGA-348 | In Progress | One approval policy and audit log with runtime adapters | Mostly superseded by D97 (approvals at Bud-owned leaves); review what's left with Jason |
+| JGA-348 | Closed | One approval policy and audit log with runtime adapters | Superseded by D97; a narrow follow-up should consolidate the shared audit log (D132) |
 | JGA-376 | Backlog | Audit Signal approvals | Largely done by D114 to D121; close or narrow with Jason |
 | JGA-374 | Backlog | Review final-dispatch approvals, plan isolated home-server verification | Jason |
 | JGA-349 | Backlog | Signal reactions and replies to approval requests | Likely stale (built in R6b, D101); confirm and close |
 | JGA-301 | In Progress | Ported search tools against a real private search service | A SearXNG instance |
 | JGA-368 | In Progress | SQLite memory packaging on the home server | Hard-kill and backup-restore checks, on the home server |
-| JGA-317 | Backlog | Isolate untrusted mail ingestion | Jason's mail `--record` output, then the summarizer shape (item 12) |
+| JGA-317 | Backlog | Isolate untrusted mail ingestion | Jason's mail `--record` output, then implement the summarizer (D131, item 12) |
 | JGA-318 | Backlog | A compact personal digest | After JGA-317 |
 | JGA-347 | Backlog | Queue private work and wake the Qwen box | Wake-on-LAN isn't enabled on the Qwen box |
 | JGA-345 | Backlog | Lemonade behind the router (D98) | The Qwen box |

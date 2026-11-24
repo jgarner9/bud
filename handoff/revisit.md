@@ -21,7 +21,7 @@ Check Hermes 0.23.2 first: if the child can carry a parent id, take B; else A.
 Approved records were saved at P1 before D130; nothing can change a record's `privacy` today (`discard` only touches staged ones).
 
 - **A — reviewer-only `retier` action (recommended).** `POST /retier {id, privacy}` → `UPDATE records SET privacy`. Reviewer token, asked on Signal the way memory-review approves. One-line update (the FTS index doesn't rebuild on privacy). Add a `memory:retier` title; enumerate via `export` or a lean `approved` list.
-- **B — also "remove".** Deleting an approved record is heavier: references and per-model vector tables don't cascade, so removal needs explicit cleanup or `export_recovery` breaks. Defer; model as a `retier` sentinel later.
+- **B — also "remove".** Deleting an approved record is heavier: references cascade, but per-model vector tables don't, so removal needs explicit vector cleanup or `export_recovery` breaks. Defer; model as a `retier` sentinel later.
 
 Build A now; defer B. Say the word and I'll file + build it.
 
@@ -60,7 +60,7 @@ Decisions waiting on him (bring them up with a recommendation; don't decide them
 - **Item 9:** the JGA-364 deletion list.
 - **Item 10:** R5c, other chat keys (recommended: wait until he's used opencode.nvim).
 - **Item 11:** R9, the custom TUI (JGA-375): a design session before any code.
-- **Item 12:** JGA-317 summarizer shape (recommended: a direct router call with no tools); waits on the mail `--record` output.
+- **Item 12:** JGA-317 summarizer implementation waits on the mail `--record` output; its shape is decided in D131.
 - **Item 13:** the stale branch `claude/hermes-router` can be deleted.
 - **Item 16:** router spend past the $10 cap (recommended: hold and ask on Signal, one yes covers one request or the rest of that turn, never a raised cap).
 - **Item 28:** moving bud-kb's remote onto the home server so P0 facts can reach the KB (recommended: wait a few weeks).
@@ -97,7 +97,7 @@ Worked through on 2026-11-22 (UTC) by the thread "Continue Bud roadmap tasks" on
 9. **JGA-364 deletion list** needs your review before anything is removed.
 10. **R5c** (other chat keys): recommended to wait until you've used opencode.nvim for a while.
 11. **R9 custom TUI (JGA-375):** a design session before any code.
-12. **JGA-317 summarizer shape:** a direct router call with no tools (recommended) or a tool-less Hermes profile. Waits on item 1's recording.
+12. **JGA-317 summarizer implementation:** D131 chose a direct router call with no tools. Waits on item 1's recording.
 13. **Stale branch** `claude/hermes-router` can be deleted from PR #77.
 
 ### Added by this thread

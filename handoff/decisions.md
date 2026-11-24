@@ -1,6 +1,6 @@
-# Bud Suite decisions, D1 to D130
+# Bud Suite decisions, D1 to D132
 
-The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D130. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
+The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D130, with D131 and D132 recorded here. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
 
 Rules for the log: it's append-only. A new decision takes the next number at the end. An entry is never renumbered, deleted or rewritten; a decision that changes is marked "Superseded by Dn" with its old text struck through, and the new decision gets the next number. When you add one, add it here and in the design doc it came from, and tell Jason the number.
 

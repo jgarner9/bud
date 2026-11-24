@@ -14,4 +14,4 @@
 
 - Color only when writing to a terminal, `TERM` isn't `dumb` and `NO_COLOR` is unset, so pipes and tests stay plain. Pad text before coloring it.
 - Plain Unicode symbols, never emoji.
-- Prompts read from the terminal (`/dev/tty` when stdin is a pipe, as under `curl | sh`). With `--yes` or no terminal, take the defaults.
+- Prompts read from the terminal (`/dev/tty` when stdin is a pipe, as under `curl | sh`). For a non-destructive prompt, `--yes` or no terminal takes the default; a destructive step still refuses without a terminal and names `--yes` (above).

@@ -17,7 +17,7 @@ One issue, one context. When a task is committed, stop and tell Jason to `/clear
 2. **Decide, then write the spec.** Every decision and edge case is yours. The spec is what a coder needs and nothing else: the files to touch with line anchors, signatures, the behaviour as numbered rules, the exact error text, the tests, and the commands that must pass. Put it where the repo keeps such things, or in the brief when it is short.
 3. **Rate what is left and hand it over.** Use the table. Reading and searching across many files goes to the `explore` subagent; writing code goes to the `general` subagent, whose model the rating picks. The brief is the spec's path, the files the coder may touch, and the checks. No history, no background.
 4. **Check, don't read.** Run the repo's check yourself. Read the diff stat and the test names; read code only where no test can speak for it. Send corrections back to the same coder.
-5. **Commit and move the issue**, then stop (see above).
+5. **Report it done and ready to commit**, then stop. Commit only when asked, and move the issue once it's committed.
 
 | Rating | The coding that is left | Coder |
 | --- | --- | --- |

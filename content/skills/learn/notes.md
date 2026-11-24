@@ -11,7 +11,7 @@
 He doesn't need to ask. Stage the record at the end of the reply, after the answer:
 
 1. **Search first** (step 1's search is usually enough). If a record on the topic is already there, stage what's new rather than a second copy of it. Later questions in the same conversation build on the record this one staged.
-2. **New record:** stage it as a `summary` (or `fact` for a single idea) under the `learning` label (or `learning/<field>` when one exists), titled with the topic, not the question ("How DNA ancestry tests work", not "my question about 23andMe").
+2. **New record:** stage it with `kind: "summary"` (or `"fact"` for a single idea), titled with the topic, not the question ("How DNA ancestry tests work", not "my question about 23andMe"). `memory_stage` takes only `source`, `kind`, `body` and optional `privacy`, so put `learning: <topic>` in the body, not as a field.
 3. **Freshness:** there is no stale-by date, so put the date you checked the facts in the body, and re-check a fast-moving field sooner — 180 days for a settled topic, 30 for one that changes.
 4. **Body,** under about 500 words: a short summary in your own words, the key ideas as `- [concept] ...`, the misconceptions as `- [misconception] ...`, what he's still unsure of or wants to come back to as `- [question] ...`, any flashcards you made, and the sources.
 5. **Updating:** add what's new, and stage anything you corrected as "Was: X. Now: Y." instead of leaving the old record as current.

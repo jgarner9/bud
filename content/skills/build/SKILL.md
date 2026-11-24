@@ -11,6 +11,10 @@ Every tool call resends the whole conversation, so the cost of a task is the siz
 
 One issue, one context. When a task is committed, stop and tell Jason to `/clear` (or `/compact` when the next task needs what was learned) before the next one. As the context grows, watch its size and recommend a `/handoff` and a new session before every turn gets expensive.
 
+## Your model and the split
+
+This session runs `glm-5.3`. It plans, decides and checks; it does not write the code itself. Work is plan-then-build: a planning session on `glm-5.3` writes the whole spec up front (the `planning` skill), then this build session works through that plan, handing each task to a sub-agent on a cheaper model from the table below. `minimax-m3` is the starting coder for features; `glm-5.3-flash` is for mechanical edits.
+
 ## The loop
 
 1. **Read only what the task names.** The issue, then the files and lines it points at. A search across many files goes to the `explore` subagent, which returns conclusions, not file contents. Send independent tool calls in one turn.

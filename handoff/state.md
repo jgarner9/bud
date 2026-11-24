@@ -45,18 +45,19 @@ None of the 2026-11-22 builds are rolled out there yet. **Jason hasn't done revi
 
 ## Next, in order
 
-1. **JGA-390** (Medium, Backlog, left for OpenCode): keep a delegated Hermes subagent P0 when its parent conversation is P0. A subagent gets its own conversation id, so P0 data the parent writes into its task prompt isn't held by the router's sticky P0. Recommendation from the approvals thread: first check Hermes 0.23.2's delegation config (what the child sends, and whether it carries the parent's `x-opencode-session` or any parent id), then send subagents through a router path that is always P0. Read `docs/internals/router.md` and `design/autonomy-and-privacy-design.md` first. This is privacy loosening's safety net, so bring the approach to Jason with options before building.
-2. **Re-tiering approved memory records** (not filed): Hermes saved every record at P1 until D130, and the memory service has no action to re-tier or remove an approved record. Recommendation: a reviewer-only `retier` action, asked on Signal like memory-review. Ask Jason before filing (revisit item 29, step 3).
-3. **Help Jason through the rollouts** in [revisit.md](revisit.md) when he's at the home server: give paste blocks, read his output, and fix what breaks.
-4. **Then the rest of Bud 2.0** (below). Most need the home server, the Qwen box, Herdr or a design session with him, so recommend one and ask.
+1. **JGA-390** (D135, decided 2026-11-24: an always-P0 subagent path). A delegated Hermes subagent gets its own conversation id, so P0 data the parent writes into its task prompt isn't held by the router's sticky P0. Jason chose option A: the subagent runs through its own router path that is always P0, whatever the parent's tier. Being built.
+2. **Re-tiering approved memory records** (D136, decided 2026-11-24: a reviewer-only `retier` action). Hermes saved every record at P1 until D130; the action is `POST /retier {id, privacy}`, asked on Signal like memory-review, and removing a record is deferred. Being built.
+3. **Close JGA-348** (D134, decided 2026-11-23: superseded by D97) and file the narrow "consolidate the audit logs" follow-up.
+4. **Help Jason through the rollouts** in [revisit.md](revisit.md) when he's at the home server: give paste blocks, read his output, and fix what breaks.
+5. **Then the rest of Bud 2.0** (below). Most need the home server, the Qwen box, Herdr or a design session with him, so recommend one and ask.
 
 ## Open in Bud 2.0 (Linear)
 
 | Issue | Status | What | Needs |
 | --- | --- | --- | --- |
-| JGA-390 | Backlog | Subagents stay P0 with a P0 parent | Above |
+| JGA-390 | In Progress | Subagents stay P0 with a P0 parent | D135: always-P0 subagent path; being built |
 | JGA-321 | In Review | Self-improvement loop | Rollout (item 21), then Done |
-| JGA-348 | In Progress | One approval policy and audit log with runtime adapters | Mostly superseded by D97 (approvals at Bud-owned leaves); review what's left with Jason |
+| JGA-348 | In Progress | One approval policy and audit log with runtime adapters | D134: close as superseded by D97, file the audit-log follow-up |
 | JGA-376 | Backlog | Audit Signal approvals | Largely done by D114 to D121; close or narrow with Jason |
 | JGA-374 | Backlog | Review final-dispatch approvals, plan isolated home-server verification | Jason |
 | JGA-349 | Backlog | Signal reactions and replies to approval requests | Likely stale (built in R6b, D101); confirm and close |

@@ -21,19 +21,19 @@ Home-server rollouts Jason hasn't done yet. Each one changes how the home server
 
 Decisions waiting on him (bring them up with a recommendation; don't decide them):
 
-- **Item 29 step 3:** already-approved memory records were saved at P1, even ones from chats that read his calendar, and the memory service has no action to re-tier or remove an approved record (`discard` works only on staged ones). Recommendation: a small reviewer-only `retier` action in the memory service, asked about on Signal the way memory-review asks. Not filed yet.
+- **Item 29 step 3:** ~~already-approved memory records were saved at P1, even ones from chats that read his calendar, and the memory service has no action to re-tier or remove an approved record.~~ Decided 2026-11-24 (Suite D136): a reviewer-only `retier` action (`POST /retier {id, privacy}`), asked on Signal the way memory-review approves; removing a record is deferred. Being built.
 - **Item 8:** removing the old `bud.ai.claude` / `bud.ai.acp` chat code (a delete he reviews) and whether `ai.backend` defaults to `opencode`.
 - **Item 9:** the JGA-364 deletion list.
 - **Item 10:** R5c, other chat keys (recommended: wait until he's used opencode.nvim).
 - **Item 11:** R9, the custom TUI (JGA-375): a design session before any code.
-- **Item 12:** JGA-317 summarizer shape (recommended: a direct router call with no tools); waits on the mail `--record` output.
+- **Item 12:** JGA-317 summarizer shape — decided 2026-11-24 (Suite D133): a direct router call with no tools. Still waits on the mail `--record` output.
 - **Item 13:** the stale branch `claude/hermes-router` can be deleted.
 - **JGA-393:** whether laptop OpenCode goes through the router (Suite D70) for one spend meter and the same privacy rules, at the cost of coding needing the home server. Jason chose on 2026-11-24 to decide it later.
 - **Item 16:** router spend past the $10 cap (recommended: hold and ask on Signal, one yes covers one request or the rest of that turn, never a raised cap).
 - **Item 28:** moving bud-kb's remote onto the home server so P0 facts can reach the KB (recommended: wait a few weeks).
 - Older open items from the 2026-11-22 handoff: the JGA-368 hard-kill and backup-restore checks, the mail `--record` output for JGA-317, and a separate vault for the memory reviewer token and the bud-planning service account (both can read the whole Bud vault today).
 
-Work an agent can pick up without him: **JGA-390** (a delegated Hermes subagent gets its own conversation id, so P0 data in its task prompt isn't held; item 25). See [state.md](state.md).
+Work an agent can pick up without him: **JGA-390** — decided 2026-11-24 (Suite D135): a delegated subagent runs through an always-P0 router path, whatever the parent's tier. Being built. See [state.md](state.md).
 
 Closed since the list was last read: item 19 (the `improve:digest` prompt title) landed in PR #110; item 25's memory gap became D130 (PR #116).
 
@@ -145,7 +145,7 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 29. **the home server steps once PR #116 is merged** (after item 22's steps):
     1. Update bud from main again (the nightly or a build from main, as in item 22; no release includes #116 yet), promote the edge content cut from the #116 merge (format 9) with `gh workflow run content.yml -R jgarner9/bud -f mode=promote -f version=<v>`, then `bud sync`. Check that `~/.hermes/config.yaml` shows `X-Bud-Privacy: "P0"` under `mcp_servers.memory.headers`.
     2. Restart the router, then Hermes, so both pick up the change. Restart memory-mcp too, so its answers carry the marker.
-    3. Re-check the records you've already approved, since Hermes saved them at P1, even ones from chats that read your calendar. You can see them with a `memory_search` from Hermes once it's at P0, since each result shows its tier. The memory service has no action yet to re-tier or remove an approved record (`discard` works only on staged ones), so a private one needs a hand edit of the SQLite file, or a small new action. Say if you want the action built.
+    3. Re-check the records you've already approved, since Hermes saved them at P1, even ones from chats that read your calendar. You can see them with a `memory_search` from Hermes once it's at P0, since each result shows its tier. The reviewer-only `retier` action (Suite D136) re-tiers one once it lands, asked on Signal like memory-review; until then a private one needs a hand edit of the SQLite file.
     4. Test: in a Signal chat, ask Hermes something that recalls a P0 record. The router log should say "a private Bud memory record in the history raised a P1 request to P0", and the reply should come from Qwen.
     5. Then take out the item 24 hold (remove `qwen-35b` from the front of the overlay's `roles.manager.pool`), and `bud sync` again.
 

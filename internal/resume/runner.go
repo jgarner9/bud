@@ -75,6 +75,15 @@ func (r *Runner) Run() (string, error) {
 	}
 
 	e, path, err := r.Queue.Claim(now)
+	if err != nil && path != "" {
+		// the rename went through, so the prompt is consumed and never
+		// retried; leave the error on the entry where status looks for it
+		if e != nil {
+			e.Error = err.Error()
+			r.Queue.record(path, e)
+		}
+		return "", fmt.Errorf("claim the prompt: %w; it was moved to %s and won't run again on its own", err, path)
+	}
 	if err != nil {
 		return "", fmt.Errorf("claim the prompt: %w", err)
 	}

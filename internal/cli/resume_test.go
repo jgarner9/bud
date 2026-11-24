@@ -80,9 +80,9 @@ func TestResumeQueueRunLaunch(t *testing.T) {
 	}
 	var gotBin string
 	var gotArgv []string
-	resumeStart = func(b string, argv []string) (func() error, error) {
+	resumeStart = func(b string, argv []string) (func() error, func(), error) {
 		gotBin, gotArgv = b, argv
-		return func() error { return nil }, nil
+		return func() error { return nil }, func() { t.Error("a good launch stopped opencode") }, nil
 	}
 	wd, _ := os.Getwd()
 	t.Cleanup(func() { os.Chdir(wd) })
@@ -153,15 +153,61 @@ func TestResumeLaunchRecordsAMissingOpencode(t *testing.T) {
 }
 
 func TestStartChildReportsFailures(t *testing.T) {
-	if _, err := startChild(filepath.Join(t.TempDir(), "missing"), []string{"missing"}); err == nil {
+	if _, _, err := startChild(filepath.Join(t.TempDir(), "missing"), []string{"missing"}); err == nil {
 		t.Fatal("a missing binary started")
 	}
-	wait, err := startChild("/bin/sh", []string{"/bin/sh", "-c", "exit 3"})
+	wait, _, err := startChild("/bin/sh", []string{"/bin/sh", "-c", "exit 3"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := wait(); err == nil || !strings.Contains(err.Error(), "exit status 3") {
 		t.Fatalf("wait = %v", err)
+	}
+}
+
+func TestStartChildStopKillsTheChild(t *testing.T) {
+	_, stop, err := startChild("/bin/sh", []string{"/bin/sh", "-c", "sleep 60"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { stop(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("stop didn't kill and reap the child")
+	}
+}
+
+// a start the entry can't record must not leave opencode running, since
+// the runner will call it failed
+func TestResumeLaunchStopsOpencodeWhenRecordingFails(t *testing.T) {
+	q := resume.Queue{Dir: t.TempDir()}
+	if err := q.Add(resume.Entry{Version: resume.Version, Dir: t.TempDir(), Prompt: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	_, path, err := q.Claim(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(t.TempDir(), "opencode")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origStart := resumeStart
+	t.Cleanup(func() { resumeStart = origStart })
+	stopped := false
+	resumeStart = func(string, []string) (func() error, func(), error) {
+		os.Remove(path) // so MarkLaunched can't read the entry
+		return func() error { t.Error("waited on a start that wasn't recorded"); return nil }, func() { stopped = true }, nil
+	}
+	wd, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(wd) })
+	if err := resumeLaunch([]string{path}, bin); err == nil || !strings.Contains(err.Error(), "stopped") {
+		t.Fatalf("launch = %v", err)
+	}
+	if !stopped {
+		t.Error("opencode was left running")
 	}
 }
 

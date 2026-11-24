@@ -207,29 +207,38 @@ func resumeLaunch(args []string, opencode string) error {
 	// opencode runs as a child, not through exec, so a failed start comes
 	// back here before launched_at is written: the runner can't read a
 	// start as good when opencode never ran
-	wait, err := resumeStart(bin, resume.Argv(bin, e))
+	wait, stop, err := resumeStart(bin, resume.Argv(bin, e))
 	if err != nil {
 		return fail(fmt.Errorf("start opencode: %w", err))
 	}
 	if err := resume.MarkLaunched(args[0], resumeNow()); err != nil {
-		return fmt.Errorf("opencode started, but recording it failed: %w", err)
+		// the runner will call this start failed, so don't leave opencode
+		// running behind it
+		stop()
+		return fail(fmt.Errorf("opencode started, but recording it failed, so it was stopped: %w", err))
 	}
 
 	return wait()
 }
 
 // startChild starts argv on this terminal and returns a wait that forwards
-// the signals that stop a tmux pane and returns how the child exited
-func startChild(bin string, argv []string) (func() error, error) {
+// the signals that stop a tmux pane and returns how the child exited, and a
+// stop that kills and reaps the child instead
+func startChild(bin string, argv []string) (wait func() error, stop func(), err error) {
 	cmd := exec.Command(bin, argv[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	sigs := make(chan os.Signal, 4)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	if err := cmd.Start(); err != nil {
 		signal.Stop(sigs)
-		return nil, err
+		return nil, nil, err
 	}
-	return func() error {
+	stop = func() {
+		signal.Stop(sigs)
+		cmd.Process.Kill()
+		cmd.Wait()
+	}
+	wait = func() error {
 		defer signal.Stop(sigs)
 		done := make(chan error, 1)
 		go func() { done <- cmd.Wait() }()
@@ -244,7 +253,9 @@ func startChild(bin string, argv []string) (func() error, error) {
 				return nil
 			}
 		}
-	}, nil
+	}
+
+	return wait, stop, nil
 }
 
 func resumeStatus(g *Globals, args []string, tmux string) error {

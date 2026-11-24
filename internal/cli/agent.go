@@ -97,7 +97,8 @@ func agent(g *Globals, args []string) error {
 				return errors.New("opencode isn't installed: run bud ai setup")
 			}
 			// A running shared server would keep its original environment.
-			argv := []string{op, "run", "--env-file=" + file, "--", bin, "--standalone", ws.Root}
+			// op needs its service token, but OpenCode only needs the resolved values.
+			argv := []string{op, "run", "--env-file=" + file, "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN", bin, "--standalone", ws.Root}
 			g.Logf("running %q in %s", argv, ws.Root)
 			return execClaude(ws.Root, argv, agentEnv())
 		} else if !errors.Is(err, os.ErrNotExist) {

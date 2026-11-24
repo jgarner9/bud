@@ -56,7 +56,7 @@ func TestAgentOpenCodeSyncedEnv(t *testing.T) {
 	if err := os.WriteFile(op, nil, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	want = []string{op, "run", "--env-file=" + p.OpenCodeEnv(), "--", bin, "--standalone", project}
+	want = []string{op, "run", "--env-file=" + p.OpenCodeEnv(), "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN", bin, "--standalone", project}
 	if err := run(); err != nil {
 		t.Fatal(err)
 	}

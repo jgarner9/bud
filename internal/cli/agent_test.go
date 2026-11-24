@@ -12,6 +12,56 @@ import (
 	"jgarner.dev/bud/internal/paths"
 )
 
+func TestAgentOpenCodeSyncedEnv(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	p, err := paths.Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(p.State, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.MachineConfig(), []byte(`{"ai":{"backend":"opencode"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir)
+	bin, op := filepath.Join(binDir, "opencode"), filepath.Join(binDir, "op")
+	if err := os.WriteFile(bin, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	project, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{bin, project}
+	orig := execClaude
+	t.Cleanup(func() { execClaude = orig })
+	execClaude = func(dir string, argv, env []string) error {
+		if dir != project || !slices.Equal(argv, want) {
+			t.Fatalf("ran %q in %s; want %q in %s", argv, dir, want, project)
+		}
+		return nil
+	}
+	run := func() error { return agent(&Globals{}, []string{project}) }
+	if err := run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.OpenCodeEnv(), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(); err == nil || !strings.Contains(err.Error(), "1Password CLI") {
+		t.Fatalf("missing op: %v", err)
+	}
+	if err := os.WriteFile(op, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want = []string{op, "run", "--env-file=" + p.OpenCodeEnv(), "--", bin, "--standalone", project}
+	if err := run(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAgent(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	// Claude Code's own TUI: the claude backend (D131)

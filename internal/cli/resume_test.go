@@ -34,8 +34,8 @@ func TestResumeQueueRunLaunch(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", state)
 	tm := &recTmux{}
 	now := time.Date(2026, 11, 24, 1, 0, 0, 0, time.UTC)
-	origStdin, origNow, origTmux, origExec := resumeStdin, resumeNow, resumeTmux, resumeExec
-	t.Cleanup(func() { resumeStdin, resumeNow, resumeTmux, resumeExec = origStdin, origNow, origTmux, origExec })
+	origStdin, origNow, origTmux, origStart := resumeStdin, resumeNow, resumeTmux, resumeStart
+	t.Cleanup(func() { resumeStdin, resumeNow, resumeTmux, resumeStart = origStdin, origNow, origTmux, origStart })
 	resumeNow = func() time.Time { return now }
 	resumeTmux = func(string) resume.Tmux { return tm }
 
@@ -80,16 +80,16 @@ func TestResumeQueueRunLaunch(t *testing.T) {
 	}
 	var gotBin string
 	var gotArgv []string
-	resumeExec = func(b string, argv, _ []string) error {
+	resumeStart = func(b string, argv []string) (func() error, error) {
 		gotBin, gotArgv = b, argv
-		return nil
+		return func() error { return nil }, nil
 	}
 	wd, _ := os.Getwd()
 	t.Cleanup(func() { os.Chdir(wd) })
 	if err := resumeLaunch([]string{entryPath}, bin); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{bin, "--agent", "build", "--prompt", "Resume from handoff/README.md.\nBUD_RESUME_PROMPT\n"}
+	want := []string{bin, "--agent=build", "--prompt=Resume from handoff/README.md.\nBUD_RESUME_PROMPT\n"}
 	if gotBin != bin || !slices.Equal(gotArgv, want) {
 		t.Errorf("exec %s %q, want %q", gotBin, gotArgv, want)
 	}
@@ -101,7 +101,7 @@ func TestResumeQueueRunLaunch(t *testing.T) {
 	if err := resumeStatus(&Globals{stdout: &out}, nil, "tmux"); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"kill switch: off", "orchestrator: running", "queued: 2026-11-24T01:03:00Z", "last 24 hours: 1", "started"} {
+	for _, want := range []string{"kill switch: off", "orchestrator: running", "queued: 2026-11-24T01:03:00Z", "claimed in the last 24 hours: 1", "started"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("status lacks %q:\n%s", want, out.String())
 		}
@@ -149,5 +149,18 @@ func TestResumeLaunchRecordsAMissingOpencode(t *testing.T) {
 	e, err := resume.Read(path)
 	if err != nil || e.Started() || !strings.Contains(e.Error, "find opencode") {
 		t.Fatalf("entry = %+v, %v", e, err)
+	}
+}
+
+func TestStartChildReportsFailures(t *testing.T) {
+	if _, err := startChild(filepath.Join(t.TempDir(), "missing"), []string{"missing"}); err == nil {
+		t.Fatal("a missing binary started")
+	}
+	wait, err := startChild("/bin/sh", []string{"/bin/sh", "-c", "exit 3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := wait(); err == nil || !strings.Contains(err.Error(), "exit status 3") {
+		t.Fatalf("wait = %v", err)
 	}
 }

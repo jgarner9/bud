@@ -34,7 +34,9 @@ type Runner struct {
 	Sleep func(time.Duration)
 }
 
-// ErrCap is Run's error when the daily cap stops a start; the prompt stays queued
+// ErrCap is Run's error when the daily cap stops a start; the prompt stays
+// queued. The cap counts claims, failed starts included: each one needs a
+// look, and a loop of failures shouldn't run unchecked either
 var ErrCap = errors.New("daily cap reached")
 
 // Run starts the next orchestrator when a prompt is queued, and says what it did
@@ -69,7 +71,7 @@ func (r *Runner) Run() (string, error) {
 		return "", err
 	}
 	if r.MaxPerDay > 0 && n >= r.MaxPerDay {
-		return "", fmt.Errorf("%w: %d orchestrators started in the last 24 hours (--max-per-day %d); the prompt stays queued", ErrCap, n, r.MaxPerDay)
+		return "", fmt.Errorf("%w: %d prompts claimed in the last 24 hours (--max-per-day %d); the prompt stays queued", ErrCap, n, r.MaxPerDay)
 	}
 
 	e, path, err := r.Queue.Claim(now)
@@ -112,7 +114,7 @@ func (r *Runner) start(e *Entry, path string) error {
 	}
 
 	// tmux runs bud resume launch, which reads the prompt from the consumed
-	// entry and execs opencode, so the prompt never goes through tmux's
+	// entry and starts opencode, so the prompt never goes through tmux's
 	// message size limit or a shell
 	if err := r.Tmux.NewSession(r.session(), e.Dir, []string{r.Bud, "resume", "launch", "--opencode", r.Opencode, path}); err != nil {
 		return err
@@ -158,10 +160,12 @@ func (r *Runner) waitLaunch(e *Entry, path string) error {
 // --yolo or --dangerously-skip-permissions: asks wait for Jason, and the
 // unattended-deny plugin refuses one left unanswered (Suite D99, D111)
 func Argv(opencode string, e *Entry) []string {
+	// attached values, so a prompt or agent that starts with - stays the
+	// option's value instead of parsing as a flag of its own
 	argv := []string{opencode}
 	if e.Agent != "" {
-		argv = append(argv, "--agent", e.Agent)
+		argv = append(argv, "--agent="+e.Agent)
 	}
 
-	return append(argv, "--prompt", e.Prompt)
+	return append(argv, "--prompt="+e.Prompt)
 }

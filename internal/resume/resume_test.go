@@ -262,11 +262,12 @@ func TestClaimIsOnce(t *testing.T) {
 func TestArgvNeverAutoApproves(t *testing.T) {
 	e := &Entry{Agent: "build", Prompt: "--auto"}
 	got := Argv("/bin/opencode", e)
-	want := []string{"/bin/opencode", "--agent", "build", "--prompt", "--auto"}
+	// attached values: a prompt of --auto stays the prompt, never a flag
+	want := []string{"/bin/opencode", "--agent=build", "--prompt=--auto"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Argv = %v, want %v", got, want)
 	}
-	for _, a := range got[:len(got)-1] {
+	for _, a := range got {
 		if a == "--auto" || a == "--yolo" || a == "--dangerously-skip-permissions" {
 			t.Errorf("argv carries %s", a)
 		}

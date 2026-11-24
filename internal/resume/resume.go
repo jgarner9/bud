@@ -36,7 +36,7 @@ type Entry struct {
 	Prompt   string    `json:"prompt"`
 
 	ClaimedAt  *time.Time `json:"claimed_at,omitempty"`
-	LaunchedAt *time.Time `json:"launched_at,omitempty"` // bud resume launch, just before it execs opencode
+	LaunchedAt *time.Time `json:"launched_at,omitempty"` // bud resume launch, once opencode has started
 	Error      string     `json:"error,omitempty"`
 }
 
@@ -289,8 +289,8 @@ func Read(path string) (*Entry, error) {
 	return e, err
 }
 
-// MarkLaunched records, from inside the tmux session, that launch is about to
-// exec opencode; the runner waits for it before calling a start good
+// MarkLaunched records, from inside the tmux session, that opencode has
+// started; the runner waits for it before calling a start good
 func MarkLaunched(path string, now time.Time) error {
 	e, err := Read(path)
 	if err != nil {

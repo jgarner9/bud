@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -19,13 +20,13 @@ func init() {
 	RegisterCommand(Resume())
 }
 
-// resumeStdin, resumeNow, resumeTmux, resumeExec and resumeQueue are
+// resumeStdin, resumeNow, resumeTmux, resumeStart and resumeQueue are
 // swappable for tests
 var (
 	resumeStdin io.Reader = os.Stdin
 	resumeNow             = time.Now
 	resumeTmux            = func(path string) resume.Tmux { return resume.ExecTmux{Path: path} }
-	resumeExec            = syscall.Exec
+	resumeStart           = startChild
 	resumeQueue           = func() (resume.Queue, error) {
 		p, err := paths.Resolve()
 		if err != nil {
@@ -72,7 +73,7 @@ func Resume() *Command {
 			},
 			{
 				Name:  "launch",
-				Usage: "run inside the tmux session: exec opencode with a consumed entry's prompt: launch <entry.json>",
+				Usage: "run inside the tmux session: start opencode with a consumed entry's prompt: launch <entry.json>",
 				Flags: func(fs *flag.FlagSet) {
 					fs.StringVar(&opencode, "opencode", "opencode", "the opencode binary")
 				},
@@ -200,11 +201,47 @@ func resumeLaunch(args []string, opencode string) error {
 	if err := os.Chdir(e.Dir); err != nil {
 		return fail(err)
 	}
+	// opencode runs as a child, not through exec, so a failed start comes
+	// back here before launched_at is written: the runner can't read a
+	// start as good when opencode never ran
+	wait, err := resumeStart(bin, resume.Argv(bin, e))
+	if err != nil {
+		return fail(fmt.Errorf("start opencode: %w", err))
+	}
 	if err := resume.MarkLaunched(args[0], resumeNow()); err != nil {
-		return err
+		return fmt.Errorf("opencode started, but recording it failed: %w", err)
 	}
 
-	return fail(resumeExec(bin, resume.Argv(bin, e), os.Environ()))
+	return wait()
+}
+
+// startChild starts argv on this terminal and returns a wait that forwards
+// the signals that stop a tmux pane and returns how the child exited
+func startChild(bin string, argv []string) (func() error, error) {
+	cmd := exec.Command(bin, argv[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	sigs := make(chan os.Signal, 4)
+	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	if err := cmd.Start(); err != nil {
+		signal.Stop(sigs)
+		return nil, err
+	}
+	return func() error {
+		defer signal.Stop(sigs)
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+		for {
+			select {
+			case sig := <-sigs:
+				cmd.Process.Signal(sig)
+			case err := <-done:
+				if err != nil {
+					return fmt.Errorf("opencode: %w", err)
+				}
+				return nil
+			}
+		}
+	}, nil
 }
 
 func resumeStatus(g *Globals, args []string, tmux string) error {
@@ -239,7 +276,7 @@ func resumeStatus(g *Globals, args []string, tmux string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "started in the last 24 hours: %d\n", n)
+	fmt.Fprintf(w, "claimed in the last 24 hours: %d (the --max-per-day cap counts these, failed starts too)\n", n)
 	last, err := q.Last()
 	if err != nil {
 		return err
@@ -297,6 +334,12 @@ func resumeOn(g *Globals, args []string) error {
 	if err != nil {
 		return err
 	}
+	// the same lock off takes, so the last of off and on to finish wins
+	unlock, err := q.LockWait()
+	if err != nil {
+		return fmt.Errorf("take the lock: %w", err)
+	}
+	defer unlock()
 	if err := q.SetOff(false); err != nil {
 		return err
 	}

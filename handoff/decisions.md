@@ -1,6 +1,6 @@
-# Bud Suite decisions, D1 to D132
+# Bud Suite decisions, D1 to D136
 
-The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D132. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
+The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D136. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
 
 Rules for the log: it's append-only. A new decision takes the next number at the end. An entry is never renumbered, deleted or rewritten; a decision that changes is marked "Superseded by Dn" with its old text struck through, and the new decision gets the next number. When you add one, add it here and in the design doc it came from, and tell Jason the number.
 
@@ -178,3 +178,27 @@ Taken on recommendation 2026-11-22 (thread "Build self-improvement proposals and
 | # | Decision | Date | Notes |
 | --- | --- | --- | --- |
 | D132 | A session that hands off queues its resume prompt (`/handoff`, `bud resume queue`), and a systemd user timer on the home server (`server/resume/`) claims it once and starts the next OpenCode orchestrator in the detached tmux session `bud-orchestrator`, replacing the one that queued it. One queued prompt at a time, a lock on the runner, at most eight starts in 24 hours, and `bud resume off` as the kill switch. The session never auto-approves: asks wait for Jason in tmux and the unattended-deny plugin (D111) refuses one left for 10 minutes. | 2026-11-24 | JGA-394, from the coordinator's brief on Jason's blocker list. tmux over `opencode run` was recommended on a decision card (`opencode run` rejects every ask, so a resumed session could never commit or push); building on the recommendation while Jason decides. Jason approved letting `bud resume queue *` run alone as an overlay rule on 2026-11-24 (bud-overlay PR #11, revisit item 31). Detail in `docs/internals/resume.md`. |
+
+## D133: the mail summarizer is a direct router call
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D133 | JGA-317's untrusted-mail summarizer is a direct router call with no `tools` field — the router forwards every field except `model`, so a no-tools request structurally cannot invoke a tool — rather than a tool-less Hermes profile. | 2026-11-23 | On recommendation: the handoff already recorded this shape (revisit item 12), and the router's pass-through of non-model fields confirms it. Gated on Jason's `bud mail-mcp --record` output. |
+
+## D134: JGA-348's runtime adapters are superseded by D97
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D134 | JGA-348's "runtime adapters" half is superseded by D97 (no patched runtimes; approvals enforced at Bud-owned leaves). Close JGA-348 and fold the one remaining piece — a single shared audit log — into a narrow follow-up. | 2026-11-23 | On recommendation: the lifecycle, store, SocketReview, Signal reviewer and the three leaves (gateway, router P0 fallback, ops) are all built; only the fragmented audit logs remain. |
+
+## D135: a delegated subagent is always P0
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D135 | A delegated Hermes subagent gets its own conversation id and carries no parent id, so the router's sticky P0 (keyed on `x-opencode-session`) can't hold P0 data the parent writes into the subagent's task prompt. The subagent therefore runs through its own router path that is always P0, whatever the parent's tier. Over-broad — every subagent is P0 even when its parent is P1 or P2 — but the conservative, fails-closed direction. | 2026-11-24 | Jason chose A over B (the child carries the parent's id, gated on Hermes 0.23.2's delegation config, not confirmable from this repo) and C (map a parent-id header). JGA-390. |
+
+## D136: re-tier an approved memory record
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D136 | A reviewer-only `retier` action in the memory service (`POST /retier {id, privacy}`) re-tiers an approved record, asked on Signal the way memory-review approves, so records saved at P1 before D130 can move to P0. Removing an approved record is deferred: references and per-model vector tables don't cascade, so removal needs explicit cleanup or `export_recovery` breaks. | 2026-11-24 | Jason chose A (build `retier`) over also building remove. Revisit item 29 step 3. |

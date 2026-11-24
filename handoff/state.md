@@ -4,7 +4,7 @@ Where Bud stands at the handoff from Claude Code to OpenCode. Linear (team JGA, 
 
 ## Main
 
-Working tree: `bud agent` uses the synced 1Password reference file when launching OpenCode. The profile must supply OpenCode references for sync to produce the file.
+Working tree: a selected overlay fragment can supply a 1Password reference for a rendered OpenCode provider's `{env:VAR}` key. `bud agent` uses the synced reference file at launch; explicit registry references cannot be redirected.
 
 The shared OpenCode shell rules now allow exact workspace inspection commands and common pipeline filters, including `rg --files`, `git branch --show-current`, `git worktree list`, `wc -l` and `sort -u`.
 

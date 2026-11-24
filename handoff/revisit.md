@@ -4,7 +4,7 @@ This is the Claude project's revisit list as of 2026-11-22 18:45 UTC, with host 
 
 ## Open, in the order to do them
 
-For interactive OpenCode on the server profile, select the intended `bud.opencode_secrets` references in that profile's private overlay fragments, then sync and use the updated `bud agent`.
+For interactive OpenCode on the server profile, install a build with the overlay provider-key fix before syncing the server-only Go and GitHub references. Verify authentication in a fresh `bud agent .` session.
 
 Home-server rollouts Jason hasn't done yet. Each one changes how the home server behaves, so they're his to run; give him paste blocks, never run them for him.
 

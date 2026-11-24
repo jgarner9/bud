@@ -547,6 +547,10 @@
       ],
       "models": {
         "gemini-4-argon": {
+          "cost": {
+            "input": 2,
+            "output": 10
+          },
           "limit": {
             "context": 1048576,
             "output": 65536
@@ -554,6 +558,10 @@
           "modelID": "gemini-4-argon"
         },
         "glm-5.2": {
+          "cost": {
+            "input": 1.4,
+            "output": 4.4
+          },
           "limit": {
             "context": 1000000,
             "output": 131072
@@ -561,6 +569,10 @@
           "modelID": "glm-5.2"
         },
         "glm-5.3": {
+          "cost": {
+            "input": 1.4,
+            "output": 4.4
+          },
           "limit": {
             "context": 1000000,
             "output": 131072
@@ -568,6 +580,10 @@
           "modelID": "glm-5.3"
         },
         "glm-5.3-flash": {
+          "cost": {
+            "input": 0.15,
+            "output": 0.5
+          },
           "limit": {
             "context": 1000000,
             "output": 131072
@@ -575,6 +591,10 @@
           "modelID": "glm-5.3-flash"
         },
         "kimi-k2.7-code": {
+          "cost": {
+            "input": 0.95,
+            "output": 4
+          },
           "limit": {
             "context": 262144,
             "output": 262144
@@ -582,6 +602,10 @@
           "modelID": "kimi-k2.7-code"
         },
         "kimi-k3.1-pro": {
+          "cost": {
+            "input": 2,
+            "output": 10
+          },
           "limit": {
             "context": 1048576,
             "output": 1048576
@@ -589,6 +613,10 @@
           "modelID": "kimi-k3.1-pro"
         },
         "mimo-v2.6-flash": {
+          "cost": {
+            "input": 0.14,
+            "output": 0.28
+          },
           "limit": {
             "context": 1048576,
             "output": 131072
@@ -596,6 +624,10 @@
           "modelID": "mimo-v2.6-flash"
         },
         "mimo-v2.6-pro": {
+          "cost": {
+            "input": 0.435,
+            "output": 0.87
+          },
           "limit": {
             "context": 1048576,
             "output": 131072
@@ -603,6 +635,10 @@
           "modelID": "mimo-v2.6-pro"
         },
         "minimax-m3": {
+          "cost": {
+            "input": 0.3,
+            "output": 1.2
+          },
           "limit": {
             "context": 1000000,
             "output": 131072
@@ -610,6 +646,10 @@
           "modelID": "minimax-m3"
         },
         "minimax-m3.1-flash": {
+          "cost": {
+            "input": 0.15,
+            "output": 0.6
+          },
           "limit": {
             "context": 1000000,
             "output": 512000
@@ -617,6 +657,10 @@
           "modelID": "minimax-m3.1-flash"
         },
         "qwen3.7-plus": {
+          "cost": {
+            "input": 0.4,
+            "output": 1.6
+          },
           "limit": {
             "context": 1000000,
             "output": 65536
@@ -624,6 +668,10 @@
           "modelID": "qwen3.7-plus"
         },
         "qwen3.8-flash": {
+          "cost": {
+            "input": 0.15,
+            "output": 0.47
+          },
           "limit": {
             "context": 1000000,
             "output": 131072
@@ -631,6 +679,10 @@
           "modelID": "qwen3.8-flash"
         },
         "qwen3.8-max": {
+          "cost": {
+            "input": 2,
+            "output": 6
+          },
           "limit": {
             "context": 1000000,
             "output": 131072

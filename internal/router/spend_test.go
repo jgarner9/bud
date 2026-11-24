@@ -381,3 +381,75 @@ func TestReadSpendLeavesTheFileAndReadsAnOldMonthAsEmpty(t *testing.T) {
 		t.Errorf("corrupt: %v", err)
 	}
 }
+
+func TestTheLedgerCountsTokensAndHourlySpendAcrossARestart(t *testing.T) {
+	up := jsonUpstream(`{"prompt_tokens":1000,"completion_tokens":500}`)
+	defer up.Close()
+	path := filepath.Join(t.TempDir(), "spend.json")
+	c := &clock{time.Date(2026, 3, 31, 22, 30, 0, 0, time.UTC)}
+	rt, _ := newSpendRouter(t, up.URL, path, 10, c)
+	for range 2 {
+		if w := do(t, rt, "POST", "/v1/chat/completions", chatBody("inc2"), nil); w.Code != 200 {
+			t.Fatalf("%d %s", w.Code, w.Body)
+		}
+	}
+	sp, err := ReadSpend(path, c.t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// each response is 1000*1/1e6 + 500*2/1e6 = 0.002 dollars
+	if tk := sp.Tokens["inc2"]; tk.Requests != 2 || tk.In != 2000 || tk.Out != 1000 {
+		t.Errorf("tokens %+v", sp.Tokens)
+	}
+	if v := sp.Last5h["inc2"]; v < 0.00399 || v > 0.00401 {
+		t.Errorf("last 5h = %v", v)
+	}
+
+	// a new month resets the month's tokens but keeps the hours, since
+	// Go's weekly window runs across months
+	c.t = time.Date(2026, 4, 1, 1, 0, 0, 0, time.UTC)
+	_, l := newSpendRouter(t, up.URL, path, 10, c)
+	if err := l.Charge("inc2", 1); err != nil {
+		t.Fatal(err)
+	}
+	sp, _ = ReadSpend(path, c.t)
+	if len(sp.Tokens) != 0 || sp.Spent["inc2"] != 1 {
+		t.Errorf("new month: tokens %+v spent %+v", sp.Tokens, sp.Spent)
+	}
+	if v := sp.Last5h["inc2"]; v < 1.00399 || v > 1.00401 {
+		t.Errorf("last 5h over the month change = %v", v)
+	}
+
+	// past 5 hours the old hour leaves the short window, past 7 days the
+	// next charge drops it from the file
+	sp, _ = ReadSpend(path, time.Date(2026, 4, 1, 5, 30, 0, 0, time.UTC))
+	if v := sp.Last5h["inc2"]; v != 1 {
+		t.Errorf("last 5h later = %v", v)
+	}
+	if v := sp.Last7d["inc2"]; v < 1.00399 || v > 1.00401 {
+		t.Errorf("last 7d = %v", v)
+	}
+	c.t = time.Date(2026, 4, 8, 1, 30, 0, 0, time.UTC)
+	if err := l.Charge("paid", 1); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if strings.Contains(string(data), "2026-03-31T22") {
+		t.Errorf("an hour older than 7 days was kept: %s", data)
+	}
+	if !strings.Contains(string(data), "2026-04-01T01") {
+		t.Errorf("an hour inside 7 days was dropped: %s", data)
+	}
+}
+
+func TestAWindowCountsTheHoursItOverlapsAndSkipsTheFuture(t *testing.T) {
+	hours := map[string]float64{"2026-03-05T10": 1, "2026-03-05T14": 2, "2026-03-05T16": 4, "bad": 8}
+	now := time.Date(2026, 3, 5, 15, 10, 0, 0, time.UTC)
+	// 10:00-11:00 overlaps 10:10-15:10, 16:00 hasn't started
+	if got := window(hours, now, 5*time.Hour); got != 3 {
+		t.Errorf("got %v, want 3", got)
+	}
+	if got := window(hours, now.Add(time.Hour), 5*time.Hour); got != 6 {
+		t.Errorf("an hour later got %v, want 6", got)
+	}
+}

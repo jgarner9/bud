@@ -233,7 +233,7 @@ func (rt *Router) charge(id string, u *usage) {
 		return
 	}
 	cost := u.Prompt*m.Price.In/1e6 + u.Completion*m.Price.Out/1e6
-	if err := rt.ledger.Charge(id, cost); err != nil {
+	if err := rt.ledger.chargeUsage(id, cost, u); err != nil {
 		rt.logf("router: %v", err)
 	}
 }

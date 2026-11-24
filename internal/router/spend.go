@@ -28,6 +28,10 @@ type Ledger struct {
 	month  string
 	spent  map[string]float64
 	topUp  float64
+	tokens map[string]Tokens
+	// hours is each model's dollars per UTC hour over the last 7 days, kept
+	// across months, for Go's 5-hour and weekly limits
+	hours map[string]map[string]float64
 	// cap is the router's top-up cap, saved with the ledger so readers such
 	// as bud mcp-ops can report it; nil until the router sets it
 	cap *float64
@@ -40,10 +44,25 @@ type Ledger struct {
 	slot chan struct{}
 }
 
+// Tokens is a model's charged requests and their tokens this month
+type Tokens struct {
+	Requests int     `json:"requests"`
+	In       float64 `json:"in"`
+	Out      float64 `json:"out"`
+}
+
+// hourKey names the UTC hour a charge falls in
+const hourKey = "2006-01-02T15"
+
+// windowKeep is how far back the hourly spend is kept
+const windowKeep = 7 * 24 * time.Hour
+
 type ledgerFile struct {
-	Month string             `json:"month"`
-	Spent map[string]float64 `json:"spent"`
-	TopUp float64            `json:"topup"`
+	Month  string                        `json:"month"`
+	Spent  map[string]float64            `json:"spent"`
+	TopUp  float64                       `json:"topup"`
+	Tokens map[string]Tokens             `json:"tokens,omitempty"`
+	Hours  map[string]map[string]float64 `json:"hours,omitempty"`
 	// Cap is the top-up cap of the router that last wrote the file
 	Cap *float64 `json:"cap,omitempty"`
 }
@@ -51,7 +70,7 @@ type ledgerFile struct {
 // NewLedger loads the ledger at path; a missing file is an empty ledger and
 // an empty path keeps it in memory.
 func NewLedger(path string, models map[string]registry.Model) (*Ledger, error) {
-	l := &Ledger{Now: time.Now, path: path, models: models, spent: map[string]float64{}, slot: make(chan struct{}, 1)}
+	l := &Ledger{Now: time.Now, path: path, models: models, spent: map[string]float64{}, tokens: map[string]Tokens{}, hours: map[string]map[string]float64{}, slot: make(chan struct{}, 1)}
 	if path == "" {
 		return l, nil
 	}
@@ -69,6 +88,12 @@ func NewLedger(path string, models map[string]registry.Model) (*Ledger, error) {
 	l.month, l.topUp = f.Month, f.TopUp
 	if f.Spent != nil {
 		l.spent = f.Spent
+	}
+	if f.Tokens != nil {
+		l.tokens = f.Tokens
+	}
+	if f.Hours != nil {
+		l.hours = f.Hours
 	}
 	return l, nil
 }
@@ -93,13 +118,19 @@ type Spend struct {
 	// Cap is the top-up cap of the router that last wrote the file; nil
 	// when no router that records it has written it yet
 	Cap *float64
+	// Tokens is each charged model's requests and tokens this month
+	Tokens map[string]Tokens
+	// Last5h and Last7d are each model's dollars in the UTC hours that
+	// overlap the last 5 hours and 7 days, so they may count up to an hour
+	// more than the window; models with none are absent
+	Last5h, Last7d map[string]float64
 }
 
 // ReadSpend reads the ledger at path without changing it, the way the
 // router would see it at now: a file from an earlier month reads as an
 // empty month. A missing file reads as an empty month with Recorded false
 func ReadSpend(path string, now time.Time) (Spend, error) {
-	out := Spend{Month: now.UTC().Format("2006-01"), Spent: map[string]float64{}}
+	out := Spend{Month: now.UTC().Format("2006-01"), Spent: map[string]float64{}, Tokens: map[string]Tokens{}, Last5h: map[string]float64{}, Last7d: map[string]float64{}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return out, nil
@@ -119,15 +150,40 @@ func ReadSpend(path string, now time.Time) (Spend, error) {
 				out.Spent[id] = v
 			}
 		}
+		for id, v := range f.Tokens {
+			out.Tokens[id] = v
+		}
+	}
+	for id, hours := range f.Hours {
+		if v := window(hours, now, 5*time.Hour); v > 0 {
+			out.Last5h[id] = v
+		}
+		if v := window(hours, now, windowKeep); v > 0 {
+			out.Last7d[id] = v
+		}
 	}
 	return out, nil
+}
+
+// window sums the hours that overlap the span ending at now
+func window(hours map[string]float64, now time.Time, span time.Duration) float64 {
+	from := now.UTC().Add(-span)
+	var sum float64
+	for k, v := range hours {
+		h, err := time.Parse(hourKey, k)
+		if err != nil || !h.Add(time.Hour).After(from) || h.After(now.UTC()) {
+			continue
+		}
+		sum += v
+	}
+	return sum
 }
 
 // roll drops the old month's numbers when the month has changed
 func (l *Ledger) roll() {
 	m := l.Now().UTC().Format("2006-01")
 	if m != l.month {
-		l.month, l.spent, l.topUp = m, map[string]float64{}, 0
+		l.month, l.spent, l.topUp, l.tokens = m, map[string]float64{}, 0, map[string]Tokens{}
 	}
 }
 
@@ -135,12 +191,39 @@ func (l *Ledger) roll() {
 // (all of it for C2, or for C1 with no allowance) counts as top-up. C0
 // models are never charged.
 func (l *Ledger) Charge(id string, cost float64) error {
+	return l.chargeUsage(id, cost, nil)
+}
+
+// chargeUsage is Charge that also counts the response's tokens
+func (l *Ledger) chargeUsage(id string, cost float64, u *usage) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.roll()
 	m := l.models[id]
 	if (m.Cost != "C1" && m.Cost != "C2") || cost <= 0 {
 		return nil
+	}
+	if u != nil {
+		t := l.tokens[id]
+		t.Requests++
+		t.In += u.Prompt
+		t.Out += u.Completion
+		l.tokens[id] = t
+	}
+	now := l.Now().UTC()
+	if l.hours[id] == nil {
+		l.hours[id] = map[string]float64{}
+	}
+	l.hours[id][now.Format(hourKey)] += cost
+	for mid, hours := range l.hours {
+		for k := range hours {
+			if h, err := time.Parse(hourKey, k); err != nil || !h.Add(time.Hour).After(now.Add(-windowKeep)) {
+				delete(hours, k)
+			}
+		}
+		if len(hours) == 0 {
+			delete(l.hours, mid)
+		}
 	}
 	before := l.spent[id]
 	l.spent[id] = before + cost
@@ -159,7 +242,7 @@ func (l *Ledger) Charge(id string, cost float64) error {
 	if l.path == "" {
 		return nil
 	}
-	data, err := json.Marshal(ledgerFile{Month: l.month, Spent: l.spent, TopUp: l.topUp, Cap: l.cap})
+	data, err := json.Marshal(ledgerFile{Month: l.month, Spent: l.spent, TopUp: l.topUp, Tokens: l.tokens, Hours: l.hours, Cap: l.cap})
 	if err != nil {
 		return fmt.Errorf("encode the spend ledger: %w", err)
 	}

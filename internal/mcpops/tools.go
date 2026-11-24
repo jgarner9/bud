@@ -67,7 +67,7 @@ func Tools(src Sources) []Tool {
 		},
 		{
 			Name:        "spend",
-			Description: "Returns this month's model spend as bud router counted it: the top-up total against the router's monthly cap (about $10 of Go top-up), and each model's dollars spent, with its cost class and, for an included model, its allowance and what's left. Read-only; months are UTC.",
+			Description: "Returns the model spend bud router counted: the month's top-up total against the router's monthly cap (about $10 of Go top-up), and each model's dollars, requests and tokens this month, its dollars in the last 5 hours and 7 days, its cost class and, for an included model, its monthly allowance, what's left, and Go Plus's 5-hour and weekly limits (20% and 50% of the allowance). Only traffic through the router counts: an OpenCode that talks to Go directly reads its own with `opencode stats --cost --models --json`. Read-only; months and hours are UTC.",
 			Run: func(_ context.Context, args json.RawMessage) (any, error) {
 				if err := decodeArgs(args, &struct{}{}); err != nil {
 					return nil, err
@@ -185,6 +185,18 @@ type modelSpend struct {
 	// an allowance
 	Allowance     *float64 `json:"allowance,omitempty"`
 	AllowanceLeft *float64 `json:"allowance_left,omitempty"`
+	// Requests, InputTokens and OutputTokens count this month's charged
+	// responses
+	Requests     int     `json:"requests"`
+	InputTokens  float64 `json:"input_tokens"`
+	OutputTokens float64 `json:"output_tokens"`
+	// Last5h and Last7d are the dollars in the UTC hours overlapping the
+	// last 5 hours and 7 days; Limit5h and Limit7d are Go Plus's limits for
+	// those windows (20% and 50% of the monthly allowance)
+	Last5h  float64  `json:"last_5h"`
+	Last7d  float64  `json:"last_7d"`
+	Limit5h *float64 `json:"limit_5h,omitempty"`
+	Limit7d *float64 `json:"limit_7d,omitempty"`
 }
 
 type spendOut struct {
@@ -193,7 +205,7 @@ type spendOut struct {
 	TopUp float64  `json:"topup"`
 	Cap   *float64 `json:"topup_cap,omitempty"`
 	Left  *float64 `json:"topup_left,omitempty"`
-	// Models lists the models with spend this month, by id
+	// Models lists the models with spend this month or in the last 7 days, by id
 	Models []modelSpend `json:"models"`
 }
 
@@ -228,19 +240,28 @@ func routerSpend(src Sources, now time.Time) (spendOut, error) {
 			notes = append(notes, "cost classes and allowances are left out: "+err.Error())
 		}
 	}
-	ids := make([]string, 0, len(sp.Spent))
-	for id := range sp.Spent {
+	seen := map[string]bool{}
+	for _, set := range []map[string]float64{sp.Spent, sp.Last7d} {
+		for id := range set {
+			seen[id] = true
+		}
+	}
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
-		m := modelSpend{ID: id, Spent: cents(sp.Spent[id])}
+		t := sp.Tokens[id]
+		m := modelSpend{ID: id, Spent: cents(sp.Spent[id]), Requests: t.Requests, InputTokens: t.In, OutputTokens: t.Out,
+			Last5h: cents(sp.Last5h[id]), Last7d: cents(sp.Last7d[id])}
 		if reg != nil {
 			if rm, ok := reg.Models[id]; ok {
 				m.Cost = rm.Cost
 				if rm.Cost == "C1" && rm.Allowance > 0 {
 					a, left := cents(rm.Allowance), cents(math.Max(0, rm.Allowance-sp.Spent[id]))
-					m.Allowance, m.AllowanceLeft = &a, &left
+					l5, l7 := cents(rm.Allowance*0.2), cents(rm.Allowance*0.5)
+					m.Allowance, m.AllowanceLeft, m.Limit5h, m.Limit7d = &a, &left, &l5, &l7
 				}
 			}
 		}

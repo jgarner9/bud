@@ -112,6 +112,11 @@ func Render(in Input) (*Output, error) {
 			if len(limit) > 0 {
 				entry["limit"] = limit
 			}
+			if m.Price != nil {
+				// dollars per million tokens, so opencode stats --cost
+				// reports what the session spent (JGA-391)
+				entry["cost"] = map[string]any{"input": m.Price.In, "output": m.Price.Out}
+			}
 			models[mid] = entry
 		}
 		if len(models) == 0 {

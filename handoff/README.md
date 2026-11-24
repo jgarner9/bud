@@ -41,13 +41,13 @@ In Claude Code these were the `bud` plugin's skills (from `jgarner9/bud-plugins`
 
 ## The PR workflow
 
-Jason authorized this on 2026-11-20 ("leave a comment and automatically merge... just crank out tasks") and it still stands:
+Jason updated the standing workflow on 2026-11-24:
 
-1. One task, one branch, one PR. Run `just check` (or the tests that cover the change) before opening it, and show the result.
+1. One task, one branch, one PR. A request to fix something includes committing the fix on a dedicated branch, pushing it and opening a PR. Run `just check` (or the tests that cover the change) before opening it, and show the result.
 2. Start the PR body with what changed and why, the Linear issue, and how it was tested. Assign Jason.
 3. Request a Copilot review and wait for it. A review with no comments still counts as done, and nothing notifies you about it: check the PR for it.
-4. Fix every real finding, push all the fixes, reply on and resolve each thread, then leave **one top-level comment** that lists each finding, what changed (or why not) and the commit that carries it. Thread replies alone aren't enough, because he can't tell when a round is finished.
-5. When CI is green, merge it yourself (squash). Ping him only for a genuine decision, with a recommendation.
+4. If the review finds issues, fix them on the same branch, run the relevant checks, push, resolve the addressed threads, and leave **one top-level comment** summarizing the findings, fixes and commit. If the review is clean, leave the PR alone; no courtesy comment.
+5. Leave the PR open unless Jason asks for a merge.
 6. Never merge a PR labelled `bud-proposal` (the self-improvement loop's PRs, D126): merging one is his approval of that change. Never force-push a shared branch; merge the old head instead.
 
 Releases come from `VERSION` (see `AGENTS.md`, "Release and install"); a push to main that changes `content/` cuts an edge content release, and promoting it to stable is `gh workflow run content.yml -R jgarner9/bud -f mode=promote -f version=<v>`, which Jason runs or asks for.

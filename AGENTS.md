@@ -20,7 +20,7 @@ Nothing personal goes in this public repo: no hostnames, tailnet names, home pat
 
 ## Resuming work
 
-Work moved from Claude Code to OpenCode on 2026-11-22. Before starting a task, read [handoff/README.md](handoff/README.md): how Jason works (lead with the answer, plain Unicode and no emoji, options with a recommendation, he decides design), the PR workflow (Copilot review, one comment summarizing the fixes, then merge), and links to the current state, the open items waiting on him and the Suite decision log (D1 onward). Keep `handoff/state.md` and `handoff/revisit.md` current in the same PR as the work. Host names and exact home-server commands are in the private overlay's `handoff/`, never here.
+Work moved from Claude Code to OpenCode on 2026-11-22. Before starting a task, read [handoff/README.md](handoff/README.md): how Jason works (lead with the answer, plain Unicode and no emoji, options with a recommendation, he decides design), the PR workflow, and links to the current state, the open items waiting on him and the Suite decision log (D1 onward). Keep `handoff/state.md` and `handoff/revisit.md` current in the same PR as the work. Host names and exact home-server commands are in the private overlay's `handoff/`, never here.
 
 ## The IDE
 
@@ -127,6 +127,8 @@ Releases come from `VERSION` (D80): a push to main that changes it runs `.github
 Tests swap package-level vars and restore them with `t.Cleanup` (`internal/cli`'s `TestMain` also turns off `refreshBundles` and `findBundles` for every test there, so none reaches GitHub or rebuilds this machine's Bud.app): `CommandRegistry`, `installer.Deps`, `installer.goos`, `version.Version`. Tests that need binaries on PATH use the `fakePath` helper in `internal/installer`. `App` tests build an `App` with a custom `Cmds` map and recorder commands instead of using the global registry.
 
 ## Commits
+
+For a fix, commit on a dedicated branch and open a PR as part of the task. Address review findings on that PR and leave one summary comment after pushing the fixes. If the review is clean, leave the PR alone. Leave merging to Jason unless he asks.
 
 Lowercase conventional style: `feat:`, `fix:`, `chore:`, `docs:`, followed by a short summary.
 

@@ -12,7 +12,7 @@
 // list: `bud registry refresh content/env/registry.jsonc go` rechecks them and
 // --write rewrites them (Suite D69). grade, allowance (Go Plus's included
 // dollars a month) and retention (days the provider keeps requests) are kept
-// by hand from https://opencode.ai/docs/go, last checked 2026-11-15.
+// by hand from https://opencode.ai/console/go, last checked 2026-11-25.
 {
   "version": 1,
 
@@ -70,7 +70,7 @@
     "kimi-k3.1-pro": { "provider": "go", "name": "kimi-k3.1-pro", "privacy": ["P1", "P2"], "cost": "C1",
       "grade": "top", "allowance": 60, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 1048576, "output": 1048576, "price": { "in": 2, "out": 10 } },
     "glm-5.3": { "provider": "go", "name": "glm-5.3", "privacy": ["P1", "P2"], "cost": "C1",
-      "grade": "top", "allowance": 120, "retention": 0, "inputs": ["text"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 1.4, "out": 4.4 } },
+      "grade": "top", "allowance": 400, "retention": 0, "inputs": ["text"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 1.4, "out": 4.4 } },
     "qwen3.8-max": { "provider": "go", "name": "qwen3.8-max", "privacy": ["P1", "P2"], "cost": "C1",
       "grade": "top", "allowance": 60, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 2, "out": 6 } },
     // the price is half off until 2026-11-30

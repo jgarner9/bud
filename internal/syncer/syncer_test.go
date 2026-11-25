@@ -515,7 +515,13 @@ func TestADeviceWithoutOpenCodeTakesContentOnly(t *testing.T) {
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "init.defaultBranch=main"}, args...)...)
+	// These commits are the test's, not the user's: name them, and never
+	// sign them, whatever the machine's global commit.gpgsign says.
+	flags := []string{
+		"-c", "user.name=t", "-c", "user.email=t@example.com",
+		"-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false",
+	}
+	cmd := exec.Command("git", append(flags, args...)...)
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)

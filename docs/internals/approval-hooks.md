@@ -1,6 +1,6 @@
 # Approval hook investigation
 
-Inspected on 2026-11-19 on the current machine, without starting or changing either service. These are observations, not a compatibility promise for other installations.
+Inspected on 2026-11-19 on the current machine, without starting or changing either production service; the only thing started anywhere was the isolated, localhost-only OpenCode probe server described under "Synthetic API probes and limitations", stopped again after its tests. These are observations, not a compatibility promise for other installations.
 
 ## Hermes
 

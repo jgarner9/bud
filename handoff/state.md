@@ -6,6 +6,8 @@ Where Bud stands at the handoff from Claude Code to OpenCode. Linear (team JGA, 
 
 Working tree: a selected overlay fragment can supply a 1Password reference for a rendered OpenCode provider's `{env:VAR}` key. `bud agent` uses the synced reference file at launch; explicit registry references cannot be redirected.
 
+Interactive `bud agent` now gives OpenCode a resizing terminal inside `op run`. The Linux resize check used the real OpenCode TUI with a pipe-producing stand-in for `op`; native macOS verification is pending.
+
 The shared OpenCode shell rules now allow exact workspace inspection commands and common pipeline filters, including `rg --files`, `git branch --show-current`, `git worktree list`, `wc -l` and `sort -u`.
 
 - **Code on main:** everything through PR #116 (see below). `VERSION` is still 1.1.0 (the last tag is v1.1.0); no release has been cut since the Suite work began, and the home server runs bud built from main. A release is a `bud:release` run in Claude Code, or Jason's call.

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"syscall"
@@ -98,7 +99,11 @@ func agent(g *Globals, args []string) error {
 			}
 			// A running shared server would keep its original environment.
 			// op needs its service token, but OpenCode only needs the resolved values.
-			argv := []string{op, "run", "--env-file=" + file, "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN", bin, "--standalone", ws.Root}
+			child := []string{bin, "--standalone", ws.Root}
+			if isTerminal(os.Stdin) && isTerminal(os.Stdout) && isTerminal(os.Stderr) {
+				child = agentPTY(child)
+			}
+			argv := append([]string{op, "run", "--env-file=" + file, "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN"}, child...)
 			g.Logf("running %q in %s", argv, ws.Root)
 			return execClaude(ws.Root, argv, agentEnv())
 		} else if !errors.Is(err, os.ErrNotExist) {
@@ -140,6 +145,42 @@ func agent(g *Globals, args []string) error {
 	g.Logf("running %q in %s", argv, ws.Root)
 
 	return execClaude(ws.Root, argv, agentEnv())
+}
+
+// agentPTY runs inside op run, whose output pipes still mask resolved secrets.
+func agentPTY(child []string) []string {
+	if runtime.GOOS == "darwin" {
+		// Apple's script copies the initial window size but doesn't relay SIGWINCH.
+		// Give Expect its program on fd 3, leaving stdin attached to the terminal.
+		return append([]string{"/bin/sh", "-c", `exec /usr/bin/expect -N -n -f /dev/fd/3 "$@" 3<<'EXPECT'
+spawn -noecho {*}$argv
+set slave $spawn_out(slave,name)
+proc resize {} {
+    global slave
+    lassign [exec /bin/stty size <@stdin] rows cols
+    exec /bin/stty rows $rows cols $cols < $slave
+}
+trap resize WINCH
+resize
+interact
+lassign [wait] pid id failed status reason sig
+if {$failed} {exit 1}
+if {$reason eq "CHILDKILLED"} {exit [expr {128 + [exec /bin/bash -c {kill -l "$1"} sh $sig]}]}
+exit $status
+EXPECT`, "bud-agent"}, child...)
+	}
+	// Older util-linux script takes a shell command, not an argument vector.
+	// Use sh for that command regardless of the user's shell; restore SHELL
+	// before exec so OpenCode's own terminal still uses the user's choice.
+	restore := "-u SHELL"
+	if shell, ok := os.LookupEnv("SHELL"); ok {
+		restore = shellQuote("SHELL=" + shell)
+	}
+	cmd := "exec /usr/bin/env " + restore
+	for _, arg := range child {
+		cmd += " " + shellQuote(arg)
+	}
+	return []string{"/usr/bin/env", "SHELL=/bin/sh", "script", "-qec", cmd, "/dev/null"}
 }
 
 // resumeFlags picks the conversation the way the editor does (resume_args in

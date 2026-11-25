@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -57,8 +58,69 @@ func TestAgentOpenCodeSyncedEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	want = []string{op, "run", "--env-file=" + p.OpenCodeEnv(), "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN", bin, "--standalone", project}
+	if isTerminal(os.Stdin) && isTerminal(os.Stdout) && isTerminal(os.Stderr) {
+		want = append(want[:7:7], agentPTY(want[7:])...)
+	}
 	if err := run(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAgentPTYArgumentsAndStatus(t *testing.T) {
+	t.Setenv("SHELL", "/not a 'posix' shell")
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "Open Code's probe")
+	project := "a 'project'; $HOME\n$(false)"
+	if err := os.WriteFile(bin, []byte(`#!/bin/sh
+[ -t 0 ] && [ -t 1 ] && [ -t 2 ] || exit 1
+[ "$#" = 2 ] && [ "$1" = --standalone ] && [ "$2" = "$PROJECT" ] || exit 2
+[ "$SHELL" = "/not a 'posix' shell" ] && [ -z "${OP_SERVICE_ACCOUNT_TOKEN+x}" ] || exit 3
+exec python3 -c 'import os, signal, sys
+def report(*_):
+    cols, rows = os.get_terminal_size(1)
+    print("SIZE", rows, cols, flush=True)
+    if (rows, cols) == (50, 160):
+        sys.exit(42)
+signal.signal(signal.SIGWINCH, report)
+report()
+while True:
+    signal.pause()'
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PROJECT", project)
+	t.Setenv("OP_SERVICE_ACCOUNT_TOKEN", "test")
+	args := append([]string{"-u", "OP_SERVICE_ACCOUNT_TOKEN"}, agentPTY([]string{bin, "--standalone", project})...)
+	// The wrapper itself is interactive: its stdin is a tty while op pipes
+	// its output. Use a real outer terminal even when go test runs in CI.
+	const probe = `import fcntl, os, pty, select, struct, subprocess, sys, termios, time
+pid, master = pty.fork()
+if pid == 0:
+    p = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    while True:
+        data = os.read(p.stdout.fileno(), 8192)
+        if not data: break
+        os.write(1, data)
+    os._exit(p.wait())
+try:
+    for rows, cols in [(63,208), (24,80), (50,160)]:
+        fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        expected = ('SIZE %d %d' % (rows, cols)).encode()
+        buf = b''
+        deadline = time.monotonic() + 5
+        while expected not in buf:
+            timeout = max(0, deadline - time.monotonic())
+            if not select.select([master], [], [], timeout)[0]:
+                raise RuntimeError('missing %r: %r' % (expected, buf))
+            buf += os.read(master, 8192)
+    sys.exit(os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]))
+finally:
+    os.close(master)
+`
+	cmd := exec.Command("python3", append([]string{"-c", probe, "/usr/bin/env"}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err == nil || cmd.ProcessState.ExitCode() != 42 {
+		t.Fatalf("PTY launch: %v: %s", err, out)
 	}
 }
 

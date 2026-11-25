@@ -41,6 +41,12 @@ Earlier in the same run (2026-11-21 and the night after): R6b approvals at Bud-o
 
 Not set up on the home server yet: revisit item 31.
 
+## Built on 2026-11-25
+
+| Issue | What | PR | Decisions |
+| --- | --- | --- | --- |
+| | The 2026-11-19 approval-hook investigation lands in docs/internals: Hermes v0.23.2 and OpenCode 2.3.2 hook and permission boundaries, identity, cancellation and the one-call enforcement gaps, groundwork for the approval and audit-log follow-ups (JGA-374, JGA-376, D134) | this PR | |
+
 ## The home server
 
 Fully set up and verified by Jason as of 2026-11-22 08:20 UTC: gateway, router, Hermes (both profiles), signal-cli and bud-signal, embeddings, the memory service with memory-mcp through the gateway (Hermes's own memory off), calendar, contacts, mail, and the planning OpenCode as the `bud-planning` user.

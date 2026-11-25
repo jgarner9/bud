@@ -152,6 +152,7 @@ func agentPTY(child []string) []string {
 	if runtime.GOOS == "darwin" {
 		// Apple's script copies the initial window size but doesn't relay SIGWINCH.
 		// Give Expect its program on fd 3, leaving stdin attached to the terminal.
+		// sh -c consumes "bud-agent" as $0; "$@" starts with the OpenCode binary.
 		return append([]string{"/bin/sh", "-c", `exec /usr/bin/expect -N -n -f /dev/fd/3 "$@" 3<<'EXPECT'
 spawn -noecho {*}$argv
 set slave $spawn_out(slave,name)

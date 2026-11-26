@@ -1,6 +1,6 @@
 # AGENTS.md
 
-How to work on this repository. OpenCode reads this file (Bud Suite D17), and it is the only instructions file in the repo.
+How to work on this repository. OpenCode reads this file (Bud Suite D17). `content/AGENTS.md` is a different file: the one that syncs to every device.
 
 ## What this is
 

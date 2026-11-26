@@ -50,7 +50,7 @@ func checkCheckout(dir string) error {
 	return nil
 }
 
-// CheckBudRepo says whether dir is still a bud git checkout an agent can work in:
+// CheckBudRepo says whether dir is still a bud git checkout that an agent can work in:
 // it exists, has bud's source and is a git repo. A remembered path (JGA-226)
 // goes through this each time it's used, since the dir may have been moved or
 // removed since

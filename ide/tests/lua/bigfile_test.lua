@@ -64,9 +64,9 @@ end)
 eq(vim.bo[buf].syntax, "go", "Go's regex syntax, after the first screen")
 eq(#notes, 1, "said once")
 eq(notes[1]:find("big.go", 1, true) ~= nil, true, "names the file")
-eq(bigfile.filetype(buf), "go", "its real filetype, for the bridge")
+eq(bigfile.filetype(buf), "go", "its real filetype, for the review")
 
--- reloading it (:e, or a reload after Claude rewrote it) keeps it a big file,
+-- reloading it (:e, or a reload after the agent rewrote it) keeps it a big file,
 -- without saying so again
 vim.cmd.edit()
 eq(vim.bo[buf].filetype, "bigfile", "still big after :e")
@@ -108,11 +108,11 @@ eq(vim.filetype.match({ buf = unloaded }), "go", "an unloaded buffer isn't big")
 eq(vim.filetype.match({ filename = dir .. "/big.go" }), "go", "nor is a name alone")
 eq(vim.filetype.match({ filename = dir .. "/go.sum" }), "gosum", "a lockfile's name alone")
 
--- Claude's edit review shows a big file's proposed side in its real syntax,
+-- The edit review shows a big file's proposed side in its real syntax,
 -- without making it a big file of its own
-local tools = require("bud.ai.bridge.tools")
+local review = require("bud.ai.review")
 local said = #notes
-tools.review({ path = dir .. "/big.go", contents = table.concat(lines, "\n") .. "\n", name = "big" }, function() end)
+review.review({ path = dir .. "/big.go", contents = table.concat(lines, "\n") .. "\n", name = "big" }, function() end)
 local proposed = vim.api.nvim_get_current_buf()
 eq(vim.bo[proposed].filetype, "", "the proposed side has no filetype")
 vim.wait(1000, function()

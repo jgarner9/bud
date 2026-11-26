@@ -71,7 +71,7 @@ eq(backdrops(), 0, "backdrop = false leaves the editor alone")
 local got = {}
 ui.dialog({
   title = "permission",
-  lines = { "Claude wants to run ls" },
+  lines = { "the agent wants to run ls" },
   actions = {
     {
       key = "y",

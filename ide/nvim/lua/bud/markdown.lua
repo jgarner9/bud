@@ -2,7 +2,7 @@
 -- place, and this decides, per buffer, whether it should. A buffer renders
 -- unless you switched it to text (<leader>um; ui.markdown = false starts new
 -- ones that way) or one of its windows is a diff. The plugin draws per buffer,
--- not per window, so a file open both in the editor and in Claude's edit
+-- not per window, so a file open both in the editor and in the agent's edit
 -- review (or diffview) would otherwise hide a changed # or list marker there.
 
 local M = {}

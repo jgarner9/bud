@@ -1,5 +1,5 @@
 -- Run with: nvim --clean --headless -l tests/lua/permissions_test.lua (just lua-test)
--- Claude Code's permission questions: edits as diffs, the rest as a prompt
+-- The agent's permission questions: edits as diffs, the rest as a prompt
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
 dofile("tests/lua/lib/nui.lua")

@@ -32,7 +32,7 @@ end
 
 -- host is the file window he stands in: the one furthest to the bottom right
 -- of the tab page, big enough to spare a corner. Panes (the explorer, the
--- terminal, Claude Code's pane) are never it, so he's never over a prompt
+-- terminal, the AI pane) are never it, so he's never over a prompt
 local function host()
   local best, best_at
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do

@@ -1,5 +1,5 @@
 -- bud's dialogs, menus, inputs and panels (JGA-136), on nui.nvim, so every
--- Claude screen and custom menu looks and behaves the same: rounded borders,
+-- AI screen and custom menu looks and behaves the same: rounded borders,
 -- a title with bud's accent, the keys in the footer, q or <Esc> to close.
 --
 --   ui.float({ title, lines, footer, width, height, enter })  -> handle
@@ -31,7 +31,7 @@ end
 
 -- the border every bud float has; title gets the robot's accent
 local function border(opts)
-  local top = opts.title and text((opts.icon or icons().claude) .. " " .. opts.title) or nil
+  local top = opts.title and text((opts.icon or icons().ai) .. " " .. opts.title) or nil
   return {
     style = "rounded",
     padding = opts.padding,

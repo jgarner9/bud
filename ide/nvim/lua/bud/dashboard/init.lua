@@ -44,14 +44,11 @@ function M.doctor_banners(results)
   local fails, warns = 0, 0
   local ai
   for _, r in ipairs(results) do
-    -- the Go doctor's Claude Code check isn't this one's business (it goes
-    -- with the rest of Claude Code's support)
-    local other = r.name == "claude code"
     if r.name == M.ai_check() then
       ai = r
-    elseif not other and r.status == "fail" then
+    elseif r.status == "fail" then
       fails = fails + 1
-    elseif not other and r.status == "warn" then
+    elseif r.status == "warn" then
       warns = warns + 1
     end
   end
@@ -123,7 +120,7 @@ local function health()
     table.insert(parts, (icons.startup .. " %d ms"):format(vim.g.bud_startup_ms))
   end
   table.insert(parts, icons.plugins .. " " .. #require("bud.pack").names .. " plugins")
-  table.insert(parts, icons.claude .. " " .. M.ai_health(current.ai, vim.fn.executable("opencode") == 1))
+  table.insert(parts, icons.ai .. " " .. M.ai_health(current.ai, vim.fn.executable("opencode") == 1))
   return table.concat(parts, " · ")
 end
 

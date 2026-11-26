@@ -1,9 +1,7 @@
 -- Run with: nvim --clean --headless -l tests/lua/work_test.lua (just lua-test)
--- Claude working a filed issue in a worktree (JGA-126), on a fake claude
+-- The agent working a filed issue in a worktree (JGA-126), on the fake ACP agent
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
--- the claude backend (D131): bud.ai.claude and Claude Code's TUI
-dofile("tests/lua/lib/claude_backend.lua")
 dofile("tests/lua/lib/nui.lua")
 
 local function eq(got, want, what)
@@ -21,11 +19,7 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp .. "/bud", "p")
 tmp = vim.uv.fs_realpath(tmp)
-vim.env.CLAUDE_CONFIG_DIR = tmp .. "/claude-home"
 require("bud.config").file = tmp .. "/config.json"
-require("bud.ai.bridge").lock_dir = function()
-  return tmp .. "/ide"
-end
 
 -- a repo with one commit on main
 local repo = tmp .. "/bud"
@@ -39,41 +33,41 @@ vim.fn.writefile({ "hi" }, repo .. "/README")
 git({ "add", "README" })
 git({ "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "chore: start" })
 
--- answers each message from the next reply file
-local function reply(n, text)
-  local line = vim.json.encode({ type = "result", subtype = "success", session_id = "s1", result = text })
-  vim.fn.writefile({ line }, tmp .. "/reply" .. n)
+-- the fake agent answers each prompt from the next reply and logs what it's sent
+local replies = {
+  "Should the row fold or close?",
+  'Fixed.\n```bud-work\n{"status": "done", "commit": "abc123", "summary": "Esc folds rows now."}\n```',
+}
+local repo_root = vim.fn.getcwd()
+local acp_log = tmp .. "/acp.log"
+local agent = require("bud.ai.agent")
+agent.command = function()
+  return {
+    "env",
+    "FAKE_ACP_LOG=" .. acp_log,
+    "FAKE_ACP_REPLIES=" .. vim.json.encode(replies),
+    vim.v.progpath,
+    "--clean",
+    "--headless",
+    "-l",
+    repo_root .. "/tests/lua/lib/fake_acp.lua",
+  }
 end
-reply(1, "Should the row fold or close?")
-reply(2, 'Fixed.\n```bud-work\n{"status": "done", "commit": "abc123", "summary": "Esc folds rows now."}\n```')
-local fake = tmp .. "/fake-claude"
-vim.fn.writefile({
-  "#!/bin/sh",
-  "n=0",
-  "while IFS= read -r line; do",
-  [[  printf '%s\n' "$line" >> "$(dirname "$0")/sent.log"]],
-  "  n=$((n + 1))",
-  [[  cat "$(dirname "$0")/reply$n"]],
-  "done",
-}, fake)
-vim.fn.setfperm(fake, "rwxr-xr-x")
+agent.ids_file = function()
+  return tmp .. "/agent-sessions.json"
+end
+-- sent is the prompts the agent has been given
 local function sent()
-  return vim.tbl_map(vim.json.decode, vim.fn.readfile(tmp .. "/sent.log"))
+  local prompts = {}
+  for _, line in ipairs(vim.fn.readfile(acp_log)) do
+    local msg = vim.json.decode(line)
+    if msg.method == "session/prompt" then
+      table.insert(prompts, msg.params.prompt[1].text)
+    end
+  end
+  return prompts
 end
 
-local claude = require("bud.ai.claude")
--- bud's embedded plugin (D142) is unpacked by the bud binary, which these tests don't run
-claude.plugin_dir = function()
-  return nil
-end
-claude.bin = function()
-  return fake
-end
-claude.check_login = function(_, cb)
-  vim.schedule(function()
-    cb(true)
-  end)
-end
 local notified = {}
 vim.notify = function(msg)
   table.insert(notified, msg)
@@ -142,8 +136,8 @@ end
 eq(ask("Edit", { file_path = run.worktree .. "/README" }).behavior, "allow", "edit inside")
 eq(work.policy({ tool = "Edit", input = { file_path = repo .. "/README" }, root = run.worktree }), nil, "edit outside")
 eq(work.policy({ tool = "Bash", input = { command = "just check" }, root = run.worktree }), nil, "commands asked")
-eq(ask("mcp__claude_ai_Linear__save_issue", {}).behavior, "allow", "moving the issue")
-eq(ask("mcp__linear__save_issue", {}).behavior, "allow", "through another linear server too")
+eq(ask("mcp__linear__save_issue", {}).behavior, "allow", "moving the issue")
+eq(ask("mcp__Linear__save_issue", {}).behavior, "allow", "through a differently named linear server too")
 eq(work.policy({ tool = "Edit", input = { file_path = repo .. "/README" }, root = repo }), nil, "another root")
 
 eq(work.answer("JGA-7", "Fold it."), true, "answered")
@@ -152,15 +146,15 @@ wait(function()
 end, "the fix")
 eq(run.commit, "abc123", "commit")
 eq(run.summary, "Esc folds rows now.", "summary")
-eq(claude.get(run.key), nil, "session dropped")
+eq(agent.get(run.key), nil, "session dropped")
 eq(work.statusline(), "", "nothing in progress")
 eq(work.policy({ tool = "Edit", input = { file_path = run.worktree .. "/README" }, root = run.worktree }), nil, "done")
 local msgs = sent()
 eq(#msgs, 2, "prompt and answer")
 for _, want in ipairs({ "Linear issue JGA-7", "branch `jga-7-esc-drops-the-proposal` (from `main`)", "```bud-work" }) do
-  assert(msgs[1].message.content:find(want, 1, true), ("prompt lacks %q"):format(want))
+  assert(msgs[1]:find(want, 1, true), ("prompt lacks %q"):format(want))
 end
-eq(msgs[2].message.content, "Fold it.", "answer sent")
+eq(msgs[2], "Fold it.", "answer sent")
 assert(
   notified[#notified]:find("JGA-7 is ready to review on jga-7-esc-drops-the-proposal", 1, true),
   notified[#notified]
@@ -447,6 +441,6 @@ end
 issue.work("JGA-9")
 eq(started, { "JGA-9", "Other", repo }, "work uses the filed repo")
 
-claude.stop_all()
+agent.stop_all()
 vim.fn.delete(tmp, "rf")
 print("work_test: ok")

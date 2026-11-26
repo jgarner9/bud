@@ -53,11 +53,9 @@ eq(banners, {
 }, "banners")
 banners, clean = dashboard.doctor_banners({ { name = "git", status = "ok" } })
 eq({ banners, clean }, { {}, true }, "clean")
--- OpenCode's own check gives the banner, and the Go doctor's Claude Code
--- check says nothing
+-- OpenCode's own check gives the banner, not a doctor warning
 local ai
 banners, clean, ai = dashboard.doctor_banners({
-  { name = "claude code", status = "warn", detail = "not installed" },
   { name = "opencode", status = "warn", detail = "opencode isn't installed" },
 })
 eq(banners, { { level = "warn", text = "opencode isn't set up, press c" } }, "opencode's banner, not a doctor warning")
@@ -93,7 +91,7 @@ local data = {
     { key = "2", name = "dollarwise", pinned = false },
   },
   banners = { { level = "warn", text = "1 doctor warning, press d" } },
-  health = " 30 ms · 23 plugins · claude ready",
+  health = " 30 ms · 23 plugins · opencode ready",
 }
 local icons = require("bud.icons")
 -- every icon is one cell wide, or the centering is off
@@ -308,7 +306,7 @@ eq(vim.api.nvim_get_hl(0, { name = "BudHiddenCursor" }).blend, 100, "hidden curs
 has(shown, icons.pinned .. "  a", "pinned from the registry")
 has(shown, icons.unpinned .. "  b", "recent from the registry")
 has(shown, "x   " .. icons.scratchpad .. "  Scratchpad", "scratchpad when turned on")
-has(shown, icons.claude .. " ", "claude in the health line")
+has(shown, icons.ai .. " ", "the AI in the health line")
 for _, line in ipairs(shown) do
   if line:find("gone", 1, true) then
     error("a missing project was shown")

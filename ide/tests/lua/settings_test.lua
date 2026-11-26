@@ -10,6 +10,11 @@ local function eq(got, want, what)
 end
 
 local settings = require("bud.settings")
+-- no setting is a list any more, so give the AI section one to cover how a list draws
+table.insert(
+  settings.sections[#settings.sections].rows,
+  { key = "ai.agent.args", label = "Extra flags", kind = "list" }
+)
 local config = {
   profile = "full",
   terminal = "kitty",
@@ -17,7 +22,7 @@ local config = {
   format_on_save = true,
   update = { channel = "stable", auto = true },
   dashboard = { style = "silly", git = true },
-  ai = { claude = { autostart = true, resume = "continue", idle_minutes = 30, args = {} } },
+  ai = { agent = { autostart = true, idle_minutes = 30, args = {} } },
   tools = { disabled = { "off-tool" } },
 }
 local ran = {}
@@ -116,7 +121,7 @@ eq(ran[1], "tools enable off-tool", "a tool turned on")
 
 -- unset keys come back as JSON null, and the screen still redraws
 config.tools.disabled = vim.NIL
-config.ai.claude.command = vim.NIL
+config.ai.agent.args = vim.NIL
 settings.refresh()
 assert(
   vim.wait(2000, function()

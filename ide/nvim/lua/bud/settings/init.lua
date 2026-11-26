@@ -62,22 +62,6 @@ M.sections = {
       { key = "ai.agent.idle_minutes", label = "Stop idle agents after (min)", kind = "number" },
     },
   },
-  {
-    title = "Claude Code",
-    rows = {
-      { key = "ai.claude.autostart", label = "Start with a project", kind = "bool" },
-      { key = "ai.claude.resume", label = "Reopening a project", kind = "choice", choices = { "continue", "new" } },
-      { key = "ai.claude.idle_minutes", label = "Stop idle sessions after (min)", kind = "number" },
-      {
-        key = "ai.claude.config",
-        label = "Claude Code config (restart bud)",
-        kind = "choice",
-        choices = { "home", "bud" },
-      },
-      { key = "ai.claude.command", label = "Run through", kind = "list" },
-      { key = "ai.claude.args", label = "Extra flags", kind = "list" },
-    },
-  },
 }
 
 local state = {} -- buf, win, rows (line -> row), settings

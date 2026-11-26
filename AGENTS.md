@@ -26,7 +26,7 @@ Work moved from Claude Code to OpenCode on 2026-11-22. Before starting a task, r
 
 Bud's IDE is a Neovim-based editor driven by a small Go CLI (`bud`). The CLI installs, launches, updates and syncs an isolated Neovim config (`NVIM_APPNAME=bud`, so it never touches `~/.config/nvim`). `BASE.md` is the full plan plus a numbered decision log (D1, D2, ...). Nearly all of it is built, but a few parts are still marked as later, so check the code before assuming a planned feature exists. When a decision changes, update `BASE.md` too.
 
-The IDE chat is moving to the pinned sudo-tee/opencode.nvim talking to local OpenCode (D150, superseding the ACP plan in D131/D132 and D138-D140; Suite D96). Until JGA-350 lands, the tree still holds the older chat: the `bud.ai.claude` chat session (D25, BASE.md 4.2; going away under Suite D139) and the `bud.ai.acp` client. Don't extend either; new chat work goes through opencode.nvim, and removing the old code is a separate change Jason reviews. Don't add a model provider or an API client unless asked.
+The IDE chat is the pinned sudo-tee/opencode.nvim talking to local OpenCode (D150, superseding the ACP plan in D131/D132 and D138-D140; Suite D96). `bud.ai.agent` and `bud.ai.acp` stay as the programmatic session behind `:BudGen`, issue filing, working an issue, inline actions and commit drafts, and they run only `opencode acp` (Suite D139); the Claude Code session and the IDE bridge are gone (JGA-402). Don't extend opencode.nvim with a fork; bud's changes live in `bud.ai.opencode`. Don't add a model provider or an API client unless asked.
 
 ## Docs
 
@@ -92,7 +92,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | `bud update`, rollback, the background check | `docs/internals/updater.md` |
 | `bud claude`, the Claude Code check | `docs/internals/claude-code.md` |
 | `bud.ai.acp`, the OpenCode transport and the fake ACP agent | `docs/internals/acp.md` |
-| `bud.ai.*`: the session, the TUI pane, the IDE bridge, permissions, chat, inline actions, tools, the generator, filing and working issues | `docs/internals/claude-session.md` |
+| `bud.ai.*`: the session, the TUI pane, permissions, chat, inline actions, tools, the generator, filing and working issues | `docs/internals/session.md` |
 | Anything under `ide/nvim/`: plugins, lazy loading, languages, layouts, debugging, UI, the dashboard, the settings screen | `docs/internals/neovim.md` |
 | `bud bootstrap`, the nightly build, release signing | `docs/internals/release.md` |
 | `bud mcp-gateway` (`internal/mcpgateway`): the home server's MCP gateway and its unit in `server/mcp-gateway/` | `docs/internals/mcp-gateway.md` |

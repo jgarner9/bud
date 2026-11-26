@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -61,13 +62,10 @@ func (a *Account) Record(ctx context.Context, w io.Writer) (Findings, error) {
 	if err := c.Login(ctx, a.user, a.pass); err != nil {
 		return f, err
 	}
-	if _, err := c.Has(ctx, "MOVE"); err != nil {
+	if f.Capabilities, err = c.Capabilities(ctx); err != nil {
 		return f, err
 	}
-	for k := range c.caps {
-		f.Capabilities = append(f.Capabilities, k)
-	}
-	f.Move, f.UIDPlus = c.caps["MOVE"], c.caps["UIDPLUS"]
+	f.Move, f.UIDPlus = slices.Contains(f.Capabilities, "MOVE"), slices.Contains(f.Capabilities, "UIDPLUS")
 	list, err := c.List(ctx)
 	if err != nil {
 		return f, err

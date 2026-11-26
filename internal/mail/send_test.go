@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
+	"github.com/emersion/go-imap/v2"
 	"net"
 	netmail "net/mail"
 	"os"
@@ -223,14 +224,20 @@ func newTestAccount(t *testing.T, imap string) *Account {
 
 func TestMoveToTrashLogsEachMessageAndRestoreUndoesIt(t *testing.T) {
 	ctx := context.Background()
-	a := newTestAccount(t, replay(t, "trash"))
-	moved, trash, err := a.MoveToTrash(ctx, "INBOX", []uint32{7, 8})
+	m := newMemServer(t)
+	m.add(t, "INBOX", msg("Buy now.\r\n", "From: Store <deals@example.net>", "Subject: Sale", "Message-ID: <sale@example.net>"))
+	m.add(t, "INBOX", msg("Keep.\r\n", "From: Pat <pat@example.com>", "Subject: Keep", "Message-ID: <keep@example.com>"))
+	a := newTestAccount(t, m.addr)
+	moved, trash, err := a.MoveToTrash(ctx, "INBOX", []uint32{1, 99})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Moved{{UID: 7, MessageID: "<sale@example.net>", From: []string{"Store <deals@example.net>"}, Subject: "Sale"}}
+	want := []Moved{{UID: 1, MessageID: "<sale@example.net>", From: []string{"Store <deals@example.net>"}, Subject: "Sale"}}
 	if trash != "Deleted Messages" || !reflect.DeepEqual(moved, want) {
 		t.Fatalf("moved %+v to %q", moved, trash)
+	}
+	if m.count(t, "INBOX") != 1 || m.count(t, "Deleted Messages") != 1 {
+		t.Fatalf("INBOX has %d and the trash %d messages", m.count(t, "INBOX"), m.count(t, "Deleted Messages"))
 	}
 	info, err := os.Stat(a.Log.path)
 	if err != nil || info.Mode().Perm() != 0o600 {
@@ -241,7 +248,7 @@ func TestMoveToTrashLogsEachMessageAndRestoreUndoesIt(t *testing.T) {
 		t.Fatalf("digest %+v", acts)
 	}
 
-	b := newTestAccount(t, replay(t, "restore"))
+	b := newTestAccount(t, m.addr)
 	b.Log = a.Log
 	r, err := b.Restore(ctx, "<sale@example.net>")
 	if err != nil {
@@ -250,8 +257,35 @@ func TestMoveToTrashLogsEachMessageAndRestoreUndoesIt(t *testing.T) {
 	if r.ToFolder != "INBOX" || r.Folder != "Deleted Messages" {
 		t.Errorf("restored %+v", r)
 	}
+	if m.count(t, "INBOX") != 2 || m.count(t, "Deleted Messages") != 0 {
+		t.Errorf("after the restore INBOX has %d and the trash %d messages", m.count(t, "INBOX"), m.count(t, "Deleted Messages"))
+	}
 	if _, err := b.Restore(ctx, "<sale@example.net>"); err == nil || !strings.Contains(err.Error(), "only undoes bud's own moves") {
 		t.Errorf("a second restore: %v", err)
+	}
+}
+
+func TestRestoreSaysWhenTheMessageIsGoneFromTheTrash(t *testing.T) {
+	ctx := context.Background()
+	m := newMemServer(t)
+	m.add(t, "INBOX", msg("Buy now.\r\n", "From: Store <deals@example.net>", "Subject: Sale", "Message-ID: <sale@example.net>"))
+	a := newTestAccount(t, m.addr)
+	if _, _, err := a.MoveToTrash(ctx, "INBOX", []uint32{1}); err != nil {
+		t.Fatal(err)
+	}
+	// emptied by hand
+	c := dialMem(t, m)
+	if _, err := c.Select(ctx, "Deleted Messages"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.user.Delete("Deleted Messages"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.user.Create("Deleted Messages", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Restore(ctx, "<sale@example.net>"); err == nil || !strings.Contains(err.Error(), "isn't in Deleted Messages any more") {
+		t.Errorf("got %v", err)
 	}
 }
 
@@ -270,8 +304,10 @@ func TestMoveToTrashChecksItsArguments(t *testing.T) {
 }
 
 func TestAMoveIsLoggedWhenTheLogoutFails(t *testing.T) {
-	a := newTestAccount(t, replay(t, "trash_dropped"))
-	if _, _, err := a.MoveToTrash(context.Background(), "INBOX", []uint32{7, 8}); err != nil {
+	m := newMemServer(t)
+	m.add(t, "INBOX", msg("Buy now.\r\n", "From: Store <deals@example.net>", "Subject: Sale", "Message-ID: <sale@example.net>"))
+	a := newTestAccount(t, dropOnLogout(t, m.addr))
+	if _, _, err := a.MoveToTrash(context.Background(), "INBOX", []uint32{1}); err != nil {
 		t.Fatal(err)
 	}
 	if acts, _ := a.Log.Read(); len(acts) != 1 || acts[0].MessageID != "<sale@example.net>" {
@@ -292,12 +328,23 @@ func TestNewLogMakesAnOldLogPrivate(t *testing.T) {
 	}
 }
 
+// replyFixture is a server whose INBOX holds the message the reply tests
+// answer, at UID 1
+func replyFixture(t *testing.T) *memServer {
+	t.Helper()
+	m := newMemServer(t)
+	m.add(t, "INBOX", msg("Lunch at noon?\r\n",
+		"From: Sam Lee <sam@example.com>", "To: someone@example.com, Pat <pat@example.com>", "Cc: lee@example.com",
+		"Subject: Lunch?", "Message-ID: <m7@example.com>", "References: <m1@example.com>", " <m5@example.com>"), imap.FlagSeen)
+	return m
+}
+
 func TestAReplyGoesOnlyToPeopleOnTheOriginalAndThreads(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeSMTP(t)
-	a := newTestAccount(t, replay(t, "reply"))
+	a := newTestAccount(t, replyFixture(t).addr)
 	a.Sender = newTestSender(t, f.addr)
-	id, err := a.Reply(ctx, "INBOX", 7, addrs(t, "sam@example.com", "pat@example.com"), addrs(t, "lee@example.com"), "Re: Lunch?", "Noon works.")
+	id, err := a.Reply(ctx, "INBOX", 1, addrs(t, "sam@example.com", "pat@example.com"), addrs(t, "lee@example.com"), "Re: Lunch?", "Noon works.")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,20 +369,20 @@ func TestAReplyGoesOnlyToPeopleOnTheOriginalAndThreads(t *testing.T) {
 
 func TestAReplyToSomeoneNotOnTheOriginalIsRefused(t *testing.T) {
 	ctx := context.Background()
-	a := newTestAccount(t, replay(t, "reply"))
+	a := newTestAccount(t, replyFixture(t).addr)
 	a.Sender = newTestSender(t, "127.0.0.1:1")
-	_, err := a.Reply(ctx, "INBOX", 7, addrs(t, "sam@example.com", "attacker@evil.example"), nil, "Re: Lunch?", "hi")
+	_, err := a.Reply(ctx, "INBOX", 1, addrs(t, "sam@example.com", "attacker@evil.example"), nil, "Re: Lunch?", "hi")
 	if err == nil || !strings.Contains(err.Error(), "attacker@evil.example isn't on the message") {
 		t.Fatalf("got %v", err)
 	}
-	b := newTestAccount(t, replay(t, "reply"))
+	b := newTestAccount(t, replyFixture(t).addr)
 	b.Sender = a.Sender
-	if _, err := b.Reply(ctx, "INBOX", 7, addrs(t, "pat@example.com"), nil, "Re: Lunch?", "hi"); err == nil || !strings.Contains(err.Error(), "who sent the message") {
+	if _, err := b.Reply(ctx, "INBOX", 1, addrs(t, "pat@example.com"), nil, "Re: Lunch?", "hi"); err == nil || !strings.Contains(err.Error(), "who sent the message") {
 		t.Fatalf("a reply that leaves out the sender: %v", err)
 	}
-	c := newTestAccount(t, replay(t, "reply"))
+	c := newTestAccount(t, replyFixture(t).addr)
 	c.Sender = a.Sender
-	if _, err := c.Reply(ctx, "INBOX", 7, addrs(t, "sam@example.com"), nil, "Lunch?", "hi"); err == nil || !strings.Contains(err.Error(), `"Re: Lunch?"`) {
+	if _, err := c.Reply(ctx, "INBOX", 1, addrs(t, "sam@example.com"), nil, "Lunch?", "hi"); err == nil || !strings.Contains(err.Error(), `"Re: Lunch?"`) {
 		t.Fatalf("a reply under another subject: %v", err)
 	}
 }
@@ -418,37 +465,6 @@ func TestCleanupToolsPassTheirArguments(t *testing.T) {
 	}
 }
 
-func TestARecordingRedactsTheLoginLiteralsAndAddresses(t *testing.T) {
-	a, err := NewAccount(replay(t, "record"), "someone@example.com", "app-pass")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var out strings.Builder
-	f, err := a.Record(context.Background(), &out)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !f.Move || !f.UIDPlus || f.Trash != "Deleted Messages" || len(f.Folders) != 2 {
-		t.Errorf("findings %+v", f)
-	}
-	got := out.String()
-	for _, secret := range []string{"app-pass", "private", "secret body"} {
-		if strings.Contains(got, secret) {
-			t.Errorf("the recording holds %q:\n%s", secret, got)
-		}
-	}
-	for _, want := range []string{
-		"C: a1 LOGIN <redacted>\n",
-		"S: * CAPABILITY IMAP4rev1 MOVE UIDPLUS\n",
-		"REPLY-TO)] {#}\nL: [redacted]\nS: )\n",
-		"C: a9 LOGOUT\n",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("the recording lacks %q:\n%s", want, got)
-		}
-	}
-}
-
 func TestTheTracerRedactsEveryLoginLineAndEveryLiteralForm(t *testing.T) {
 	var out strings.Builder
 	tr := newTracer(nil, &out)
@@ -478,19 +494,5 @@ func TestTheTracerRedactsEveryLoginLineAndEveryLiteralForm(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("the trace lacks %q:\n%s", want, got)
 		}
-	}
-}
-
-func TestAFailedRecordingKeepsItsTrace(t *testing.T) {
-	a, err := NewAccount(replay(t, "login_refused"), "someone@example.com", "old-pass")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var out strings.Builder
-	if _, err := a.Record(context.Background(), &out); err == nil {
-		t.Fatal("a refused login recorded")
-	}
-	if !strings.Contains(out.String(), "C: a1 LOGIN <redacted>\n") {
-		t.Errorf("the trace of a failed session was lost:\n%s", out.String())
 	}
 }

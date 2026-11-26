@@ -1,4 +1,4 @@
-# Bud Suite decisions, D1 to D137
+# Bud Suite decisions, D1 to D139
 
 The Suite decision log, carried over from the architecture document (`design/bud-suite-architecture.html`, section 14) for D1 to D113 and from the design docs for D114 to D136. `BASE.md` has its own, separate numbers for the IDE and CLI (D1 to D152); "Suite Dn" always means this list.
 
@@ -208,6 +208,12 @@ Taken on recommendation 2026-11-22 (thread "Build self-improvement proposals and
 | # | Decision | Date | Notes |
 | --- | --- | --- | --- |
 | D137 | A selected private-overlay fragment may supply the 1Password reference for a rendered OpenCode provider whose registry key is `{env:VAR}`. | 2026-11-24 | Jason approved this so one profile can supply a launch credential without changing the shared registry. Public fragments cannot opt a provider in, and explicit registry references remain authoritative. |
+
+## D138: the mail IMAP client moves to go-imap
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D138 | `internal/mail`'s IMAP client is `github.com/emersion/go-imap/v2` (v2.0.0-beta.9), bud's second third-party Go module (after tidwall/jsonc, BASE D153), under the D1 exception Jason granted in chat on 2026-11-25 and is himself carrying into BASE.md D1's rewording. The adapter keeps every tool contract, safety refusal and error sentence from the homegrown client, so D106's "own IMAP subset" clause is superseded for the IMAP half only; sends stay on `net/smtp`, and nothing else in bud takes third-party modules. `wire.go`, `utf7.go` and the hand-written transcripts go, and the package's tests run against the library's own in-process server (`imapserver/imapmemserver`). | 2026-11-25 | Jason: "IMAP client (internal/mail/ — ~4.3K lines). This is the single best candidate... I think this is extremely worth it" and "I'm giving a D1 exception here btw, I am working to change this if you are looking for it." Verified there is no Google-authored go-imap; emersion/go-imap v2 is the maintained line (default branch v2, v2.0.0-beta.9, deps go-sasl and go-message). Design: `handoff/design/go-imap-mail.md`. |
 
 ## D139: Bud 2.0 drops Claude Code and backend-agnosticism
 

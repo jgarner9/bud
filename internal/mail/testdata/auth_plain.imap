@@ -1,9 +1,0 @@
-# LOGIN disabled: AUTHENTICATE PLAIN with a continuation. Hand-written
-S: * OK [CAPABILITY IMAP4rev1 LOGINDISABLED AUTH=PLAIN] IMAP4 service ready
-C: a1 AUTHENTICATE PLAIN
-S: +
-C: AHNvbWVvbmVAZXhhbXBsZS5jb20AYXBwLXBhc3M=
-S: a1 OK user logged in
-C: a2 LOGOUT
-S: * BYE logging out
-S: a2 OK LOGOUT completed

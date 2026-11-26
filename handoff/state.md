@@ -12,7 +12,7 @@ The shared OpenCode shell rules now allow exact workspace inspection commands an
 
 Laptop spend: `opencode stats --cost` shows $0.00 for every Go model by design, not a bug. The Go endpoint reports `cost: 0` (with `billing_source: go-plus`) in its usage object, and OpenCode v2.3.2 treats an endpoint-reported zero as authoritative, so the registry prices rendered into `opencode.jsonc` never enter the sum (verified 2026-11-25 against the endpoint with a free-model probe and the v2.3.2 source; the render itself is correct per the docs and was probed via `hungerg-free`). The real dollar views are the Go console and, for traffic through the router, `ops_spend`; laptop-direct traffic is invisible to Bud, which is JGA-393's argument.
 
-- **Code on main:** everything through PR #116 (see below). `VERSION` is still 1.1.0 (the last tag is v1.1.0); no release has been cut since the Suite work began, and the home server runs bud built from main. A release is a `bud:release` run in Claude Code, or Jason's call.
+- **Code on main:** everything through PR #116 (see below). `VERSION` is still 1.1.0 (the last tag is v1.1.0); no release has been cut since the Suite work began, and the home server runs bud built from main. A release is a run of the `release` skill (`content/skills/release`) in an OpenCode session, or Jason's call.
 - **Content:** format 9 since PR #116 (an older bud refuses it). Edge content is cut on every push to main that changes `content/`; the home server is on stable 2026.11.22.1 and needs the newer edge cut promoted during its rollout (revisit item 22).
 - **Diagrams:** `docs/architecture.md` (six Mermaid levels, PR #111). Update it in the same change as the code it draws.
 

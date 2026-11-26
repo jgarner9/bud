@@ -61,6 +61,8 @@ rewritten, since every reader filters on `records.privacy` and the FTS index
 and vector tables don't copy it. The reviewer also holds `export` so
 `bud memory-review retier` can show the record it asks about.
 
+The service runs from this copy, not the repo, and `bud update` doesn't refresh it. When a change here adds an action or policy rule, copy the files again (`main`, `service`, `store`, `history`, `vectors`, `retrieval`) before editing the policy: an older `service.py` refuses an action it doesn't know and exits with `invalid client policy`.
+
 The unit reads `OP_SERVICE_ACCOUNT_TOKEN` from
 `~/.config/bud-server/op-service-account.env` and uses `op run --env-file` to
 resolve the reference at startup. Create that file with mode 0600. Run the

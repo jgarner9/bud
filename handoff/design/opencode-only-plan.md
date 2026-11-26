@@ -84,9 +84,9 @@ just smoke
 
 ### 3. Lua: delete `bud.ai.claude` and the IDE bridge
 
-Delete `ide/nvim/lua/bud/ai/claude.lua`, `ide/nvim/lua/bud/ai/bridge/`, and every require of them: `term.lua`, `chat.lua`, `permissions.lua` (its Claude path), `issue.lua` (the `plugin_dir` check: the file-issue skill now comes from synced content), `open.lua`, `core/autocmds.lua`, the dashboard's chat entry (it opens the opencode.nvim chat), settings, quit and statusline. Delete their tests (`claude_test.lua`, `claude_term_test.lua`, `claude_resume_default_test.lua`, `claude_plugin_test.lua`, `bridge_test.lua`, `lib/claude_backend.lua`) and the Claude cases in the others. Rename `docs/internals/claude-session.md` to `docs/internals/session.md`, rewrite it for what's left, and update its row in AGENTS.md's "Where the detail is" table. The Lua stops reading every `ai.claude.*` key; the Go side still defines them until task 5.
+Delete `ide/nvim/lua/bud/ai/claude.lua`, `ide/nvim/lua/bud/ai/bridge/`, and every require of them: `term.lua`, `chat.lua`, `permissions.lua` (its Claude path), `issue.lua` (the `plugin_dir` check: the file-issue skill now comes from synced content), `open.lua`, `core/autocmds.lua`, the dashboard's chat entry (it opens the opencode.nvim chat), settings, quit and statusline. Delete their tests (`claude_test.lua`, `claude_term_test.lua`, `claude_resume_default_test.lua`, `claude_plugin_test.lua`, `bridge_test.lua`, `lib/claude_backend.lua`) and the Claude cases in the others. Rename `docs/internals/claude-session.md` to `docs/internals/session.md`, rewrite it for what's left, and update its row in AGENTS.md's "Where the detail is" table. The IDE's references to the plugin's names become the synced content names while the plugin still exists: `issue.lua`'s prompt `bud-ide:file-issue` becomes `file-issue`, and `chat.lua`'s `bud-ide:chat` agent becomes `chat`, so task 6 can delete the plugin without breaking issue filing or chat. The Lua stops reading every `ai.claude.*` key; the Go side still defines them until task 5.
 
-Done when:
+Done when (also `git grep -n 'bud-ide:' -- ide/nvim` prints nothing):
 
 ```sh
 test ! -e ide/nvim/lua/bud/ai/claude.lua && test ! -e ide/nvim/lua/bud/ai/bridge
@@ -110,7 +110,7 @@ go test ./...
 
 ### 5. Go: delete Claude Code support
 
-Delete `internal/claude`, `internal/cli/claude.go`, `internal/cli/claudedir.go` and their tests; `cli.UseClaudeConfig` and its call in `cmd/bud/main.go`; the Claude Code and Headroom steps in `bud install`; the `claude code` and `claude command` doctor checks; `paths.ClaudeConfig`; the `ai.claude.*` keys; and the Claude path of `bud agent`. Port `bud chat` to OpenCode with the synced `chat` agent (`opencode --agent chat` in `paths.Chat`). Delete `docs/internals/claude-code.md` and its AGENTS.md row, and remove the keys' rows from `docs/config.md` and `bud claude` from `docs/commands.md`.
+Delete `internal/claude`, `internal/cli/claude.go`, `internal/cli/claudedir.go` and their tests; `cli.UseClaudeConfig` and its call in `cmd/bud/main.go`; the Claude Code and Headroom steps in `bud install`; the `claude code` and `claude command` doctor checks; `paths.ClaudeConfig`; the `ai.claude.*` keys; and the Claude path of `bud agent`. Port `bud chat` to OpenCode with the synced `chat` agent (`opencode --agent chat` in `paths.Chat`; the Go `chatAgent` constant drops its `bud-ide:` prefix). Delete `docs/internals/claude-code.md` and its AGENTS.md row, and remove the keys' rows from `docs/config.md` and `bud claude` from `docs/commands.md`.
 
 Done when:
 
@@ -157,7 +157,7 @@ Done when:
 ```sh
 git grep -n -i -E 'claude|openclaw|codex' -- docs site README.md ide/bundles ':!docs/internals/jga-348-worklog.md'   # prints nothing
 just site-test
-go test ./internal/cli -run TestDocs
+go test ./internal/config -run TestDocsCoverEveryKey
 ```
 
 ### 9. Living docs: AGENTS.md, delete CLAUDE.md, handoff, comments

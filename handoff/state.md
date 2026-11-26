@@ -10,6 +10,8 @@ Interactive `bud agent` now gives OpenCode a resizing terminal inside `op run`. 
 
 The shared OpenCode shell rules now allow exact workspace inspection commands and common pipeline filters, including `rg --files`, `git branch --show-current`, `git worktree list`, `wc -l` and `sort -u`.
 
+Laptop spend: `opencode stats --cost` shows $0.00 for every Go model by design, not a bug. The Go endpoint reports `cost: 0` (with `billing_source: go-plus`) in its usage object, and OpenCode v2.3.2 treats an endpoint-reported zero as authoritative, so the registry prices rendered into `opencode.jsonc` never enter the sum (verified 2026-11-25 against the endpoint with a free-model probe and the v2.3.2 source; the render itself is correct per the docs and was probed via `hungerg-free`). The real dollar views are the Go console and, for traffic through the router, `ops_spend`; laptop-direct traffic is invisible to Bud, which is JGA-393's argument.
+
 - **Code on main:** everything through PR #116 (see below). `VERSION` is still 1.1.0 (the last tag is v1.1.0); no release has been cut since the Suite work began, and the home server runs bud built from main. A release is a `bud:release` run in Claude Code, or Jason's call.
 - **Content:** format 9 since PR #116 (an older bud refuses it). Edge content is cut on every push to main that changes `content/`; the home server is on stable 2026.11.22.1 and needs the newer edge cut promoted during its rollout (revisit item 22).
 - **Diagrams:** `docs/architecture.md` (six Mermaid levels, PR #111). Update it in the same change as the code it draws.
@@ -57,9 +59,8 @@ None of the 2026-11-22 builds are rolled out there yet. **Jason hasn't done revi
 
 1. **JGA-390** (D135, decided 2026-11-24: an always-P0 subagent path). A delegated Hermes subagent gets its own conversation id, so P0 data the parent writes into its task prompt isn't held by the router's sticky P0. Jason chose option A: the subagent runs through its own router path that is always P0, whatever the parent's tier. Being built.
 2. **Re-tiering approved memory records** (D136, decided 2026-11-24: a reviewer-only `retier` action). Hermes saved every record at P1 until D130; the action is `POST /retier {id, privacy}`, asked on Signal like memory-review, and removing a record is deferred. Being built.
-3. **Close JGA-348** (D134, decided 2026-11-23: superseded by D97) and file the narrow "consolidate the audit logs" follow-up.
-4. **Help Jason through the rollouts** in [revisit.md](revisit.md) when he's at the home server: give paste blocks, read his output, and fix what breaks.
-5. **Then the rest of Bud 2.0** (below). Most need the home server, the Qwen box, Herdr or a design session with him, so recommend one and ask.
+3. **Help Jason through the rollouts** in [revisit.md](revisit.md) when he's at the home server: give paste blocks, read his output, and fix what breaks.
+4. **Then the rest of Bud 2.0** (below). Most need the home server, the Qwen box, Herdr or a design session with him, so recommend one and ask.
 
 ## Open in Bud 2.0 (Linear)
 
@@ -67,7 +68,8 @@ None of the 2026-11-22 builds are rolled out there yet. **Jason hasn't done revi
 | --- | --- | --- | --- |
 | JGA-390 | In Progress | Subagents stay P0 with a P0 parent | D135: always-P0 subagent path; being built |
 | JGA-321 | In Review | Self-improvement loop | Rollout (item 21), then Done |
-| JGA-348 | In Progress | One approval policy and audit log with runtime adapters | D134: close as superseded by D97, file the audit-log follow-up |
+| JGA-395 | Backlog | Consolidate the fragmented audit logs into one shared store | JGA-348's narrow follow-up (D134), filed 2026-11-24; JGA-348 is closed as superseded by D97 |
+| JGA-397 | Backlog | Fix the mail-to-self rule's address in the overlay | Jason: the correct send-as is in 1Password |
 | JGA-376 | Backlog | Audit Signal approvals | Largely done by D114 to D121; close or narrow with Jason |
 | JGA-374 | Backlog | Review final-dispatch approvals, plan isolated home-server verification | Jason |
 | JGA-349 | Backlog | Signal reactions and replies to approval requests | Likely stale (built in R6b, D101); confirm and close |

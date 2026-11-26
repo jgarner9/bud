@@ -142,3 +142,20 @@ func TestFetchMainUnreachable(t *testing.T) {
 		t.Error("fetching a missing repo gave no error")
 	}
 }
+
+func TestLockSource(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "cache", "source")
+	unlock, err := LockSource(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LockSource(dir); err == nil || !strings.Contains(err.Error(), "already building") {
+		t.Errorf("second lock: %v, want an already-building error", err)
+	}
+	unlock()
+	again, err := LockSource(dir)
+	if err != nil {
+		t.Fatalf("lock after unlock: %v", err)
+	}
+	again()
+}

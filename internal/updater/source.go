@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"jgarner.dev/bud/internal/version"
@@ -22,6 +23,31 @@ var SourceURL = "https://github.com/" + Repo + ".git"
 
 // versionPkg is the package whose Version variable release builds stamp
 const versionPkg = "jgarner.dev/bud/internal/version"
+
+// LockSource takes dir's lock, so two `bud update --from-main` runs never reset
+// or clean the checkout while the other compiles it. It doesn't wait: a second
+// run fails saying so. The lock file sits beside dir, since FetchMain may
+// remove dir, and the lock is released when unlock is called or the process
+// ends (including the exec that hands the update to the new bud)
+func LockSource(dir string) (unlock func(), err error) {
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		return nil, err
+	}
+	path := dir + ".lock"
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("another bud update --from-main is already building from %s: wait for it to finish, then run this again", dir)
+	}
+
+	return func() {
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}, nil
+}
 
 // FetchMain brings the checkout in dir to the tip of main and returns its
 // full commit hash. dir is bud's own cache of the source (a shallow clone), so

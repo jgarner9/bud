@@ -64,6 +64,7 @@ var (
 	fetchRelease  = updater.Fetch
 	checkBinary   = updater.CheckBinary
 	fetchMain     = updater.FetchMain
+	lockSource    = updater.LockSource
 	buildMain     = updater.BuildMain
 	execBinary    = syscall.Exec
 	executable    = os.Executable
@@ -363,6 +364,12 @@ func selfUpdateFromMain(g *Globals, p *paths.Paths, noDoctor bool) error {
 	fmt.Printf("Building bud from the tip of %s. A source build is unsigned: it skips the release signature and checksum check that stable and nightly updates get.\n", updater.SourceBranch)
 	ctx := context.Background()
 	dir := p.Source()
+	// held from the fetch until the build is done, so another run can't change the checkout under it
+	unlock, err := lockSource(dir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	commit, err := fetchMain(ctx, dir)
 	if err != nil {
 		return err

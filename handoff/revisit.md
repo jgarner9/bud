@@ -175,7 +175,7 @@ The timer's tmux session had no `OPENCODE_GO_API_KEY`, so a resumed session fail
 ### OpenCode-only follow-ups (Suite D139)
 
 33. **The Linear policy rename is untested against a live permission request.** JGA-406 (PR #143) found that the Linear rules in `issue.lua` and `work.lua` matched `mcp__<server>__<tool>` names, which OpenCode never sends, and renamed them to OpenCode's `linear_<tool>` names. Nothing has yet run a real ACP permission request through them. Next time you file or work an issue from the editor (`<leader>ai`, `:BudIssues` w), check that Linear reads run without a prompt and writes ask as before; tell me if either is wrong.
-34. **Claude-era wording outside this repo (your call).** `jgarner9/bud-plugins` still holds the old `bud` plugin and its release skill, and the private overlay's `handoff/` and profiles still use Claude-era wording. D139 left both for you. Say if you'd like them reworded or archived.
+34. ~~**Claude-era wording outside this repo.**~~ **DONE 2026-11-26** (Suite D141, your approval in the project chat). `jgarner9/bud-plugins` is archived: nothing in this repo loads it (the skills live in `content/skills/`), and the only references left are dated history in `BASE.md`, `handoff/decisions.md` and `handoff/design/`, kept verbatim under D139. The overlay's living handoff docs now say OpenCode and Hermes (overlay PR #13); its `handoff/memory/` and `revisit-raw.md` stay verbatim as history. If your Claude surfaces still sync the `bud-plugins` marketplace, remove it there.
 
 ### Subagents at P0 (JGA-390, Suite D135)
 

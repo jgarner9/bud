@@ -19,14 +19,17 @@ type Tmux interface {
 
 // Runner is one bud resume run: what the timer starts
 type Runner struct {
-	Queue     Queue
-	Tmux      Tmux
-	Bud       string        // this bud binary, which tmux runs as bud resume launch
-	Opencode  string        // the opencode binary
-	Session   string        // the tmux session; Session when empty
-	MinAge    time.Duration // a prompt waits this long, so the session that queued it can finish its last reply
-	MaxPerDay int           // starts allowed in any 24 hours
-	Now       func() time.Time
+	Queue    Queue
+	Tmux     Tmux
+	Bud      string // this bud binary, which tmux runs as bud resume launch
+	Opencode string // the opencode binary
+	// LaunchFlags go to bud resume launch before its entry, such as the
+	// --op-env-file that gets opencode its keys
+	LaunchFlags []string
+	Session     string        // the tmux session; Session when empty
+	MinAge      time.Duration // a prompt waits this long, so the session that queued it can finish its last reply
+	MaxPerDay   int           // starts allowed in any 24 hours
+	Now         func() time.Time
 	// LaunchWait is how long the runner waits for launch to report from
 	// inside tmux; 10 seconds when zero
 	LaunchWait time.Duration
@@ -125,7 +128,8 @@ func (r *Runner) start(e *Entry, path string) error {
 	// tmux runs bud resume launch, which reads the prompt from the consumed
 	// entry and starts opencode, so the prompt never goes through tmux's
 	// message size limit or a shell
-	if err := r.Tmux.NewSession(r.session(), e.Dir, []string{r.Bud, "resume", "launch", "--opencode", r.Opencode, path}); err != nil {
+	argv := append([]string{r.Bud, "resume", "launch", "--opencode", r.Opencode}, r.LaunchFlags...)
+	if err := r.Tmux.NewSession(r.session(), e.Dir, append(argv, path)); err != nil {
 		return err
 	}
 
@@ -167,7 +171,7 @@ func (r *Runner) waitLaunch(e *Entry, path string) error {
 			return nil
 		}
 		if !r.Tmux.HasSession(r.session()) {
-			return errors.New("the tmux session ended before bud resume launch reported; check the unit's PATH")
+			return errors.New("the tmux session ended before bud resume launch reported; check the unit's PATH, and with --op-env-file that op run can resolve every reference")
 		}
 		if waited >= wait {
 			return fmt.Errorf("bud resume launch didn't report within %s", wait)

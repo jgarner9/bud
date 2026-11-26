@@ -63,17 +63,12 @@ bud config edit                           # open it in bud's editor, then check 
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `ai.backend` | `"claude"` | Not read by the IDE since Suite D139: bud talks only to OpenCode. The Go side still defines the key until JGA-403 removes it, so setting it changes nothing. |
 | `ai.agent.chat_layout` | `"pane"` | How bud's AI pane opens when something other than `<leader>ac` asks for it (the layout's chat pane, `<leader>av`): `pane`, the pull-out on the right, or `full`, a tab of its own. `<leader>aF` switches between them either way. `<leader>ac` always opens opencode.nvim and ignores this (D150). |
 | `ai.agent.autostart` | `true` | Start the project's OpenCode agent when it opens (it costs a process, no tokens). Off, it starts on the first use. |
 | `ai.agent.idle_minutes` | `30` | Stop a project's agent nothing has used for this long; the next use starts it again on the same session. `0` never stops it. |
 | `ai.agent.chat_ui` | `"tui"` | What draws the AI chat in a layout's chat pane and on `<leader>aF`: `tui`, OpenCode's own TUI, or `bud`, bud's own chat drawn in Neovim from the agent's replies (`<leader>av` opens it either way). With `bud`, chat mode (`<leader>ch`) is bud's chat too, full screen, outside any project. `<leader>ac` always opens opencode.nvim and ignores this (D150). |
-| `ai.openclaw.url` | `""` | Not read by the IDE since Suite D139: bud talks only to OpenCode. The Go side still defines the key until JGA-403 removes it, so setting it changes nothing. |
-| `ai.openclaw.token_file` | `""` | Not read by the IDE since Suite D139: bud talks only to OpenCode. The Go side still defines the key until JGA-403 removes it, so setting it changes nothing. |
-| `ai.openclaw.agent` | `"main"` | Not read by the IDE since Suite D139: bud talks only to OpenCode. The Go side still defines the key until JGA-403 removes it, so setting it changes nothing. |
 | `ai.planning.url` | `""` | The home server's planning OpenCode (Suite D49), such as `http://100.x.y.z:8797` (its tailnet IP; see `server/planning-opencode/`). `<leader>aP` and `:BudPlan` open OpenCode's own TUI attached to it (`opencode --server`) in a pane of its own, apart from local coding. Empty means home planning isn't set up, and the key says so. |
 | `ai.planning.password_file` | `"~/.config/bud/planning-password"` | A file holding the planning server's password (mode 600), the same as its `OPENCODE_PASSWORD`. bud checks the server with it before opening the pane, and passes it to `opencode` in the environment, never on the command line. |
-| `ai.custom.command` | `[]` | Not read by the IDE since Suite D139: bud talks only to OpenCode. The Go side still defines the key until JGA-403 removes it, so setting it changes nothing. |
 | `ai.claude.autostart` | `true` | Start a Claude Code session when a project opens. Off, bud only starts one when you use an AI feature. |
 | `ai.claude.resume` | `"new"` | Reopening a project starts a fresh conversation, on the model your settings choose. `"continue"` carries on bud's last conversation there instead (kept in `~/.local/state/bud/claude-sessions.json`, so never one you started yourself, or an issue, gen or chat conversation) and keeps the model that conversation was on. `bud agent` follows the same rule. |
 | `ai.claude.idle_minutes` | `30` | Stop a session nothing has used for this long; the next use starts it again on the same conversation. `0` never stops one. |

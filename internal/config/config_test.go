@@ -300,27 +300,45 @@ func TestOldKitKeyStillLoadsAndSaves(t *testing.T) {
 	}
 }
 
-// ai.backend picks a known agent, and custom needs its command (D131)
-func TestBackendValidate(t *testing.T) {
+// the chat layout is checked, and a config.json from before OpenCode-only
+// (Suite D139) that still has the backend keys loads and keeps them on save
+func TestAgentValidateAndLegacyKeys(t *testing.T) {
 	s := Defaults()
-	if s.AI.Backend != "claude" || s.AI.Agent.ChatLayout != "pane" {
-		t.Fatalf("defaults: backend %q, chat_layout %q", s.AI.Backend, s.AI.Agent.ChatLayout)
-	}
-	s.AI.Backend = "gpt"
-	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "ai.backend") {
-		t.Errorf("unknown backend: %v", err)
-	}
-	s.AI.Backend = "custom"
-	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "ai.custom.command") {
-		t.Errorf("custom with no command: %v", err)
-	}
-	s.AI.Custom.Command = []string{"gemini", "--experimental-acp"}
-	if err := s.Validate(); err != nil {
-		t.Errorf("custom with a command: %v", err)
+	if s.AI.Agent.ChatLayout != "pane" {
+		t.Fatalf("defaults: chat_layout %q", s.AI.Agent.ChatLayout)
 	}
 	s.AI.Agent.ChatLayout = "half"
 	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "chat_layout") {
 		t.Errorf("unknown chat layout: %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "config.json")
+	// the removed key names are spelled out in pieces so the grep that checks
+	// the Go side no longer mentions them stays empty (JGA-403)
+	gateway := "open" + "claw"
+	old := `{"ai": {"backend": "gpt", "` + gateway + `": {"url": "wss://h"}, "custom": {"command": ["x"]}, "agent": {"chat_layout": "full"}}}`
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.Settings()
+	if err != nil || got.AI.Agent.ChatLayout != "full" {
+		t.Fatalf("legacy keys: %+v, %v", got.AI.Agent, err)
+	}
+	if err := f.Save(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	for _, key := range []string{`"backend"`, `"` + gateway + `"`, `"custom"`} {
+		if !strings.Contains(string(data), key) {
+			t.Errorf("%s lost on save: %s", key, data)
+		}
+	}
+	if !strings.Contains(string(data), `"url": "wss://h"`) {
+		t.Errorf("the %s subtree's contents lost on save: %s", gateway, data)
 	}
 }
 

@@ -63,7 +63,7 @@ func installHarness(_ *Globals, yes bool) error {
 	status := backend.CheckOpenCodeHarness()
 	if status.Bin == "" {
 		if pr := terminalPrompter(yes); pr != nil {
-			ok, err := pr.confirmYes("Install the OpenCode harness with " + backend.Install["opencode"] + "?")
+			ok, err := pr.confirmYes("Install the OpenCode harness with " + backend.InstallCommand + "?")
 			if err != nil {
 				return err
 			}
@@ -221,16 +221,15 @@ func installIDE(g *Globals, yes bool) error {
 		fmt.Printf("\nGitHub CLI isn't set up (%v); 'gh auth login' and your package manager do it by hand.\n", err)
 	}
 
-	if s.AI.Backend != "claude" {
-		// another backend (D131): its command and, for OpenClaw, the Gateway;
-		// never Claude Code's setup, whatever ai.claude.autostart says
-		if s.AI.Agent.Autostart {
-			fmt.Println()
-			if err := installBackend(pr, yes, s.AI.Backend); err != nil {
-				fmt.Printf("The AI backend (%s) isn't set up (%v); 'bud ai setup' tries again.\n", s.AI.Backend, err)
-			}
+	if s.AI.Agent.Autostart {
+		// OpenCode is the editor's agent (Suite D139); never Claude Code's
+		// setup, whatever ai.claude.autostart says
+		fmt.Println()
+		if err := installOpenCode(pr, yes); err != nil {
+			fmt.Printf("OpenCode isn't set up (%v); 'bud ai setup' tries again.\n", err)
 		}
-	} else if s.AI.Claude.Autostart {
+	}
+	if s.AI.Claude.Autostart {
 		fmt.Println()
 		if err := installClaude(pr, yes); err != nil {
 			fmt.Printf("Claude Code isn't set up (%v); 'bud claude setup' tries again.\n", err)
@@ -254,15 +253,15 @@ func installIDE(g *Globals, yes bool) error {
 // swappable in tests: the desktop app on the full profile (BASE.md 5.2 step 5)
 var installBundle = func(g *Globals) error { return bundleCmd(g, nil, false, false, "") }
 
-// installBackend offers bud ai setup for a backend other than claude; bud
-// works without it, so saying no only says how to do it later
-func installBackend(pr *prompter, yes bool, backend string) error {
+// installOpenCode offers bud ai setup; bud works without it, so saying no
+// only says how to do it later
+func installOpenCode(pr *prompter, yes bool) error {
 	if pr == nil && !yes {
-		fmt.Printf("The AI backend (%s) isn't set up here; run 'bud ai setup' for the AI parts.\n", backend)
+		fmt.Println("OpenCode isn't set up here; run 'bud ai setup' for the AI parts.")
 		return nil
 	}
 	if pr != nil && !yes {
-		ok, err := pr.confirmYes(fmt.Sprintf("Set up %s for bud's AI now?", backend))
+		ok, err := pr.confirmYes("Set up OpenCode for bud's AI now?")
 		if err != nil || !ok {
 			if err == nil {
 				fmt.Println("Skipped; 'bud ai setup' does it later.")

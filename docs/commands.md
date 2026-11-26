@@ -89,15 +89,16 @@ Locate uses ripgrep if installed and falls back to grep, which can also search i
 
 Every key and its default is in the [config reference](config.md).
 
-## The AI backend
+## OpenCode
 
-The AI backend is a setting (`ai.backend`); [AI backends](backends.md) says how to choose one. The default, `claude`, runs Claude Code directly (below); `openclaw`, `codex`, `opencode` and `custom` go over the Agent Client Protocol (ACP).
+OpenCode is the one AI agent bud runs (Suite D139); there is no backend to choose. In the editor it goes over the Agent Client Protocol (ACP), and signing in to its models is OpenCode's own step.
 
 | Command | What it does |
 | --- | --- |
-| `bud ai status [--json]` | Which backend is set, the command it runs, whether that's installed, and for OpenClaw whether the Gateway at `ai.openclaw.url` answers, with a fix for each problem. |
-| `bud agent [path]` · `bud chat` | Open the backend's own TUI from the shell. With OpenCode, `bud agent` uses `op run` and a private OpenCode server when `bud sync` has written `opencode.env`; otherwise it launches OpenCode directly. With OpenClaw, open the project's Gateway session or the shared chat session. With Claude Code, see below. |
-| `bud ai setup [--yes]` | On the `claude` backend, points you at `bud claude setup`. On the others, installs the backend's command with npm if it's missing (asking first), then for OpenClaw asks for the Gateway's URL and the file holding its token, and saves them. Models sign in on the Gateway host (`openclaw onboard` there). |
+| `bud ai status [--json]` | Whether OpenCode is installed, which version, and a fix for each problem. |
+| `bud ai setup [--yes]` | Installs the pinned OpenCode with npm if it's missing (asking first), then prints the status. |
+| `bud agent [path]` | OpenCode's own TUI in a project, from the shell. When `bud sync` has written `opencode.env`, it runs through `op run` against a private OpenCode server; otherwise it launches OpenCode directly. |
+| `bud chat` | OpenCode's own TUI in a directory that belongs to no project. `--resume` is Claude Code's and is refused. |
 
 ## Claude Code
 
@@ -105,8 +106,6 @@ The AI backend is a setting (`ai.backend`); [AI backends](backends.md) says how 
 | --- | --- |
 | `bud claude status` | Whether Claude Code is installed and logged in. |
 | `bud claude setup [--yes]` | Installs Claude Code with Anthropic's installer if it's missing, then runs its login. See [Claude Code in bud](claude-code.md#setting-it-up). |
-| `bud agent [path]` | Claude Code's own TUI in a project, from the shell. |
-| `bud chat [--resume]` | Claude Code in chat mode, outside any project. `--resume` picks an earlier chat. |
 | `bud plugin path` | Unpacks the `bud-ide` plugin bud ships (if needed) and prints its dir; the editor passes it to Claude Code with `--plugin-dir`. |
 | `bud tools ls` | Your tools and bud's, and whether each is on. |
 | `bud tools gen "<description>"` | Has Claude write a tool or language spec, in the editor. See [tools](tools.md). |

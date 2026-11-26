@@ -64,7 +64,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 ## Hard constraints
 
-- **Standard library only (D1).** No third-party Go modules. Commands use `flag.FlagSet`, not cobra. Config and data files are JSON (D2).
+- **Standard library only (D1).** No third-party Go modules, with one exception (D153): the JSONC stripper is github.com/tidwall/jsonc, picked because its output keeps the input's byte offsets and line breaks, which the registry's in-place patching and error lines depend on. Commands use `flag.FlagSet`, not cobra. Config and data files are JSON (D2).
 - **Flags go before positionals (D4):** `bud [global flags] <command> [command flags] [args]`. That's plain `flag` behavior, so don't add interspersed parsing.
 - **macOS and Linux only (D22).**
 

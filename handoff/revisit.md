@@ -162,3 +162,7 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 31. **Starting the next orchestrator after a handoff.** Set up with the steps in `server/resume/README.md` (tmux, opencode, a checkout with push access and `gh`, then the timer). Two calls for you:
     - **tmux or headless.** Built as tmux on the recommendation: asks wait for you to attach and are refused after 10 minutes. Headless `opencode run` would reject every ask, so the session couldn't commit or push.
     - **Whether `bud resume queue` runs alone.** The base rules ask for it like any unlisted command, so an unattended session's `/handoff` would time out and print the prompt instead of queueing it. **You said yes on 2026-11-24:** jgarner9/bud-overlay#11 adds `{ "action": "shell", "resource": "bud resume queue *", "effect": "allow" }` to the overlay's `env/personal.jsonc`, for you to merge after #122, then `bud sync`.
+
+### JSONC parsing (BASE D153)
+
+32. **The one stdlib exception.** You granted a D1 exception in chat overnight ("I'm giving a D1 exception here") for a tested JSONC library, and the swap was done on it: `StripJSONC` now wraps github.com/tidwall/jsonc. The library the note named didn't exist; tidwall's is the only established one that keeps byte offsets and line breaks, which `bud registry refresh --write`'s in-place editing relies on. If you'd rather keep the homegrown stripper — its error for an unterminated comment was friendlier — say so and the PR reverts.

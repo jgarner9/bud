@@ -241,10 +241,7 @@ func Read(path string) (*Registry, error) {
 // Parse decodes a registry from JSONC. A field it doesn't know is an error,
 // so a typo can't quietly drop a setting
 func Parse(src []byte) (*Registry, error) {
-	b, err := StripJSONC(src)
-	if err != nil {
-		return nil, err
-	}
+	b := StripJSONC(src)
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	var r Registry

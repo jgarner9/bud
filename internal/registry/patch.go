@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 )
@@ -14,9 +15,13 @@ import (
 func PatchFacts(src []byte, models map[string]Model) ([]byte, error) {
 	// StripJSONC keeps every byte offset, so spans found in the plain JSON
 	// point into src as well
-	plain, err := StripJSONC(src)
-	if err != nil {
-		return nil, err
+	plain := StripJSONC(src)
+	// ToJSON leaves an unterminated comment or string for a JSON parser to
+	// report, and the scan below reads only the root object, so validate the
+	// whole file here rather than patch a malformed one
+	var whole any
+	if err := json.Unmarshal(plain, &whole); err != nil {
+		return nil, fmt.Errorf("patch the registry: %w", err)
 	}
 	root, err := scanObject(plain, skipSpace(plain, 0))
 	if err != nil {

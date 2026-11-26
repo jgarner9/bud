@@ -72,12 +72,8 @@ func TestRenderingIsDeterministic(t *testing.T) {
 // decode reads a rendered config back, header and all
 func decode(t *testing.T, b []byte) map[string]any {
 	t.Helper()
-	clean, err := registry.StripJSONC(b)
-	if err != nil {
-		t.Fatal(err)
-	}
 	var cfg map[string]any
-	if err := json.Unmarshal(clean, &cfg); err != nil {
+	if err := json.Unmarshal(registry.StripJSONC(b), &cfg); err != nil {
 		t.Fatal(err)
 	}
 

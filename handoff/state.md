@@ -47,6 +47,7 @@ Not set up on the home server yet: revisit item 31.
 
 | Issue | What | PR | Decisions |
 | --- | --- | --- | --- |
+| JGA-398 | JSONC is parsed with github.com/tidwall/jsonc, D1's one stdlib exception; the homegrown stripper is a one-line wrapper over its offset-preserving `ToJSON` | this PR | D153 (BASE) |
 | | glm-5.3's Go Plus allowance corrected from 120 to 400 dollars a month (only entry that drifted; opencode.ai/console/go, checked 2026-11-25), so the spend views report the real headroom | this PR | |
 | | The syncer tests' git commits no longer inherit the machine's commit signing (one `-c commit.gpgsign=false` in the test helper), so the golden tests run anywhere | this PR | |
 | | The 2026-11-19 approval-hook investigation lands in docs/internals: Hermes v0.23.2 and OpenCode 2.3.2 hook and permission boundaries, identity, cancellation and the one-call enforcement gaps, groundwork for the approval and audit-log follow-ups (JGA-374, JGA-376, D134) | this PR | |

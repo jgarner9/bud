@@ -163,6 +163,13 @@ func TestPatchFactsKeepsEverythingElse(t *testing.T) {
 	}
 }
 
+func TestPatchFactsRejectsAMalformedRegistry(t *testing.T) {
+	src := `{"models": {"m": {"provider": "go", "name": "m-1"}}} /* never closed`
+	if _, err := PatchFacts([]byte(src), map[string]Model{"m": {Inputs: []string{"text"}}}); err == nil {
+		t.Fatal("want an error for a comment that is never closed")
+	}
+}
+
 func TestAFactTheListLeavesOutIsKept(t *testing.T) {
 	r := catalogRegistry()
 	list, err := ParseCatalog(strings.NewReader(`{"data": [{"id": "glm-5.3", "limit": {"context": 2000000}}]}`))

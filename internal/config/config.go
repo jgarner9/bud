@@ -70,7 +70,7 @@ type Dashboard struct {
 	Style string `json:"style"` // "silly" or "minimal"
 	// the default extras (JGA-62), on unless turned off
 	Git     bool `json:"git"`     // branch and changes per project
-	Health  bool `json:"health"`  // startup time, plugins, Claude Code
+	Health  bool `json:"health"`  // startup time, plugins, OpenCode
 	Banners bool `json:"banners"` // doctor problems with a one-key fix
 	// optional extras, off by default (JGA-99)
 	Scratchpad bool `json:"scratchpad"` // x opens a persistent notes buffer
@@ -102,7 +102,6 @@ type UI struct {
 
 type AI struct {
 	Agent    Agent    `json:"agent"`
-	Claude   Claude   `json:"claude"`
 	Issues   Issues   `json:"issues"`
 	Work     Work     `json:"work"`
 	Planning Planning `json:"planning"`
@@ -133,11 +132,10 @@ type Agent struct {
 	IdleMinutes int `json:"idle_minutes"`
 }
 
-// Work is where <leader>aw has Claude fix an issue (JGA-237)
+// Work is where <leader>aw has the agent fix an issue (JGA-237)
 type Work struct {
-	// "local": a git worktree next to the repo, in a Claude Code session of
-	// bud's own (the default); "cloud": a Claude Code cloud session that clones
-	// the repo from GitHub and pushes a branch
+	// "local": a git worktree next to the repo (the default); "cloud": a cloud
+	// session that clones the repo from GitHub and pushes a branch
 	Where string `json:"where"`
 }
 
@@ -153,23 +151,9 @@ type Issues struct {
 type IssueTarget struct {
 	Team    string `json:"team"`
 	Project string `json:"project"`
-	// the bud checkout Claude works in for issues about bud, remembered by
+	// the bud checkout the agent works in for issues about bud, remembered by
 	// 'bud issue checkout'; only read for ai.issues.bud
 	Checkout string `json:"checkout"`
-}
-
-type Claude struct {
-	Autostart bool   `json:"autostart"`
-	Resume    string `json:"resume"` // "new" (the default, D106) or "continue"
-	// a session nothing has used for this long is stopped (D49); 0 never
-	IdleMinutes int      `json:"idle_minutes"`
-	Args        []string `json:"args"`
-	// what runs claude, when it isn't claude itself: a wrapper that passes
-	// what follows on, such as ["headroom", "wrap", "claude", "--"]
-	Command []string `json:"command"`
-	// whose Claude Code config bud's sessions use: Claude Code's usual
-	// ~/.claude ("home", the default, D77) or bud's own dir ("bud", JGA-135)
-	Config string `json:"config"`
 }
 
 // Profiles are the install profiles
@@ -189,7 +173,6 @@ func Defaults() Settings {
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
 		AI: AI{Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30},
-			Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"},
 			Planning: Planning{PasswordFile: "~/.config/bud/planning-password"}},
 	}
@@ -207,8 +190,6 @@ func (s Settings) Validate() error {
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
 		{"ai.agent.chat_layout", s.AI.Agent.ChatLayout, []string{"pane", "full"}},
 		{"ai.agent.chat_ui", s.AI.Agent.ChatUI, []string{"tui", "bud"}},
-		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},
-		{"ai.claude.config", s.AI.Claude.Config, []string{"home", "bud"}},
 		{"ai.work.where", s.AI.Work.Where, []string{"local", "cloud"}},
 	}
 	for _, c := range checks {

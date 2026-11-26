@@ -21,7 +21,6 @@ import (
 	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/bundle"
-	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/lang"
@@ -84,8 +83,6 @@ var (
 	embedded      = func() fs.FS { return bud.Config() }
 	loadLanguages = lang.Load
 	startupTime   = nvim.StartupTime
-	claudeCheck   = claude.Check
-	lookPath      = exec.LookPath
 )
 
 // Options picks which checks Run does
@@ -143,12 +140,6 @@ func Run(opts Options) []Result {
 
 	results = append(results, checkAgent(opts.Quick))
 
-	cr, status := checkClaude(cfg)
-	results = append(results, cr)
-	if r, ok := checkClaudeCommand(cfg, status); ok {
-		results = append(results, r)
-	}
-
 	if r, ok := checkBudApp(p); ok {
 		results = append(results, r)
 	}
@@ -204,60 +195,6 @@ func checkBudApp(p *paths.Paths) (Result, bool) {
 		return r, true
 	}
 	return Result{}, false
-}
-
-// checkClaudeCommand looks for the wrapper ai.claude.command runs Claude Code
-// through (D60, Headroom's): without it every session fails to start. Only
-// when one is set; it only warns, like the Claude Code check
-func checkClaudeCommand(cfg config.Settings, s claude.Status) (Result, bool) {
-	cmd := cfg.AI.Claude.Command
-	if len(cmd) == 0 {
-		return Result{}, false
-	}
-	r := Result{Name: "claude command"}
-	if _, err := lookPath(cmd[0]); err != nil {
-		r.Status = Warn
-		r.Detail = "ai.claude.command runs " + cmd[0] + ", which isn't on PATH, so Claude Code sessions can't start"
-		r.Fix = "bud config unset ai.claude.command"
-		return r, true
-	}
-	// Bedrock and the rest go to their cloud directly, past Headroom's proxy
-	// (JGA-149): it starts, but compresses nothing
-	if filepath.Base(cmd[0]) == "headroom" && s.Cloud() {
-		r.Status = Warn
-		r.Detail = "Claude Code on " + s.Method + " talks to it directly, past Headroom's proxy, so Headroom compresses nothing"
-		r.Fix = "bud config unset ai.claude.command"
-		return r, true
-	}
-	r.Detail = "sessions run through " + strings.Join(cmd, " ")
-
-	return r, true
-}
-
-// ClaudeCheck names the Claude Code check, which the dashboard gives its own banner
-const ClaudeCheck = "claude code"
-
-// checkClaude reports Claude Code. It only ever warns: bud works without it,
-// there's just no AI (BASE.md 4.2)
-func checkClaude(cfg config.Settings) (Result, claude.Status) {
-	r := Result{Name: ClaudeCheck}
-	s, err := claudeCheck()
-	switch {
-	case err != nil:
-		r.Status, r.Detail = Warn, err.Error()
-	case s.Bin == "" && !cfg.AI.Claude.Autostart:
-		r.Detail = "not installed (ai.claude.autostart is off)"
-	case s.Bin == "":
-		r.Status, r.Detail, r.Fix = Warn, "not installed, so there's no AI in the editor", "bud claude setup"
-	case !s.LoggedIn && s.Elsewhere != "":
-		r.Status, r.Detail, r.Fix = Warn, s.Version+", not logged in here; ~/.claude runs it on "+s.Elsewhere+", which bud's own config dir doesn't see", "bud claude setup"
-	case !s.LoggedIn:
-		r.Status, r.Detail, r.Fix = Warn, s.Version+", not logged in", "bud claude setup"
-	default:
-		r.Detail = s.Version + ", logged in with " + s.Method
-	}
-
-	return r, s
 }
 
 // agentCheck is swappable in tests

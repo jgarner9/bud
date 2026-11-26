@@ -222,22 +222,10 @@ func installIDE(g *Globals, yes bool) error {
 	}
 
 	if s.AI.Agent.Autostart {
-		// OpenCode is the editor's agent (Suite D139); never Claude Code's
-		// setup, whatever ai.claude.autostart says
+		// OpenCode is the editor's only agent (Suite D139)
 		fmt.Println()
 		if err := installOpenCode(pr, yes); err != nil {
 			fmt.Printf("OpenCode isn't set up (%v); 'bud ai setup' tries again.\n", err)
-		}
-	}
-	if s.AI.Claude.Autostart {
-		fmt.Println()
-		if err := installClaude(pr, yes); err != nil {
-			fmt.Printf("Claude Code isn't set up (%v); 'bud claude setup' tries again.\n", err)
-		}
-		if s.Profile == "full" {
-			if err := offerHeadroom(pr, f, s); err != nil {
-				fmt.Printf("Headroom: %v; 'bud config set ai.claude.command' sets it.\n", err)
-			}
 		}
 	}
 
@@ -270,76 +258,6 @@ func installOpenCode(pr *prompter, yes bool) error {
 		}
 	}
 	return aiSetup(pr, yes)
-}
-
-// installClaude offers Claude Code's setup (BASE.md 4.2). bud works without
-// it, so saying no, or having nobody to ask, is fine
-var installClaude = func(pr *prompter, yes bool) error {
-	s, err := checkClaude()
-	if err != nil {
-		return err
-	}
-	if s.Bin != "" && s.LoggedIn {
-		fmt.Printf("Claude Code %s is ready.\n", s.Version)
-		return nil
-	}
-	if s.Bin != "" && s.Elsewhere != "" {
-		// sharing ~/.claude is the setup here, not claude.ai's login
-		return claudeSetup(pr, yes)
-	}
-	if !yes {
-		if pr == nil {
-			fmt.Println("Claude Code isn't set up; run 'bud claude setup' for the AI parts.")
-			return nil
-		}
-		ok, err := pr.confirm("Set up Claude Code for bud's AI now?")
-		if err != nil {
-			return err
-		}
-		if !ok {
-			fmt.Println("Skipped; 'bud claude setup' does it later.")
-			return nil
-		}
-	}
-
-	return claudeSetup(pr, true)
-}
-
-// lookPath finds a binary on PATH; swappable in tests
-var lookPath = exec.LookPath
-
-// headroomCommand runs Claude Code through Headroom (D60). Headroom's own
-// code memory (--code-memory) stays off
-var headroomCommand = []string{"headroom", "wrap", "claude", "--code-memory", "none", "--"}
-
-// offerHeadroom offers to run bud's Claude Code sessions through Headroom when
-// it's installed and nothing else is set (JGA-130). It routes every request
-// through Headroom's local proxy, so it's asked, never assumed; --yes and
-// nobody to ask both leave it off
-func offerHeadroom(pr *prompter, f *config.File, s config.Settings) error {
-	if len(s.AI.Claude.Command) > 0 || pr == nil {
-		return nil
-	}
-	if _, err := lookPath("headroom"); err != nil {
-		return nil
-	}
-	// a cloud provider goes past Headroom's proxy, so it would do nothing (JGA-149)
-	if c, err := checkClaude(); err == nil && c.Cloud() {
-		return nil
-	}
-	ok, err := pr.confirm("Headroom is installed. Run bud's Claude Code sessions through it (compressed context, fewer tokens)?")
-	if err != nil || !ok {
-		return err
-	}
-	if err := f.Set("ai.claude.command", headroomCommand); err != nil {
-		return err
-	}
-	if err := f.Save(); err != nil {
-		return err
-	}
-	fmt.Println("Claude Code sessions now run through Headroom; 'bud config unset ai.claude.command' undoes it.")
-
-	return nil
 }
 
 // askLanguages reads the specs (this binary's, then the user's in userSpecs),

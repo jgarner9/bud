@@ -111,6 +111,14 @@ func aiStatus(asJSON bool) error {
 	return nil
 }
 
+// runOnTerminal runs argv on the terminal, so its output and any prompt show;
+// swappable in tests
+var runOnTerminal = func(argv []string) error {
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return cmd.Run()
+}
+
 // npmInstall installs an npm package, on the terminal so its
 // output and any prompt show; swappable in tests
 var npmInstall = func(pkg string) error {

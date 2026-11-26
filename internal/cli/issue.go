@@ -61,7 +61,7 @@ func Issue() *Command {
 	}
 }
 
-// target is where an issue goes, and the checkout Claude works in for it
+// target is where an issue goes, and the checkout the agent works in for it
 type target struct {
 	Team    string `json:"team"`
 	Project string `json:"project"`

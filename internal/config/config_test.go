@@ -39,7 +39,7 @@ func TestSettingsMergeOverDefaults(t *testing.T) {
 		"update": {"channel": "nightly"},
 		"languages": ["bash"],
 		"format_on_save": false,
-		"ai": {"claude": {"args": ["--model", "opus"]}}
+		"ai": {"agent": {"idle_minutes": 45}}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -66,28 +66,11 @@ func TestSettingsMergeOverDefaults(t *testing.T) {
 	if s.FormatOnSave {
 		t.Error("format_on_save = true, want the file's false")
 	}
-	if c := s.AI.Claude; !c.Autostart || c.Resume != "new" || !slices.Equal(c.Args, []string{"--model", "opus"}) {
-		t.Errorf("ai.claude = %+v", c)
+	if a := s.AI.Agent; !a.Autostart || a.IdleMinutes != 45 || a.ChatLayout != "pane" {
+		t.Errorf("ai.agent = %+v, want idle_minutes from the file and the other defaults kept", a)
 	}
 	if s.Dashboard.Style != "silly" || s.Terminal != "kitty" {
 		t.Errorf("untouched keys lost their defaults: %+v", s)
-	}
-}
-
-func TestAReopenedProjectStartsFreshUnlessTheConfigSaysContinue(t *testing.T) {
-	if got := Defaults().AI.Claude.Resume; got != "new" {
-		t.Errorf("default ai.claude.resume = %q, want %q (D106)", got, "new")
-	}
-	f, err := Load(writeFile(t, `{"ai": {"claude": {"resume": "continue"}}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := f.Settings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := s.AI.Claude.Resume; got != "continue" {
-		t.Errorf("ai.claude.resume = %q, want the file's %q", got, "continue")
 	}
 }
 
@@ -97,7 +80,7 @@ func TestSettingsValidate(t *testing.T) {
 		`{"terminal": "xterm"}`,
 		`{"update": {"channel": "beta"}}`,
 		`{"dashboard": {"style": "loud"}}`,
-		`{"ai": {"claude": {"resume": "maybe"}}}`,
+		`{"ai": {"agent": {"chat_ui": "maybe"}}}`,
 	} {
 		f, err := Load(writeFile(t, doc))
 		if err != nil {
@@ -197,10 +180,10 @@ func TestGetSet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := f.Set("ai.claude.autostart", false); err != nil {
+	if err := f.Set("ai.agent.autostart", false); err != nil {
 		t.Fatal(err)
 	}
-	if v, ok := f.Get("ai.claude.autostart"); !ok || v != false {
+	if v, ok := f.Get("ai.agent.autostart"); !ok || v != false {
 		t.Errorf("get after set = %v, %v", v, ok)
 	}
 	if _, ok := f.Get("update.channel"); ok {
@@ -242,7 +225,7 @@ func TestDocsCoverEveryKey(t *testing.T) {
 // saves with its clod key untouched
 func TestOldClodKeyStillLoadsAndSaves(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
-	in := `{"profile": "minimal", "clod": {"repo": "me/claude-setup"}}`
+	in := `{"profile": "minimal", "clod": {"repo": "me/old-setup"}}`
 	if err := os.WriteFile(path, []byte(in), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +247,7 @@ func TestOldClodKeyStillLoadsAndSaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
-	if !strings.Contains(string(data), `"clod"`) || !strings.Contains(string(data), "me/claude-setup") {
+	if !strings.Contains(string(data), `"clod"`) || !strings.Contains(string(data), "me/old-setup") {
 		t.Fatalf("clod key lost on save: %s", data)
 	}
 }

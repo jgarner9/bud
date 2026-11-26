@@ -35,7 +35,7 @@ func Tools() *Command {
 		Usage: "Lists, enables, disables, removes and promotes bud's tools",
 		Subs: []*Command{
 			{Name: "ls", Usage: "list the tools, yours and bud's, and whether each is on", Run: func(_ *Globals, args []string) error { return toolsLs(args) }},
-			{Name: "gen", Usage: "have Claude write a tool or language spec, in the editor: gen \"<description>\"", Run: func(g *Globals, args []string) error { return toolsGen(g, args) }},
+			{Name: "gen", Usage: "have the agent write a tool or language spec, in the editor: gen \"<description>\"", Run: func(g *Globals, args []string) error { return toolsGen(g, args) }},
 			{Name: "enable", Usage: "turn a tool on: enable <name>", Run: func(_ *Globals, args []string) error { return toolsEnable(args) }},
 			{
 				Name:  "disable",

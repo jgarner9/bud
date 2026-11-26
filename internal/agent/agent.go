@@ -31,6 +31,13 @@ func TUI(dir string) []string {
 	return []string{"opencode", dir}
 }
 
+// ChatTUI is OpenCode's TUI on dir run as the named agent, the way
+// bud chat starts it. The agent has to exist in OpenCode's config, which
+// bud sync writes from content/agents
+func ChatTUI(dir, agent string) []string {
+	return []string{"opencode", "--agent=" + agent, dir}
+}
+
 // Status is what Check found
 type Status struct {
 	Argv    []string

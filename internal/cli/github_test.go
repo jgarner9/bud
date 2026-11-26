@@ -4,8 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
+
+// yesPrompter answers a prompt's questions from answers, one per line
+func yesPrompter(answers string) *prompter {
+	return newPrompter(strings.NewReader(answers), &strings.Builder{})
+}
 
 // gh is optional: bud install offers its login on the full profile, at a
 // terminal, and otherwise leaves it alone

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/updater"
 )
 
@@ -129,12 +128,6 @@ func TestListsColourLikePlain(t *testing.T) {
 	t.Run("config", func(t *testing.T) {
 		t.Setenv("XDG_STATE_HOME", t.TempDir())
 		colourMatchesPlain(t, "config ls", func() error { return configLs(nil, false) })
-	})
-	t.Run("claude status", func(t *testing.T) {
-		for _, s := range []claude.Status{claudeMissing, claudeLoggedOut, claudeReady, claudeElsewhere} {
-			fakeClaude(t, s)
-			colourMatchesPlain(t, "claude status", func() error { return claudeStatus(nil) })
-		}
 	})
 	t.Run("update --check", func(t *testing.T) {
 		t.Setenv("XDG_STATE_HOME", t.TempDir())

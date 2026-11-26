@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -36,9 +34,9 @@ func TestAgentOpenCodeSyncedEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{bin, project}
-	orig := execClaude
-	t.Cleanup(func() { execClaude = orig })
-	execClaude = func(dir string, argv, env []string) error {
+	orig := execProcess
+	t.Cleanup(func() { execProcess = orig })
+	execProcess = func(dir string, argv, env []string) error {
 		if dir != project || !slices.Equal(argv, want) {
 			t.Fatalf("ran %q in %s; want %q in %s", argv, dir, want, project)
 		}
@@ -135,9 +133,9 @@ func TestAgent(t *testing.T) {
 
 	var dir string
 	var argv, env []string
-	orig := execClaude
-	execClaude = func(d string, a, e []string) error { dir, argv, env = d, a, e; return nil }
-	t.Cleanup(func() { execClaude = orig })
+	orig := execProcess
+	execProcess = func(d string, a, e []string) error { dir, argv, env = d, a, e; return nil }
+	t.Cleanup(func() { execProcess = orig })
 
 	project, _ := filepath.EvalSymlinks(t.TempDir())
 	os.Mkdir(filepath.Join(project, ".git"), 0o755)
@@ -147,7 +145,7 @@ func TestAgent(t *testing.T) {
 	// a config.json from before OpenCode-only, naming another backend, changes nothing
 	state := os.Getenv("XDG_STATE_HOME")
 	os.MkdirAll(filepath.Join(state, "bud"), 0o755)
-	os.WriteFile(filepath.Join(state, "bud", "config.json"), []byte(`{"ai": {"backend": "claude"}}`), 0o644)
+	os.WriteFile(filepath.Join(state, "bud", "config.json"), []byte(`{"ai": {"backend": "acme"}}`), 0o644)
 
 	if err := agent(&Globals{}, []string{file}); err != nil {
 		t.Fatal(err)
@@ -168,68 +166,5 @@ func TestAgent(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	if err := agent(&Globals{}, nil); err == nil || !strings.Contains(err.Error(), "opencode isn't installed: run bud ai setup") {
 		t.Fatalf("no opencode: %v", err)
-	}
-}
-
-// resume "continue" resumes the editor's saved conversation, and --continue
-// only happens in bud's own Claude Code config dir (JGA-231)
-func TestResumeFlags(t *testing.T) {
-	state := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", state)
-	t.Setenv("HOME", t.TempDir())
-	root, _ := filepath.EvalSymlinks(t.TempDir())
-	cont := config.Defaults()
-	cont.AI.Claude.Resume = "continue"
-
-	write := func(dir, name string) {
-		os.MkdirAll(dir, 0o755)
-		os.WriteFile(filepath.Join(dir, name), nil, 0o644)
-	}
-
-	// the default starts fresh
-	if got := resumeFlags(config.Defaults(), root); got != nil {
-		t.Fatalf("new: %q", got)
-	}
-
-	// shared ~/.claude with a hand-started conversation: nothing to continue
-	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	write(claudeProjectDir(root), "by-hand.jsonl")
-	if got := resumeFlags(cont, root); got != nil {
-		t.Fatalf("shared dir passed %q", got)
-	}
-
-	// the editor's saved conversation is resumed by id, shared or not
-	ids, _ := json.Marshal(map[string]string{root: "saved-id"})
-	os.MkdirAll(filepath.Join(state, "bud"), 0o755)
-	os.WriteFile(filepath.Join(state, "bud", "claude-sessions.json"), ids, 0o644)
-	if got := resumeFlags(cont, root); got != nil {
-		t.Fatalf("a saved id whose conversation is gone: %q", got)
-	}
-	write(claudeProjectDir(root), "saved-id.jsonl")
-	if got := resumeFlags(cont, root); !slices.Equal(got, []string{"--resume", "saved-id"}) {
-		t.Fatalf("saved: %q", got)
-	}
-	os.Remove(filepath.Join(state, "bud", "claude-sessions.json"))
-
-	// bud's own config dir: --continue, when there is a conversation
-	p, _ := paths.Resolve()
-	t.Setenv("CLAUDE_CONFIG_DIR", p.ClaudeConfig())
-	if got := resumeFlags(cont, root); got != nil {
-		t.Fatalf("own dir with no conversation: %q", got)
-	}
-	write(claudeProjectDir(root), "any.jsonl")
-	if got := resumeFlags(cont, root); !slices.Equal(got, []string{"--continue"}) {
-		t.Fatalf("own dir: %q", got)
-	}
-
-	// no home directory and no config dir set: nowhere to look, so nothing to
-	// continue (not a lookup relative to the working directory)
-	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	t.Setenv("HOME", "")
-	if dir := claudeProjectDir(root); dir != "" {
-		t.Fatalf("no home: %q", dir)
-	}
-	if anyConversation(root) {
-		t.Fatal("no home but a conversation was found")
 	}
 }

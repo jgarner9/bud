@@ -18,15 +18,15 @@ func TestChatRunsOpenCodeOutsideAnyProject(t *testing.T) {
 
 	var dir string
 	var argv []string
-	orig := execClaude
-	execClaude = func(d string, a, e []string) error { dir, argv = d, a; return nil }
-	t.Cleanup(func() { execClaude = orig })
+	orig := execProcess
+	execProcess = func(d string, a, e []string) error { dir, argv = d, a; return nil }
+	t.Cleanup(func() { execProcess = orig })
 
 	if err := chat(&Globals{}, nil, false); err != nil {
 		t.Fatal(err)
 	}
 	want := filepath.Join(state, "bud", "chat")
-	if dir != want || !slices.Equal(argv, []string{bin, want}) {
+	if dir != want || !slices.Equal(argv, []string{bin, "--agent=chat", want}) {
 		t.Fatalf("ran %q in %s, want OpenCode in %s", argv, dir, want)
 	}
 	if _, err := os.Stat(want); err != nil {

@@ -1,20 +1,16 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"regexp"
 	"runtime"
 	"slices"
 	"strings"
 	"syscall"
 
 	backend "jgarner.dev/bud/internal/agent"
-	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -32,8 +28,8 @@ func Agent() *Command {
 	}
 }
 
-// swappable in tests
-var execClaude = func(dir string, argv, env []string) error {
+// execProcess replaces bud with argv in dir; swappable in tests
+var execProcess = func(dir string, argv, env []string) error {
 	if err := os.Chdir(dir); err != nil {
 		return err
 	}
@@ -42,14 +38,18 @@ var execClaude = func(dir string, argv, env []string) error {
 
 // execOpenCodeTUI replaces bud with OpenCode's own TUI in dir
 func execOpenCodeTUI(g *Globals, dir string) error {
-	argv := backend.TUI(dir)
+	return execOpenCode(g, backend.TUI(dir), dir)
+}
+
+// execOpenCode replaces bud with argv, an opencode command line, in dir
+func execOpenCode(g *Globals, argv []string, dir string) error {
 	bin, err := exec.LookPath(argv[0])
 	if err != nil {
 		return fmt.Errorf("%s isn't installed: run bud ai setup", argv[0])
 	}
 	argv[0] = bin
 	g.Logf("running %q in %s", argv, dir)
-	return execClaude(dir, argv, agentEnv())
+	return execProcess(dir, argv, agentEnv())
 }
 
 // agentEnv is this environment with BUD_BIN pointing at this bud, as nvim's
@@ -95,7 +95,7 @@ func agent(g *Globals, args []string) error {
 		}
 		argv := append([]string{op, "run", "--env-file=" + file, "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN"}, child...)
 		g.Logf("running %q in %s", argv, ws.Root)
-		return execClaude(ws.Root, argv, agentEnv())
+		return execProcess(ws.Root, argv, agentEnv())
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("checking the synced OpenCode environment: %w", err)
 	}
@@ -137,114 +137,4 @@ EXPECT`, "bud-agent"}, child...)
 		cmd += " " + shellQuote(arg)
 	}
 	return []string{"/usr/bin/env", "SHELL=/bin/sh", "script", "-qec", cmd, "/dev/null"}
-}
-
-// resumeFlags picks the conversation the way the editor does (resume_args in
-// bud.ai.claude): with resume "continue", the project's saved one, else the
-// newest in the dir, but only in bud's own Claude Code config dir. In a shared
-// ~/.claude the newest may be one you started by hand, an issue, gen or chat
-// conversation, so it starts a new one instead (JGA-231)
-func resumeFlags(s config.Settings, root string) []string {
-	if s.AI.Claude.Resume != "continue" {
-		return nil
-	}
-	if id := savedConversation(root); id != "" {
-		return []string{"--resume", id}
-	}
-	if budClaudeDir() && anyConversation(root) {
-		return []string{"--continue"}
-	}
-
-	return nil
-}
-
-// claudeProjectDir is where Claude Code keeps the conversations run in root:
-// the real path with everything but letters and digits turned into -. It is ""
-// when there is no home directory to look in
-func claudeProjectDir(root string) string {
-	dir := os.Getenv("CLAUDE_CONFIG_DIR")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		dir = filepath.Join(home, ".claude")
-	}
-	if real, err := filepath.EvalSymlinks(root); err == nil {
-		root = real
-	}
-
-	return filepath.Join(dir, "projects", nonAlnum.ReplaceAllString(root, "-"))
-}
-
-var nonAlnum = regexp.MustCompile(`[^A-Za-z0-9]`)
-
-// anyConversation says whether Claude Code has a conversation to continue in root
-func anyConversation(root string) bool {
-	dir := claudeProjectDir(root)
-	if dir == "" {
-		return false
-	}
-	files, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
-	return len(files) > 0
-}
-
-// savedConversation is the conversation the editor saved for root in
-// claude-sessions.json, when Claude Code still has it, else ""
-func savedConversation(root string) string {
-	p, err := paths.Resolve()
-	if err != nil {
-		return ""
-	}
-	data, err := os.ReadFile(filepath.Join(p.State, "claude-sessions.json"))
-	if err != nil {
-		return ""
-	}
-	var ids map[string]string
-	if json.Unmarshal(data, &ids) != nil {
-		return ""
-	}
-	id := ids[root]
-	if id == "" {
-		return ""
-	}
-	dir := claudeProjectDir(root)
-	if dir == "" {
-		return ""
-	}
-	if _, err := os.Stat(filepath.Join(dir, id+".jsonl")); err != nil {
-		return ""
-	}
-
-	return id
-}
-
-// machineSettings is config.json's settings, the defaults when it's missing
-// or broken
-func machineSettings() config.Settings {
-	s := config.Defaults()
-	if p, err := paths.Resolve(); err == nil {
-		if f, err := config.Load(p.MachineConfig()); err == nil {
-			if loaded, err := f.Settings(); err == nil {
-				s = loaded
-			}
-		}
-	}
-	return s
-}
-
-// tuiArgv is the command line for Claude Code's TUI, as nvim builds it: bin,
-// or ai.claude.command in its place, then flags, then ai.claude.args
-func tuiArgv(s config.Settings, bin string, flags []string) ([]string, error) {
-	argv := []string{bin}
-	if len(s.AI.Claude.Command) > 0 {
-		wrapper, err := exec.LookPath(s.AI.Claude.Command[0])
-		if err != nil {
-			return nil, fmt.Errorf("ai.claude.command: %w", err)
-		}
-		argv = append([]string{wrapper}, s.AI.Claude.Command[1:]...)
-	}
-	argv = append(argv, flags...)
-
-	return append(argv, s.AI.Claude.Args...), nil
 }

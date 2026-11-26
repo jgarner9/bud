@@ -71,7 +71,7 @@ func (p *Paths) UpdateState() string { return filepath.Join(p.State, "update.jso
 // UpdateLog is where the detached background update check writes
 func (p *Paths) UpdateLog() string { return filepath.Join(p.Cache, "update.log") }
 
-// Chat is where bud's chat runs Claude Code (JGA-165), a dir that's no
+// Chat is where bud's chat runs OpenCode (JGA-165), a dir that's no
 // project's, so its conversations are kept apart; nvim's stdpath("state")/chat
 func (p *Paths) Chat() string { return filepath.Join(p.State, "chat") }
 
@@ -80,10 +80,6 @@ func (p *Paths) Migrations() string { return filepath.Join(p.State, "migrations.
 
 // InstallReceipt is written by install.sh and names the binary it installed (D20)
 func (p *Paths) InstallReceipt() string { return filepath.Join(p.State, "install.json") }
-
-// ClaudeConfig is bud's own Claude Code config dir (JGA-135): its
-// CLAUDE_CONFIG_DIR unless ai.claude.config is "home"
-func (p *Paths) ClaudeConfig() string { return filepath.Join(p.Data, "claude") }
 
 // Plugins is where bud extracts its embedded Claude Code plugin (D142), one
 // dir per version

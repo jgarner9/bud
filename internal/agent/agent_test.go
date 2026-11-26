@@ -36,6 +36,9 @@ func TestArgvAndTUI(t *testing.T) {
 	if got := TUI("/p"); !reflect.DeepEqual(got, []string{"opencode", "/p"}) {
 		t.Errorf("TUI = %q", got)
 	}
+	if got := ChatTUI("/p", "chat"); !reflect.DeepEqual(got, []string{"opencode", "--agent=chat", "/p"}) {
+		t.Errorf("ChatTUI = %q", got)
+	}
 }
 
 func TestCheckNotInstalled(t *testing.T) {

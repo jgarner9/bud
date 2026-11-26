@@ -11,14 +11,12 @@ import (
 // languages/*.lua names the files, so _template.lua comes along: a directory
 // pattern would leave out names starting with _
 //
-// all:plugins keeps .claude-plugin/, which a plain directory pattern would drop
-//
 // all:server/hugo/site keeps the layouts' _markup/ and _partials/
 //
 // the Hermes plugin's files are named by glob, so __init__.py comes along
 // and a __pycache__ left by its tests doesn't
 //
-//go:embed ide/nvim ide/languages/*.lua ide/layouts/*.lua ide/migrations/*.lua ide/bundles ide/tools all:ide/plugins profiles/*.json server/hermes/plugins/bud-signal/*.py server/hermes/plugins/bud-signal/plugin.yaml all:server/hugo/site
+//go:embed ide/nvim ide/languages/*.lua ide/layouts/*.lua ide/migrations/*.lua ide/bundles ide/tools profiles/*.json server/hermes/plugins/bud-signal/*.py server/hermes/plugins/bud-signal/plugin.yaml all:server/hugo/site
 var repoFS embed.FS
 
 // Config returns what bud syncs into ~/.config/bud: the repo's nvim/ directory
@@ -45,13 +43,6 @@ func KBSite() fs.FS {
 // Bundles returns the app bundle templates bud bundle builds from (BASE.md 5.6)
 func Bundles() fs.FS {
 	return sub("ide/bundles")
-}
-
-// Plugin returns the bud-ide Claude Code plugin (D142), whose root has
-// .claude-plugin/plugin.json; internal/plugin extracts it for the sessions the
-// IDE starts
-func Plugin() fs.FS {
-	return sub("ide/plugins/bud-ide")
 }
 
 // HermesPlugin returns bud-signal, the Hermes plugin that lets Signal

@@ -1,6 +1,6 @@
 ---
 name: file-issue
-description: Turns a problem report or feature request into one or more well-formed Linear issues someone can pick up cold. Proposes them first and files only after an explicit yes. Use when asked to file, report or log an issue, bug or feature request in Linear.
+description: Turns a problem report or feature request (often sent from bud's editor keys, with editor context attached) into one or more well-formed Linear issues someone can pick up cold. Proposes them first and files only after an explicit yes. Use when asked to file, report or log an issue, bug or feature request in Linear.
 ---
 
 # Filing an issue from a report
@@ -21,7 +21,7 @@ Use the Linear MCP tools. If none are available, say so in one line and stop.
    - **Priority:** 1 Urgent only when something is broken for everyone now; 2 High for broken behavior on the critical path; 3 Medium by default, features included; 4 Low for polish.
    - **Labels:** only labels the team already has, such as Bug, Feature or Improvement.
    - **Milestone:** the project's current milestone if one clearly fits, else none.
-6. **Reply** with one line saying what you found, then the proposed issues as a readable list: title, priority, labels, and the description under each. End by asking whether to file them as they are.
+6. **Reply** with one line saying what you found, then the proposed issues. By hand, that is a readable list: title, priority, labels, and the description under each, ending with a question whether to file them as they are. When bud's editor sent the report (see "From bud's editor"), it is the `bud-issues` block instead.
 
 ## Round 2: file
 
@@ -29,8 +29,44 @@ Only after an explicit yes. If the reporter changed anything, file what they sai
 
 If the reporter drops them, say so in one line and file nothing.
 
+## From bud's editor
+
+bud's issue keys (`<leader>ai`, `<leader>aB`) send the report with the target team and project, and the editor context: the file and lines the reporter was on, diagnostics there and recent errors. Use that team and project exactly. The editor parses your replies, so the rounds are the same but the format is fixed.
+
+Round 1: reply with one line saying what you found, then exactly one fenced block:
+
+```bud-issues
+{
+  "team": "JGA",
+  "project": "Bud IDE",
+  "issues": [
+    {
+      "key": "a",
+      "title": "...",
+      "description": "...",
+      "priority": 3,
+      "labels": ["Bug"],
+      "milestone": null,
+      "blocked_by": [],
+      "duplicate_of": null
+    }
+  ],
+  "notes": "anything the reporter should know, or a question"
+}
+```
+
+`key` is a local name ("a", "b") that `blocked_by` refers to. With `duplicate_of` set ("JGA-42"), the issue is a comment on that one and `description` is the comment. If the message names no team, ask for one in `notes` and propose nothing. For a feature, the editor context is often just where the reporter happened to be: use it only when it bears on the request.
+
+Round 2: the next message starts with "File these" and carries the block back, possibly edited by the reporter. File what it says, not your first draft, in `blocked_by` order, then reply with one `→` line per issue (`→ JGA-130 filed: <title>`, or `commented` or `failed`) and exactly one fenced block:
+
+```bud-filed
+[{"key": "a", "id": "JGA-130", "url": "https://linear.app/...", "title": "...", "action": "filed"}]
+```
+
+`action` is "filed" or "commented". If one fails, file the rest and give it `"action": "failed", "error": "..."`. If the next message says the reporter dropped them, reply "Dropped." and file nothing.
+
 ## Don't
 
-- Create, edit or comment on anything in Linear before the yes.
+- Create, edit or comment on anything in Linear before the yes (or the "File these" message).
 - Edit the repo: this is reporting, not fixing or building.
 - Copy secrets, tokens or private data from the context into an issue.

@@ -181,8 +181,12 @@ func (p *Paths) HermesTiers() string { return filepath.Join(p.State, "hermes-tie
 // MCPGateway is the home server's MCP gateway config (Suite D72)
 func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway.json") }
 
-// MCPAudit is where the MCP gateway logs every tool call until the shared
-// audit log (JGA-348) exists
+// Audit is the shared audit log (internal/audit, Suite D140): one append-only
+// file every leaf writes its approval-tier and spend events to
+func (p *Paths) Audit() string { return filepath.Join(p.State, "audit.jsonl") }
+
+// MCPAudit is where the MCP gateway logs every tool call until its events
+// move to the shared audit log (JGA-395, Suite D140)
 func (p *Paths) MCPAudit() string { return filepath.Join(p.State, "mcp-audit.jsonl") }
 
 // MailActions is bud mail-mcp's log of every move, restore and send (Suite

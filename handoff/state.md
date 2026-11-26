@@ -4,6 +4,8 @@ Where Bud stands at the handoff from Claude Code to OpenCode. Linear (team JGA, 
 
 ## Main
 
+Working tree, 2026-11-26: `internal/mail`'s IMAP client is now the go-imap library behind a thin adapter (JGA-399, Suite D138, PR in review). `wire.go`, `utf7.go` and the hand-written transcripts are gone, and the package's tests run against go-imap's own in-process server. It is bud's second third-party Go module, after tidwall/jsonc. Nothing about the mail tools' behaviour changes; the one check it can't make is the first live run against iCloud.
+
 Working tree: a selected overlay fragment can supply a 1Password reference for a rendered OpenCode provider's `{env:VAR}` key. `bud agent` uses the synced reference file at launch; explicit registry references cannot be redirected.
 
 Interactive `bud agent` now gives OpenCode a resizing terminal inside `op run`. The Linux resize check used the real OpenCode TUI with a pipe-producing stand-in for `op`; native macOS verification is pending.
@@ -75,6 +77,7 @@ None of the 2026-11-22 builds are rolled out there yet. **Jason hasn't done revi
 | JGA-390 | In Progress | Subagents stay P0 with a P0 parent | D135: always-P0 subagent path; being built |
 | JGA-321 | In Review | Self-improvement loop | Rollout (item 21), then Done |
 | JGA-395 | Backlog | Consolidate the fragmented audit logs into one shared store | JGA-348's narrow follow-up (D134), filed 2026-11-24; JGA-348 is closed as superseded by D97 |
+| JGA-399 | In Review | Replace the homegrown IMAP client in `internal/mail` with go-imap | Review and merge; then the first live iCloud run (revisit) |
 | JGA-397 | Backlog | Fix the mail-to-self rule's address in the overlay | Jason: the correct send-as is in 1Password |
 | JGA-376 | Backlog | Audit Signal approvals | Largely done by D114 to D121; close or narrow with Jason |
 | JGA-374 | Backlog | Review final-dispatch approvals, plan isolated home-server verification | Jason |

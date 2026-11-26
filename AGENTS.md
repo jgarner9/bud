@@ -64,7 +64,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 ## Hard constraints
 
-- **Standard library only (D1).** No third-party Go modules, with one exception (D153): the JSONC stripper is github.com/tidwall/jsonc, picked because its output keeps the input's byte offsets and line breaks, which the registry's in-place patching and error lines depend on. Commands use `flag.FlagSet`, not cobra. Config and data files are JSON (D2).
+- **Standard library only (D1).** No third-party Go modules, with two exceptions. The JSONC stripper is github.com/tidwall/jsonc (D153), picked because its output keeps the input's byte offsets and line breaks, which the registry's in-place patching and error lines depend on. The mail IMAP client is github.com/emersion/go-imap/v2 (Suite D138), behind `internal/mail`'s adapter, so the tools' guarantees stay bud's own. Commands use `flag.FlagSet`, not cobra. Config and data files are JSON (D2).
 - **Flags go before positionals (D4):** `bud [global flags] <command> [command flags] [args]`. That's plain `flag` behavior, so don't add interspersed parsing.
 - **macOS and Linux only (D22).**
 
@@ -98,7 +98,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | `bud mcp-gateway` (`internal/mcpgateway`): the home server's MCP gateway and its unit in `server/mcp-gateway/` | `docs/internals/mcp-gateway.md` |
 | `bud router` (`internal/router`): the home server's OpenAI-compatible router over the registry's providers and its unit in `server/router/` | `docs/internals/router.md` |
 | `bud calendar-mcp` (`internal/calendar`): the calendar MCP server over CalDAV and its unit in `server/calendar-mcp/` | `docs/internals/calendar.md` |
-| `bud mail-mcp` (`internal/mail`): the iCloud mail MCP server over IMAP, with its own IMAP client | `docs/internals/mail.md` |
+| `bud mail-mcp` (`internal/mail`): the iCloud mail MCP server over IMAP, through a thin adapter on go-imap | `docs/internals/mail.md` |
 | `bud memory-mcp` (`internal/memorymcp`, `internal/memory`): the memory MCP server over the working-memory service and the embedding server, and its unit in `server/memory-mcp/` | `docs/internals/memory-mcp.md` |
 | `bud improve` (`internal/improve`): the self-improvement loop's proposals, measurements, model scan and weekly digest, and its timer in `server/improve/` | `docs/internals/improve.md` |
 | `bud memory-review` (`internal/memoryreview`): asking on Signal about staged memory records, and its unit in `server/memory-review/` | `docs/internals/memory-review.md` |

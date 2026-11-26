@@ -28,6 +28,7 @@ Decisions waiting on him (bring them up with a recommendation; don't decide them
 - **Item 9:** the JGA-364 deletion list.
 - **Item 10:** R5c, other chat keys (recommended: wait until he's used opencode.nvim).
 - **Item 11:** R9, the custom TUI (JGA-375): a design session before any code.
+- **JGA-399 (go-imap):** after it merges, the first live mail run on the home server is the one check left: iCloud's `MOVE` and `UIDPLUS`, whether it files a copy in Sent Messages, and how long the trash keeps mail. `bud mail-mcp --record` captures it, and its redacted transcript shows what the adapter sends and what iCloud answers. The module fetch and the Linear filing, which the overnight sessions had to leave for Jason, are done.
 - **Item 12:** JGA-317 summarizer shape — decided 2026-11-24 (Suite D133): a direct router call with no tools. Still waits on the mail `--record` output.
 - **Item 13:** the stale branch `claude/hermes-router` can be deleted.
 - **JGA-393:** whether laptop OpenCode goes through the router (Suite D70) for one spend meter and the same privacy rules, at the cost of coding needing the home server. Jason chose on 2026-11-24 to decide it later.

@@ -25,7 +25,7 @@ JSONC: JSON plus `//` and `/* */` comments and trailing commas. A field bud does
     "qwen-35b": { "provider": "qwen", "name": "qwen-35b", "privacy": ["P0", "P1", "P2"], "cost": "C0",
       "grade": "mid", "inputs": ["text", "image"], "caps": ["tools", "reasoning", "json"], "context": 32768 },
     "glm-5.3":  { "provider": "go", "name": "glm-5.3", "privacy": ["P1", "P2"], "cost": "C1",
-      "grade": "top", "allowance": 120, "retention": 0, "inputs": ["text"], "caps": ["tools", "reasoning", "json"],
+      "grade": "top", "allowance": 400, "retention": 0, "inputs": ["text"], "caps": ["tools", "reasoning", "json"],
       "context": 1000000, "output": 131072, "price": { "in": 1.4, "out": 4.4 } }
   },
   "roles": {

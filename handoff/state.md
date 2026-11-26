@@ -71,6 +71,7 @@ Not set up on the home server yet: revisit item 31.
 | JGA-408 | The living docs say OpenCode only: the root `CLAUDE.md` is deleted (Jason confirmed all the D139 deletions on 2026-11-26), `AGENTS.md`, `HANDOFF.md` and the handoff files drop the Claude Code wording except history sentences, revisit item 8 is closed, BASE.md marks section 4's intro, 4.2, 4.3 and the decisions D154 supersedes, and the code comments that named Claude are reworded. The Linear policy rename in PR #143 still hasn't met a live ACP permission request (revisit item 33) | this PR | D139 |
 | JGA-390 | A delegated Hermes subagent always runs at P0 (D135): the router serves `/p0/v1/...` as P0 whatever `X-Bud-Privacy` says, and the private profile's Hermes config sends `delegation.base_url` there. Whether Hermes 0.23.2 honours `delegation.*` is unconfirmed (revisit item 35) | this PR | D135 |
 | JGA-396 | A reviewer-only `retier` action in the memory service (`POST /retier {id, privacy, from, body_hash}`) and `bud memory-review retier <id> <tier>`, which asks on Signal with the whole record and moves it only on his yes. The reviewer token's policy needs `retier` and `export` (revisit item 36) | this PR | D136 |
+| JGA-395 | The shared audit log, step 1 of 3 (D140): `internal/audit` (`Open`, `Write`, `Read`; one `O_APPEND` write per line, 0600, events refused over 32 KB or with no source or kind), `paths.Audit` and `docs/internals/audit.md`. Nothing writes to it yet; the leaves follow in the next PR | #149 | D140 |
 
 ## The home server
 

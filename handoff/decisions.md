@@ -208,3 +208,9 @@ Taken on recommendation 2026-11-22 (thread "Build self-improvement proposals and
 | # | Decision | Date | Notes |
 | --- | --- | --- | --- |
 | D137 | A selected private-overlay fragment may supply the 1Password reference for a rendered OpenCode provider whose registry key is `{env:VAR}`. | 2026-11-24 | Jason approved this so one profile can supply a launch credential without changing the shared registry. Public fragments cannot opt a provider in, and explicit registry references remain authoritative. |
+
+## D139: Bud 2.0 drops Claude Code and backend-agnosticism
+
+| # | Decision | Date | Notes |
+| --- | --- | --- | --- |
+| D139 | Bud 2.0 is OpenCode (local harness) plus Hermes (server brain) only. (a) A release is reviewed by an OpenCode session from a written checklist, with Copilot as the per-PR gate. (b) History stays verbatim: decisions are never renumbered or deleted, superseded ones are marked, and only living docs are reworded. (c) The work is phased PRs, not one: Lua first, then Go, then the docs passes (plan in `design/opencode-only-plan.md`, JGA-400 to JGA-408). (d) The root `CLAUDE.md` is deleted in the living-docs pass. (e) `bud.ai.acp` and `bud.ai.agent` stay as the programmatic OpenCode session; only the other backends go. (f) Cloud issue work (`ai.work.where = "cloud"`) goes with no replacement. Supersedes BASE D25, D81, D131, D132, D138 to D142 and D145 where they describe Claude Code or a choice of backend; bud-plugins and overlay wording are left for Jason. Generality for other users is the 3.0 milestone. | 2026-11-26 | Jason, 2026-11-26: remove Claude references and focus solely on OpenCode and Hermes before any other task. (a) to (d) are the four recommendations in the OpenCode night handoff, taken on recommendation under his standing rule for decision-only items; (e) and (f) were found in the survey and follow from the same direction, so he can reverse them. |

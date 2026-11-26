@@ -75,7 +75,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **Errors and output.** Commands return errors and never print errors or call `os.Exit`. `cli.ExitCode` (`internal/cli/errors.go`) is the only place that prints errors (one `bud: ...` line on stderr) and picks the exit code: 0 for success or `-h`, 2 for a `*UsageError` (build one with `usageErrorf`), 1 for anything else. `App.parse` silences the flag package and prints requested help to stdout, and the error plus usage to stderr. `App.Stdout`/`App.Stderr` let tests capture that output.
 
-**Embedded config (D5).** The root package `bud` (`embed.go`) embeds `ide/nvim/`, `ide/languages/*.lua` (a file glob, so `_template.lua` isn't dropped), `ide/layouts/*.lua`, `ide/tools/`, `ide/migrations/*.lua`, `ide/bundles/` and `ide/plugins/` with `//go:embed`, and `bud.Config()` serves the first four as one tree: `ide/nvim/` at the root with `languages/`, `layouts/` and `tools/` mounted inside. It must stay at the repo root, because embed can't reach parent directories. `ide/migrations/`, `ide/bundles/` and `ide/plugins/` are embedded but not synced into the config dir (`bud.Migrations()`, `bud.Bundles()`, `bud.Plugin()`). The binary is the release: `internal/nvim.SyncConfig` copies `bud.Config()` into `~/.config/bud` and records them in `.bud-manifest.json`. It overwrites managed files, deletes ones a release dropped, and never touches anything else. After a change it runs `bud.pack.restore()` in headless nvim, so plugins match the committed `ide/nvim/nvim-pack-lock.json`. The target dir comes from `paths.Resolve().Config`, which is `~/.config/bud` on macOS too, because that's where Neovim looks.
+**Embedded config (D5).** The root package `bud` (`embed.go`) embeds `ide/nvim/`, `ide/languages/*.lua` (a file glob, so `_template.lua` isn't dropped), `ide/layouts/*.lua`, `ide/tools/`, `ide/migrations/*.lua` and `ide/bundles/` with `//go:embed`, and `bud.Config()` serves the first four as one tree: `ide/nvim/` at the root with `languages/`, `layouts/` and `tools/` mounted inside. It must stay at the repo root, because embed can't reach parent directories. `ide/migrations/` and `ide/bundles/` are embedded but not synced into the config dir (`bud.Migrations()`, `bud.Bundles()`). The binary is the release: `internal/nvim.SyncConfig` copies `bud.Config()` into `~/.config/bud` and records them in `.bud-manifest.json`. It overwrites managed files, deletes ones a release dropped, and never touches anything else. After a change it runs `bud.pack.restore()` in headless nvim, so plugins match the committed `ide/nvim/nvim-pack-lock.json`. The target dir comes from `paths.Resolve().Config`, which is `~/.config/bud` on macOS too, because that's where Neovim looks.
 
 **Paths and machine config.** `internal/paths.Resolve` is the only place that builds a bud path (XDG on macOS too, D13); don't hardcode one elsewhere. That includes the language spec dirs (`LanguageSpecs`, `UserLanguageSpecs`). Files bud rewrites (`config.json`, `projects.json`, the sync manifest) go through `internal/atomicfile.WriteFile`. `internal/config` keeps `config.json` as a raw JSON tree so unknown keys survive `Save`, and `File.Settings()` decodes it over `Defaults()`.
 
@@ -87,7 +87,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 
 | Working on | Read |
 | --- | --- |
-| A command in `internal/cli/` other than the above: colour, completion, `bud config`, uninstall, launch and open, install, `bud lang`, projects, dev link, migrations, version, `bud plugin` (the embedded `bud-ide` plugin) | `docs/internals/cli.md` |
+| A command in `internal/cli/` other than the above: colour, completion, `bud config`, uninstall, launch and open, install, `bud lang`, projects, dev link, migrations, version | `docs/internals/cli.md` |
 | `bud bundle` and the desktop apps | `docs/internals/bundles.md` |
 | `bud update`, rollback, the background check | `docs/internals/updater.md` |
 | `bud.ai.acp`, the OpenCode transport and the fake ACP agent | `docs/internals/acp.md` |
@@ -110,7 +110,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 
 Rules that apply wherever you are:
 
-- The `bud-ide` plugin (its skills, chat agent and notes) lives in `ide/plugins/bud-ide/` and is changed here (D142, D145); it reaches only sessions the IDE starts, through `--plugin-dir`. Personal skills live outside bud; the `bud` plugin is still changed in `bud-plugins`.
+- The IDE's skills and chat agent are ordinary synced content (`content/skills/file-issue`, `content/skills/bud-dev`, `content/agents/chat.md`); there is no embedded plugin (Suite D139, BASE D154). Personal skills live outside bud.
 - Never edit or renumber a shipped file in `ide/migrations/`.
 - Never run `scripts/rotate-release-key.sh`; Jason runs it by hand.
 - `ide/nvim/nvim-pack-lock.json` is generated with `vim.pack` itself and committed byte for byte. Plugin versions change only by regenerating it and shipping a release.

@@ -46,10 +46,20 @@ resolved value has this shape, with real tokens held only in 1Password.
   },
   "reviewer-token-at-least-32-characters": {
     "tiers": ["P0", "P1", "P2"],
-    "actions": ["search", "staged", "approve", "discard"]
+    "actions": ["search", "staged", "approve", "discard", "retier", "export"]
   }
 }
 ```
+
+`retier` (`POST /retier {id, privacy}`, Suite D136) moves an approved record
+to another tier, so a record saved at P1 before D130 can become P0. It is for
+the reviewer identity only, like `approve` and `discard`, and the service
+refuses a client that holds both it and `stage`. Both the record's current
+tier and the new one must be among the client's tiers (404 otherwise), and a
+staged record is refused (409): only approved records move. Nothing else is
+rewritten, since every reader filters on `records.privacy` and the FTS index
+and vector tables don't copy it. The reviewer also holds `export` so
+`bud memory-review retier` can show the record it asks about.
 
 The unit reads `OP_SERVICE_ACCOUNT_TOKEN` from
 `~/.config/bud-server/op-service-account.env` and uses `op run --env-file` to

@@ -104,6 +104,19 @@ class Store:
                 raise PermissionError(record_id)
             self.db.execute("DELETE FROM records WHERE id = ? AND state = 'staged'", (record_id,))
 
+    def retier(self, record_id, privacy):
+        """Move an approved record to another tier. The FTS index keys on the
+        body and the vector tables on the id and body hash, so nothing else
+        has to change; every reader filters on records.privacy."""
+        if privacy not in PRIVACY_TIERS:
+            raise ValueError("privacy must be P0, P1, or P2")
+        with self.db:
+            cursor = self.db.execute(
+                "UPDATE records SET privacy = ? WHERE id = ? AND state = 'approved'", (privacy, record_id)
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(record_id)
+
     def staged(self, privacy, after=0, limit=20):
         """List staged records in the allowed tiers, in id order above after."""
         if not privacy or any(p not in PRIVACY_TIERS for p in privacy):

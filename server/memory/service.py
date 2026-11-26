@@ -28,8 +28,8 @@ class MemoryServer(socketserver.UnixStreamServer):
             or not policy["tiers"]
             or any(tier not in ("P0", "P1", "P2") for tier in policy["tiers"])
             or not isinstance(policy.get("actions"), list)
-            or any(action not in ("stage", "search", "approve", "staged", "discard", "vector_put", "vector_search", "vector_pending", "retrieve", "reference", "export", "backup", "restore") for action in policy["actions"])
-            or (any(action in policy["actions"] for action in ("approve", "staged", "discard", "backup", "restore")) and "stage" in policy["actions"])
+            or any(action not in ("stage", "search", "approve", "staged", "discard", "retier", "vector_put", "vector_search", "vector_pending", "retrieve", "reference", "export", "backup", "restore") for action in policy["actions"])
+            or (any(action in policy["actions"] for action in ("approve", "staged", "discard", "retier", "backup", "restore")) and "stage" in policy["actions"])
             or (any(action in policy["actions"] for action in ("backup", "restore")) and set(policy["tiers"]) != {"P0", "P1", "P2"})
             for token, policy in clients.items()
         ):
@@ -103,7 +103,7 @@ class MemoryHandler(BaseHTTPRequestHandler):
         if policy is None:
             self.reply(401, {"error": "unauthorized"})
             return
-        if self.path not in ("/stage", "/search", "/approve", "/staged", "/discard", "/vector_put", "/vector_search", "/vector_pending", "/retrieve", "/reference", "/export", "/backup", "/restore"):
+        if self.path not in ("/stage", "/search", "/approve", "/staged", "/discard", "/retier", "/vector_put", "/vector_search", "/vector_pending", "/retrieve", "/reference", "/export", "/backup", "/restore"):
             self.reply(404, {"error": "unknown endpoint"})
             return
         action = self.path[1:]
@@ -164,6 +164,23 @@ class MemoryHandler(BaseHTTPRequestHandler):
                     return
                 self.server.store.discard(payload["id"])
                 result = {"discarded": True}
+            elif action == "retier":
+                # Suite D136: an approved record saved at the wrong tier moves
+                # to the right one. Both tiers must be the reviewer's own, so
+                # a narrower reviewer can't move a record out of its sight
+                if set(payload) != {"id", "privacy"} or type(payload["id"]) is not int or payload["privacy"] not in PRIVACY_TIERS:
+                    raise ValueError()
+                row = self.server.store.db.execute(
+                    "SELECT privacy, state FROM records WHERE id = ?", (payload["id"],)
+                ).fetchone()
+                if row is None or row[0] not in policy["tiers"] or payload["privacy"] not in policy["tiers"]:
+                    self.reply(404, {"error": "record unavailable"})
+                    return
+                if row[1] != "approved":
+                    self.reply(409, {"error": "record isn't approved"})
+                    return
+                self.server.store.retier(payload["id"], payload["privacy"])
+                result = {"retiered": True, "from": row[0], "to": payload["privacy"]}
             elif action in ("vector_put", "reference"):
                 if action == "vector_put":
                     keys = set(payload) - {"body_hash"}

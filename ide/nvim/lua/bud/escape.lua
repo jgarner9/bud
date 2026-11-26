@@ -1,5 +1,5 @@
 -- jk leaves Insert mode, and Terminal mode in bud's terminal panes (the
--- <leader>t terminal, Claude Code's pane and chat), with no lag on either
+-- <leader>t terminal, the AI pane and chat), with no lag on either
 -- key: j goes in at once, and a k within M.window ms of it takes the j back
 -- out (a backspace) and goes to Normal mode. Any other k is just a k. In a
 -- terminal pane Normal mode is where the pane's toggle (<leader>t,

@@ -1,11 +1,6 @@
--- Claude Code's own TUI in a terminal, on the project's session (BASE.md 4.2,
--- D48). Opening it hands the session over from the headless job, so only one
--- of them drives it; when the TUI exits, the session goes back to bud's UIs,
--- picking up the conversation where the TUI left it. <leader>ac shows and
--- hides it; hiding keeps it running, until it's been hidden and unused for
--- ai.claude.idle_minutes (D49).
-
-local claude = require("bud.ai.claude")
+-- OpenCode's own TUI in a terminal, one per project (BASE.md 4.2, D48).
+-- Hiding it keeps it running, until it's been hidden and unused for
+-- ai.agent.idle_minutes (D49).
 
 local M = {}
 
@@ -58,39 +53,19 @@ local function show(t, side)
   return win
 end
 
--- backend is the configured AI backend (D131): "claude" runs Claude Code's
--- own TUI on bud's Claude session, as before; the others run their own TUI
--- (bud.ai.agent.tui), OpenClaw's on the project's Gateway session
-local function backend()
-  return require("bud.ai.agent").backend()
-end
-
 -- available says whether there's a TUI to open, for the layout's chat pane
 function M.available()
-  if backend() == "claude" then
-    return claude.bin() ~= nil and require("bud.config").get("ai.claude.autostart", true)
-  end
-  -- cheap: the session starts only when the pane opens
-  local bin = require("bud.ai.agent").tui_bin()
-  return bin ~= nil and vim.fn.executable(bin) == 1
+  -- cheap: the TUI starts only when the pane opens
+  return vim.fn.executable("opencode") == 1
 end
 
 -- launch is the TUI's command line and environment for root
 local function launch(root)
-  if backend() == "claude" then
-    local argv, why = claude.handover(root)
-    return argv, why, claude.bridge_env(root), true
+  local spec = require("bud.ai.agent").tui(root)
+  if vim.fn.executable(spec.argv[1]) ~= 1 then
+    return nil, ("%s isn't installed: run bud ai setup"):format(spec.argv[1])
   end
-  local agent = require("bud.ai.agent")
-  local bin = agent.tui_bin()
-  if bin and vim.fn.executable(bin) ~= 1 then
-    return nil, ("%s isn't installed: run bud ai setup"):format(bin)
-  end
-  local spec, why = agent.tui(root)
-  if not spec then
-    return nil, why
-  end
-  return spec.argv, nil, spec.env, false
+  return spec.argv, nil, spec.env
 end
 
 -- open shows root's TUI (default: the current project's), starting it when
@@ -102,12 +77,12 @@ function M.open(opts)
   local t = terms[root]
   local win = t and window(t)
   if not t then
-    local argv, why, env, handed = launch(root)
+    local argv, why, env = launch(root)
     if not argv then
       vim.notify("bud: " .. why, vim.log.levels.WARN)
       return nil
     end
-    t = { buf = vim.api.nvim_create_buf(false, true), last_used = now(), root = root, claude = handed }
+    t = { buf = vim.api.nvim_create_buf(false, true), last_used = now(), root = root }
     terms[root] = t
     vim.bo[t.buf].bufhidden = "hide"
     -- jk to Normal mode, where <leader>ac hides it and <leader>w moves on
@@ -175,7 +150,7 @@ function M.send(text, opts)
     if not submit then
       return
     end
-    -- a beat apart, so Claude Code reads the Enter as submit, not as part of a paste
+    -- a beat apart, so the TUI reads the Enter as submit, not as part of a paste
     vim.defer_fn(function()
       if terms[root] == t then
         vim.fn.chansend(t.job, "\r")
@@ -192,7 +167,7 @@ function M.send(text, opts)
       waited = waited + 100
       vim.defer_fn(wait, 100)
     else
-      vim.notify("bud: Claude Code's TUI didn't start in time", vim.log.levels.WARN)
+      vim.notify("bud: OpenCode's TUI didn't start in time", vim.log.levels.WARN)
     end
   end
   wait()
@@ -285,26 +260,20 @@ function M.toggle()
   end
 end
 
--- chat_key is <leader>ac: opencode.nvim's window on the opencode backend
--- (D150), else toggle. :Opencode with no argument toggles, and its lazy stub
--- loads the plugin on first use, so nothing is on the runtimepath at startup.
+-- chat_key is <leader>ac: opencode.nvim's window (D150). :Opencode with no
+-- argument toggles, and its lazy stub loads the plugin on first use, so
+-- nothing is on the runtimepath at startup.
 function M.chat_key()
-  if require("bud.ai.agent").backend() == "opencode" then
-    return require("bud.ai.opencode").run()
-  end
-  return M.toggle()
+  return require("bud.ai.opencode").run()
 end
 
--- _closed cleans up after the TUI exits and hands the session back
+-- _closed cleans up after the TUI exits
 function M._closed(root)
   local t = terms[root]
   if not t then
     return
   end
   terms[root] = nil
-  if t.claude then
-    claude.handback(root)
-  end
   if vim.api.nvim_buf_is_valid(t.buf) then
     for _, win in ipairs(vim.fn.win_findbuf(t.buf)) do
       if #vim.api.nvim_list_wins() > 1 then

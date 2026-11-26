@@ -24,13 +24,13 @@ func TestConfigCommands(t *testing.T) {
 	}
 
 	captureStdout(t, func() {
-		for _, kv := range [][]string{{"update.channel", "nightly"}, {"ai.claude.idle_minutes", "45"}, {"languages", `["go","lua"]`}, {"dashboard.git", "false"}} {
+		for _, kv := range [][]string{{"update.channel", "nightly"}, {"ai.agent.idle_minutes", "45"}, {"languages", `["go","lua"]`}, {"dashboard.git", "false"}} {
 			if err := configSet(kv, false); err != nil {
 				t.Fatalf("set %v: %v", kv, err)
 			}
 		}
 	})
-	for key, want := range map[string]string{"update.channel": "nightly\n", "ai.claude.idle_minutes": "45\n", "dashboard.git": "false\n"} {
+	for key, want := range map[string]string{"update.channel": "nightly\n", "ai.agent.idle_minutes": "45\n", "dashboard.git": "false\n"} {
 		if got := captureStdout(t, func() { configGet([]string{key}) }); got != want {
 			t.Errorf("%s = %q, want %q", key, got, want)
 		}
@@ -38,7 +38,7 @@ func TestConfigCommands(t *testing.T) {
 
 	// typos, wrong types and values bud doesn't allow are refused, and nothing is saved
 	before, _ := os.ReadFile(p.MachineConfig())
-	for _, kv := range [][]string{{"update.chanel", "x"}, {"update.channel", "weekly"}, {"ai.claude.idle_minutes", "soon"}} {
+	for _, kv := range [][]string{{"update.chanel", "x"}, {"update.channel", "weekly"}, {"ai.agent.idle_minutes", "soon"}} {
 		if err := configSet(kv, false); err == nil {
 			t.Errorf("set %v accepted", kv)
 		}

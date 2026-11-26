@@ -192,7 +192,7 @@ conn:request("session/prompt", {}, function(e)
 end)
 eq(failed.message, "the agent isn't running", "requests after the exit fail at once")
 
--- an error's detail (OpenClaw's data.details) joins its message
+-- an error's detail (an agent's data.details) joins its message
 eq(
   acp.why({ message = "Internal error", data = { details = "No session found" } }),
   "Internal error: No session found",

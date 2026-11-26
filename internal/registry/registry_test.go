@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -186,16 +187,47 @@ func TestStripJSONCKeepsLinesAndStrings(t *testing.T) {
 		{"{\"a\":1 // c\n}", "{\"a\":1     \n}"},
 		{"/*\n*/1", "  \n  1"},
 	} {
-		got, err := StripJSONC([]byte(tc.in))
-		if err != nil || string(got) != tc.want {
-			t.Errorf("StripJSONC(%q) = %q, %v; want %q", tc.in, got, err, tc.want)
+		if got := StripJSONC([]byte(tc.in)); string(got) != tc.want {
+			t.Errorf("StripJSONC(%q) = %q; want %q", tc.in, got, tc.want)
 		}
 	}
-	for _, bad := range []string{`{"a": "open`, "/* never closed", "{\"a\": \"line\nbreak\"}"} {
-		if _, err := StripJSONC([]byte(bad)); err == nil {
-			t.Errorf("StripJSONC(%q): want an error", bad)
+}
+
+func TestParseRejectsAnUnterminatedStringOrComment(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an unclosed string", "{\n  \"version\": 1,\n  \"providers\": {\"a\": \"open\n}", ""},
+		{"an unclosed block comment", "{\n  /* never closed\n}", "line 2"},
+		{"a string that runs past its line", "{\n  \"models\": {\"a\": \"line\nbreak\"}\n}", ""},
+	} {
+		_, err := Parse([]byte(tc.src))
+		if err == nil {
+			t.Errorf("%s: want an error", tc.name)
+			continue
+		}
+		if tc.want != "" && !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: want the error to say %q, got %v", tc.name, tc.want, err)
 		}
 	}
+}
+
+// FuzzStripJSONC guards the contract the package leans on: the plain JSON
+// is exactly as long as the source and keeps its line breaks, so byte
+// offsets and error lines still point into the original file
+func FuzzStripJSONC(f *testing.F) {
+	for _, seed := range []string{
+		`{"a": "x\"//y"}`, "[1, 2, ]", "/*\n*/1", "{\n  // c\n}", `["//\""]`,
+	} {
+		f.Add([]byte(seed))
+	}
+	f.Fuzz(func(t *testing.T, src []byte) {
+		out := StripJSONC(src)
+		if len(out) != len(src) {
+			t.Fatalf("the plain JSON is %d bytes, the source is %d", len(out), len(src))
+		}
+		if got, want := bytes.Count(out, []byte("\n")), bytes.Count(src, []byte("\n")); got != want {
+			t.Fatalf("the plain JSON has %d newlines, the source has %d", got, want)
+		}
+	})
 }
 
 func TestTheOverlayReplacesEntriesByID(t *testing.T) {

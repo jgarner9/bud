@@ -127,8 +127,6 @@ providers:
     models:
       gemini-4-argon:
         context_length: 1048576
-      "glm-5.2":
-        context_length: 1000000
       "glm-5.3":
         context_length: 1000000
       "glm-5.3-flash":

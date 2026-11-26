@@ -1,8 +1,7 @@
 -- The diff review (BASE.md 4.2, D134): a proposed version of a file shown
 -- beside the file as it is, in a tab of its own, to accept (ga, :w, ZZ, :x)
--- or reject (q, or closing it), with your own edits to it kept. Claude
--- Code's IDE bridge (openDiff) and every ACP backend's permission requests
--- (bud.ai.permissions) open edits here.
+-- or reject (q, or closing it), with your own edits to it kept. The agent's
+-- permission requests (bud.ai.permissions) open edits here.
 
 local M = {}
 

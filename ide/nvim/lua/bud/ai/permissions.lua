@@ -1,8 +1,7 @@
--- Claude Code's permission questions as Neovim UI (BASE.md 4.2, JGA-82). A
--- headless session runs with --permission-prompt-tool pointed at the
--- bridge's approve tool, so each "may I?" comes here: an edit opens as a diff
--- to accept or reject (bud.ai.review), anything else as a small
--- prompt. bud never changes Claude Code's permission mode; "allow for this
+-- The agent's permission questions as Neovim UI (BASE.md 4.2, JGA-82). Each
+-- ACP session/request_permission from OpenCode comes here (acp): an edit opens
+-- as a diff to accept or reject (bud.ai.review), anything else as a small
+-- prompt. bud never changes OpenCode's own permission rules; "allow for this
 -- session" is only remembered here, for the session's Neovim lifetime.
 
 local M = {}
@@ -47,7 +46,7 @@ local function replace(text, old, new, all)
 end
 
 -- proposal works out a file edit's result: the file's path, its text now and
--- after, or nil when the edit can't be applied (Claude Code will say why)
+-- after, or nil when the edit can't be applied (the agent will say why)
 function M.proposal(tool, input)
   local path = input.file_path
   if not path then
@@ -73,8 +72,8 @@ function M.proposal(tool, input)
 end
 
 -- edited is the tool input that makes the file what you ended up with, in
--- the same tool's shape (Claude Code checks it against that tool's schema):
--- the whole file replaced, which is unique by definition
+-- the same tool's shape: the whole file replaced, which is unique by
+-- definition
 function M.edited(tool, path, now, text)
   if tool == "Write" or not now then
     return { file_path = path, content = text }
@@ -118,11 +117,11 @@ end
 local show_next
 
 -- prompt shows one non-edit question in a dialog (bud.ui) and answers
--- through done; closing it any other way is a no, so Claude Code never waits
+-- through done; closing it any other way is a no, so the agent never waits
 local function prompt(req, done)
   local lines = {
     "",
-    "  [o.o]  " .. (req.who or "Claude Code") .. " wants to use " .. req.tool,
+    "  [o.o]  " .. (req.who or "the agent") .. " wants to use " .. req.tool,
     "",
     "    " .. M.summary(req.tool, req.input),
     "",
@@ -161,7 +160,7 @@ local function prompt(req, done)
         key = "r",
         label = "deny and say why",
         fn = function()
-          vim.ui.input({ prompt = "Tell " .. (req.who or "Claude") .. " why not: " }, function(why)
+          vim.ui.input({ prompt = "Tell " .. (req.who or "the agent") .. " why not: " }, function(why)
             done(deny(why and why ~= "" and ("The user said no: " .. why) or nil))
           end)
         end,
@@ -182,7 +181,7 @@ local function ask(req, done)
         path = path,
         contents = after,
         name = req.review,
-        title = (req.who or "Claude")
+        title = (req.who or "the agent")
           .. " wants to "
           .. (req.tool == "Write" and "write" or "edit")
           .. " "
@@ -216,12 +215,12 @@ show_next = function()
 end
 
 -- policies answer some requests without asking: each is fn(req) returning
--- "allow", "deny" (and a message for Claude), or nil to pass. A module adds
+-- "allow", "deny" (and a message for the agent), or nil to pass. A module adds
 -- one for the requests it owns, such as bud.ai.issue's Linear writes
 M.policies = {}
 
 -- request asks about one tool use: req = { tool, input, root, id,
--- respond(result) }, where result is Claude Code's { behavior, ... }.
+-- respond(result) }, where result is { behavior = "allow"|"deny", ... }.
 -- Requests wait their turn, one on screen at a time
 function M.request(req)
   for _, policy in ipairs(M.policies) do
@@ -235,9 +234,6 @@ function M.request(req)
   local mine = remembered[req.root or ""]
   if mine and mine[M.key(req.tool, req.input)] then
     return req.respond(allow(req.input))
-  end
-  if not req.acp then
-    require("bud.ai.claude")._emit("permission_request", { tool = req.tool, input = req.input }, req.root)
   end
   table.insert(queue, req)
   show_next()
@@ -308,7 +304,6 @@ function M.acp(req, respond)
     root = req.session and req.session.root,
     id = call.toolCallId,
     who = req.session and req.session.backend or "the agent",
-    acp = true,
     respond = function(result)
       if result.behavior == "allow" then
         respond(pick({ "allow_once", "allow_always" }))

@@ -1,18 +1,11 @@
--- Chat (JGA-165): Claude Code's own TUI in chat mode, in its own tab. It runs
--- as bud-ide's chat agent (conversational; it reads and looks things up but
--- doesn't edit or run commands), in a dir that's no project's, so no project
--- instructions load. Conversations are Claude Code's own, kept for that dir:
--- its /resume (or opts.resume) picks an earlier one. When the TUI exits the
--- tab closes, back to where you were (the dashboard, for its c).
+-- Chat (JGA-165): OpenCode's own TUI in its own tab, in a dir that's no
+-- project's, so no project instructions load. Conversations are OpenCode's
+-- own, kept for that dir: its /sessions picks an earlier one. When the TUI
+-- exits the tab closes, back to where you were (the dashboard, for its c).
 --
 -- It never touches a project's session: that's bud.ai.term's.
 
-local claude = require("bud.ai.claude")
-
 local M = {}
-
--- the agent chat runs as, from the bud-ide plugin bud ships (D142)
-M.agent = "bud-ide:chat"
 
 local state = {} -- tab, buf, job
 
@@ -32,34 +25,14 @@ local function tab_valid()
   return state.tab and vim.api.nvim_tabpage_is_valid(state.tab)
 end
 
--- env is nvim's environment without BUD_BIN, so bud-ide's SessionStart hook
--- leaves out its notes on working inside bud (chat isn't a project)
-local function env()
-  local e = vim.fn.environ()
-  e.BUD_BIN = nil
-  return e
-end
-
--- argv is the TUI's command line: as the chat agent, from the plugin bud
--- ships and tui_argv loads (D142)
-function M.argv(bin, opts)
-  local flags = { "--agent", M.agent }
-  if opts.resume then
-    table.insert(flags, "--resume")
-  end
-  return claude.tui_argv(bin, flags)
-end
-
--- open goes to the chat tab, starting the TUI when it isn't running.
--- opts.resume opens Claude Code's picker of earlier chats
 -- own says whether chat is bud's own (ai.agent.chat_ui = "bud", D138):
 -- bud.ai.view, full screen, on a session in chat's dir
 local function own()
   return require("bud.ai.agent").own_chat()
 end
 
-function M.open(opts)
-  opts = opts or {}
+-- open goes to the chat tab, starting the TUI when it isn't running
+function M.open()
   if own() then
     return require("bud.ai.view").open({ root = chat_dir(), layout = "full" })
   end
@@ -68,26 +41,10 @@ function M.open(opts)
     vim.cmd.startinsert()
     return
   end
-  local argv, extra
-  local agent = require("bud.ai.agent")
-  if agent.backend() ~= "claude" then
-    -- the backend's own TUI on its chat session (D131), the one bud chat opens
-    local spec, why = agent.chat_tui(chat_dir())
-    if not spec then
-      vim.notify("bud: " .. why, vim.log.levels.WARN)
-      return
-    elseif vim.fn.executable(spec.argv[1]) ~= 1 then
-      vim.notify(("bud: %s isn't installed: run bud ai setup"):format(spec.argv[1]), vim.log.levels.WARN)
-      return
-    end
-    argv, extra = spec.argv, spec.env
-  else
-    local bin = claude.bin()
-    if not bin then
-      vim.notify("bud: Claude Code isn't installed: run bud claude setup", vim.log.levels.WARN)
-      return
-    end
-    argv = M.argv(bin, opts)
+  local spec = require("bud.ai.agent").tui(chat_dir())
+  if vim.fn.executable(spec.argv[1]) ~= 1 then
+    vim.notify(("bud: %s isn't installed: run bud ai setup"):format(spec.argv[1]), vim.log.levels.WARN)
+    return
   end
   vim.cmd.tabnew()
   state = { tab = vim.api.nvim_get_current_tabpage(), buf = vim.api.nvim_get_current_buf() }
@@ -97,11 +54,9 @@ function M.open(opts)
     vim.api.nvim_set_option_value(opt, value, { scope = "local", win = 0 })
   end
   local mine = state
-  state.job = vim.fn.jobstart(argv, {
+  state.job = vim.fn.jobstart(spec.argv, {
     term = true,
     cwd = chat_dir(),
-    env = vim.tbl_extend("force", env(), extra or {}),
-    clear_env = true,
     on_exit = function()
       vim.schedule(function()
         M._closed(mine)

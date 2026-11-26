@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -212,6 +213,30 @@ func (c *Client) Discard(ctx context.Context, id int64) error {
 	return err
 }
 
+// ErrNotApproved means a record Retier was given is still staged, so it
+// can't be moved
+var ErrNotApproved = errors.New("the record isn't approved")
+
+// Retier moves an approved record from tier from to tier to (Suite D136).
+// Only a reviewer token may, and both tiers must be among its tiers. from
+// and bodyHash (the record's body_hash from Export, empty to skip) are what
+// the caller showed Jason: a record that changed since returns ErrStale, so
+// nothing moves that he didn't see. A staged record returns ErrNotApproved
+func (c *Client) Retier(ctx context.Context, id int64, from, to, bodyHash string) error {
+	req := map[string]any{"id": id, "from": from, "privacy": to}
+	if bodyHash != "" {
+		req["body_hash"] = bodyHash
+	}
+	err := c.post(ctx, "retier", req, nil)
+	if se, ok := errors.AsType[*StatusError](err); ok && se.Status == http.StatusConflict {
+		if strings.Contains(se.Reason, "changed") {
+			return fmt.Errorf("memory retier: record %d: %w", id, ErrStale)
+		}
+		return fmt.Errorf("memory retier: record %d: %w", id, ErrNotApproved)
+	}
+	return err
+}
+
 // ExportedRecord is an approved record as the export action lists it
 type ExportedRecord struct {
 	ID        int64  `json:"id"`
@@ -219,6 +244,7 @@ type ExportedRecord struct {
 	Kind      string `json:"kind"`
 	Privacy   string `json:"privacy"`
 	Body      string `json:"body"`
+	BodyHash  string `json:"body_hash"`
 	CreatedAt string `json:"created_at"`
 	State     string `json:"state"`
 }

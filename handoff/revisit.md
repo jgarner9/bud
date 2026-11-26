@@ -4,6 +4,10 @@ This is the Claude project's revisit list as of 2026-11-22 18:45 UTC, with host 
 
 ## Open, in the order to do them
 
+Native macOS check for the OpenCode launcher: with a synced `opencode.env`, open `bud agent` in a large terminal, shrink it, then expand it. Check that the footer follows the lower edge each time.
+
+For interactive OpenCode on the server profile, install a build with the overlay provider-key fix before syncing the server-only Go and GitHub references. Verify authentication in a fresh `bud agent .` session.
+
 Home-server rollouts Jason hasn't done yet. Each one changes how the home server behaves, so they're his to run; give him paste blocks, never run them for him.
 
 | Order | Item | What | Waits on |
@@ -19,19 +23,20 @@ Home-server rollouts Jason hasn't done yet. Each one changes how the home server
 
 Decisions waiting on him (bring them up with a recommendation; don't decide them):
 
-- **Item 29 step 3:** already-approved memory records were saved at P1, even ones from chats that read his calendar, and the memory service has no action to re-tier or remove an approved record (`discard` works only on staged ones). Recommendation: a small reviewer-only `retier` action in the memory service, asked about on Signal the way memory-review asks. Not filed yet.
-- **Item 8:** removing the old `bud.ai.claude` / `bud.ai.acp` chat code (a delete he reviews) and whether `ai.backend` defaults to `opencode`.
+- **Item 29 step 3:** ~~already-approved memory records were saved at P1, even ones from chats that read his calendar, and the memory service has no action to re-tier or remove an approved record.~~ Decided 2026-11-24 (Suite D136), built 2026-11-26: `bud memory-review retier <id> <tier>`, asked on Signal the way memory-review approves; removing a record is deferred. See item 36.
+- **Item 8:** ~~removing the old `bud.ai.claude` / `bud.ai.acp` chat code, and whether `ai.backend` defaults to `opencode`.~~ Done 2026-11-26 (Suite D139, JGA-402 to JGA-404): the old chat code is gone, `ai.backend` no longer exists, and OpenCode is the only backend.
 - **Item 9:** the JGA-364 deletion list.
 - **Item 10:** R5c, other chat keys (recommended: wait until he's used opencode.nvim).
 - **Item 11:** R9, the custom TUI (JGA-375): a design session before any code.
-- **Item 12:** JGA-317 summarizer shape (recommended: a direct router call with no tools); waits on the mail `--record` output.
+- **JGA-399 (go-imap):** after it merges, the first live mail run on the home server is the one check left: iCloud's `MOVE` and `UIDPLUS`, whether it files a copy in Sent Messages, and how long the trash keeps mail. `bud mail-mcp --record` captures it, and its redacted transcript shows what the adapter sends and what iCloud answers. The module fetch and the Linear filing, which the overnight sessions had to leave for Jason, are done.
+- **Item 12:** JGA-317 summarizer shape — decided 2026-11-24 (Suite D133): a direct router call with no tools. Still waits on the mail `--record` output.
 - **Item 13:** the stale branch `claude/hermes-router` can be deleted.
 - **JGA-393:** whether laptop OpenCode goes through the router (Suite D70) for one spend meter and the same privacy rules, at the cost of coding needing the home server. Jason chose on 2026-11-24 to decide it later.
 - **Item 16:** router spend past the $10 cap (recommended: hold and ask on Signal, one yes covers one request or the rest of that turn, never a raised cap).
 - **Item 28:** moving bud-kb's remote onto the home server so P0 facts can reach the KB (recommended: wait a few weeks).
 - Older open items from the 2026-11-22 handoff: the JGA-368 hard-kill and backup-restore checks, the mail `--record` output for JGA-317, and a separate vault for the memory reviewer token and the bud-planning service account (both can read the whole Bud vault today).
 
-Work an agent can pick up without him: **JGA-390** (a delegated Hermes subagent gets its own conversation id, so P0 data in its task prompt isn't held; item 25). See [state.md](state.md).
+Work an agent can pick up without him: the re-tier action (JGA-396, Suite D136), then the narrower Bud 2.0 backlog in [state.md](state.md). JGA-390 (Suite D135, the always-P0 subagent path) is built; its rollout check is item 35.
 
 Closed since the list was last read: item 19 (the `improve:digest` prompt title) landed in PR #110; item 25's memory gap became D130 (PR #116).
 
@@ -54,11 +59,11 @@ Worked through on 2026-11-22 (UTC) by the thread "Continue Bud roadmap tasks" on
 
 ### Laptop
 
-7. **Live test of opencode.nvim chat keys.** `bud config set ai.backend opencode`, then `<leader>ac`, a permission prompt (`<leader>ay` / `<leader>an`), `<leader>ad` after an edit, `<leader>ap`, and `<leader>aP` once the planning server runs.
+7. **Live test of opencode.nvim chat keys.** Press `<leader>ac` for the chat, then try a permission prompt (`<leader>ay` / `<leader>an`), `<leader>ad` after an edit, `<leader>ap`, and `<leader>aP` once the planning server runs.
 
 ### Decisions for you
 
-8. **JGA-350 follow-ups.** Removing the old `bud.ai.claude` / `bud.ai.acp` chat code (a delete you review), and whether the default `ai.backend` moves from `claude` to `opencode`.
+8. ~~**JGA-350 follow-ups.** Removing the old `bud.ai.claude` / `bud.ai.acp` chat code (a delete you review), and whether the default `ai.backend` moves from `claude` to `opencode`.~~ **DONE 2026-11-26 (Suite D139, JGA-402 to JGA-404).** The old chat code and the `ai.backend` key are gone; OpenCode is the only backend, and `bud.ai.agent` and `bud.ai.acp` stay as the programmatic session.
 9. **JGA-364 deletion list** needs your review before anything is removed.
 10. **R5c** (other chat keys): recommended to wait until you've used opencode.nvim for a while.
 11. **R9 custom TUI (JGA-375):** a design session before any code.
@@ -122,7 +127,7 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 24. **To hold P1 back** after updating, put `qwen-35b` first in the overlay's `roles.manager.pool`. P1 chats then stay on Qwen, while everything else ships. **Chosen 2026-11-22 18:33 UTC ("Merge, hold P1 on the home server"):** #114 is merged as 39bdd7a; do this overlay change before the step 3 sync, and keep it until memory records carry a tier.
 25. **Known gaps after #114 (decision; my recommendation follows each):**
     - ~~**Bud memory search results** can hold private records and now reach Go in P1 chats.~~ **Decided 2026-11-22 (Suite D130, JGA-389, PR #116):** Hermes reaches memory at P0, and the router keeps a chat that recalls a P0 record local. See item 29.
-    - **A delegated subagent (JGA-390, left for OpenCode)** gets its own conversation id, so P0 data the parent writes into its task prompt isn't held. Recommendation: send subagents through a router path that is always P0, once Hermes's delegation config is checked.
+    - ~~**A delegated subagent (JGA-390)** gets its own conversation id, so P0 data the parent writes into its task prompt isn't held.~~ **Decided 2026-11-24 (Suite D135), built 2026-11-26:** subagents go to the router's always-P0 `/p0/v1` endpoint. See item 35.
 
 ### KB curator and Hugo site (JGA-311, JGA-312, PR #115)
 
@@ -143,7 +148,7 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 29. **the home server steps once PR #116 is merged** (after item 22's steps):
     1. Update bud from main again (the nightly or a build from main, as in item 22; no release includes #116 yet), promote the edge content cut from the #116 merge (format 9) with `gh workflow run content.yml -R jgarner9/bud -f mode=promote -f version=<v>`, then `bud sync`. Check that `~/.hermes/config.yaml` shows `X-Bud-Privacy: "P0"` under `mcp_servers.memory.headers`.
     2. Restart the router, then Hermes, so both pick up the change. Restart memory-mcp too, so its answers carry the marker.
-    3. Re-check the records you've already approved, since Hermes saved them at P1, even ones from chats that read your calendar. You can see them with a `memory_search` from Hermes once it's at P0, since each result shows its tier. The memory service has no action yet to re-tier or remove an approved record (`discard` works only on staged ones), so a private one needs a hand edit of the SQLite file, or a small new action. Say if you want the action built.
+    3. Re-check the records you've already approved, since Hermes saved them at P1, even ones from chats that read your calendar. You can see them with a `memory_search` from Hermes once it's at P0, since each result shows its tier. `bud memory-review retier <id> P0` (Suite D136, item 36) re-tiers one, asked on Signal like memory-review.
     4. Test: in a Signal chat, ask Hermes something that recalls a P0 record. The router log should say "a private Bud memory record in the history raised a P1 request to P0", and the reply should come from Qwen.
     5. Then take out the item 24 hold (remove `qwen-35b` from the front of the overlay's `roles.manager.pool`), and `bud sync` again.
 
@@ -162,3 +167,20 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 ### Resumed orchestrator's Go key (JGA-411)
 
 The timer's tmux session had no `OPENCODE_GO_API_KEY`, so a resumed session failed with "OpenCode Go requires an API key". `bud resume` now resolves `opencode.env` with `op read` and the service account in `op-service-account.env`. On archie after the update: reinstall the unit (`server/resume/bud-resume.service` has new flags) and `systemctl --user daemon-reload`. That service account must be able to read the Go key's item; if it can't, `bud resume status` shows op's error.
+
+### JSONC parsing (BASE D153)
+
+32. **The one stdlib exception.** You granted a D1 exception in chat overnight ("I'm giving a D1 exception here") for a tested JSONC library, and the swap was done on it: `StripJSONC` now wraps github.com/tidwall/jsonc. The library the note named didn't exist; tidwall's is the only established one that keeps byte offsets and line breaks, which `bud registry refresh --write`'s in-place editing relies on. If you'd rather keep the homegrown stripper — its error for an unterminated comment was friendlier — say so and the PR reverts.
+
+### OpenCode-only follow-ups (Suite D139)
+
+33. **The Linear policy rename is untested against a live permission request.** JGA-406 (PR #143) found that the Linear rules in `issue.lua` and `work.lua` matched `mcp__<server>__<tool>` names, which OpenCode never sends, and renamed them to OpenCode's `linear_<tool>` names. Nothing has yet run a real ACP permission request through them. Next time you file or work an issue from the editor (`<leader>ai`, `:BudIssues` w), check that Linear reads run without a prompt and writes ask as before; tell me if either is wrong.
+34. **Claude-era wording outside this repo (your call).** `jgarner9/bud-plugins` still holds the old `bud` plugin and its release skill, and the private overlay's `handoff/` and profiles still use Claude-era wording. D139 left both for you. Say if you'd like them reworded or archived.
+
+### Subagents at P0 (JGA-390, Suite D135)
+
+35. **Rollout check on the home server, with item 22 or 29's sync.** `bud sync` writes a `delegation:` block into the private Hermes profile (`base_url` is the router's `/p0/v1`). Hermes's docs describe `delegation.base_url`, `api_key`, `api_mode` and `model`, but this repo can't show that Hermes 0.23.2 reads them. After the sync and restarts, ask Hermes on Signal for something it delegates (say, "use a subagent to list three tools you have") and check the router's journal: the subagent's requests should arrive as `POST /p0/v1/chat/completions` and be served by Qwen. If they still arrive on `/v1`, 0.23.2 ignores the block; tell me and I'll look at the other option from D135 (a parent-id header) or a Hermes upgrade. A P1 chat that delegates is now local for the subagent, so expect it slower.
+
+### Re-tiering approved records (JGA-396, Suite D136)
+
+36. **Two steps on the home server before `retier` works** (item 29 step 3 needs them). First, add `"retier"` and `"export"` to the reviewer token's `actions` in the Bud Memory item's `clients` field (the policy shape is in `server/memory/README.md`), then restart `bud-memory`; the service refuses a policy that gives one token both `stage` and `retier`. Second, update bud from main so `bud memory-review retier` exists. Then, for each record that should be private: `op run --env-file ~/.config/bud-server/memory-review.env -- bud memory-review retier <id> P0`, and answer the Signal prompt. The prompt shows the whole record; his no or no answer changes nothing.

@@ -53,30 +53,21 @@ eq(banners, {
 }, "banners")
 banners, clean = dashboard.doctor_banners({ { name = "git", status = "ok" } })
 eq({ banners, clean }, { {}, true }, "clean")
-local claude
-banners, clean, claude = dashboard.doctor_banners({
-  { name = "git", status = "ok" },
-  { name = "claude code", status = "warn", detail = "not installed" },
+-- OpenCode's own check gives the banner, not a doctor warning
+local ai
+banners, clean, ai = dashboard.doctor_banners({
+  { name = "opencode", status = "warn", detail = "opencode isn't installed" },
 })
-eq(banners, { { level = "warn", text = "Claude Code isn't set up, press c" } }, "claude banner, not a doctor warning")
-eq({ clean, claude.detail }, { false, "not installed" }, "claude result comes back")
-
--- on another backend (D131) its own check gives the banner, and Claude
--- Code's says nothing
-banners, clean, claude = dashboard.doctor_banners({
-  { name = "claude code", status = "warn", detail = "not installed" },
-  { name = "ai backend", status = "warn", detail = "openclaw: openclaw isn't installed" },
-}, "openclaw")
-eq(banners, { { level = "warn", text = "openclaw isn't set up, press c" } }, "the backend's banner")
-eq(claude.detail, "openclaw: openclaw isn't installed", "the backend's result comes back")
-banners, clean = dashboard.doctor_banners({ { name = "ai backend", status = "ok" } }, "openclaw")
-eq({ banners, clean }, { {}, true }, "openclaw set up")
+eq(banners, { { level = "warn", text = "opencode isn't set up, press c" } }, "opencode's banner, not a doctor warning")
+eq({ clean, ai.detail }, { false, "opencode isn't installed" }, "its result comes back")
+banners, clean = dashboard.doctor_banners({ { name = "opencode", status = "ok" } })
+eq({ banners, clean }, { {}, true }, "opencode set up")
 
 -- health line's AI part
-eq(dashboard.ai_health("claude", nil, false), "no claude yet", "before doctor, not on PATH")
-eq(dashboard.ai_health("claude", nil, true), "claude ready", "before doctor, on PATH")
-eq(dashboard.ai_health("claude", { status = "warn" }, true), "claude not set up", "logged out")
-eq(dashboard.ai_health("openclaw", { status = "ok" }, true), "openclaw ready", "ready")
+eq(dashboard.ai_health(nil, false), "no opencode yet", "before doctor, not on PATH")
+eq(dashboard.ai_health(nil, true), "opencode ready", "before doctor, on PATH")
+eq(dashboard.ai_health({ status = "warn" }, true), "opencode not set up", "not set up")
+eq(dashboard.ai_health({ status = "ok" }, true), "opencode ready", "ready")
 
 -- git
 eq(
@@ -100,7 +91,7 @@ local data = {
     { key = "2", name = "dollarwise", pinned = false },
   },
   banners = { { level = "warn", text = "1 doctor warning, press d" } },
-  health = " 30 ms · 23 plugins · claude ready",
+  health = " 30 ms · 23 plugins · opencode ready",
 }
 local icons = require("bud.icons")
 -- every icon is one cell wide, or the centering is off
@@ -315,7 +306,7 @@ eq(vim.api.nvim_get_hl(0, { name = "BudHiddenCursor" }).blend, 100, "hidden curs
 has(shown, icons.pinned .. "  a", "pinned from the registry")
 has(shown, icons.unpinned .. "  b", "recent from the registry")
 has(shown, "x   " .. icons.scratchpad .. "  Scratchpad", "scratchpad when turned on")
-has(shown, icons.claude .. " ", "claude in the health line")
+has(shown, icons.ai .. " ", "the AI in the health line")
 for _, line in ipairs(shown) do
   if line:find("gone", 1, true) then
     error("a missing project was shown")

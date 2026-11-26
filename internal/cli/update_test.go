@@ -259,7 +259,6 @@ func TestUpdateSyncsAndChecks(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
-	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	origApply, origCheck, origDoctor := applyConfig, checkRelease, doctorChecks
 	t.Cleanup(func() {
 		applyConfig, checkRelease, doctorChecks = origApply, origCheck, origDoctor

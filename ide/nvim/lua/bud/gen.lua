@@ -1,5 +1,5 @@
 -- The tool generator (BASE.md 4 part 2, JGA-91): :BudGen "what you want".
--- Claude writes a tool (manifest.json + init.lua, D54) or a language spec in
+-- The agent writes a tool (manifest.json + init.lua, D54) or a language spec in
 -- user-tools/, on its own session there. Every file it writes is a
 -- permission diff you accept or reject (bud.ai.permissions), so nothing
 -- lands without you seeing it. Then a new or changed tool is loaded in a
@@ -9,7 +9,7 @@
 -- The conversation shows as a log in a split, where i asks for changes; each
 -- reply runs the checks again.
 
--- the configured backend's session (D131)
+-- the OpenCode session (D131)
 local ai = require("bud.ai.session")
 
 local M = {}
@@ -24,7 +24,7 @@ local function user_tools()
   return vim.uv.fs_realpath(dir) or dir
 end
 
--- prompt is what Claude is asked: the request, and the contracts it must follow
+-- prompt is what the agent is asked: the request, and the contracts it must follow
 function M.prompt(request, template)
   return table.concat({
     "You're writing an extension for bud, a Neovim IDE. The request:",
@@ -50,7 +50,7 @@ function M.prompt(request, template)
 end
 
 -- snapshot is every tool's init.lua and manifest.json with its mtime, and the
--- language specs, so what Claude changed can be found afterwards
+-- language specs, so what the agent changed can be found afterwards
 local function snapshot(dir)
   local out = {}
   for name, kind in vim.fs.dir(dir, { depth = 2 }) do
@@ -112,7 +112,7 @@ M.load_test = function(dir, cb)
   end)
 end
 
--- check loads what Claude made: a tool passes the load test and is turned on,
+-- check loads what the agent made: a tool passes the load test and is turned on,
 -- or is turned off with the error; a spec is pointed at bud lang enable
 function M.check(before)
   local dir = user_tools()
@@ -200,7 +200,7 @@ local function close()
   end
 end
 
--- listen logs what the generator's session says, and checks what Claude
+-- listen logs what the generator's session says, and checks what the agent
 -- wrote after each reply
 local function listen(dir)
   local function mine(session)
@@ -222,7 +222,7 @@ local function listen(dir)
     ai.on("done", function(d, session)
       if mine(session) then
         if not d.ok then
-          log({ "✗ " .. (d.text or "Claude stopped"), "" })
+          log({ "✗ " .. (d.text or "the agent stopped"), "" })
         end
         -- each reply may have written files: check them, then compare against now
         M.check(state.before)
@@ -268,7 +268,7 @@ end
 function M.setup()
   vim.api.nvim_create_user_command("BudGen", function(o)
     M.run(o.args)
-  end, { nargs = "?", desc = "Have Claude write a bud tool or language spec" })
+  end, { nargs = "?", desc = "Have the agent write a bud tool or language spec" })
 end
 
 -- buf is the generator's log, for tests

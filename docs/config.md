@@ -35,7 +35,7 @@ bud config edit                           # open it in bud's editor, then check 
 | `ui.cmdline_float` | `true` | While you type a command (`;`), a search or an input, the command line is a centered float titled with what it is, and completion opens under it; it goes back to the bottom line when you're done, where the command and its messages show as before. Needs `ui.messages`. Turn it off to keep the command line at the bottom; takes effect on the next start. |
 | `ui.breadcrumbs` | `true` | Path and symbol breadcrumbs at the top of file windows (dropbar.nvim); `<leader>;` picks one and opens its menu. |
 | `ui.markdown` | `true` | Markdown files open rendered: headings, lists, code blocks, tables and checkboxes drawn in place, the cursor line shown as written. `false` opens them as text. Either way `<leader>um` switches one file, a file open in a diff shows its text everywhere until the diff closes, and one over 250 KB always opens as text. Applies to files opened after the change. |
-| `ui.buddy` | `false` | The robot stands in the bottom right corner of the file window (never over the explorer, the terminal or Claude Code's pane) and plays the dashboard's moves while you work. He takes no focus or keys, steps aside while the dashboard is on screen and when no file window is big enough to spare the corner, and after midnight he only snores. `<leader>ub` turns him on or off for the session either way; the setting takes effect on the next start. |
+| `ui.buddy` | `false` | The robot stands in the bottom right corner of the file window (never over the explorer, the terminal or the AI pane) and plays the dashboard's moves while you work. He takes no focus or keys, steps aside while the dashboard is on screen and when no file window is big enough to spare the corner, and after midnight he only snores. `<leader>ub` turns him on or off for the session either way; the setting takes effect on the next start. |
 
 ## Updates
 
@@ -50,7 +50,7 @@ bud config edit                           # open it in bud's editor, then check 
 | --- | --- | --- |
 | `dashboard.style` | `"silly"` | `"silly"` (the robot, icons, projects with git) or `"minimal"`. `t` on the dashboard switches for now. |
 | `dashboard.git` | `true` | Branch, changes and ahead/behind for each listed project. |
-| `dashboard.health` | `true` | The line with the startup time (from `bud` starting to the first screen), plugins and Claude Code. |
+| `dashboard.health` | `true` | The line with the startup time (from `bud` starting to the first screen), plugins and the AI agent. |
 | `dashboard.banners` | `true` | Doctor problems and updates, each with a key to fix it. |
 | `dashboard.scratchpad` | `false` | `x` opens one notes file in bud's data dir. |
 | `dashboard.prs` | `false` | Open PRs per project, and how many ask you for a review, through `gh`. |
@@ -59,33 +59,21 @@ bud config edit                           # open it in bud's editor, then check 
 | `dashboard.animate` | `true` | The robot plays his moves one after another (wave, backflip, juggling, fireworks, a moonwalk and more; 22 in all), in a random order that then repeats; after midnight he only snores. |
 | `dashboard.sessions` | `false` | Save a project's open files on exit and restore them when you open it from the dashboard. |
 
-## Claude Code
+## AI
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `ai.backend` | `"claude"` | Which agent bud talks to: `claude` (Claude Code directly, as through 1.0; moving onto ACP through `claude-agent-acp` later), or over the Agent Client Protocol (ACP) `openclaw` (an OpenClaw Gateway, through `openclaw acp`), `codex` (Codex, through `codex-acp`), `opencode` (`opencode acp`; `<leader>ac` opens opencode.nvim instead of bud's pane, D150), or `custom` (`ai.custom.command`; it has no TUI bud knows, so set `ai.agent.chat_ui` to `bud`). See [AI backends](backends.md). |
-| `ai.agent.chat_layout` | `"pane"` | How `<leader>ac` opens the AI chat: `pane`, the pull-out on the right, or `full`, a tab of its own. `<leader>aF` switches between them either way. With `ai.backend = "opencode"`, `<leader>ac` opens opencode.nvim instead and this setting doesn't apply to it (D150). |
-| `ai.agent.autostart` | `true` | On any backend but `claude`, start the project's agent when it opens (it costs a process and a Gateway session, no tokens). Off, it starts on the first use. The `claude` backend keeps `ai.claude.autostart`. |
-| `ai.agent.idle_minutes` | `30` | On any backend but `claude`, stop a project's agent nothing has used for this long; the next use starts it again on the same session. `0` never stops it. |
-| `ai.agent.chat_ui` | `"tui"` | What draws the AI chat on `<leader>ac` and in a layout's chat pane: `tui`, the backend's own TUI (`openclaw tui`, Claude Code's), or `bud`, bud's own chat drawn in Neovim from the agent's replies, on any backend but `claude` (which keeps Claude Code's TUI until it runs over ACP) (`<leader>av` opens it either way). With `bud`, chat mode (`<leader>ch`) is bud's chat too, full screen, outside any project. With `ai.backend = "opencode"`, `<leader>ac` opens opencode.nvim instead and this setting doesn't apply to it (D150). |
-| `ai.openclaw.url` | `""` | The OpenClaw Gateway's WebSocket URL, such as `wss://home.your-tailnet.ts.net:18789`. Empty uses the `openclaw` CLI's own `gateway.remote.url`, else a Gateway on this machine. |
-| `ai.openclaw.token_file` | `""` | A file holding the Gateway token (keep it mode 600), passed as `--token-file` so the token stays out of `config.json` and process listings. Empty uses the CLI's own credentials. |
-| `ai.openclaw.agent` | `"main"` | The OpenClaw agent bud's sessions belong to, for opening them in `openclaw tui` (`agent:<this>:acp-bridge:<id>`). Each project keeps one session, saved in `~/.local/state/bud/agent-sessions.json` and reattached on the next start, so the web UI, the apps and the TUI show the same thread. |
+| `ai.agent.chat_layout` | `"pane"` | How bud's AI pane opens when something other than `<leader>ac` asks for it (the layout's chat pane, `<leader>av`): `pane`, the pull-out on the right, or `full`, a tab of its own. `<leader>aF` switches between them either way. `<leader>ac` always opens opencode.nvim and ignores this (D150). |
+| `ai.agent.autostart` | `true` | Start the project's OpenCode agent when it opens (it costs a process, no tokens). Off, it starts on the first use. |
+| `ai.agent.idle_minutes` | `30` | Stop a project's agent nothing has used for this long; the next use starts it again on the same session. `0` never stops it. |
+| `ai.agent.chat_ui` | `"tui"` | What draws the AI chat in a layout's chat pane and on `<leader>aF`: `tui`, OpenCode's own TUI, or `bud`, bud's own chat drawn in Neovim from the agent's replies (`<leader>av` opens it either way). With `bud`, chat mode (`<leader>ch`) is bud's chat too, full screen, outside any project. `<leader>ac` always opens opencode.nvim and ignores this (D150). |
 | `ai.planning.url` | `""` | The home server's planning OpenCode (Suite D49), such as `http://100.x.y.z:8797` (its tailnet IP; see `server/planning-opencode/`). `<leader>aP` and `:BudPlan` open OpenCode's own TUI attached to it (`opencode --server`) in a pane of its own, apart from local coding. Empty means home planning isn't set up, and the key says so. |
 | `ai.planning.password_file` | `"~/.config/bud/planning-password"` | A file holding the planning server's password (mode 600), the same as its `OPENCODE_PASSWORD`. bud checks the server with it before opening the pane, and passes it to `opencode` in the environment, never on the command line. |
-| `ai.custom.command` | `[]` | The command line of an ACP agent bud doesn't know by name, used when `ai.backend` is `custom`, such as `["gemini", "--experimental-acp"]`. |
-| `ai.claude.autostart` | `true` | Start a Claude Code session when a project opens. Off, bud only starts one when you use an AI feature. |
-| `ai.claude.resume` | `"new"` | Reopening a project starts a fresh conversation, on the model your settings choose. `"continue"` carries on bud's last conversation there instead (kept in `~/.local/state/bud/claude-sessions.json`, so never one you started yourself, or an issue, gen or chat conversation) and keeps the model that conversation was on. `bud agent` follows the same rule. |
-| `ai.claude.idle_minutes` | `30` | Stop a session nothing has used for this long; the next use starts it again on the same conversation. `0` never stops one. |
-| `ai.claude.args` | `[]` | Extra flags for every session, e.g. `["--model", "opus"]`. |
-| `ai.claude.command` | unset | What runs Claude Code when it isn't `claude` itself: a wrapper that passes the rest on, e.g. `["headroom", "wrap", "claude", "--code-memory", "none", "--"]`. `bud install` offers exactly that when Headroom is installed, and `bud doctor` warns if the wrapper isn't on PATH. |
-| `ai.claude.config` | `"home"` | Whose Claude Code config bud uses. `"home"` shares `~/.claude` with the `claude` you run yourself, so bud's sessions get its MCP servers, skills, settings, rules and login. `"bud"` is its own, in `~/.local/share/bud/claude` (set as `CLAUDE_CONFIG_DIR` for everything bud starts): plugins, settings, history and login stay apart, so it needs its own login (`bud claude setup`), and it can't see a cloud provider set up in `~/.claude/settings.json` (then `bud claude setup` and `bud install` offer to share). A `CLAUDE_CONFIG_DIR` you set yourself wins. |
 | `ai.issues.team` | unset | The Linear team issues filed with `<leader>ai` go to, for projects without their own (`bud issue set --team T [--project P] [project]`). `bud issue set --global` sets it. |
 | `ai.issues.project` | unset | The Linear project in that team, if any. |
 | `ai.issues.bud.team` | `"JGA"` | Where issues about bud itself (`<leader>aB`) go: bud's own tracker. |
 | `ai.issues.bud.project` | `"Bud IDE"` | The Linear project in that team. |
-| `ai.issues.bud.checkout` | unset | The bud checkout Claude reads and works in for issues about bud. `<leader>aB` asks for it once and saves it with `bud issue checkout <path>`; it is checked each time, and asked for again if the dir was moved or removed. A `bud dev link` checkout takes precedence. |
-| `ai.work.where` | `"local"` | Where `<leader>aw` has Claude fix an issue: `local` is a git worktree beside the repo; `cloud` starts a Claude Code cloud session that clones the repo from GitHub, works the issue and pushes a branch (the repo needs a GitHub `origin` with the base branch pushed). `:BudIssue work ID cloud` or `local` picks per issue. See [filing issues](issues.md#in-the-cloud). |
+| `ai.issues.bud.checkout` | unset | The bud checkout the agent reads and works in for issues about bud. `<leader>aB` asks for it once and saves it with `bud issue checkout <path>`; it is checked each time, and asked for again if the dir was moved or removed. A `bud dev link` checkout takes precedence. |
 
 ## Tools
 
@@ -107,4 +95,3 @@ bud config edit                           # open it in bud's editor, then check 
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` | Where bud's dirs go, on macOS too. |
 | `NO_COLOR` | Plain output, no colour. |
 | `BUD_OVERLAY` | The overlay's git URL for `bud sync`, used instead of `overlay.repo`. |
-| `CLAUDE_CONFIG_DIR` | Where Claude Code's own config is (default `~/.claude`). bud's IDE bridge follows it. |

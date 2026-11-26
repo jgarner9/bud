@@ -1,10 +1,8 @@
 -- Run with: nvim --clean --headless -l tests/lua/gen_test.lua (just lua-test)
--- :BudGen: Claude's files are found, load-tested in a headless Neovim, and
--- turned on or off; a fake claude stands in for the files it would write
+-- :BudGen: the agent's files are found, load-tested in a headless Neovim, and
+-- turned on or off; the fake ACP agent stands in for the files it would write
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
--- the claude backend (D131): bud.ai.claude and Claude Code's TUI
-dofile("tests/lua/lib/claude_backend.lua")
 
 local function eq(got, want, what)
   if not vim.deep_equal(got, want) then
@@ -22,11 +20,7 @@ local tmp = vim.uv.fs_realpath(vim.fn.tempname()) or vim.fn.tempname()
 vim.fn.mkdir(tmp, "p")
 tmp = vim.uv.fs_realpath(tmp)
 vim.env.XDG_DATA_HOME = tmp .. "/data"
-vim.env.CLAUDE_CONFIG_DIR = tmp .. "/claude-home"
 require("bud.config").file = tmp .. "/config.json"
-require("bud.ai.bridge").lock_dir = function()
-  return tmp .. "/ide"
-end
 
 local gen = require("bud.gen")
 
@@ -42,34 +36,31 @@ local tools, specs = gen.changed(
 )
 eq({ tools, specs }, { { "a" }, { "zig" } }, "changed tools and specs")
 
--- the fake "writes" a good tool and a broken one, then answers
-local fake = tmp .. "/fake-claude"
+-- the fake agent "writes" a good tool and a broken one, then answers
+local writes = tmp .. "/write-files.sh"
 vim.fn.writefile({
-  "#!/bin/sh",
-  "while IFS= read -r line; do",
-  "  mkdir -p hello bad",
-  [[  printf '{"name":"hello","description":"says hi"}' > hello/manifest.json]],
-  [[  printf 'return { setup = function() vim.api.nvim_create_user_command("BudHello", function() end, {}) end }' > hello/init.lua]],
-  [[  printf '{"name":"bad"}' > bad/manifest.json]],
-  [[  printf 'return { setup = function() error("nope") end }' > bad/init.lua]],
-  [[  printf '{"type":"assistant","session_id":"g1","message":{"content":[{"type":"text","text":"Made hello: run :BudHello."}]}}\n']],
-  [[  printf '{"type":"result","subtype":"success","session_id":"g1","result":"Made hello."}\n']],
-  "done",
-}, fake)
-vim.fn.setfperm(fake, "rwxr-xr-x")
-
-local claude = require("bud.ai.claude")
--- bud's embedded plugin (D142) is unpacked by the bud binary, which these tests don't run
-claude.plugin_dir = function()
-  return nil
+  "mkdir -p hello bad",
+  [[printf '{"name":"hello","description":"says hi"}' > hello/manifest.json]],
+  [[printf 'return { setup = function() vim.api.nvim_create_user_command("BudHello", function() end, {}) end }' > hello/init.lua]],
+  [[printf '{"name":"bad"}' > bad/manifest.json]],
+  [[printf 'return { setup = function() error("nope") end }' > bad/init.lua]],
+}, writes)
+local repo_root = vim.fn.getcwd()
+local agent = require("bud.ai.agent")
+agent.command = function()
+  return {
+    "env",
+    "FAKE_ACP_RUN=sh " .. writes,
+    "FAKE_ACP_REPLY=Made hello: run :BudHello.",
+    vim.v.progpath,
+    "--clean",
+    "--headless",
+    "-l",
+    repo_root .. "/tests/lua/lib/fake_acp.lua",
+  }
 end
-claude.bin = function()
-  return fake
-end
-claude.check_login = function(_, cb)
-  vim.schedule(function()
-    cb(true)
-  end)
+agent.ids_file = function()
+  return tmp .. "/agent-sessions.json"
 end
 -- record what the CLI would be told
 local cli_calls = {}
@@ -86,7 +77,7 @@ vim.notify = function(msg)
 end
 gen.run("a command that says hi")
 local log = gen.buf()
-eq(claude.get("gen").root, vim.uv.fs_realpath(vim.fn.stdpath("data") .. "/user-tools"), "runs in user-tools")
+eq(agent.get("gen").root, vim.uv.fs_realpath(vim.fn.stdpath("data") .. "/user-tools"), "runs in user-tools")
 wait(function()
   return #notes >= 2
 end, "both load tests")
@@ -108,7 +99,6 @@ eq(
 )
 
 gen._reset()
-claude._reset()
-require("bud.ai.bridge").stop()
+agent._reset()
 vim.fn.delete(tmp, "rf")
 print("gen_test: ok")

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-How to work on this repository. OpenCode reads only this file (Bud Suite D17); `CLAUDE.md` imports it, so Claude Code reads the same text. Edit this file, not `CLAUDE.md`.
+How to work on this repository. OpenCode reads this file (Bud Suite D17). `content/AGENTS.md` is a different file: the one that syncs to every device.
 
 ## What this is
 
@@ -9,7 +9,7 @@ This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module
 | Path | What it holds |
 | --- | --- |
 | `cmd/bud/`, `internal/` | The one Go module and binary: install, sync, update, doctor, the IDE launcher |
-| `ide/` | The Neovim IDE: `nvim/`, `languages/`, `layouts/`, `tools/`, `migrations/`, `bundles/`, `plugins/` and its Lua tests, all embedded in the binary |
+| `ide/` | The Neovim IDE: `nvim/`, `languages/`, `layouts/`, `tools/`, `migrations/`, `bundles/` and its Lua tests, all embedded in the binary |
 | `content/` | What syncs to every device running OpenCode: `AGENTS.md`, skills, agents, commands, plugins and `env/` (the model registry and config fragments) |
 | `profiles/` | Example device profiles only; real ones live in the private overlay |
 | `server/` | Home-server service units for the MCP gateway, calendar, ops and Signal, plus Hermes setup and its Bud plugin |
@@ -20,17 +20,17 @@ Nothing personal goes in this public repo: no hostnames, tailnet names, home pat
 
 ## Resuming work
 
-Work moved from Claude Code to OpenCode on 2026-11-22. Before starting a task, read [handoff/README.md](handoff/README.md): how Jason works (lead with the answer, plain Unicode and no emoji, options with a recommendation, he decides design), the PR workflow (Copilot review, one comment summarizing the fixes, then merge), and links to the current state, the open items waiting on him and the Suite decision log (D1 onward). Keep `handoff/state.md` and `handoff/revisit.md` current in the same PR as the work. Host names and exact home-server commands are in the private overlay's `handoff/`, never here.
+Before starting a task, read [handoff/README.md](handoff/README.md): how Jason works (lead with the answer, plain Unicode and no emoji, options with a recommendation, he decides design), the PR workflow, and links to the current state, the open items waiting on him and the Suite decision log (D1 onward). Keep `handoff/state.md` and `handoff/revisit.md` current in the same PR as the work. Host names and exact home-server commands are in the private overlay's `handoff/`, never here.
 
 ## The IDE
 
 Bud's IDE is a Neovim-based editor driven by a small Go CLI (`bud`). The CLI installs, launches, updates and syncs an isolated Neovim config (`NVIM_APPNAME=bud`, so it never touches `~/.config/nvim`). `BASE.md` is the full plan plus a numbered decision log (D1, D2, ...). Nearly all of it is built, but a few parts are still marked as later, so check the code before assuming a planned feature exists. When a decision changes, update `BASE.md` too.
 
-The IDE chat is moving to the pinned sudo-tee/opencode.nvim talking to local OpenCode (D150, superseding the ACP plan in D131/D132 and D138-D140; Suite D96). Until JGA-350 lands, the tree still holds the older chat: the `bud.ai.claude` Claude Code session (D25, BASE.md 4.2) and the `bud.ai.acp` client. Don't extend either; new chat work goes through opencode.nvim, and removing the old code is a separate change Jason reviews. Don't add a model provider or an API client unless asked.
+The IDE chat is the pinned sudo-tee/opencode.nvim talking to local OpenCode (D150, superseding the ACP plan in D131/D132 and D138-D140; Suite D96). `bud.ai.agent` and `bud.ai.acp` stay as the programmatic session behind `:BudGen`, issue filing, working an issue, inline actions and commit drafts, and they run only `opencode acp` (Suite D139); there is no other backend and no IDE bridge. Don't extend opencode.nvim with a fork; bud's changes live in `bud.ai.opencode`. Don't add a model provider or an API client unless asked.
 
 ## Docs
 
-`docs/` holds the user docs: `setup.md` (the whole setup in order, including Claude Code and the plugins), `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), references for every command (`commands.md`) and key (`keys.md`), the AI backends (`backends.md`, with `openclaw.md` as the worked example), an overview of Claude Code in bud (`claude-code.md`), the architecture diagrams (`architecture.md`, Mermaid, updated in the same change as the code they draw), and how-tos for languages, tools, layouts, filing issues, building a Claude TUI and troubleshooting. The README keeps short descriptions and links to these. Keep them in step when behaviour changes. The same files are the docs site, https://bud.jgarner.dev (D110): `site/` holds only the landing page, layout and styles, `scripts/site.sh` copies `docs/*.md` in beside them, and `.github/workflows/pages.yml` builds it with GitHub Pages' Jekyll on a push to main. A new page in `docs/` needs a line in `site/_data/nav.yml`, and a link out of `docs/` (to the README, say) has to be a full URL, since only `docs/*.md` is on the site. `docs/internals/` is the other kind: how each part of the code works, for working on bud (see "Where the detail is"). Move detail there when a paragraph here grows, and keep this file short, since it loads in every session.
+`docs/` holds the user docs: `setup.md` (the whole setup in order, including OpenCode and the synced content), `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), references for every command (`commands.md`) and key (`keys.md`), the architecture diagrams (`architecture.md`, Mermaid, updated in the same change as the code they draw), and how-tos for languages, tools, layouts, filing issues and troubleshooting. The README keeps short descriptions and links to these. Keep them in step when behaviour changes. The same files are the docs site, https://bud.jgarner.dev (D110): `site/` holds only the landing page, layout and styles, `scripts/site.sh` copies `docs/*.md` in beside them, and `.github/workflows/pages.yml` builds it with GitHub Pages' Jekyll on a push to main. A new page in `docs/` needs a line in `site/_data/nav.yml`, and a link out of `docs/` (to the README, say) has to be a full URL, since only `docs/*.md` is on the site. `docs/internals/` is the other kind: how each part of the code works, for working on bud (see "Where the detail is"). Move detail there when a paragraph here grows, and keep this file short, since it loads in every session.
 
 ## Commands
 
@@ -64,7 +64,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 ## Hard constraints
 
-- **Standard library only (D1).** No third-party Go modules. Commands use `flag.FlagSet`, not cobra. Config and data files are JSON (D2).
+- **Standard library only (D1).** No third-party Go modules, with two exceptions. The JSONC stripper is github.com/tidwall/jsonc (D153), picked because its output keeps the input's byte offsets and line breaks, which the registry's in-place patching and error lines depend on. The mail IMAP client is github.com/emersion/go-imap/v2 (Suite D138), behind `internal/mail`'s adapter, so the tools' guarantees stay bud's own. Commands use `flag.FlagSet`, not cobra. Config and data files are JSON (D2).
 - **Flags go before positionals (D4):** `bud [global flags] <command> [command flags] [args]`. That's plain `flag` behavior, so don't add interspersed parsing.
 - **macOS and Linux only (D22).**
 
@@ -75,7 +75,7 @@ If the Go build cache isn't writable (for example inside a sandbox), prefix comm
 
 **Errors and output.** Commands return errors and never print errors or call `os.Exit`. `cli.ExitCode` (`internal/cli/errors.go`) is the only place that prints errors (one `bud: ...` line on stderr) and picks the exit code: 0 for success or `-h`, 2 for a `*UsageError` (build one with `usageErrorf`), 1 for anything else. `App.parse` silences the flag package and prints requested help to stdout, and the error plus usage to stderr. `App.Stdout`/`App.Stderr` let tests capture that output.
 
-**Embedded config (D5).** The root package `bud` (`embed.go`) embeds `ide/nvim/`, `ide/languages/*.lua` (a file glob, so `_template.lua` isn't dropped), `ide/layouts/*.lua`, `ide/tools/`, `ide/migrations/*.lua`, `ide/bundles/` and `ide/plugins/` with `//go:embed`, and `bud.Config()` serves the first four as one tree: `ide/nvim/` at the root with `languages/`, `layouts/` and `tools/` mounted inside. It must stay at the repo root, because embed can't reach parent directories. `ide/migrations/`, `ide/bundles/` and `ide/plugins/` are embedded but not synced into the config dir (`bud.Migrations()`, `bud.Bundles()`, `bud.Plugin()`). The binary is the release: `internal/nvim.SyncConfig` copies `bud.Config()` into `~/.config/bud` and records them in `.bud-manifest.json`. It overwrites managed files, deletes ones a release dropped, and never touches anything else. After a change it runs `bud.pack.restore()` in headless nvim, so plugins match the committed `ide/nvim/nvim-pack-lock.json`. The target dir comes from `paths.Resolve().Config`, which is `~/.config/bud` on macOS too, because that's where Neovim looks.
+**Embedded config (D5).** The root package `bud` (`embed.go`) embeds `ide/nvim/`, `ide/languages/*.lua` (a file glob, so `_template.lua` isn't dropped), `ide/layouts/*.lua`, `ide/tools/`, `ide/migrations/*.lua` and `ide/bundles/` with `//go:embed`, and `bud.Config()` serves the first four as one tree: `ide/nvim/` at the root with `languages/`, `layouts/` and `tools/` mounted inside. It must stay at the repo root, because embed can't reach parent directories. `ide/migrations/` and `ide/bundles/` are embedded but not synced into the config dir (`bud.Migrations()`, `bud.Bundles()`). The binary is the release: `internal/nvim.SyncConfig` copies `bud.Config()` into `~/.config/bud` and records them in `.bud-manifest.json`. It overwrites managed files, deletes ones a release dropped, and never touches anything else. After a change it runs `bud.pack.restore()` in headless nvim, so plugins match the committed `ide/nvim/nvim-pack-lock.json`. The target dir comes from `paths.Resolve().Config`, which is `~/.config/bud` on macOS too, because that's where Neovim looks.
 
 **Paths and machine config.** `internal/paths.Resolve` is the only place that builds a bud path (XDG on macOS too, D13); don't hardcode one elsewhere. That includes the language spec dirs (`LanguageSpecs`, `UserLanguageSpecs`). Files bud rewrites (`config.json`, `projects.json`, the sync manifest) go through `internal/atomicfile.WriteFile`. `internal/config` keeps `config.json` as a raw JSON tree so unknown keys survive `Save`, and `File.Settings()` decodes it over `Defaults()`.
 
@@ -87,18 +87,17 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 
 | Working on | Read |
 | --- | --- |
-| A command in `internal/cli/` other than the above: colour, completion, `bud config`, uninstall, launch and open, install, `bud lang`, projects, dev link, migrations, version, `bud plugin` (the embedded `bud-ide` plugin) | `docs/internals/cli.md` |
+| A command in `internal/cli/` other than the above: colour, completion, `bud config`, uninstall, launch and open, install, `bud lang`, projects, dev link, migrations, version | `docs/internals/cli.md` |
 | `bud bundle` and the desktop apps | `docs/internals/bundles.md` |
 | `bud update`, rollback, the background check | `docs/internals/updater.md` |
-| `bud claude`, the Claude Code check | `docs/internals/claude-code.md` |
-| `bud.ai.acp`, the backends (OpenClaw, Claude Code, Codex, OpenCode) and the fake ACP agent | `docs/internals/acp.md` |
-| `bud.ai.*`: the session, the TUI pane, the IDE bridge, permissions, chat, inline actions, tools, the generator, filing and working issues | `docs/internals/claude-session.md` |
+| `bud.ai.acp`, the OpenCode transport and the fake ACP agent | `docs/internals/acp.md` |
+| `bud.ai.*`: the session, the TUI pane, permissions, chat, inline actions, tools, the generator, filing and working issues | `docs/internals/session.md` |
 | Anything under `ide/nvim/`: plugins, lazy loading, languages, layouts, debugging, UI, the dashboard, the settings screen | `docs/internals/neovim.md` |
 | `bud bootstrap`, the nightly build, release signing | `docs/internals/release.md` |
 | `bud mcp-gateway` (`internal/mcpgateway`): the home server's MCP gateway and its unit in `server/mcp-gateway/` | `docs/internals/mcp-gateway.md` |
 | `bud router` (`internal/router`): the home server's OpenAI-compatible router over the registry's providers and its unit in `server/router/` | `docs/internals/router.md` |
 | `bud calendar-mcp` (`internal/calendar`): the calendar MCP server over CalDAV and its unit in `server/calendar-mcp/` | `docs/internals/calendar.md` |
-| `bud mail-mcp` (`internal/mail`): the iCloud mail MCP server over IMAP, with its own IMAP client | `docs/internals/mail.md` |
+| `bud mail-mcp` (`internal/mail`): the iCloud mail MCP server over IMAP, through a thin adapter on go-imap | `docs/internals/mail.md` |
 | `bud memory-mcp` (`internal/memorymcp`, `internal/memory`): the memory MCP server over the working-memory service and the embedding server, and its unit in `server/memory-mcp/` | `docs/internals/memory-mcp.md` |
 | `bud improve` (`internal/improve`): the self-improvement loop's proposals, measurements, model scan and weekly digest, and its timer in `server/improve/` | `docs/internals/improve.md` |
 | `bud memory-review` (`internal/memoryreview`): asking on Signal about staged memory records, and its unit in `server/memory-review/` | `docs/internals/memory-review.md` |
@@ -111,7 +110,7 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 
 Rules that apply wherever you are:
 
-- The `bud-ide` plugin (its skills, chat agent and notes) lives in `ide/plugins/bud-ide/` and is changed here (D142, D145); it reaches only sessions the IDE starts, through `--plugin-dir`. Personal skills live outside bud; the `bud` plugin is still changed in `bud-plugins`.
+- The IDE's skills and chat agent are ordinary synced content (`content/skills/file-issue`, `content/skills/bud-dev`, `content/agents/chat.md`); there is no embedded plugin (Suite D139, BASE D154). Personal skills live outside bud.
 - Never edit or renumber a shipped file in `ide/migrations/`.
 - Never run `scripts/rotate-release-key.sh`; Jason runs it by hand.
 - `ide/nvim/nvim-pack-lock.json` is generated with `vim.pack` itself and committed byte for byte. Plugin versions change only by regenerating it and shipping a release.
@@ -120,13 +119,15 @@ Rules that apply wherever you are:
 
 ## Release and install
 
-Releases come from `VERSION` (D80): a push to main that changes it runs `.github/workflows/release.yml`, where `scripts/release-plan.sh` checks it (`X.Y.Z`, newer than the newest stable tag; `just release-plan-test`), the tests run, the workflow pushes the `vX.Y.Z` tag itself and GoReleaser builds linux/darwin × amd64/arm64 archives plus `checksums.txt`. Cloud sessions can't push tags (their git proxy allows only `refs/heads/*`), so to cut a release, use the `bud:release` skill (bud-plugins), which runs `code-review` and `security-review` on everything since the last tag before it bumps `VERSION` and pushes main; a hand-pushed `v*` tag must match `VERSION`, and re-running the workflow builds a tag that has no release yet. Archive names deliberately leave out the version (`bud_<os>_<arch>.tar.gz`) because `install.sh` downloads from `releases/latest/download/<name>`, so keep `.goreleaser.yaml` and `install.sh` in sync. Content releases (`content-YYYY.MM.DD.N` and the rolling `content-channel`, cut by `.github/workflows/content.yml` on a push to main that changes `content/`) are always prereleases for the same reason; how they're cut is in `docs/internals/release.md`. `install.sh` must stay POSIX `sh` and shellcheck-clean. It verifies the signature on `checksums.txt` with `ssh-keygen -Y verify` against its pinned `RELEASE_KEYS`, one per line (D41/D44; a test keeps them equal to `updater.ReleaseKeys`), then the checksum, installs to `~/.local/bin`, and asks on `/dev/tty` before running `bud install`, because stdin is the script under `curl | sh`.
+Releases come from `VERSION` (D80): a push to main that changes it runs `.github/workflows/release.yml`, where `scripts/release-plan.sh` checks it (`X.Y.Z`, newer than the newest stable tag; `just release-plan-test`), the tests run, the workflow pushes the `vX.Y.Z` tag itself and GoReleaser builds linux/darwin × amd64/arm64 archives plus `checksums.txt`. Cloud sessions can't push tags (their git proxy allows only `refs/heads/*`), so to cut a release, use the `release` skill (`content/skills/release`), where an OpenCode session walks a written review checklist over everything since the last tag and reports its findings before it bumps `VERSION` and pushes main (Copilot stays the per-PR gate, Suite D139); a hand-pushed `v*` tag must match `VERSION`, and re-running the workflow builds a tag that has no release yet. Archive names deliberately leave out the version (`bud_<os>_<arch>.tar.gz`) because `install.sh` downloads from `releases/latest/download/<name>`, so keep `.goreleaser.yaml` and `install.sh` in sync. Content releases (`content-YYYY.MM.DD.N` and the rolling `content-channel`, cut by `.github/workflows/content.yml` on a push to main that changes `content/`) are always prereleases for the same reason; how they're cut is in `docs/internals/release.md`. `install.sh` must stay POSIX `sh` and shellcheck-clean. It verifies the signature on `checksums.txt` with `ssh-keygen -Y verify` against its pinned `RELEASE_KEYS`, one per line (D41/D44; a test keeps them equal to `updater.ReleaseKeys`), then the checksum, installs to `~/.local/bin`, and asks on `/dev/tty` before running `bud install`, because stdin is the script under `curl | sh`.
 
 ## Tests
 
 Tests swap package-level vars and restore them with `t.Cleanup` (`internal/cli`'s `TestMain` also turns off `refreshBundles` and `findBundles` for every test there, so none reaches GitHub or rebuilds this machine's Bud.app): `CommandRegistry`, `installer.Deps`, `installer.goos`, `version.Version`. Tests that need binaries on PATH use the `fakePath` helper in `internal/installer`. `App` tests build an `App` with a custom `Cmds` map and recorder commands instead of using the global registry.
 
 ## Commits
+
+For a fix, commit on a dedicated branch and open a PR as part of the task. Address review findings on that PR and leave one summary comment after pushing the fixes. If the review is clean, leave the PR alone. Leave merging to Jason unless he asks.
 
 Lowercase conventional style: `feat:`, `fix:`, `chore:`, `docs:`, followed by a short summary.
 

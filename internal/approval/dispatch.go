@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"jgarner.dev/bud/internal/audit"
 )
 
 var ErrReviewUnavailable = errors.New("authenticated approval review unavailable")
@@ -69,7 +71,7 @@ type Review func(ctx context.Context, prompt Prompt) (Reply, error)
 // reach the store or impersonate the reviewer. The executor must honor the
 // supplied context and check it at the effectful leaf; cancellation cannot
 // undo an effect or stop code that ignores the context.
-func (s Store) Dispatch(ctx context.Context, scope Scope, call Invocation, deadline time.Time, review Review, execute func(context.Context, Invocation) error) error {
+func (s Store) Dispatch(ctx context.Context, scope Scope, call Invocation, deadline time.Time, review Review, execute func(context.Context, Invocation) error) (err error) {
 	if scope.Runtime == "" || scope.Profile == "" || scope.Session == "" || scope.Surface == "" || scope.Actor == "" || review == nil {
 		return ErrReviewUnavailable
 	}
@@ -106,6 +108,9 @@ func (s Store) Dispatch(ctx context.Context, scope Scope, call Invocation, deadl
 	if err := s.Create(request); err != nil {
 		return fmt.Errorf("persist approval request: %w", err)
 	}
+	approved := false
+	s.record(scope, call, request, "requested")
+	defer func() { s.record(scope, call, request, outcome(err, approved)) }()
 	pending := true
 	defer func() {
 		if pending {
@@ -143,6 +148,7 @@ func (s Store) Dispatch(ctx context.Context, scope Scope, call Invocation, deadl
 		if err := s.approveAndConsume(request.ID, request.Session, call.Action, call.Target, call.Arguments); err != nil {
 			return fmt.Errorf("consume approval: %w", err)
 		}
+		approved = true
 	default:
 		return ErrReviewMismatch
 	}
@@ -156,4 +162,43 @@ func (s Store) Dispatch(ctx context.Context, scope Scope, call Invocation, deadl
 		return context.DeadlineExceeded
 	}
 	return execute(reviewCtx, call)
+}
+
+// outcome names how a dispatch ended, for the audit log
+func outcome(err error, approved bool) string {
+	switch {
+	case err == nil:
+		return "approved"
+	case errors.Is(err, ErrDeclined):
+		return "declined"
+	case errors.Is(err, ErrDenied):
+		return "denied"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "expired"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case approved:
+		return "approved_failed"
+	}
+	return "failed"
+}
+
+// record writes one approval event. It carries the request's id and where
+// it came from, never its arguments
+func (s Store) record(scope Scope, call Invocation, r Request, decision string) {
+	s.Audit.Record(audit.Event{
+		Source:   s.Source,
+		Kind:     audit.KindApproval,
+		Actor:    scope.Actor,
+		Action:   call.Action,
+		Target:   call.Target,
+		Decision: decision,
+		Detail: map[string]any{
+			"request":        r.ID,
+			"runtime":        scope.Runtime,
+			"profile":        scope.Profile,
+			"surface":        scope.Surface,
+			"arguments_hash": r.ArgumentsHash,
+		},
+	})
 }

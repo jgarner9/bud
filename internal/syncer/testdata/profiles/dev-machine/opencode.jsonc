@@ -332,6 +332,136 @@
     {
       "action": "shell",
       "effect": "allow",
+      "resource": "pwd"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "ls"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "ls -la"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "rg --files"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git ls-files"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git branch --list"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git branch --show-current"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git rev-parse --show-toplevel"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git rev-parse --short HEAD"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "git worktree list"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "wc"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "wc -l"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "wc -w"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "wc -c"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "sort"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "sort -u"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "sort -n"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "sort -nr"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "uniq"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "uniq -c"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "head"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "head -n 1"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "head -n 20"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "tail"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "tail -n 1"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
+      "resource": "tail -n 20"
+    },
+    {
+      "action": "shell",
+      "effect": "allow",
       "resource": "scc"
     },
     {
@@ -771,17 +901,6 @@
             "output": 65536
           },
           "modelID": "gemini-4-argon"
-        },
-        "glm-5.2": {
-          "cost": {
-            "input": 1.4,
-            "output": 4.4
-          },
-          "limit": {
-            "context": 1000000,
-            "output": 131072
-          },
-          "modelID": "glm-5.2"
         },
         "glm-5.3": {
           "cost": {

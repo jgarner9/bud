@@ -1,10 +1,8 @@
 -- Run with: nvim --clean --headless -l tests/lua/quit_test.lua (just lua-test)
--- Quitting with bud's terminals open: ExitPre ends Claude Code's panes and an
+-- Quitting with bud's terminals open: ExitPre ends OpenCode's panes and an
 -- idle shell, never a busy one, and nothing while a :qa is about to fail
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
--- the claude backend (D131): bud.ai.claude and Claude Code's TUI
-dofile("tests/lua/lib/claude_backend.lua")
 vim.o.shell = "sh"
 
 local function eq(got, want, what)
@@ -22,20 +20,12 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp, "p")
 require("bud.config").file = tmp .. "/config.json"
-require("bud.ai.bridge").lock_dir = function()
-  return tmp .. "/ide"
-end
-local fake = tmp .. "/claude"
+-- a fake opencode TUI on PATH
+vim.fn.mkdir(tmp .. "/bin", "p")
+local fake = tmp .. "/bin/opencode"
 vim.fn.writefile({ "#!/bin/sh", "echo '> ready'", "while IFS= read -r l; do :; done" }, fake)
 vim.fn.setfperm(fake, "rwxr-xr-x")
-local claude = require("bud.ai.claude")
--- bud's embedded plugin (D142) is unpacked by the bud binary, which these tests don't run
-claude.plugin_dir = function()
-  return nil
-end
-claude.bin = function()
-  return fake
-end
+vim.env.PATH = tmp .. "/bin:" .. vim.env.PATH
 
 local quit = require("bud.quit")
 local term = require("bud.ai.term")
@@ -51,7 +41,7 @@ vim.notify = function(msg)
   table.insert(notes, msg)
 end
 
--- an idle shell and Claude Code's pane both end
+-- an idle shell and OpenCode's pane both end
 term.open({ focus = false })
 terminal.toggle()
 local shell = terminal.job()
@@ -88,7 +78,7 @@ vim.api.nvim_buf_set_lines(0, 0, -1, false, { "draft" })
 eq(#quit.unsaved(), 1, "one unsaved file")
 vim.fn.histadd(":", "qa")
 eq(quit.ending(), {}, ":qa with unsaved changes ends nothing")
-eq(term.running(), true, "Claude Code's pane stays")
+eq(term.running(), true, "OpenCode's pane stays")
 vim.fn.histadd(":", "wqa")
 eq(#quit.ending(), 1, ":wqa ends it")
 

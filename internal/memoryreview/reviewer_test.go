@@ -219,3 +219,111 @@ func TestReadStatusWithNoFile(t *testing.T) {
 		t.Errorf("ReadStatus = %v, %v; want not ok and no error", ok, err)
 	}
 }
+
+// fakeApproved is the memory service's approved records, which a re-tier
+// lists and moves
+type fakeApproved struct {
+	records []memory.ExportedRecord
+	moved   map[int64]string
+	// calls are the (from, hash) each Retier was given
+	calls [][2]string
+	// err is what Retier answers with
+	err error
+}
+
+func (f *fakeApproved) Export(context.Context) (*memory.Export, error) {
+	return &memory.Export{Records: f.records}, nil
+}
+
+func (f *fakeApproved) Retier(_ context.Context, id int64, from, privacy, bodyHash string) error {
+	f.calls = append(f.calls, [2]string{from, bodyHash})
+	if f.err != nil {
+		return f.err
+	}
+	if f.moved == nil {
+		f.moved = map[int64]string{}
+	}
+	f.moved[id] = privacy
+	return nil
+}
+
+func approvedP1(id int64, body string) memory.ExportedRecord {
+	return memory.ExportedRecord{ID: id, Source: "hermes", Kind: "fact", Privacy: "P1", Body: body, CreatedAt: "2026-11-22 08:00:00", State: "approved", BodyHash: "hash" + string(rune('0'+id))}
+}
+
+// Suite D136: a yes moves the record, and the prompt shows it whole with
+// where it goes; his no, a plugin that stops and an unanswered prompt leave it
+func TestARetierMovesTheRecordOnlyOnHisYes(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		review approval.Review
+		moved  map[int64]string
+		errHas string
+	}{
+		{"yes", answer(approval.AllowOnce, true), map[int64]string{2: "P0"}, ""},
+		{"his no", answer(approval.DenyOnce, true), nil, "Jason said no"},
+		{"the plugin stopping", answer(approval.DenyOnce, false), nil, "denied"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeApproved{records: []memory.ExportedRecord{approvedP1(1, "other"), approvedP1(2, "the dentist is on Tuesdays")}}
+			var got approval.Prompt
+			r := newReviewer(t, &fakeRecords{}, func(ctx context.Context, p approval.Prompt) (approval.Reply, error) {
+				got = p
+				return tc.review(ctx, p)
+			})
+			err := r.Retier(context.Background(), f, 2, "P0")
+			if tc.errHas == "" && err != nil || tc.errHas != "" && (err == nil || !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.errHas))) {
+				t.Fatalf("err = %v, want one with %q", err, tc.errHas)
+			}
+			if !reflect.DeepEqual(f.moved, tc.moved) {
+				t.Errorf("moved %v, want %v", f.moved, tc.moved)
+			}
+			if tc.moved != nil && !reflect.DeepEqual(f.calls, [][2]string{{"P1", "hash2"}}) {
+				t.Errorf("the service was told %v, want the tier and body hash that were shown", f.calls)
+			}
+			if got.Invocation.Action != "memory:retier" || got.Invocation.Target != "P0" {
+				t.Errorf("invocation = %+v", got.Invocation)
+			}
+			if s := approval.Summary(got); !strings.Contains(s, "Move this Bud memory record to P0?") || !strings.Contains(s, "body: the dentist is on Tuesdays") || !strings.Contains(s, "from: P1") {
+				t.Errorf("summary = %q", s)
+			}
+		})
+	}
+}
+
+func TestARetierAsksNothingForARecordItCannotMove(t *testing.T) {
+	long := approvedP1(3, strings.Repeat("a long record line ", 400))
+	f := &fakeApproved{records: []memory.ExportedRecord{approvedP1(1, "same tier"), long}}
+	asked := false
+	r := newReviewer(t, &fakeRecords{}, func(ctx context.Context, p approval.Prompt) (approval.Reply, error) {
+		asked = true
+		return answer(approval.AllowOnce, true)(ctx, p)
+	})
+	for _, tc := range []struct {
+		id     int64
+		to     string
+		errHas string
+	}{
+		{9, "P0", "no approved record"},
+		{1, "P1", "already P1"},
+		{1, "P7", "isn't a tier"},
+		{3, "P0", "too long"},
+	} {
+		if err := r.Retier(context.Background(), f, tc.id, tc.to); err == nil || !strings.Contains(err.Error(), tc.errHas) {
+			t.Errorf("Retier(%d, %s) = %v, want %q", tc.id, tc.to, err, tc.errHas)
+		}
+	}
+	if asked || len(f.moved) != 0 {
+		t.Errorf("asked %v, moved %v", asked, f.moved)
+	}
+}
+
+// a record that changed while the prompt was open isn't moved, and the
+// answer says so
+func TestARetierOfARecordThatChangedMovesNothing(t *testing.T) {
+	f := &fakeApproved{records: []memory.ExportedRecord{approvedP1(2, "the dentist is on Tuesdays")}, err: memory.ErrStale}
+	r := newReviewer(t, &fakeRecords{}, answer(approval.AllowOnce, true))
+	if err := r.Retier(context.Background(), f, 2, "P0"); err == nil || !strings.Contains(err.Error(), "changed while the prompt was open") || len(f.moved) != 0 {
+		t.Errorf("err = %v, moved %v", err, f.moved)
+	}
+}

@@ -56,35 +56,10 @@ M.sections = {
   {
     title = "AI",
     rows = {
-      {
-        key = "ai.backend",
-        label = "Backend",
-        kind = "choice",
-        choices = { "openclaw", "claude", "codex", "opencode", "custom" },
-      },
       { key = "ai.agent.chat_layout", label = "Chat opens as", kind = "choice", choices = { "pane", "full" } },
       { key = "ai.agent.chat_ui", label = "Chat drawn by", kind = "choice", choices = { "tui", "bud" } },
       { key = "ai.agent.autostart", label = "Start with a project", kind = "bool" },
       { key = "ai.agent.idle_minutes", label = "Stop idle agents after (min)", kind = "number" },
-      { key = "ai.openclaw.url", label = "OpenClaw Gateway URL", kind = "text" },
-      { key = "ai.openclaw.token_file", label = "Gateway token file", kind = "text" },
-      { key = "ai.openclaw.agent", label = "OpenClaw agent", kind = "text" },
-    },
-  },
-  {
-    title = "Claude Code",
-    rows = {
-      { key = "ai.claude.autostart", label = "Start with a project", kind = "bool" },
-      { key = "ai.claude.resume", label = "Reopening a project", kind = "choice", choices = { "continue", "new" } },
-      { key = "ai.claude.idle_minutes", label = "Stop idle sessions after (min)", kind = "number" },
-      {
-        key = "ai.claude.config",
-        label = "Claude Code config (restart bud)",
-        kind = "choice",
-        choices = { "home", "bud" },
-      },
-      { key = "ai.claude.command", label = "Run through", kind = "list" },
-      { key = "ai.claude.args", label = "Extra flags", kind = "list" },
     },
   },
 }

@@ -12,7 +12,6 @@ import (
 
 	"jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/bundle"
-	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/lang"
@@ -471,75 +470,6 @@ func TestCheckProjects(t *testing.T) {
 	}
 }
 
-func TestCheckClaude(t *testing.T) {
-	orig := claudeCheck
-	t.Cleanup(func() { claudeCheck = orig })
-	on := config.Defaults()
-	off := on
-	off.AI.Claude.Autostart = false
-	openclaw := config.Defaults()
-	openclaw.AI.Backend = "openclaw"
-
-	for _, c := range []struct {
-		name   string
-		cfg    config.Settings
-		status claude.Status
-		err    error
-		want   Status
-		detail string
-	}{
-		{"logged in", on, claude.Status{Bin: "/c", Version: "2.1.0", LoggedIn: true, Method: "claude.ai"}, nil, OK, "2.1.0, logged in with claude.ai"},
-		{"logged out", on, claude.Status{Bin: "/c", Version: "2.1.0"}, nil, Warn, "not logged in"},
-		{"missing", on, claude.Status{}, nil, Warn, "not installed"},
-		{"provider elsewhere", on, claude.Status{Bin: "/c", Version: "2.1.0", Elsewhere: "Amazon Bedrock"}, nil, Warn, "runs it on Amazon Bedrock"},
-		{"missing and not wanted", off, claude.Status{}, nil, OK, "autostart is off"},
-		{"missing on another backend", openclaw, claude.Status{}, nil, OK, "ai.backend is openclaw"},
-		{"broken", on, claude.Status{Bin: "/c"}, errors.New("boom"), Warn, "boom"},
-	} {
-		claudeCheck = func() (claude.Status, error) { return c.status, c.err }
-		r, _ := checkClaude(c.cfg)
-		if r.Status != c.want || !strings.Contains(r.Detail, c.detail) {
-			t.Errorf("%s: got %v %q", c.name, r.Status, r.Detail)
-		}
-		if r.Status == Warn && c.err == nil && r.Fix != "bud claude setup" {
-			t.Errorf("%s: fix %q", c.name, r.Fix)
-		}
-	}
-}
-
-func TestCheckClaudeCommand(t *testing.T) {
-	orig := lookPath
-	t.Cleanup(func() { lookPath = orig })
-	cfg := config.Defaults()
-	if _, ok := checkClaudeCommand(cfg, claude.Status{}); ok {
-		t.Fatal("checked with no command set")
-	}
-
-	cfg.AI.Claude.Command = []string{"headroom", "wrap", "claude", "--"}
-	lookPath = func(string) (string, error) { return "/bin/headroom", nil }
-	if r, ok := checkClaudeCommand(cfg, claude.Status{}); !ok || r.Status != OK || !strings.Contains(r.Detail, "headroom wrap claude") {
-		t.Fatalf("present: %+v", r)
-	}
-	lookPath = func(string) (string, error) { return "", errors.New("not found") }
-	if r, _ := checkClaudeCommand(cfg, claude.Status{}); r.Status != Warn || r.Fix != "bud config unset ai.claude.command" {
-		t.Fatalf("missing: %+v", r)
-	}
-
-	// Bedrock goes past Headroom's proxy (JGA-149)
-	lookPath = func(string) (string, error) { return "/bin/headroom", nil }
-	bedrock := claude.Status{Bin: "/c", LoggedIn: true, Method: "Amazon Bedrock"}
-	if !bedrock.Cloud() {
-		t.Fatal("Bedrock isn't a cloud provider")
-	}
-	if r, _ := checkClaudeCommand(cfg, bedrock); r.Status != Warn || !strings.Contains(r.Detail, "compresses nothing") {
-		t.Fatalf("bedrock: %+v", r)
-	}
-	cfg.AI.Claude.Command = []string{"mywrap", "--"}
-	if r, _ := checkClaudeCommand(cfg, bedrock); r.Status != OK {
-		t.Fatalf("another wrapper on bedrock: %+v", r)
-	}
-}
-
 func TestCheckBudAppWarnsWhenItsOutOfDate(t *testing.T) {
 	origFind, origRead, origKitty, origGOOS, origVersion := findBundles, readMac, bundle.KittyVersion, doctorGOOS, version.Version
 	t.Cleanup(func() {
@@ -638,27 +568,28 @@ func fakeServers(names ...string) string {
 	return strings.Join(entries, ", ")
 }
 
-// the AI backend check only warns, and names each problem's fix (D131)
+// the OpenCode check only warns, and names each problem's fix (Suite D139)
 func TestCheckAgent(t *testing.T) {
 	orig := agentCheck
 	t.Cleanup(func() { agentCheck = orig })
-	agentCheck = func(cfg config.Settings, quick bool) agent.Status {
-		return agent.Status{Backend: "openclaw", Version: "OpenClaw 2026.11.3", Gateway: "home:18789", Reachable: true}
+	agentCheck = func(quick bool) agent.Status {
+		return agent.Status{Version: "2.3.2"}
 	}
-	cfg := config.Defaults()
-	cfg.AI.Backend = "openclaw"
-	r := checkAgent(cfg, false)
-	if r.Status != OK || r.Detail != "openclaw: OpenClaw 2026.11.3, Gateway at home:18789 answering" {
+	r := checkAgent(false)
+	if r.Name != "opencode" || r.Status != OK || r.Detail != "2.3.2" {
 		t.Errorf("ready: %+v", r)
 	}
-	agentCheck = func(cfg config.Settings, quick bool) agent.Status {
-		return agent.Status{Backend: "openclaw", Problems: []agent.Problem{
-			{What: "openclaw isn't installed", Fix: "npm install -g openclaw", Hard: true},
-			{What: "the Gateway token file can be read by others", Fix: "chmod 600 f"},
+	agentCheck = func(quick bool) agent.Status { return agent.Status{} }
+	if r := checkAgent(true); r.Status != OK || r.Detail != "installed" {
+		t.Errorf("quick: %+v", r)
+	}
+	agentCheck = func(quick bool) agent.Status {
+		return agent.Status{Problems: []agent.Problem{
+			{What: "opencode isn't installed", Fix: "npm install -g @opencode/cli@2.3.2", Hard: true},
 		}}
 	}
-	r = checkAgent(config.Defaults(), true)
-	if r.Status != Warn || !strings.Contains(r.Detail, "isn't installed; the Gateway") || r.Fix != "npm install -g openclaw; chmod 600 f" {
+	r = checkAgent(true)
+	if r.Status != Warn || r.Detail != "opencode isn't installed" || r.Fix != "npm install -g @opencode/cli@2.3.2" {
 		t.Errorf("problems: %+v", r)
 	}
 }

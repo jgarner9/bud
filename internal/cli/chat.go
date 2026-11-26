@@ -1,44 +1,32 @@
 package cli
 
 import (
-	"errors"
 	"flag"
 	"os"
-	"slices"
-	"strings"
 
 	backend "jgarner.dev/bud/internal/agent"
-	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/paths"
-	"jgarner.dev/bud/internal/plugin"
 )
 
 func init() {
 	RegisterCommand(Chat())
 }
 
-// chatAgent is the agent chat runs as, from bud-ide (JGA-165)
-const chatAgent = "bud-ide:chat"
+// chatAgent is the synced agent chat runs as (content/agents/chat.md): it
+// reads, searches and looks things up, but edits nothing
+const chatAgent = "chat"
 
-// Chat opens Claude Code's own TUI in chat mode from the shell, as the
-// dashboard's c does in the editor (JGA-165): bud-ide's chat agent, in a dir
-// that's no project's
+// Chat opens OpenCode's own TUI from the shell, in a dir that's no project's
 func Chat() *Command {
 	var resume bool
 	return &Command{
 		Name:  "chat",
-		Usage: "Chats with the AI backend, outside any project: chat [--resume]",
+		Usage: "Chats with OpenCode, outside any project: chat [--resume]",
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&resume, "resume", false, "pick an earlier chat to carry on")
 		},
 		Run: func(g *Globals, args []string) error { return chat(g, args, resume) },
 	}
-}
-
-// chatEnv is this environment without BUD_BIN, so bud-ide's SessionStart
-// hook leaves out its notes on working inside bud (chat isn't a project)
-func chatEnv() []string {
-	return slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, "BUD_BIN=") })
 }
 
 func chat(g *Globals, args []string, resume bool) error {
@@ -53,31 +41,8 @@ func chat(g *Globals, args []string, resume bool) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if s := machineSettings(); s.AI.Backend != "claude" {
-		if resume {
-			return usageErrorf("--resume is Claude Code's; %s keeps one chat, which opens where it left off", s.AI.Backend)
-		}
-		return execBackendTUI(g, s, backend.ChatKey(s.AI.OpenClaw.Agent), dir)
-	}
-	bin := claude.Find()
-	if bin == "" {
-		return errors.New("Claude Code isn't installed: run bud claude setup")
-	}
-
-	// the plugin comes with bud and loads in this session only (D142)
-	flags, err := plugin.Args()
-	if err != nil {
-		return err
-	}
-	flags = append(flags, "--agent", chatAgent)
 	if resume {
-		flags = append(flags, "--resume")
+		return usageErrorf("--resume isn't supported: OpenCode keeps one chat, which opens where it left off")
 	}
-	argv, err := tuiArgv(machineSettings(), bin, flags)
-	if err != nil {
-		return err
-	}
-	g.Logf("running %q in %s", argv, dir)
-
-	return execClaude(dir, argv, chatEnv())
+	return execOpenCode(g, backend.ChatTUI(dir, chatAgent), dir)
 }

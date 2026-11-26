@@ -1,9 +1,7 @@
 -- Run with: nvim --clean --headless -l tests/lua/issue_test.lua (just lua-test)
--- Filing an issue from the editor (JGA-125), on a fake claude
+-- Filing an issue from the editor (JGA-125), on the fake ACP agent
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
--- the claude backend (D131): bud.ai.claude and Claude Code's TUI
-dofile("tests/lua/lib/claude_backend.lua")
 dofile("tests/lua/lib/nui.lua")
 
 local function eq(got, want, what)
@@ -21,11 +19,7 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp .. "/repo", "p")
 tmp = vim.uv.fs_realpath(tmp)
-vim.env.CLAUDE_CONFIG_DIR = tmp .. "/claude-home"
 require("bud.config").file = tmp .. "/config.json"
-require("bud.ai.bridge").lock_dir = function()
-  return tmp .. "/ide"
-end
 
 local proposal = {
   team = "JGA",
@@ -38,42 +32,43 @@ local proposal = {
 }
 local filed = { { key = "a", id = "JGA-200", url = "https://linear.app/x/JGA-200", title = "Dashboard drops a row" } }
 
--- answers each message from the next reply file, logging what it's sent
-local function reply(n, text)
-  local line = vim.json.encode({ type = "result", subtype = "success", session_id = "s1", result = text })
-  vim.fn.writefile({ line }, tmp .. "/reply" .. n)
+-- the fake agent answers each prompt from the next reply and logs what it's sent
+local replies = {
+  "Found it.\n```bud-issues\n" .. vim.json.encode(proposal) .. "\n```",
+  "Filed.\n```bud-filed\n" .. vim.json.encode(filed) .. "\n```",
+}
+local repo_root = vim.fn.getcwd()
+local acp_log = tmp .. "/acp.log"
+local agent = require("bud.ai.agent")
+agent.command = function()
+  return {
+    "env",
+    "FAKE_ACP_LOG=" .. acp_log,
+    "FAKE_ACP_REPLIES=" .. vim.json.encode(replies),
+    vim.v.progpath,
+    "--clean",
+    "--headless",
+    "-l",
+    repo_root .. "/tests/lua/lib/fake_acp.lua",
+  }
 end
-reply(1, "Found it.\n```bud-issues\n" .. vim.json.encode(proposal) .. "\n```")
-reply(2, "Filed.\n```bud-filed\n" .. vim.json.encode(filed) .. "\n```")
-local fake = tmp .. "/fake-claude"
-vim.fn.writefile({
-  "#!/bin/sh",
-  "n=0",
-  "while IFS= read -r line; do",
-  [[  printf '%s\n' "$line" >> "$(dirname "$0")/sent.log"]],
-  "  n=$((n + 1))",
-  [[  cat "$(dirname "$0")/reply$n"]],
-  "done",
-}, fake)
-vim.fn.setfperm(fake, "rwxr-xr-x")
+agent.ids_file = function()
+  return tmp .. "/agent-sessions.json"
+end
+-- sent is the prompts the agent has been given
 local function sent()
-  local f = tmp .. "/sent.log"
-  return vim.fn.filereadable(f) == 1 and vim.tbl_map(vim.json.decode, vim.fn.readfile(f)) or {}
+  local prompts = {}
+  if vim.fn.filereadable(acp_log) == 1 then
+    for _, line in ipairs(vim.fn.readfile(acp_log)) do
+      local msg = vim.json.decode(line)
+      if msg.method == "session/prompt" then
+        table.insert(prompts, msg.params.prompt[1].text)
+      end
+    end
+  end
+  return prompts
 end
 
-local claude = require("bud.ai.claude")
--- bud's embedded plugin (D142) is unpacked by the bud binary, which these tests don't run
-claude.plugin_dir = function()
-  return nil
-end
-claude.bin = function()
-  return fake
-end
-claude.check_login = function(_, cb)
-  vim.schedule(function()
-    cb(true)
-  end)
-end
 local notified = {}
 vim.notify = function(msg)
   table.insert(notified, msg)
@@ -112,7 +107,7 @@ eq(ctx.diagnostics, { "L2 lua_ls: undefined global y" }, "diagnostics on the lin
 ctx.bud, ctx.messages = "0.11.0", { "E5108: boom" }
 local text = issue.prompt("Dashboard drops a row\nonly when narrow", { team = "JGA", project = "Bud IDE" }, ctx)
 for _, want in ipairs({
-  "Use the bud-ide:file-issue skill",
+  "Use the file-issue skill",
   "round 1: propose only",
   'Target: team "JGA", project "Bud IDE".',
   "> Dashboard drops a row\n> only when narrow",
@@ -148,16 +143,16 @@ local function ask(tool, root)
   })
   return got
 end
-eq(ask("mcp__claude_ai_Linear__list_issues").behavior, "allow", "read while proposing")
-eq(ask("mcp__claude_ai_Linear__save_issue").behavior, "deny", "write while proposing")
-eq(ask("mcp__linear__save_issue").behavior, "deny", "another linear server too")
-eq(ask("mcp__linear__list_issues").behavior, "allow", "its reads too")
-eq(issue.policy({ tool = "mcp__claude_ai_Linear__save_issue", root = "/elsewhere" }), nil, "another root")
+eq(ask("linear_list_issues").behavior, "allow", "read while proposing")
+eq(ask("linear_save_issue").behavior, "deny", "write while proposing")
+eq(ask("linear_get_issue").behavior, "allow", "reads by get too")
+eq(issue.policy({ tool = "linear_save_issue", root = "/elsewhere" }), nil, "another root")
 eq(issue.policy({ tool = "Bash", root = repo }), nil, "not Linear")
+eq(issue.policy({ tool = "calendar_list_events", root = repo }), nil, "another server")
 run.state = "filing"
-eq(ask("mcp__claude_ai_Linear__save_issue").behavior, "allow", "write once filing")
+eq(ask("linear_save_issue").behavior, "allow", "write once filing")
 issue.runs.t = nil
-eq(issue.policy({ tool = "mcp__claude_ai_Linear__save_issue", root = repo }), nil, "no report in flight")
+eq(issue.policy({ tool = "linear_save_issue", root = repo }), nil, "no report in flight")
 
 -- target: what bud issue target says, and none for bud without a tracker
 issue.bud = function(args)
@@ -231,15 +226,15 @@ wait(function()
 end, "the filing")
 eq(issue.filed[1].id, "JGA-200", "filed id")
 eq(issue.runs[run.key], nil, "run finished")
-eq(claude.get(run.key), nil, "session dropped")
+eq(agent.get(run.key), nil, "session dropped")
 local msgs = sent()
 eq(#msgs, 2, "two rounds")
-assert(msgs[1].message.content:find("round 1", 1, true), "round 1 sent")
-assert(msgs[2].message.content:find("^File these:\n```bud%-issues\n"), msgs[2].message.content)
-eq(issue.parse(msgs[2].message.content, "bud-issues"), proposal, "round 2 carries the proposal")
+assert(msgs[1]:find("round 1", 1, true), "round 1 sent")
+assert(msgs[2]:find("^File these:\n```bud%-issues\n"), msgs[2])
+eq(issue.parse(msgs[2], "bud-issues"), proposal, "round 2 carries the proposal")
 
 -- n drops it: nothing more is sent
-vim.fn.delete(tmp .. "/sent.log")
+vim.fn.delete(acp_log)
 run = issue.start("Again", { team = "JGA", project = "Bud IDE", root = repo }, repo, ctx)
 wait(function()
   return run.state == "review"
@@ -276,18 +271,7 @@ eq(started.ctx, ctx, "sent context")
 eq(issue.drafts.project, nil, "draft cleared")
 issue.start = real_start
 
-claude.stop_all()
+agent.stop_all()
 vim.fn.delete(tmp, "rf")
--- the skill comes from the plugin bud ships (D142): there when bud can unpack it
-local real_dir = claude.plugin_dir
-claude.plugin_dir = function()
-  return nil
-end
-eq(issue.skill_installed(), false, "bud can't unpack the plugin")
-claude.plugin_dir = function()
-  return "/some/plugin"
-end
-eq(issue.skill_installed(), true, "the plugin is there")
-claude.plugin_dir = real_dir
 
 print("issue_test: ok")

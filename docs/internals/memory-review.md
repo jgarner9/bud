@@ -23,6 +23,10 @@ Telling his no from the other denials is what the reviewer socket's `answered` f
 
 Which records are waiting, resting or too long is kept in memory only, so a restart asks about every staged record again.
 
+## Re-tiering an approved record (Suite D136)
+
+Records Hermes saved at P1 before D130 can be moved to P0 (or anywhere) with `bud memory-review retier <id> <P0|P1|P2>`, run on the home server under `op run` with the same environment as the unit. It lists the approved records with the service's `export` action to find the one, then asks on Signal under action `memory:retier`, whose target is the new tier: "Move this Bud memory record to P0?", the whole body, and `from`, `to`, `id`, `source`, `kind` and `created_at`. Only his yes calls the service's `retier` action (`POST /retier {id, privacy, from, body_hash}`), which sends the tier and body hash the prompt showed and updates `records.privacy` only if the record still has them (a record that changed while the prompt was open answers 409, and nothing moves), and nothing else, since the FTS index and the vector tables don't copy it. His no, a stopping plugin and no answer change nothing. The tier is checked as a usage error before any setup. It refuses an id that isn't an approved record in the reviewer's tiers, a record already at that tier and a record too long to show whole (move that one by hand). The reviewer token's policy needs `retier` and `export` added; the service refuses a client that has `retier` and `stage`. Removing an approved record stays deferred: references and per-model vector tables don't cascade. `reviewer_test.go` covers the answers and the refusals, `test_service.py` the service action.
+
 ## Tests
 
 `internal/memoryreview`'s tests drive the reviewer against a fake memory service and a fake review: a yes, his no and a stopping plugin; the prompt's arguments and how early it ends; the day's rest; a record too long to show; the four-prompt bound and the status file. `internal/approval` tests the memory prompt's text, `ErrDeclined`, and `MaxSummary` against the plugin. The memory service's `staged` and `discard` are tested in `server/memory/test_service.py`.

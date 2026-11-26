@@ -21,6 +21,15 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
 
+  agent-pty-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go test ./internal/cli -run '^TestAgentPTYArgumentsAndStatus$' -count=1 -v
+
   install-script:
     runs-on: ubuntu-latest
     steps:

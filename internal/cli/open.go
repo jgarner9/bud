@@ -135,7 +135,7 @@ func resolveWorkspace(args []string) (*Workspace, error) {
 		return nil, usageErrorf("open takes one directory, or one or more files")
 	}
 
-	// the first file picks the project, the same rule the Claude Code session uses (BASE.md 4.2)
+	// the first file picks the project, the same rule the agent session uses (BASE.md 4.2)
 	root, found := findRoot(filepath.Dir(files[0]))
 	return &Workspace{Root: root, Files: files, Project: found}, nil
 }

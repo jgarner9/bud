@@ -14,13 +14,13 @@ bud is a personal tool that happens to be public: it's built around one person's
 | --- | --- | --- |
 | macOS or Linux, amd64 or arm64 | everything | Homebrew on macOS; pacman, apt or dnf on Linux. |
 | A terminal with a [Nerd Font](https://www.nerdfonts.com) | the icons | Any terminal runs `bud`. `bud launch` and the desktop app open Kitty or Ghostty. |
-| An AI backend | the AI features | Your choice (`ai.backend`, see [AI backends](backends.md)): Claude Code by default, which the steps below set up, or OpenClaw, Codex, OpenCode or another ACP agent. bud never stores a model key. |
+| OpenCode | the AI features | The steps below install it. bud never stores a model key. |
 | `gh`, the GitHub CLI | the dashboard's open pull requests | Optional. On the full profile `bud install` installs it and offers `gh auth login`. |
-| Linear, connected in Claude Code | filing issues from the editor | Optional. See [Filing issues](issues.md). |
+| Linear, connected to OpenCode | filing issues from the editor | Optional. See [Filing issues](issues.md). |
 
 Everything else (Neovim 0.12+, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, each language's toolchain) is installed for you in step 2, after you've seen the command.
 
-The editor works without Claude: say no at step 3 and step 3 is skipped. `bud claude setup` picks them up later.
+The editor works without OpenCode: say no at step 3 and step 3 is skipped. `bud ai setup` picks it up later.
 
 ## 1. Install the binary
 
@@ -42,21 +42,19 @@ It asks a few questions, then does the work in this order. `--yes` takes every d
 4. **System packages:** it prints the package manager command for whatever is missing and runs it once you agree. On Linux, when the distro's Neovim or tree-sitter-cli is missing or too old, bud downloads a pinned, checksum-verified build into its own data dir instead, and touches nothing under `/usr`.
 5. **The config:** the Neovim config inside the binary is synced to `~/.config/bud` and the pinned plugins are restored. This is its own Neovim (`NVIM_APPNAME=bud`); `~/.config/nvim` is never touched.
 6. **The desktop app** (full profile): `Bud.app` on macOS, `bud.desktop` on Linux. `bud bundle` builds it again.
-7. **Claude Code:** step 3 below.
+7. **OpenCode:** step 3 below.
 8. **`bud doctor`:** the health check, with the fix for anything that's wrong.
 
-## 3. The AI backend
+## 3. OpenCode
 
-bud's AI is a choice of [backend](backends.md); `bud ai setup` checks the one you have set and installs its command, and `bud config set ai.backend <name>` picks another (OpenClaw, Codex, OpenCode or your own). The default is [Claude Code](claude-code.md), installed with Anthropic's own installer and logged in with Claude Code's own login. `bud install` offers both; by hand it's:
+bud's AI is [OpenCode](https://opencode.ai), pinned to a tested version. `bud install` offers to install it with npm; by hand it's:
 
 ```sh
-bud claude setup     # install it, then log in
-bud claude status    # installed? logged in?
+bud ai setup     # install the pinned OpenCode with npm, asking first
+bud ai status    # installed? which version? what to fix?
 ```
 
-bud shares `~/.claude` with the `claude` you run yourself, so one login and one set of settings covers both. Its MCP servers, settings and rules are yours to keep in `~/.claude` however you like (bud doesn't set them up), so bringing your own Claude Code setup is putting it there. On Bedrock, Vertex or Foundry there is nothing to log in to: bud sees the provider settings already in `~/.claude/settings.json`.
-
-On the full profile, `bud install` also offers to run Claude Code through Headroom when it's installed, which trims tool output to save tokens. It's optional; `bud config set ai.claude.command` changes it later.
+OpenCode keeps its own logins and model keys; bud stores none.
 
 ## 4. Check it
 
@@ -73,7 +71,7 @@ bud                 # the dashboard
 bud ~/code/thing    # open a project; this registers it too
 ```
 
-Leader is Space: press it and wait, and a panel shows what follows. `<leader>ac` opens Claude Code beside your code, `<leader>,` is settings, and `<leader>qq` quits. [Keys](keys.md) has the rest and [Claude Code in bud](claude-code.md) explains the AI side.
+Leader is Space: press it and wait, and a panel shows what follows. `<leader>ac` opens OpenCode's chat beside your code, `<leader>,` is settings, and `<leader>qq` quits. [Keys](keys.md) has the rest.
 
 Shell completion, if you want it: add `eval "$(bud completion zsh)"` (or `bash`, `fish`) to your shell's rc file.
 
@@ -86,12 +84,12 @@ bud bootstrap user@host            # this version of bud, minimal profile
 bud bootstrap --config user@host   # and copy your config.json across first
 ```
 
-For a second desktop, run step 1 there, then set up Claude Code's own config (`~/.claude`: MCP servers, settings and rules) the same way you did here, by copying it across or with whatever tool you keep it in. Your projects and editor settings (`config.json`) are per machine.
+For a second desktop, run step 1 there, then run step 3 for OpenCode. Your projects and editor settings (`config.json`) are per machine.
 
 ## Keeping it current, and taking it out
 
 - **Updates** install themselves in the background when a stable release is out (`update.auto`). `bud update` does it by hand: the new binary, the config, plugins, language tools, then `bud doctor`. If a check that passed before fails afterwards, it rolls back.
-- **`bud uninstall`** lists everything bud put on the machine and removes it after asking. Claude Code itself stays, since it's yours; [Troubleshooting](troubleshooting.md#starting-over) says how to remove those too.
+- **`bud uninstall`** lists everything bud put on the machine and removes it after asking. OpenCode itself stays installed.
 
 ## Making it yours
 

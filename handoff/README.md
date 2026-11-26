@@ -7,7 +7,7 @@ Written 2026-11-22 by the Claude Code project thread "Hand off Bud project to Op
 | this README | How Jason works, the PR workflow, the rules, and the resume prompt |
 | [state.md](state.md) | Where everything stands: what's merged, what's in flight, what's next, in order |
 | [revisit.md](revisit.md) | Everything waiting on Jason: home-server rollouts he hasn't done, and decisions |
-| [decisions.md](decisions.md) | The Suite decision log, D1 to D132, with the reason for each |
+| [decisions.md](decisions.md) | The Suite decision log, D1 onward, with the reason for each |
 | [design/](design/) | The design docs the decisions came from (listed below) |
 | [memory/](memory/) | The Claude project's memory, one file per subject (`MEMORY.md` is the index) |
 
@@ -37,17 +37,17 @@ In Claude Code these were the `bud` plugin's skills (from `jgarner9/bud-plugins`
 - **bud:planning** (specs, plans, decisions, issues): read what exists before asking; ask only what changes the plan; give options with a recommendation. Decisions are numbered and dated with the reason, never renumbered or deleted; a changed one is marked superseded and the new one gets the next number. Open questions have their own section. Tasks are one commit each with their own check, ordered by dependency. Status lives in Linear (team JGA, project "Bud Suite"); the plan and Linear never disagree. Don't file issues for a plan he hasn't approved, and never put secrets in a doc or issue.
 - **bud:tools** (looking anything up): use the tools you have before guessing, and say in one line when one you'd expect is missing. Code: repomap, then a language server or Serena, then `rg`/`ast-grep` (search only). Facts: what can't change from knowledge; his own projects from memory; libraries from Context7; anything else current from Exa or web search. End an answer that needed a lookup with one source line such as `◇ context7 /neovim/neovim`.
 - **bud:verify**: say done only after running the check in this session and reading its output. A check you couldn't run is "not verified", with why.
-- **bud:release** cuts a release with a code review and a security review of everything since the last tag. It needs Claude Code; leave releases for a Claude Code session or for Jason.
+- **release** (`content/skills/release`) cuts a release: an OpenCode session walks a written checklist (correctness, tests, docs, secrets and personal data, shell and file safety, signing and install paths) over everything since the last tag and reports findings before it bumps `VERSION` (Suite D139 a). Copilot stays the per-PR gate.
 
 ## The PR workflow
 
-Jason authorized this on 2026-11-20 ("leave a comment and automatically merge... just crank out tasks") and it still stands:
+Jason updated the standing workflow on 2026-11-24:
 
-1. One task, one branch, one PR. Run `just check` (or the tests that cover the change) before opening it, and show the result.
+1. One task, one branch, one PR. A request to fix something includes committing the fix on a dedicated branch, pushing it and opening a PR. Run `just check` (or the tests that cover the change) before opening it, and show the result.
 2. Start the PR body with what changed and why, the Linear issue, and how it was tested. Assign Jason.
 3. Request a Copilot review and wait for it. A review with no comments still counts as done, and nothing notifies you about it: check the PR for it.
-4. Fix every real finding, push all the fixes, reply on and resolve each thread, then leave **one top-level comment** that lists each finding, what changed (or why not) and the commit that carries it. Thread replies alone aren't enough, because he can't tell when a round is finished.
-5. When CI is green, merge it yourself (squash). Ping him only for a genuine decision, with a recommendation.
+4. If the review finds issues, fix them on the same branch, run the relevant checks, push, resolve the addressed threads, and leave **one top-level comment** summarizing the findings, fixes and commit. If the review is clean, leave the PR alone; no courtesy comment.
+5. Leave the PR open unless Jason asks for a merge.
 6. Never merge a PR labelled `bud-proposal` (the self-improvement loop's PRs, D126): merging one is his approval of that change. Never force-push a shared branch; merge the old head instead.
 
 Releases come from `VERSION` (see `AGENTS.md`, "Release and install"); a push to main that changes `content/` cuts an edge content release, and promoting it to stable is `gh workflow run content.yml -R jgarner9/bud -f mode=promote -f version=<v>`, which Jason runs or asks for.

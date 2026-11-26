@@ -12,10 +12,12 @@
 --   slow         one chunk, then waits for session/cancel and stops: cancelled
 --   fail         answers the prompt with a JSON-RPC error
 --   crash        exits with status 3 mid-turn
---   replay <log> plays a turn recorded from a real agent
---                (tests/fixtures/openclaw/*.log): its updates and requests,
---                then its stop reason
 --
+-- Any other first word gets $FAKE_ACP_REPLY as the reply, when that's set.
+-- $FAKE_ACP_REPLIES (a JSON array of strings) replies in turn instead: the
+-- first such prompt gets the first string, the second the second, and the last
+-- string repeats. $FAKE_ACP_RUN is a shell command run in the session's
+-- directory before each such reply, so a test can have the agent "write" files.
 -- Everything it receives is appended to $FAKE_ACP_LOG, one JSON line each.
 -- FAKE_ACP_NEW_FAIL=1 refuses session/new. FAKE_ACP_LOAD=1 advertises loadSession; loading the session "gone" fails.
 
@@ -73,8 +75,10 @@ local function say(session, text)
 end
 
 local sessions = 0
+local dirs = {} -- each session's working directory
+local answered = 0 -- prompts answered by the fallback so far
 
--- its settings, like OpenClaw's (session/set_config_option changes them)
+-- its settings (session/set_config_option changes them)
 local options = {
   {
     id = "thought_level",
@@ -187,32 +191,18 @@ local function turn(msg)
     end
   elseif word == "fail" then
     return nil, { code = -32000, message = "scripted failure" }
-  elseif word == "replay" then
-    -- "<-N" lines are the agent's notifications, "<-R" its requests and
-    -- "<-A" the answers bud got; only what follows the prompt is played
-    local playing, stop = false, "end_turn"
-    for line in io.lines(rest) do
-      local dir, json = line:match("^(%S+) (.*)$")
-      local m = json and vim.json.decode(json, { luanil = { object = true, array = true } })
-      if dir == "->" and m.method == "session/prompt" then
-        playing = true
-      elseif playing and dir == "<-N" then
-        m.params.sessionId = sid
-        send({ method = m.method, params = m.params })
-      elseif playing and dir == "<-R" then
-        m.params.sessionId = sid
-        ask(m.method, m.params)
-      elseif playing and dir == "<-A" and m.r and m.r.stopReason then
-        stop = m.r.stopReason
-        break
-      end
-    end
-    return { stopReason = stop }
   elseif word == "crash" then
     say(sid, "about to crash")
     os.exit(3)
   end
-  say(sid, "I don't know " .. word)
+  answered = answered + 1
+  local run = os.getenv("FAKE_ACP_RUN")
+  if run and run ~= "" then
+    os.execute("cd '" .. (dirs[sid] or "."):gsub("'", "'\\''") .. "' && " .. run)
+  end
+  local replies = os.getenv("FAKE_ACP_REPLIES")
+  local scripted = replies and vim.json.decode(replies) or {}
+  say(sid, scripted[math.min(answered, #scripted)] or os.getenv("FAKE_ACP_REPLY") or ("I don't know " .. word))
   return { stopReason = "end_turn" }
 end
 
@@ -235,6 +225,7 @@ while true do
     send({ id = msg.id, error = { code = -32000, message = "no sessions today" } })
   elseif msg.method == "session/new" then
     sessions = sessions + 1
+    dirs["sess-" .. sessions] = msg.params.cwd
     send({ id = msg.id, result = { sessionId = "sess-" .. sessions, configOptions = options } })
   elseif msg.method == "session/set_config_option" then
     for _, o in ipairs(options) do

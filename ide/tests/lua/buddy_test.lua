@@ -74,7 +74,7 @@ end, 5) then
   error("the buddy never settled")
 end
 
--- a pane on the right (Claude Code's, a terminal) is never his corner: he
+-- a pane on the right (the AI pane's, a terminal) is never his corner: he
 -- stays in the file window, clear of its prompt
 vim.cmd("botright vsplit")
 local pane = vim.api.nvim_get_current_win()

@@ -166,7 +166,7 @@ function M.active()
 end
 
 function M.setup()
-  -- Claude and bud's other sections get their own colour; a colorscheme can
+  -- The AI section and bud's other sections get their own colour; a colorscheme can
   -- set BudStatuslineAI to change it
   vim.api.nvim_set_hl(0, "BudStatuslineAI", { link = "MiniStatuslineModeCommand", default = true })
   require("mini.statusline").setup({ content = { active = M.active } })

@@ -183,7 +183,7 @@ func ManagedBin(data string) string { return filepath.Join(data, "bin") }
 func managedDir(data string) string { return filepath.Join(data, "managed") }
 
 // UseManagedBin puts bud's downloaded tools ahead of the system's on PATH, for
-// this process and everything it starts (nvim, Mason, the Claude Code session).
+// this process and everything it starts (nvim, Mason, the OpenCode session).
 // It does nothing when nothing was downloaded
 func UseManagedBin(data string) {
 	dir := ManagedBin(data)

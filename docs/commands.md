@@ -15,7 +15,7 @@ bud [global flags] <command> [command flags] [args]
 | `--layout <name>` | The pane layout to open the editor with, just this once. |
 | `--no-update` | Skip the background update check at launch. |
 
-`-y` is short for `--yes` on `install`, `uninstall`, `claude setup`, `lang enable` and `lang rm`.
+`-y` is short for `--yes` on `install`, `uninstall`, `lang enable` and `lang rm`.
 
 ## Opening things
 
@@ -37,7 +37,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud update --no-doctor` | Skips the app rebuild and the doctor at the end, for scripts. |
 | `bud update --background` | What bud starts by itself at launch, detached and at most once a day, so launching never waits on the network. It installs a newer stable release when `update.auto` is on, else only notes it for the dashboard. `--no-update` skips it. You don't normally run it. |
 | `bud doctor [--quick] [--json] [--net]` | Health checks with the fix for each problem; exits 1 when something is broken. `--quick` skips the slow ones: the startup timing, which the dashboard leaves out. On a device with a profile set, it also checks what `bud sync` left: the profile and registry validate, every file the sync wrote is unchanged, which layer (public or your overlay) each piece of content comes from, and the config on disk is what this bud would render. `--net` adds the checks that go online: whether the device's channel has newer content, whether each model endpoint answers and lists the registry's models, and whether a provider that reports model facts (OpenCode Go does) disagrees with the registry about any of them, and, when `BUD_SEARXNG_URL` is set, whether that SearXNG instance answers JSON searches. The `--net` checks share one 30-second deadline. It doesn't check your MCP servers or rules, which are yours (D144). |
-| `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. Claude Code stays (see Troubleshooting). |
+| `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. |
 | `bud bootstrap [--config] user@host` | Installs this version of bud on another machine over SSH, minimal profile by default. `--config` copies your `config.json` across first. |
 | `bud version` | Prints the version. |
 | `bud completion bash\|zsh\|fish` | Prints shell completion. Add `eval "$(bud completion zsh)"` to your shell rc. |
@@ -89,35 +89,29 @@ Locate uses ripgrep if installed and falls back to grep, which can also search i
 
 Every key and its default is in the [config reference](config.md).
 
-## The AI backend
+## OpenCode
 
-The AI backend is a setting (`ai.backend`); [AI backends](backends.md) says how to choose one. The default, `claude`, runs Claude Code directly (below); `openclaw`, `codex`, `opencode` and `custom` go over the Agent Client Protocol (ACP).
-
-| Command | What it does |
-| --- | --- |
-| `bud ai status [--json]` | Which backend is set, the command it runs, whether that's installed, and for OpenClaw whether the Gateway at `ai.openclaw.url` answers, with a fix for each problem. |
-| `bud agent [path]` · `bud chat` | On any backend but `claude`, open the backend's own TUI from the shell: OpenClaw's `openclaw tui` on the project's Gateway session (the one the editor uses), or on its one chat session for `bud chat`. With `ai.backend = "claude"` they're Claude Code's, below. |
-| `bud ai setup [--yes]` | On the `claude` backend, points you at `bud claude setup`. On the others, installs the backend's command with npm if it's missing (asking first), then for OpenClaw asks for the Gateway's URL and the file holding its token, and saves them. Models sign in on the Gateway host (`openclaw onboard` there). |
-
-## Claude Code
+OpenCode is the one AI agent bud runs (Suite D139); there is no backend to choose. In the editor it goes over the Agent Client Protocol (ACP), and signing in to its models is OpenCode's own step.
 
 | Command | What it does |
 | --- | --- |
-| `bud claude status` | Whether Claude Code is installed and logged in. |
-| `bud claude setup [--yes]` | Installs Claude Code with Anthropic's installer if it's missing, then runs its login. See [Claude Code in bud](claude-code.md#setting-it-up). |
-| `bud agent [path]` | Claude Code's own TUI in a project, from the shell. |
-| `bud chat [--resume]` | Claude Code in chat mode, outside any project. `--resume` picks an earlier chat. |
-| `bud plugin path` | Unpacks the `bud-ide` plugin bud ships (if needed) and prints its dir; the editor passes it to Claude Code with `--plugin-dir`. |
+| `bud ai status [--json]` | Whether OpenCode is installed, which version, and a fix for each problem. |
+| `bud ai setup [--yes]` | Installs the pinned OpenCode with npm if it's missing (asking first), then prints the status. |
+| `bud agent [path]` | OpenCode's own TUI in a project, from the shell. When `bud sync` has written `opencode.env`, it runs through `op run` against a private OpenCode server; otherwise it launches OpenCode directly. |
+| `bud chat` | OpenCode's own TUI, run as the synced `chat` agent (it reads and looks things up but can't edit files or run commands), in a directory that belongs to no project. `--resume` is refused: OpenCode keeps one chat, which opens where it left off. |
+
+## Tools and issues
+
+| Command | What it does |
+| --- | --- |
 | `bud tools ls` | Your tools and bud's, and whether each is on. |
-| `bud tools gen "<description>"` | Has Claude write a tool or language spec, in the editor. See [tools](tools.md). |
+| `bud tools gen "<description>"` | Has the agent write a tool or language spec, in the editor. See [tools](tools.md). |
 | `bud tools enable` / `disable [--reason] <name>` | Turns a tool on or off. |
 | `bud tools rm [--yes] <name>` | Deletes one of your tools, after asking. |
 | `bud tools promote [--repo dir] [--yes] <name>` | Moves one of yours into a bud checkout's `ide/tools/`, commits and pushes it, after asking. `--repo` defaults to the `bud dev link` checkout. |
 | `bud issue target [--bud] [--json] [dir]` | Where an issue filed from the editor goes in Linear. `--json` prints it for the editor. |
 | `bud issue set --team T [--project P] [--global] [project]` / `unset [project]` | Sets or clears it. See [filing issues](issues.md). |
 | `bud issue checkout [path]` / `--unset` | Saves the bud checkout `<leader>aB` works in (checked to still be a bud git checkout), forgets it, or with neither says what is saved. See [filing issues](issues.md). |
-
-How the pieces fit together is in [Claude Code in bud](claude-code.md).
 
 ## The home server
 
@@ -132,7 +126,7 @@ How the pieces fit together is in [Claude Code in bud](claude-code.md).
 | `bud improve list` | Lists the queued proposals: id, status, target (`public` or `overlay`), where it is (pull request, edge or stable version) and title. |
 | `bud improve show [<id>]` | Prints the digest as it would be asked now, or one proposal's description, check results and note. |
 | `bud improve add <file\|->` | Queues a proposal written by hand (JSON: `title`, `evidence`, `target`, `files` with whole `before` and `after` contents, `criteria`), for the next digest. A public one may change only `content/` and is refused when it holds a personal detail; a change Jason already turned down isn't queued again. |
-| `bud memory-review [--socket path]` | Asks Jason on Signal about each memory record an agent staged (Suite D113), through the bud-signal plugin's reviewer socket, with the whole record in the prompt. A yes approves it, so memory search finds it; his no deletes it; an unanswered prompt leaves it staged and asks again a day later. At most four prompts wait at once. It reads the memory service's socket with the reviewer token `op run` puts in `BUD_MEMORY_TOKEN_REVIEWER`, and writes the counts (never the bodies) to `memory-review.json` in bud's state dir for the ops `reviews` tool. It runs as the unit in `server/memory-review/`; see [its README](https://github.com/jgarner9/bud/tree/main/server/memory-review). |
+| `bud memory-review [--socket path] [retier <id> <P0\|P1\|P2>]` | Asks Jason on Signal about each memory record an agent staged (Suite D113), through the bud-signal plugin's reviewer socket, with the whole record in the prompt. A yes approves it, so memory search finds it; his no deletes it; an unanswered prompt leaves it staged and asks again a day later. At most four prompts wait at once. It reads the memory service's socket with the reviewer token `op run` puts in `BUD_MEMORY_TOKEN_REVIEWER`, and writes the counts (never the bodies) to `memory-review.json` in bud's state dir for the ops `reviews` tool. `retier <id> <tier>` runs once instead of the loop (Suite D136): it asks on Signal, with the whole record and where it goes, and moves an approved record to that tier only on his yes (the reviewer token needs the `retier` and `export` actions). It runs as the unit in `server/memory-review/`; see [its README](https://github.com/jgarner9/bud/tree/main/server/memory-review). |
 | `bud curator run [--kb dir] [--socket path] [--registry file] [--tiers P1,P2]` | The KB curator's nightly run on the home server (Suite D123, D124): reads approved working memory through the memory service's `export` action, asks the registry's `curator` role on local providers only which facts each new record states, promotes a fact into bud-kb once two independent records agree, queues contradictions, flags sections untouched for 6 months and archives them at 12, commits each change with its evidence and pushes. Needs `BUD_MEMORY_TOKEN_CURATOR`; runs as the timer in `server/curator/`, see [its README](https://github.com/jgarner9/bud/tree/main/server/curator). |
 | `bud curator promote <record id>` | Promotes one memory record's facts on the next run without waiting for a second record. |
 | `bud curator resolve <id> keep\|take\|confirm` | Answers an item on the KB's review queue: keep the page's value, take memory's, or confirm an evergreen section is still right. Commits and pushes. |

@@ -56,7 +56,7 @@ function M.toggle_git()
   end
   git_open({ side = "right" })
 end
--- chat is the project's Claude Code TUI (D48)
+-- chat is the project's OpenCode TUI (D48)
 -- (or bud's own chat, ai.agent.chat_ui = "bud", D138)
 local function own_chat()
   return require("bud.ai.agent").own_chat()

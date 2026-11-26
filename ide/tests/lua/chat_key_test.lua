@@ -1,6 +1,5 @@
 -- Run with: nvim --clean --headless -l tests/lua/chat_key_test.lua (just lua-test)
--- <leader>ac on the opencode backend opens opencode.nvim (D150) and starts no
--- ACP session; on any other backend it is the pane toggle as before
+-- <leader>ac opens opencode.nvim (D150) and starts no ACP session
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
 
@@ -13,9 +12,6 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp, "p")
 require("bud.config").file = tmp .. "/config.json"
-local function backend(name)
-  vim.fn.writefile({ vim.json.encode({ ai = { backend = name } }) }, tmp .. "/config.json")
-end
 
 local term = require("bud.ai.term")
 -- nvim stands in for the opencode executable
@@ -35,13 +31,8 @@ agent.session = function()
   sessions = sessions + 1
 end
 
-backend("opencode")
 term.chat_key()
-eq({ opened, toggled, sessions }, { 1, 0, 0 }, "opencode opens opencode.nvim only")
-
-backend("claude")
-term.chat_key()
-eq({ opened, toggled, sessions }, { 1, 1, 0 }, "claude toggles the pane")
+eq({ opened, toggled, sessions }, { 1, 0, 0 }, "opens opencode.nvim only")
 
 term.toggle, agent.session = toggle, session
 print("ok")

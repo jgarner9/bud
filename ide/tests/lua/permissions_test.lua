@@ -1,5 +1,5 @@
 -- Run with: nvim --clean --headless -l tests/lua/permissions_test.lua (just lua-test)
--- Claude Code's permission questions: edits as diffs, the rest as a prompt
+-- The agent's permission questions: edits as diffs, the rest as a prompt
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
 dofile("tests/lua/lib/nui.lua")
@@ -268,7 +268,7 @@ local options = {
 }
 local function acp_req(command)
   return {
-    session = { root = tmp, backend = "openclaw" },
+    session = { root = tmp, backend = "opencode" },
     tool = "exec: " .. command,
     title = "exec: " .. command,
     input = { command = command },
@@ -283,7 +283,7 @@ perms.acp(acp_req("make lint"), function(id)
   chosen = id
 end)
 shown = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
-eq(shown:find("openclaw wants to use Bash", 1, true) ~= nil, true, "names the backend")
+eq(shown:find("opencode wants to use Bash", 1, true) ~= nil, true, "names the agent")
 eq(shown:find("make lint", 1, true) ~= nil, true, "shows the command")
 vim.api.nvim_feedkeys("y", "x", false)
 eq(chosen, "allow-once", "y picks the allow option")

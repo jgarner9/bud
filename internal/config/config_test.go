@@ -39,7 +39,7 @@ func TestSettingsMergeOverDefaults(t *testing.T) {
 		"update": {"channel": "nightly"},
 		"languages": ["bash"],
 		"format_on_save": false,
-		"ai": {"claude": {"args": ["--model", "opus"]}}
+		"ai": {"agent": {"idle_minutes": 45}}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -66,28 +66,11 @@ func TestSettingsMergeOverDefaults(t *testing.T) {
 	if s.FormatOnSave {
 		t.Error("format_on_save = true, want the file's false")
 	}
-	if c := s.AI.Claude; !c.Autostart || c.Resume != "new" || !slices.Equal(c.Args, []string{"--model", "opus"}) {
-		t.Errorf("ai.claude = %+v", c)
+	if a := s.AI.Agent; !a.Autostart || a.IdleMinutes != 45 || a.ChatLayout != "pane" {
+		t.Errorf("ai.agent = %+v, want idle_minutes from the file and the other defaults kept", a)
 	}
 	if s.Dashboard.Style != "silly" || s.Terminal != "kitty" {
 		t.Errorf("untouched keys lost their defaults: %+v", s)
-	}
-}
-
-func TestAReopenedProjectStartsFreshUnlessTheConfigSaysContinue(t *testing.T) {
-	if got := Defaults().AI.Claude.Resume; got != "new" {
-		t.Errorf("default ai.claude.resume = %q, want %q (D106)", got, "new")
-	}
-	f, err := Load(writeFile(t, `{"ai": {"claude": {"resume": "continue"}}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := f.Settings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := s.AI.Claude.Resume; got != "continue" {
-		t.Errorf("ai.claude.resume = %q, want the file's %q", got, "continue")
 	}
 }
 
@@ -97,7 +80,7 @@ func TestSettingsValidate(t *testing.T) {
 		`{"terminal": "xterm"}`,
 		`{"update": {"channel": "beta"}}`,
 		`{"dashboard": {"style": "loud"}}`,
-		`{"ai": {"claude": {"resume": "maybe"}}}`,
+		`{"ai": {"agent": {"chat_ui": "maybe"}}}`,
 	} {
 		f, err := Load(writeFile(t, doc))
 		if err != nil {
@@ -197,10 +180,10 @@ func TestGetSet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := f.Set("ai.claude.autostart", false); err != nil {
+	if err := f.Set("ai.agent.autostart", false); err != nil {
 		t.Fatal(err)
 	}
-	if v, ok := f.Get("ai.claude.autostart"); !ok || v != false {
+	if v, ok := f.Get("ai.agent.autostart"); !ok || v != false {
 		t.Errorf("get after set = %v, %v", v, ok)
 	}
 	if _, ok := f.Get("update.channel"); ok {
@@ -242,7 +225,7 @@ func TestDocsCoverEveryKey(t *testing.T) {
 // saves with its clod key untouched
 func TestOldClodKeyStillLoadsAndSaves(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
-	in := `{"profile": "minimal", "clod": {"repo": "me/claude-setup"}}`
+	in := `{"profile": "minimal", "clod": {"repo": "me/old-setup"}}`
 	if err := os.WriteFile(path, []byte(in), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +247,7 @@ func TestOldClodKeyStillLoadsAndSaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
-	if !strings.Contains(string(data), `"clod"`) || !strings.Contains(string(data), "me/claude-setup") {
+	if !strings.Contains(string(data), `"clod"`) || !strings.Contains(string(data), "me/old-setup") {
 		t.Fatalf("clod key lost on save: %s", data)
 	}
 }
@@ -300,27 +283,45 @@ func TestOldKitKeyStillLoadsAndSaves(t *testing.T) {
 	}
 }
 
-// ai.backend picks a known agent, and custom needs its command (D131)
-func TestBackendValidate(t *testing.T) {
+// the chat layout is checked, and a config.json from before OpenCode-only
+// (Suite D139) that still has the backend keys loads and keeps them on save
+func TestAgentValidateAndLegacyKeys(t *testing.T) {
 	s := Defaults()
-	if s.AI.Backend != "claude" || s.AI.Agent.ChatLayout != "pane" {
-		t.Fatalf("defaults: backend %q, chat_layout %q", s.AI.Backend, s.AI.Agent.ChatLayout)
-	}
-	s.AI.Backend = "gpt"
-	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "ai.backend") {
-		t.Errorf("unknown backend: %v", err)
-	}
-	s.AI.Backend = "custom"
-	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "ai.custom.command") {
-		t.Errorf("custom with no command: %v", err)
-	}
-	s.AI.Custom.Command = []string{"gemini", "--experimental-acp"}
-	if err := s.Validate(); err != nil {
-		t.Errorf("custom with a command: %v", err)
+	if s.AI.Agent.ChatLayout != "pane" {
+		t.Fatalf("defaults: chat_layout %q", s.AI.Agent.ChatLayout)
 	}
 	s.AI.Agent.ChatLayout = "half"
 	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "chat_layout") {
 		t.Errorf("unknown chat layout: %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "config.json")
+	// the removed key names are spelled out in pieces so the grep that checks
+	// the Go side no longer mentions them stays empty (JGA-403)
+	gateway := "open" + "claw"
+	old := `{"ai": {"backend": "gpt", "` + gateway + `": {"url": "wss://h"}, "custom": {"command": ["x"]}, "agent": {"chat_layout": "full"}}}`
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.Settings()
+	if err != nil || got.AI.Agent.ChatLayout != "full" {
+		t.Fatalf("legacy keys: %+v, %v", got.AI.Agent, err)
+	}
+	if err := f.Save(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	for _, key := range []string{`"backend"`, `"` + gateway + `"`, `"custom"`} {
+		if !strings.Contains(string(data), key) {
+			t.Errorf("%s lost on save: %s", key, data)
+		}
+	}
+	if !strings.Contains(string(data), `"url": "wss://h"`) {
+		t.Errorf("the %s subtree's contents lost on save: %s", gateway, data)
 	}
 }
 

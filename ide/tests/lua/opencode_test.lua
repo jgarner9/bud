@@ -1,7 +1,6 @@
 -- Run with: nvim --clean --headless -l tests/lua/opencode_test.lua (just lua-test)
 -- bud's opencode.nvim keys (D150, BASE D151): each runs its :Opencode
--- subcommand on the opencode backend, and says what's missing otherwise
--- instead of loading the plugin
+-- subcommand, and says what's missing otherwise instead of loading the plugin
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
 
@@ -14,9 +13,6 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp, "p")
 require("bud.config").file = tmp .. "/config.json"
-local function backend(name)
-  vim.fn.writefile({ vim.json.encode({ ai = { backend = name } }) }, tmp .. "/config.json")
-end
 
 local ran = {}
 vim.api.nvim_create_user_command("Opencode", function(o)
@@ -37,7 +33,6 @@ local function press(lhs)
   vim.fn.maparg(lhs, "n", false, true).callback()
 end
 
-backend("opencode")
 for _, k in ipairs(oc.keys) do
   press(k.lhs)
 end
@@ -46,7 +41,7 @@ eq(
   { "diff open", "models", "session select", "permission accept", "permission deny" },
   "each key runs its subcommand"
 )
-eq(notes, {}, "no notice on the opencode backend")
+eq(notes, {}, "no notice")
 
 vim.api.nvim_buf_set_lines(0, 0, -1, false, { "a", "b", "c" })
 ran = {}
@@ -57,13 +52,6 @@ ran, notes = {}, {}
 eq(oc.run(), true, "a bare run toggles")
 eq(ran, { "" }, "a bare run is :Opencode with no argument")
 
-backend("claude")
-ran, notes = {}, {}
-press("<leader>ad")
-eq(ran, {}, "another backend runs nothing")
-assert(notes[1]:find("bud config set ai.backend opencode", 1, true), "the notice names the fix: " .. tostring(notes[1]))
-
-backend("opencode")
 oc.executable = tmp .. "/no-such-opencode"
 ran, notes = {}, {}
 eq(oc.share(1, 1), false, "share without opencode")

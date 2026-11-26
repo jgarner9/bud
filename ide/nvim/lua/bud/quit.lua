@@ -1,8 +1,8 @@
 -- Quitting with bud's terminals open. Neovim refuses :wqa and :xa (E948)
 -- while any terminal still runs a program, and bud keeps three alive: the
--- <leader>t shell, Claude Code's pane and chat. So just before Neovim exits
--- (ExitPre), bud ends Claude Code's pane and chat, whose conversations Claude
--- Code has already saved, and the shell only when it's idle: a shell running
+-- <leader>t shell, the AI pane and chat. So just before Neovim exits
+-- (ExitPre), bud ends the AI pane and chat, whose conversations OpenCode
+-- has already saved, and the shell only when it's idle: a shell running
 -- something (a server, a build) is left, so the quit stops and says so.
 --
 -- ExitPre comes before Neovim checks for unsaved files, so with unsaved
@@ -56,7 +56,7 @@ function M.busy(job)
   return proc and proc.name or "a program"
 end
 
--- ending stops bud's terminals that can go: Claude Code's panes, chat and
+-- ending stops bud's terminals that can go: the AI panes, chat and
 -- the home planning pane always, the shell when it's idle. It returns the jobs it stopped
 function M.ending()
   if #M.unsaved() > 0 and not M.settles() then

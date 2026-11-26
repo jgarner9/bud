@@ -70,7 +70,7 @@ type Dashboard struct {
 	Style string `json:"style"` // "silly" or "minimal"
 	// the default extras (JGA-62), on unless turned off
 	Git     bool `json:"git"`     // branch and changes per project
-	Health  bool `json:"health"`  // startup time, plugins, Claude Code
+	Health  bool `json:"health"`  // startup time, plugins, OpenCode
 	Banners bool `json:"banners"` // doctor problems with a one-key fix
 	// optional extras, off by default (JGA-99)
 	Scratchpad bool `json:"scratchpad"` // x opens a persistent notes buffer
@@ -101,16 +101,8 @@ type UI struct {
 }
 
 type AI struct {
-	// which agent bud talks to (D131): "claude" (the default for now, D140:
-	// Claude Code directly, not yet over ACP), or over ACP "openclaw" (D132),
-	// "claude", "codex", "opencode", or "custom" for ai.custom.command
-	Backend  string   `json:"backend"`
 	Agent    Agent    `json:"agent"`
-	OpenClaw OpenClaw `json:"openclaw"`
-	Custom   Custom   `json:"custom"`
-	Claude   Claude   `json:"claude"`
 	Issues   Issues   `json:"issues"`
-	Work     Work     `json:"work"`
 	Planning Planning `json:"planning"`
 }
 
@@ -125,7 +117,7 @@ type Planning struct {
 	PasswordFile string `json:"password_file"`
 }
 
-// Agent is how the agent shows in the editor, whatever the backend
+// Agent is how the OpenCode agent shows in the editor
 type Agent struct {
 	// how the AI chat opens (D137): "pane", the pull-out on the right, or
 	// "full", a tab of its own
@@ -137,36 +129,6 @@ type Agent struct {
 	Autostart bool `json:"autostart"`
 	// an agent nothing has used for this long is stopped (D49); 0 never
 	IdleMinutes int `json:"idle_minutes"`
-}
-
-// OpenClaw is the Gateway the openclaw backend reaches (D132)
-type OpenClaw struct {
-	// the Gateway's WebSocket URL, such as wss://home.tailnet.ts.net:18789;
-	// empty uses the openclaw CLI's own gateway.remote.url
-	URL string `json:"url"`
-	// a file holding the Gateway token, kept out of config.json and
-	// process listings; empty uses the CLI's own credentials
-	TokenFile string `json:"token_file"`
-	// the OpenClaw agent bud's sessions run as: each project gets the
-	// Gateway session agent:<this>:bud:<project>
-	Agent string `json:"agent"`
-}
-
-// Custom is an ACP agent bud doesn't know by name (ai.backend = "custom")
-type Custom struct {
-	// the agent's command line, such as ["gemini", "--experimental-acp"]
-	Command []string `json:"command"`
-}
-
-// Backends are the ACP agents bud knows by name (D131)
-var Backends = []string{"openclaw", "claude", "codex", "opencode", "custom"}
-
-// Work is where <leader>aw has Claude fix an issue (JGA-237)
-type Work struct {
-	// "local": a git worktree next to the repo, in a Claude Code session of
-	// bud's own (the default); "cloud": a Claude Code cloud session that clones
-	// the repo from GitHub and pushes a branch
-	Where string `json:"where"`
 }
 
 // Issues is where issues filed from the editor go (JGA-123): Linear's team and
@@ -181,23 +143,9 @@ type Issues struct {
 type IssueTarget struct {
 	Team    string `json:"team"`
 	Project string `json:"project"`
-	// the bud checkout Claude works in for issues about bud, remembered by
+	// the bud checkout the agent works in for issues about bud, remembered by
 	// 'bud issue checkout'; only read for ai.issues.bud
 	Checkout string `json:"checkout"`
-}
-
-type Claude struct {
-	Autostart bool   `json:"autostart"`
-	Resume    string `json:"resume"` // "new" (the default, D106) or "continue"
-	// a session nothing has used for this long is stopped (D49); 0 never
-	IdleMinutes int      `json:"idle_minutes"`
-	Args        []string `json:"args"`
-	// what runs claude, when it isn't claude itself: a wrapper that passes
-	// what follows on, such as ["headroom", "wrap", "claude", "--"]
-	Command []string `json:"command"`
-	// whose Claude Code config bud's sessions use: Claude Code's usual
-	// ~/.claude ("home", the default, D77) or bud's own dir ("bud", JGA-135)
-	Config string `json:"config"`
 }
 
 // Profiles are the install profiles
@@ -216,9 +164,8 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
-		AI: AI{Backend: "claude", Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
-			Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
-			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"},
+		AI: AI{Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30},
+			Issues:   Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}},
 			Planning: Planning{PasswordFile: "~/.config/bud/planning-password"}},
 	}
 }
@@ -233,12 +180,8 @@ func (s Settings) Validate() error {
 		{"terminal", s.Terminal, Terminals},
 		{"update.channel", s.Update.Channel, []string{"stable", "nightly"}},
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
-		{"ai.backend", s.AI.Backend, Backends},
 		{"ai.agent.chat_layout", s.AI.Agent.ChatLayout, []string{"pane", "full"}},
 		{"ai.agent.chat_ui", s.AI.Agent.ChatUI, []string{"tui", "bud"}},
-		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},
-		{"ai.claude.config", s.AI.Claude.Config, []string{"home", "bud"}},
-		{"ai.work.where", s.AI.Work.Where, []string{"local", "cloud"}},
 	}
 	for _, c := range checks {
 		if !slices.Contains(c.allowed, c.value) {
@@ -250,9 +193,6 @@ func (s Settings) Validate() error {
 		if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") || pu.Host == "" || pu.User != nil || strings.Trim(pu.Path, "/") != "" || pu.RawQuery != "" || pu.Fragment != "" || strings.HasSuffix(u, "#") || strings.HasSuffix(u, "?") {
 			return fmt.Errorf("ai.planning.url: %q isn't a server URL such as http://<tailnet IP>:8797 (no path, no password: that goes in ai.planning.password_file)", u)
 		}
-	}
-	if s.AI.Backend == "custom" && len(s.AI.Custom.Command) == 0 {
-		return fmt.Errorf("ai.backend: custom needs ai.custom.command, the agent's command line")
 	}
 
 	return nil

@@ -27,7 +27,7 @@ var startupTimeout = 10 * time.Second
 //
 // With no filetype it's bare bud, which shows the dashboard; with one, a new
 // scratch buffer of that filetype. BUD_STARTUP_PROBE=1 tells the config to
-// skip the work it does after the first screen (a Claude Code session, the
+// skip the work it does after the first screen (an OpenCode session, the
 // layout) and the session save on quit. It runs in a temp dir and its own
 // process group, so whatever it started is stopped with it, and it quits
 // without writing ShaDa, so the scratch file never shows up in recent files

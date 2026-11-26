@@ -65,7 +65,7 @@ function M.go(path)
     vim.system({ bin, "projects", "add", "--opened", path })
   end
   vim.cmd.cd(vim.fn.fnameescape(path))
-  require("bud.ai.claude").opened(path)
+  require("bud.ai.agent").opened(path)
 
   vim.cmd.enew()
   -- the saved session, else the layout (D39, JGA-74)

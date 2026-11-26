@@ -15,7 +15,7 @@ const AppName = "bud"
 
 type Paths struct {
 	Config string // ~/.config/bud: synced copy of the embedded nvim/ (bud-owned, D21)
-	Data   string // ~/.local/share/bud: plugins, Mason, bud-managed binaries, user tools
+	Data   string // ~/.local/share/bud: Mason, bud-managed binaries, user tools
 	State  string // ~/.local/state/bud: machine config, project registry
 	Cache  string // ~/.cache/bud: Neovim's stdpath("cache"), logs and bytecode
 	// Runtime is $XDG_RUNTIME_DIR/bud, or empty when that is unset or relative.
@@ -71,7 +71,7 @@ func (p *Paths) UpdateState() string { return filepath.Join(p.State, "update.jso
 // UpdateLog is where the detached background update check writes
 func (p *Paths) UpdateLog() string { return filepath.Join(p.Cache, "update.log") }
 
-// Chat is where bud's chat runs Claude Code (JGA-165), a dir that's no
+// Chat is where bud's chat runs OpenCode (JGA-165), a dir that's no
 // project's, so its conversations are kept apart; nvim's stdpath("state")/chat
 func (p *Paths) Chat() string { return filepath.Join(p.State, "chat") }
 
@@ -80,14 +80,6 @@ func (p *Paths) Migrations() string { return filepath.Join(p.State, "migrations.
 
 // InstallReceipt is written by install.sh and names the binary it installed (D20)
 func (p *Paths) InstallReceipt() string { return filepath.Join(p.State, "install.json") }
-
-// ClaudeConfig is bud's own Claude Code config dir (JGA-135): its
-// CLAUDE_CONFIG_DIR unless ai.claude.config is "home"
-func (p *Paths) ClaudeConfig() string { return filepath.Join(p.Data, "claude") }
-
-// Plugins is where bud extracts its embedded Claude Code plugin (D142), one
-// dir per version
-func (p *Paths) Plugins() string { return filepath.Join(p.Data, "plugins") }
 
 // UserTools holds generated tools that haven't been promoted into the repo
 func (p *Paths) UserTools() string { return filepath.Join(p.Data, "user-tools") }
@@ -189,8 +181,12 @@ func (p *Paths) HermesTiers() string { return filepath.Join(p.State, "hermes-tie
 // MCPGateway is the home server's MCP gateway config (Suite D72)
 func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway.json") }
 
-// MCPAudit is where the MCP gateway logs every tool call until the shared
-// audit log (JGA-348) exists
+// Audit is the shared audit log (internal/audit, Suite D140): one append-only
+// file every leaf writes its approval-tier and spend events to
+func (p *Paths) Audit() string { return filepath.Join(p.State, "audit.jsonl") }
+
+// MCPAudit is where the MCP gateway logs every tool call until its events
+// move to the shared audit log (JGA-395, Suite D140)
 func (p *Paths) MCPAudit() string { return filepath.Join(p.State, "mcp-audit.jsonl") }
 
 // MailActions is bud mail-mcp's log of every move, restore and send (Suite

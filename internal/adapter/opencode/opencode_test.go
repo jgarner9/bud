@@ -72,12 +72,8 @@ func TestRenderingIsDeterministic(t *testing.T) {
 // decode reads a rendered config back, header and all
 func decode(t *testing.T, b []byte) map[string]any {
 	t.Helper()
-	clean, err := registry.StripJSONC(b)
-	if err != nil {
-		t.Fatal(err)
-	}
 	var cfg map[string]any
-	if err := json.Unmarshal(clean, &cfg); err != nil {
+	if err := json.Unmarshal(registry.StripJSONC(b), &cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -149,22 +145,28 @@ func TestFragmentSecretsJoinTheProviderKeysForOpRun(t *testing.T) {
 	if _, err := Render(in); err == nil || !strings.Contains(err.Error(), "bud.opencode_secrets.BUD_GO_API_KEY") {
 		t.Fatalf("got %v", err)
 	}
+}
 
-	// nor one the environment fills ({env:VAR})
-	in = shipped(t)
-	var v string
-	for pid, p := range in.Registry.Providers {
-		if k := registry.KeyVar(pid, p.Key); k != "" && !strings.HasPrefix(p.Key, "op://") {
-			v = k
-			break
-		}
+func TestOnlySelectedOverlayMaySupplyProviderEnvKey(t *testing.T) {
+	const key = "OPENCODE_GO_API_KEY"
+	const ref = "op://vault/go/key"
+	in := shipped(t)
+	baseline, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if v == "" {
-		t.Fatal("the shipped registry has no {env:VAR} provider to test with")
-	}
-	in.Env = append(in.Env, Fragment{Name: "overlay/personal", Src: []byte(`{"bud": {"opencode_secrets": {"` + v + `": "op://vault/elsewhere/key"}}}`)})
-	if _, err := Render(in); err == nil || !strings.Contains(err.Error(), "bud.opencode_secrets."+v) {
+	in.Env = append(in.Env, Fragment{Name: "public/server", Src: []byte(`{"bud":{"opencode_secrets":{"` + key + `":"` + ref + `"}}}`)},
+		Fragment{Name: "overlay/personal", Src: []byte(`{"bud":{"opencode_secrets":{"GITHUB_PERSONAL_ACCESS_TOKEN":"op://vault/github/key"}}}`)})
+	if _, err := Render(in); err == nil || !strings.Contains(err.Error(), "bud.opencode_secrets."+key) {
 		t.Fatalf("got %v", err)
+	}
+	in.Env[1].Name = "overlay/server"
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Secrets[key] != ref || out.Secrets["GITHUB_PERSONAL_ACCESS_TOKEN"] != "op://vault/github/key" || !bytes.Equal(baseline.Config, out.Config) {
+		t.Fatal("expected both references in the launch environment and unchanged OpenCode config")
 	}
 }
 

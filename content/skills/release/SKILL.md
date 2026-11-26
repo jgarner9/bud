@@ -1,18 +1,15 @@
 ---
 name: release
-description: Cut a release of the current repository, with a code review and a security review of everything since the last release, and the docs checked against the code, before anything ships. Use whenever cutting, shipping or publishing a release, bumping VERSION, tagging vX.Y.Z, or when Jason asks to cut one. Claude Code only, since it runs Claude Code's code-review and security-review skills.
+description: Cut a release of the current repository, after a written review checklist of everything since the last release and a docs check against the code. Use whenever cutting, shipping or publishing a release, bumping VERSION, tagging vX.Y.Z, or when asked to cut one.
 ---
 
 # Cut a release
 
-Cutting a release needs Claude Code: the `code-review` and `security-review`
-steps run Claude Code's own skills, which OpenCode doesn't have, so this skill
-only runs in a Claude Code session. In an OpenCode session, don't start a
-release — leave it to Jason or a Claude Code session, and say so.
-
-Every release gets a code review and a security review of everything it ships,
-and docs that say what the code does, before it ships. Jason picks the version and decides what a finding means; you
-do the legwork and never cut the release past a finding he hasn't seen.
+Every release gets a review of everything it ships, and docs that say what the
+code does, before it ships. Copilot reviews each PR as it merges; this is the
+second pass, over everything the release ships together, and it is a written
+checklist you walk yourself (step 3). The person you work for picks the version and decides what a finding means; you do the
+legwork and never cut the release past a finding they haven't seen.
 
 ## 1. Find out how this repo releases
 
@@ -21,7 +18,7 @@ do the legwork and never cut the release past a finding he hasn't seen.
   when a push to `main` changes `VERSION` (D80): the workflow checks it, runs
   the tests, pushes the `vX.Y.Z` tag and builds the release. Cloud sessions
   can't push tags, so a repo that needs a hand-pushed tag has to be released
-  from Jason's machine: say so and stop.
+  from the person's own machine: say so and stop.
 - `git fetch origin main --tags`, then work from an up-to-date `main` with a
   clean tree. Uncommitted or unpushed work: stop and ask what goes in.
 - The last release is the newest stable tag:
@@ -37,42 +34,62 @@ since the last tag: there's nothing to release, so say so and stop.
 
 ## 3. Review it
 
-Run both, on the whole range, not just the last commit:
+Review the whole range, not just the last commit. Read the diff
+(`git diff <last tag>..origin/main`, file by file for a large one), not the
+commit messages: the messages say what the author meant, the diff says what
+shipped. Walk every item below and write one line per item: what you checked
+and what you found, or "nothing to check" with the reason. An item with no
+line hasn't been reviewed.
 
-1. The `code-review` skill (`/code-review`) at `high`, with the range as its
-   target: `high <last tag>..origin/main`.
-2. The `security-review` skill (`/security-review`) on the same range.
+1. **Correctness.** Read each changed function for wrong results, missed edge
+   cases (empty input, missing file, nil or zero values), unchecked errors,
+   off-by-one and ordering mistakes, and races. Follow each changed signature
+   to its callers. Check that a change does what its commit message says.
+2. **Tests for new behaviour.** Every new feature or fixed bug has a test that
+   fails without it. Run the repo's checks (`just check`, or what CI runs) on
+   the release commit and report what they printed; a check you couldn't run is
+   "not verified", with why. A test that was skipped, loosened or deleted in
+   the range needs a reason you can state.
+3. **Docs match code.** Done in step 5; note here which pages the range
+   changes behaviour for, so step 5 reads those first.
+4. **Secrets and personal data.** Search the added lines (`git diff <last
+   tag>..origin/main | grep '^+'`) for keys, tokens, passwords, `op://` paths,
+   hostnames, tailnet names, home directories and personal names or email
+   addresses. Run the repo's leak check if it has one. Anything real blocks the
+   release: removing it from the tip doesn't remove it from history, so tell
+   the person before doing anything else.
+5. **Shell and file safety.** For each new or changed script, command
+   execution and file write: arguments are quoted or passed as a list, never
+   built by string concatenation from input; paths are checked before delete or
+   overwrite; temp files are private and cleaned up; writes that matter are
+   atomic; nothing runs with more privilege or reach than it needs; network
+   calls verify what they download. Shell scripts stay shellcheck-clean.
+6. **Signing and install paths.** If the range touches signing keys, checksums,
+   the installer, the updater or the release workflow: the signature is
+   verified before anything is installed or run, an unsigned or downgraded
+   artifact is refused, archive names still match what the installer
+   downloads, and the pinned keys still agree wherever they're listed. No
+   change there: say so in one line.
 
-`code-review` takes the range as its target. `security-review` takes no
-target: it reviews `origin/HEAD...HEAD`, which on `main` is empty, and a
-cloud clone may have no `origin/HEAD` at all. Point it at the release, run it,
-then put it back:
+Findings are written down, not fixed on the spot: each gets the file, the line,
+what breaks and the fix, and a severity (critical, high, medium, low). Nothing
+is bumped or pushed until step 4 is done. Fixes made in step 4 get the same
+walk over their own commits as the range (items 1, 2, 4 and 5 are usually
+enough for a small fix).
 
-```sh
-git update-ref refs/remotes/origin/release-base '<last tag>^{commit}'
-git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/release-base
-# run security-review
-git remote set-head origin main
-git update-ref -d refs/remotes/origin/release-base
-```
+## 4. Settle the findings
 
-Fixes made in step 4 get their own `code-review` (their commits as the
-range); a review of a fix's fix can stop at `low` once its findings are small.
-
-If either skill isn't available (a surface other than Claude Code), say so
-and stop: a release without both reviews isn't one this skill cuts.
-
-## 4. Settle the findings with Jason
-
-Show the findings from both reviews in one list, worst first, each with file,
-line, what breaks and the fix. Then let him choose, per finding: fix it now,
-ship with it (he says why), or stop the release.
+Show the findings from the checklist in one list, worst first, each with file,
+line, what breaks and the fix, together with the checklist's one-line results,
+so the person sees what was covered as well as what was found. Then let them
+choose, per finding: fix it now, ship with it (they say why), or stop the
+release.
 
 - A fix is an ordinary change: follow `code-style`, run the repo's checks
-  (`just check` or what CI runs), commit, push to `main`, and review the
-  fix's own diff with `code-review` before going on.
+  (`just check` or what CI runs), commit, push to `main`, and walk the
+  checklist over the fix's own diff before going on.
 - A critical or high-severity security finding blocks the release until it's
-  fixed or Jason explicitly ships with it.
+  fixed or the person explicitly ships with it.
 - No findings: say so in one line and go on.
 
 ## 5. Check the docs against the code
@@ -93,8 +110,8 @@ the release touched:
 - **What to fix:** anything that's wrong, missing for what this release adds,
   or describes something removed. Keep each page's voice and level of detail;
   don't rewrite what's accurate. Changes in behaviour the docs need but the
-  code doesn't have are findings for Jason, not doc edits.
-- **Then:** show Jason a short list of what was wrong, page by page, make the
+  code doesn't have are findings for the person, not doc edits.
+- **Then:** show the person a short list of what was wrong, page by page, make the
   fixes as one `docs:` commit, run the repo's checks (some test the docs, like
   bud's `TestDocsCoverEveryKey`) and push to `main`. Nothing wrong: say so in
   one line and go on.
@@ -102,27 +119,28 @@ the release touched:
 ## 6. Pick the version
 
 Propose the next version from the commits (semver: a breaking change bumps
-major, a `feat` minor, only fixes patch), or take the one Jason passed, and
-let him confirm it. It must be newer than the last tag.
+major, a `feat` minor, only fixes patch), or take the one they passed, and
+let them confirm it. It must be newer than the last tag.
 
 ## 7. Cut it
 
 Do it the repo's way. For a `VERSION` file (bud): write the version, commit
-`chore: release vX.Y.Z` with a body that records the reviews, and push `main`:
+`chore: release vX.Y.Z` with a body that records the review, and push `main`:
 
 ```text
 chore: release v0.20.0
 
-Reviewed v0.19.0..<sha>: code-review (2 findings, both fixed in <sha>),
-security-review (none), docs (3 pages fixed in <sha>).
+Reviewed v0.19.0..<sha> against the release checklist: 2 findings, both
+fixed in <sha>; nothing on secrets, shell safety or signing; docs: 3 pages
+fixed in <sha>.
 ```
 
-A finding Jason chose to ship with goes in that body too, with his reason.
+A finding the person chose to ship with goes in that body too, with their reason.
 
 ## 8. Watch it land
 
 Follow the release workflow run (GitHub's Actions tools: list the runs for
-the push, then get the run) until it's done. Green: give Jason the release
+the push, then get the run) until it's done. Green: give the person the release
 link. Red: show the failing step and its log, and fix it the same way as a
 finding. Never delete or move a tag, or re-run with the checks skipped, to
 get it green.

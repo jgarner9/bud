@@ -21,7 +21,6 @@ import (
 	"jgarner.dev/bud"
 	"jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/bundle"
-	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/installer"
 	"jgarner.dev/bud/internal/lang"
@@ -84,8 +83,6 @@ var (
 	embedded      = func() fs.FS { return bud.Config() }
 	loadLanguages = lang.Load
 	startupTime   = nvim.StartupTime
-	claudeCheck   = claude.Check
-	lookPath      = exec.LookPath
 )
 
 // Options picks which checks Run does
@@ -95,8 +92,7 @@ type Options struct {
 	Quick bool
 	// Net adds the sync checks that use the network: whether the device's
 	// channel offers newer content, and whether the registry's model
-	// endpoints answer. The ai backend check's gateway probe follows Quick,
-	// as it did before
+	// endpoints answer
 	Net bool
 
 	// netDeadline is the one deadline every --net check shares, set by Run
@@ -142,17 +138,7 @@ func Run(opts Options) []Result {
 		}
 	}
 
-	// the claude backend still runs Claude Code directly (until 1.1 task 6),
-	// which the claude code check covers
-	if cfg.AI.Backend != "claude" {
-		results = append(results, checkAgent(cfg, opts.Quick))
-	}
-
-	cr, status := checkClaude(cfg)
-	results = append(results, cr)
-	if r, ok := checkClaudeCommand(cfg, status); ok {
-		results = append(results, r)
-	}
+	results = append(results, checkAgent(opts.Quick))
 
 	if r, ok := checkBudApp(p); ok {
 		results = append(results, r)
@@ -211,86 +197,21 @@ func checkBudApp(p *paths.Paths) (Result, bool) {
 	return Result{}, false
 }
 
-// checkClaudeCommand looks for the wrapper ai.claude.command runs Claude Code
-// through (D60, Headroom's): without it every session fails to start. Only
-// when one is set; it only warns, like the Claude Code check
-func checkClaudeCommand(cfg config.Settings, s claude.Status) (Result, bool) {
-	cmd := cfg.AI.Claude.Command
-	if len(cmd) == 0 {
-		return Result{}, false
-	}
-	r := Result{Name: "claude command"}
-	if _, err := lookPath(cmd[0]); err != nil {
-		r.Status = Warn
-		r.Detail = "ai.claude.command runs " + cmd[0] + ", which isn't on PATH, so Claude Code sessions can't start"
-		r.Fix = "bud config unset ai.claude.command"
-		return r, true
-	}
-	// Bedrock and the rest go to their cloud directly, past Headroom's proxy
-	// (JGA-149): it starts, but compresses nothing
-	if filepath.Base(cmd[0]) == "headroom" && s.Cloud() {
-		r.Status = Warn
-		r.Detail = "Claude Code on " + s.Method + " talks to it directly, past Headroom's proxy, so Headroom compresses nothing"
-		r.Fix = "bud config unset ai.claude.command"
-		return r, true
-	}
-	r.Detail = "sessions run through " + strings.Join(cmd, " ")
-
-	return r, true
-}
-
-// ClaudeCheck names the Claude Code check, which the dashboard gives its own banner
-const ClaudeCheck = "claude code"
-
-// checkClaude reports Claude Code. It only ever warns: bud works without it,
-// there's just no AI (BASE.md 4.2)
-func checkClaude(cfg config.Settings) (Result, claude.Status) {
-	r := Result{Name: ClaudeCheck}
-	s, err := claudeCheck()
-	switch {
-	case err != nil:
-		r.Status, r.Detail = Warn, err.Error()
-	case s.Bin == "" && cfg.AI.Backend != "claude":
-		// another backend runs the editor's AI (D131)
-		r.Detail = "not installed (ai.backend is " + cfg.AI.Backend + ")"
-	case s.Bin == "" && !cfg.AI.Claude.Autostart:
-		r.Detail = "not installed (ai.claude.autostart is off)"
-	case s.Bin == "":
-		r.Status, r.Detail, r.Fix = Warn, "not installed, so there's no AI in the editor", "bud claude setup"
-	case !s.LoggedIn && s.Elsewhere != "":
-		r.Status, r.Detail, r.Fix = Warn, s.Version+", not logged in here; ~/.claude runs it on "+s.Elsewhere+", which bud's own config dir doesn't see", "bud claude setup"
-	case !s.LoggedIn:
-		r.Status, r.Detail, r.Fix = Warn, s.Version+", not logged in", "bud claude setup"
-	default:
-		r.Detail = s.Version + ", logged in with " + s.Method
-	}
-
-	return r, s
-}
-
 // agentCheck is swappable in tests
 var agentCheck = agent.Check
 
-// AgentCheck is the AI backend check's name
-const AgentCheck = "ai backend"
+// AgentCheck is the OpenCode check's name, which the dashboard reads
+const AgentCheck = "opencode"
 
-// checkAgent checks the backend ai.backend names (D131): its command, and
-// for OpenClaw the Gateway (not with --quick, which skips the network). It
-// only warns: bud works without AI
-func checkAgent(cfg config.Settings, quick bool) Result {
+// checkAgent checks that OpenCode, the one agent bud talks to (Suite D139),
+// is installed. It only warns: bud works without AI
+func checkAgent(quick bool) Result {
 	r := Result{Name: AgentCheck}
-	st := agentCheck(cfg, quick)
-	var detail []string
-	if st.Version != "" {
-		detail = append(detail, st.Version)
-	}
-	if st.Reachable {
-		detail = append(detail, "Gateway at "+st.Gateway+" answering")
-	}
+	st := agentCheck(quick)
 	if len(st.Problems) == 0 {
-		r.Detail = st.Backend
-		if len(detail) > 0 {
-			r.Detail += ": " + strings.Join(detail, ", ")
+		r.Detail = "installed"
+		if st.Version != "" {
+			r.Detail = st.Version
 		}
 		return r
 	}
@@ -300,7 +221,7 @@ func checkAgent(cfg config.Settings, quick bool) Result {
 		fixes = append(fixes, p.Fix)
 	}
 	r.Status = Warn
-	r.Detail = st.Backend + ": " + strings.Join(whats, "; ")
+	r.Detail = strings.Join(whats, "; ")
 	r.Fix = strings.Join(fixes, "; ")
 	return r
 }

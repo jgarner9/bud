@@ -31,23 +31,23 @@ function M.mood(state, hour)
   return "normal"
 end
 
--- ai_check is the doctor check that says whether the AI backend is set up:
--- Claude Code's own for the claude backend, else bud's "ai backend" (D131)
-function M.ai_check(backend)
-  return backend == "claude" and "claude code" or "ai backend"
+-- ai_check is the doctor check that says whether OpenCode is set up (D131);
+-- the Go doctor names its check this once JGA-403 lands
+function M.ai_check()
+  return "opencode"
 end
 
 -- doctor_banners turns `bud doctor --json` output into banners. The AI
--- backend gets its own, with its own key, since setting it up is one
+-- check gets its own, with its own key, since setting OpenCode up is one
 -- command; its result comes back too, for the health line
-function M.doctor_banners(results, backend)
-  backend = backend or "claude"
+function M.doctor_banners(results)
   local fails, warns = 0, 0
   local ai
   for _, r in ipairs(results) do
-    -- the other backend's check is not this one's business
-    local other = r.name ~= M.ai_check(backend) and (r.name == "claude code" or r.name == "ai backend")
-    if r.name == M.ai_check(backend) then
+    -- the Go doctor's Claude Code check isn't this one's business (it goes
+    -- with the rest of Claude Code's support)
+    local other = r.name == "claude code"
+    if r.name == M.ai_check() then
       ai = r
     elseif not other and r.status == "fail" then
       fails = fails + 1
@@ -67,19 +67,18 @@ function M.doctor_banners(results, backend)
   end
   local ai_ok = not ai or ai.status == "ok"
   if not ai_ok then
-    local name = backend == "claude" and "Claude Code" or backend
-    table.insert(banners, { level = "warn", text = name .. " isn't set up, press c" })
+    table.insert(banners, { level = "warn", text = "opencode isn't set up, press c" })
   end
   return banners, fails + warns == 0 and ai_ok, ai
 end
 
 -- ai_health is the health line's AI part: from doctor once it's back, until
--- then from whether the backend's command is on PATH
-function M.ai_health(backend, result, executable)
+-- then from whether opencode is on PATH
+function M.ai_health(result, executable)
   if result then
-    return result.status == "ok" and (backend .. " ready") or (backend .. " not set up")
+    return result.status == "ok" and "opencode ready" or "opencode not set up"
   end
-  return executable and (backend .. " ready") or ("no " .. backend .. " yet")
+  return executable and "opencode ready" or "no opencode yet"
 end
 
 -- update_banner turns update.json (what `bud update --background` found, D9)
@@ -124,10 +123,7 @@ local function health()
     table.insert(parts, (icons.startup .. " %d ms"):format(vim.g.bud_startup_ms))
   end
   table.insert(parts, icons.plugins .. " " .. #require("bud.pack").names .. " plugins")
-  local backend = require("bud.ai.agent").backend()
-  local argv = require("bud.ai.agent").argv(backend)
-  local bin = backend == "claude" and "claude" or (argv and argv[1] or backend)
-  table.insert(parts, icons.claude .. " " .. M.ai_health(backend, current.claude, vim.fn.executable(bin) == 1))
+  table.insert(parts, icons.claude .. " " .. M.ai_health(current.ai, vim.fn.executable("opencode") == 1))
   return table.concat(parts, " · ")
 end
 
@@ -278,12 +274,11 @@ local function keys(buf)
   map("u", function()
     cli.terminal({ "update" })
   end, "Update")
-  -- chat (the backend's TUI, JGA-165), or setting the backend up first when
-  -- the banner says it isn't
+  -- chat (OpenCode's TUI, JGA-165), or setting OpenCode up first when the
+  -- banner says it isn't
   map("c", function()
-    if current.claude and current.claude.status ~= "ok" then
-      local claude = require("bud.ai.agent").backend() == "claude"
-      cli.terminal(claude and { "claude", "setup" } or { "ai", "setup" })
+    if current.ai and current.ai.status ~= "ok" then
+      cli.terminal({ "ai", "setup" })
     else
       require("bud.ai.chat").open()
     end
@@ -410,7 +405,7 @@ local function load()
         local ok, results = pcall(vim.json.decode, res.stdout or "")
         if ok and type(results) == "table" then
           local clean
-          current.banners, clean, current.claude = M.doctor_banners(results, require("bud.ai.agent").backend())
+          current.banners, clean, current.ai = M.doctor_banners(results)
           current.doctor = { clean = clean }
           draw()
         end

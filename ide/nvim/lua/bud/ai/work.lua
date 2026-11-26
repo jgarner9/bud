@@ -12,7 +12,7 @@
 -- issue and pushes a branch named after it. bud only starts it, remembers the
 -- session's link, and notices when the branch shows up on origin.
 
--- the configured backend's session (D131)
+-- the OpenCode session (D131)
 local ai = require("bud.ai.session")
 
 local M = {}

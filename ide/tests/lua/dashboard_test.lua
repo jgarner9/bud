@@ -53,30 +53,23 @@ eq(banners, {
 }, "banners")
 banners, clean = dashboard.doctor_banners({ { name = "git", status = "ok" } })
 eq({ banners, clean }, { {}, true }, "clean")
-local claude
-banners, clean, claude = dashboard.doctor_banners({
-  { name = "git", status = "ok" },
+-- OpenCode's own check gives the banner, and the Go doctor's Claude Code
+-- check says nothing
+local ai
+banners, clean, ai = dashboard.doctor_banners({
   { name = "claude code", status = "warn", detail = "not installed" },
+  { name = "opencode", status = "warn", detail = "opencode isn't installed" },
 })
-eq(banners, { { level = "warn", text = "Claude Code isn't set up, press c" } }, "claude banner, not a doctor warning")
-eq({ clean, claude.detail }, { false, "not installed" }, "claude result comes back")
-
--- on another backend (D131) its own check gives the banner, and Claude
--- Code's says nothing
-banners, clean, claude = dashboard.doctor_banners({
-  { name = "claude code", status = "warn", detail = "not installed" },
-  { name = "ai backend", status = "warn", detail = "openclaw: openclaw isn't installed" },
-}, "openclaw")
-eq(banners, { { level = "warn", text = "openclaw isn't set up, press c" } }, "the backend's banner")
-eq(claude.detail, "openclaw: openclaw isn't installed", "the backend's result comes back")
-banners, clean = dashboard.doctor_banners({ { name = "ai backend", status = "ok" } }, "openclaw")
-eq({ banners, clean }, { {}, true }, "openclaw set up")
+eq(banners, { { level = "warn", text = "opencode isn't set up, press c" } }, "opencode's banner, not a doctor warning")
+eq({ clean, ai.detail }, { false, "opencode isn't installed" }, "its result comes back")
+banners, clean = dashboard.doctor_banners({ { name = "opencode", status = "ok" } })
+eq({ banners, clean }, { {}, true }, "opencode set up")
 
 -- health line's AI part
-eq(dashboard.ai_health("claude", nil, false), "no claude yet", "before doctor, not on PATH")
-eq(dashboard.ai_health("claude", nil, true), "claude ready", "before doctor, on PATH")
-eq(dashboard.ai_health("claude", { status = "warn" }, true), "claude not set up", "logged out")
-eq(dashboard.ai_health("openclaw", { status = "ok" }, true), "openclaw ready", "ready")
+eq(dashboard.ai_health(nil, false), "no opencode yet", "before doctor, not on PATH")
+eq(dashboard.ai_health(nil, true), "opencode ready", "before doctor, on PATH")
+eq(dashboard.ai_health({ status = "warn" }, true), "opencode not set up", "not set up")
+eq(dashboard.ai_health({ status = "ok" }, true), "opencode ready", "ready")
 
 -- git
 eq(

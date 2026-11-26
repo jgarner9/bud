@@ -13,7 +13,7 @@
 -- Permission requests show in the chat output, answered there (1/2/3 or
 -- j/k and <CR>) or with <leader>ay and <leader>an from any window. Edits are
 -- written when OpenCode allows them and reviewed afterwards with <leader>ad,
--- the session diff, which can revert a prompt's changes (docs/backends.md).
+-- the session diff, which can revert a prompt's changes.
 
 local M = {}
 
@@ -29,16 +29,8 @@ M.keys = {
 -- the executable opencode.nvim starts; a test can point it elsewhere
 M.executable = "opencode"
 
--- on is true when ai.backend is opencode
-function M.on()
-  return require("bud.ai.agent").backend() == "opencode"
-end
-
 -- problem says why an :Opencode command can't run now, or nil when it can
 function M.problem()
-  if not M.on() then
-    return "this key needs the opencode backend: bud config set ai.backend opencode"
-  end
   if vim.fn.executable(M.executable) ~= 1 then
     return "opencode isn't on PATH: install the harness with bud install --device <name>, or run bud ai setup"
   end

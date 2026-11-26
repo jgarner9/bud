@@ -1,7 +1,7 @@
 -- Run with: nvim --clean --headless -l tests/lua/agent_test.lua (just lua-test)
 -- bud.ai.agent on the fake ACP agent: a session per root, streamed replies,
--- permissions, files through buffers, interrupt, a crash, and the backends'
--- command lines (D131-D133)
+-- permissions, files through buffers, interrupt, a crash, and the command
+-- line (D131-D133, D139)
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
 
@@ -29,45 +29,14 @@ agent.ids_file = function()
   return tmp .. "/agent-sessions.json"
 end
 
--- the backends' command lines
-local settings = {}
-local function get(key, default)
-  local v = settings[key]
-  if v == nil then
-    return default
-  end
-  return v
-end
-eq(agent.argv("openclaw", get), { "openclaw", "acp" }, "openclaw with nothing set")
-settings["ai.openclaw.url"] = "wss://home.example.ts.net:18789"
-settings["ai.openclaw.token_file"] = "/secrets/gateway-token"
-eq(
-  agent.argv("openclaw", get),
-  { "openclaw", "acp", "--url", "wss://home.example.ts.net:18789", "--token-file", "/secrets/gateway-token" },
-  "openclaw with a Gateway"
-)
--- no --session: a session OpenClaw's bridge makes keeps its working dir (D139)
-eq(#agent.argv("openclaw", get), 6, "no session flag")
-eq(agent.bridge_key("abc"), "agent:main:acp-bridge:abc", "the bridge's key")
-eq(agent.bridge_key("abc", "coder"), "agent:coder:acp-bridge:abc", "with another agent")
-eq(agent.bridge_key("abc", ""), "agent:main:acp-bridge:abc", "empty is main, as in Go")
-eq(agent.argv("claude", get), { "claude-agent-acp" }, "claude")
-eq(agent.argv("codex", get), { "codex-acp" }, "codex")
-eq(agent.argv("opencode", get), { "opencode", "acp" }, "opencode")
-local argv, why = agent.argv("custom", get)
-eq(argv, nil, "custom without a command")
-assert(why:find("ai.custom.command", 1, true), why)
-settings["ai.custom.command"] = { "gemini", "--experimental-acp" }
-eq(agent.argv("custom", get), { "gemini", "--experimental-acp" }, "custom")
-argv, why = agent.argv("gpt", get)
-eq(argv, nil, "an unknown backend")
-assert(why:find('"gpt"', 1, true), why)
-eq(agent.backend(), "claude", "claude is the default backend for now (D140)")
--- the rest of this file is about an ACP backend: openclaw
-vim.fn.writefile({ vim.json.encode({ ai = { backend = "openclaw" } }) }, tmp .. "/config.json")
-eq(agent.backend(), "openclaw", "set in config")
+-- the command lines: OpenCode's ACP server, and its TUI on a project
+eq(agent.argv(), { "opencode", "acp" }, "opencode acp")
+eq(agent.tui(proj).argv, { "opencode", proj }, "opencode on the project")
 
--- a backend that isn't installed: missing, with why
+-- config.json's ai.backend isn't read (D139)
+vim.fn.writefile({ vim.json.encode({ ai = { backend = "claude" } }) }, tmp .. "/config.json")
+
+-- opencode isn't installed: missing, with why
 agent.command = function()
   return { "no-such-acp-agent-bud-test" }
 end
@@ -212,7 +181,7 @@ agent.send("edit " .. other, { root = proj })
 turn_done(8)
 eq(vim.fn.readfile(other), { "edited" }, "written on disk, its dir made")
 
--- files outside the project are refused: a remote backend can't reach the
+-- files outside the project are refused: the agent can't reach the
 -- rest of this machine through bud
 eq(agent.inside(proj, proj .. "/a/b.txt"), true, "inside")
 eq(agent.inside(proj, proj .. "/../elsewhere.txt"), false, "climbing out")
@@ -300,8 +269,14 @@ turn_done(14)
 eq(named("done")[14].ok, true, "works after a restart")
 
 -- the session id is saved per project, for the next start (D139)
-eq(agent.saved_id(proj, "openclaw"), s.id, "saved")
-eq(agent.saved_id(proj, "codex"), nil, "only for its backend")
+eq(agent.saved_id(proj), s.id, "saved")
+local ids = vim.json.decode(table.concat(vim.fn.readfile(tmp .. "/agent-sessions.json"), "\n"))
+eq(ids[proj].backend, "opencode", "saved for opencode")
+ids[proj].backend = "another-agent"
+vim.fn.writefile({ vim.json.encode(ids) }, tmp .. "/agent-sessions.json")
+eq(agent.saved_id(proj), nil, "an id saved for another agent isn't used")
+ids[proj].backend = "opencode"
+vim.fn.writefile({ vim.json.encode(ids) }, tmp .. "/agent-sessions.json")
 
 -- reattached with session/load when the agent can, its history replayed
 agent.stop(proj)
@@ -333,7 +308,7 @@ wait(function()
   return s.status == "ready"
 end, "a fresh session")
 eq(s.id ~= "gone", true, "a new id")
-eq(agent.saved_id(proj, "openclaw"), s.id, "and it's saved")
+eq(agent.saved_id(proj), s.id, "and it's saved")
 
 -- a session the agent refuses after starting: what was waiting is answered
 -- not sent, and the next send starts it again
@@ -397,68 +372,17 @@ wait(function()
   return s.status == "stopped"
 end, "reaped")
 
--- turns recorded from a real OpenClaw Gateway through openclaw acp
--- (tests/fixtures/openclaw), replayed by the fake
-local fixtures = repo .. "/tests/fixtures/openclaw/"
-events = {}
 agent.session(proj)
 wait(function()
   return s.status == "ready"
-end, "ready for the replays")
-local function replay(name)
-  local before = #named("done")
-  agent.send("replay " .. fixtures .. name .. ".log", { root = proj })
-  wait(function()
-    return #named("done") > before
-  end, "the " .. name .. " replay")
-end
+end, "ready again after the reap")
 
-replay("hello")
-eq(named("message")[#named("message")].text, "Hello from the scripted model.", "openclaw's streamed reply")
-
--- an edit runs without asking, and its patch comes afterwards (D134)
-replay("edit")
-eq(named("tool_use")[#named("tool_use")].kind, "edit", "an edit")
-local upd = named("tool_update")[#named("tool_update")]
-eq(upd.status, "completed", "edit completed")
-assert(upd.patch and upd.patch:find("+gamma", 1, true), vim.inspect(upd.patch))
-eq(upd.output, "Successfully replaced 1 block(s) in notes.txt.", "its output text")
-
--- exec under tools.exec.mode = "ask": a permission request with OpenClaw's options
-local options
-agent.permission = function(req, respond)
-  options = vim.tbl_map(function(o)
-    return o.kind .. "=" .. o.optionId
-  end, req.options)
-  respond("allow-once")
-end
-replay("perm-allow")
-eq(options, { "allow_once=allow-once", "reject_once=deny" }, "openclaw's options")
-eq(named("tool_update")[#named("tool_update")].status, "completed", "allowed exec ran")
-agent.permission = function(_, respond)
-  respond("deny")
-end
-replay("perm-reject")
-upd = named("tool_update")[#named("tool_update")]
-eq(upd.status, "failed", "denied exec failed")
-assert(upd.output:find("user-denied", 1, true), upd.output)
-
--- bud.ai.session runs on bud.ai.agent for any backend but claude
+-- bud.ai.session is bud.ai.agent, whatever ai.backend says (D139)
 local session = require("bud.ai.session")
-eq(session.module(), agent, "openclaw: bud.ai.agent")
+eq(session.module(), agent, "bud.ai.agent")
 eq(session.status(proj), agent.status(proj), "calls go to it")
-local config = require("bud.config")
-local real_get = config.get
-config.get = function(key, default)
-  if key == "ai.backend" then
-    return "claude"
-  end
-  return real_get(key, default)
-end
-eq(session.module(), require("bud.ai.claude"), "claude: bud.ai.claude, until task 6")
-config.get = real_get
 
--- the backend's settings (ACP config options), as :BudAgent option sets them
+-- the agent's settings (ACP config options), as :BudAgent option sets them
 local function option(id)
   for _, o in ipairs(agent.options(proj)) do
     if o.id == id then
@@ -466,7 +390,7 @@ local function option(id)
     end
   end
 end
-eq(option("thought_level"), "adaptive", "the backend's settings come with the session")
+eq(option("thought_level"), "adaptive", "the agent's settings come with the session")
 local set_err = "unset"
 agent.set_option(proj, "thought_level", "high", function(err)
   set_err = err
@@ -490,12 +414,12 @@ assert(set_err:find('no setting "nope"', 1, true), set_err)
 
 -- :BudAgent's status line
 local described = agent.describe(proj)
-assert(described:find("^openclaw: %a+"), described)
+assert(described:find("^opencode: %a+"), described)
 assert(described:find("fake%-acp 1.0.0"), described)
 
--- the status line names the backend
+-- the status line names the agent
 vim.cmd.cd(proj)
-assert(agent.statusline():find("openclaw", 1, true), agent.statusline())
+assert(agent.statusline():find("opencode", 1, true), agent.statusline())
 
 agent._reset()
 vim.fn.delete(tmp, "rf")

@@ -1,5 +1,5 @@
 -- OpenCode inside Neovim (D150, JGA-350). bud.ai.opencode holds the keys and
--- the options; <leader>ac opens it when ai.backend is opencode.
+-- the options; <leader>ac opens it.
 
 return {
   {

@@ -9,7 +9,7 @@
 -- The conversation shows as a log in a split, where i asks for changes; each
 -- reply runs the checks again.
 
--- the configured backend's session (D131)
+-- the OpenCode session (D131)
 local ai = require("bud.ai.session")
 
 local M = {}

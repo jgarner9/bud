@@ -43,6 +43,12 @@ Earlier in the same run (2026-11-21 and the night after): R6b approvals at Bud-o
 
 Not set up on the home server yet: revisit item 31.
 
+## Built on 2026-11-25
+
+| Issue | What | PR | Decisions |
+| --- | --- | --- | --- |
+| JGA-398 | JSONC is parsed with github.com/tidwall/jsonc, D1's one stdlib exception; the homegrown stripper is a one-line wrapper over its offset-preserving `ToJSON` | this PR | D153 (BASE) |
+
 ## The home server
 
 Fully set up and verified by Jason as of 2026-11-22 08:20 UTC: gateway, router, Hermes (both profiles), signal-cli and bud-signal, embeddings, the memory service with memory-mcp through the gateway (Hermes's own memory off), calendar, contacts, mail, and the planning OpenCode as the `bud-planning` user.

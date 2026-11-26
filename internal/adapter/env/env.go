@@ -36,11 +36,7 @@ func Merge(frags []Fragment) (map[string]any, error) {
 	out := map[string]any{}
 	for _, f := range frags {
 		var frag map[string]any
-		b, err := registry.StripJSONC(f.Src)
-		if err == nil {
-			err = json.Unmarshal(b, &frag)
-		}
-		if err != nil {
+		if err := json.Unmarshal(registry.StripJSONC(f.Src), &frag); err != nil {
 			return nil, fmt.Errorf("env fragment %s: %w", f.Name, err)
 		}
 		replaceServerLists(out, frag)

@@ -1,71 +1,24 @@
 package registry
 
 import (
-	"bytes"
 	"fmt"
+
+	"github.com/tidwall/jsonc"
 )
 
-// StripJSONC turns JSONC into JSON: it blanks // and /* */ comments and drops
-// a comma that only precedes a closing } or ], leaving strings untouched.
-// Comments become spaces (newlines kept), so encoding/json's error offsets and
-// any line numbers worked out from them still point at the original text
-func StripJSONC(src []byte) ([]byte, error) {
-	out := make([]byte, 0, len(src))
-	// pendingComma is where in out a comma waits to learn what follows it
-	pendingComma := -1
-	line := 1
-	for i := 0; i < len(src); i++ {
-		c := src[i]
-		switch {
-		case c == '"':
-			end, err := stringEnd(src, i)
-			if err != nil {
-				return nil, fmt.Errorf("line %d: %w", line, err)
-			}
-			pendingComma = -1
-			out = append(out, src[i:end]...)
-			i = end - 1
-		case c == '/' && i+1 < len(src) && src[i+1] == '/':
-			for i < len(src) && src[i] != '\n' {
-				out = append(out, ' ')
-				i++
-			}
-			i-- // the newline goes through the default case
-		case c == '/' && i+1 < len(src) && src[i+1] == '*':
-			end := bytes.Index(src[i+2:], []byte("*/"))
-			if end < 0 {
-				return nil, fmt.Errorf("line %d: a /* comment is never closed", line)
-			}
-			for _, b := range src[i : i+2+end+2] {
-				if b == '\n' {
-					line++
-					out = append(out, '\n')
-				} else {
-					out = append(out, ' ')
-				}
-			}
-			i += 2 + end + 1
-		case c == ',':
-			pendingComma = len(out)
-			out = append(out, c)
-		case c == '}' || c == ']':
-			if pendingComma >= 0 {
-				out[pendingComma] = ' '
-				pendingComma = -1
-			}
-			out = append(out, c)
-		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
-			if c == '\n' {
-				line++
-			}
-			out = append(out, c)
-		default:
-			pendingComma = -1
-			out = append(out, c)
-		}
-	}
-
-	return out, nil
+// StripJSONC turns JSONC into JSON: it blanks // and /* */ comments and a
+// comma that only precedes a closing } or ], leaving strings untouched.
+// Comments become spaces (newlines kept), so encoding/json's error offsets
+// and any line numbers worked out from them still point at the original
+// text. The scanning is github.com/tidwall/jsonc's ToJSON: it is the one
+// exception to D1's standard-library-only rule (D153), granted by Jason,
+// and the only established library whose output keeps the input's byte
+// length and line breaks, which PatchFacts' in-place edits and Parse's
+// line-numbered errors depend on. It reports no error of its own: an
+// unterminated string or comment is left for encoding/json to report, at
+// the right line
+func StripJSONC(src []byte) []byte {
+	return jsonc.ToJSON(src)
 }
 
 // stringEnd returns the index just past the string that opens at src[start]

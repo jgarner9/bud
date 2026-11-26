@@ -14,10 +14,7 @@ import (
 func PatchFacts(src []byte, models map[string]Model) ([]byte, error) {
 	// StripJSONC keeps every byte offset, so spans found in the plain JSON
 	// point into src as well
-	plain, err := StripJSONC(src)
-	if err != nil {
-		return nil, err
-	}
+	plain := StripJSONC(src)
 	root, err := scanObject(plain, skipSpace(plain, 0))
 	if err != nil {
 		return nil, fmt.Errorf("patch the registry: %w", err)

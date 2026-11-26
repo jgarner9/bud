@@ -12,7 +12,7 @@
 // list: `bud registry refresh content/env/registry.jsonc go` rechecks them and
 // --write rewrites them (Suite D69). grade, allowance (Go Plus's included
 // dollars a month) and retention (days the provider keeps requests) are kept
-// by hand from https://opencode.ai/docs/go, last checked 2026-11-15.
+// by hand from https://opencode.ai/console/go, last checked 2026-11-25.
 {
   "version": 1,
 
@@ -70,7 +70,7 @@
     "kimi-k3.1-pro": { "provider": "go", "name": "kimi-k3.1-pro", "privacy": ["P1", "P2"], "cost": "C1",
       "grade": "top", "allowance": 60, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 1048576, "output": 1048576, "price": { "in": 2, "out": 10 } },
     "glm-5.3": { "provider": "go", "name": "glm-5.3", "privacy": ["P1", "P2"], "cost": "C1",
-      "grade": "top", "allowance": 120, "retention": 0, "inputs": ["text"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 1.4, "out": 4.4 } },
+      "grade": "top", "allowance": 400, "retention": 0, "inputs": ["text"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 1.4, "out": 4.4 } },
     "qwen3.8-max": { "provider": "go", "name": "qwen3.8-max", "privacy": ["P1", "P2"], "cost": "C1",
       "grade": "top", "allowance": 60, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 2, "out": 6 } },
     // the price is half off until 2026-11-30
@@ -80,8 +80,6 @@
     // mid
     "kimi-k2.7-code": { "provider": "go", "name": "kimi-k2.7-code", "privacy": ["P1", "P2"], "cost": "C1",
       "grade": "mid", "allowance": 180, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning", "json"], "context": 262144, "output": 262144, "price": { "in": 0.95, "out": 4 } },
-    "glm-5.2": { "provider": "go", "name": "glm-5.2", "privacy": ["P1", "P2"], "cost": "C1",
-      "grade": "mid", "allowance": 180, "retention": 0, "inputs": ["text"], "caps": ["tools", "reasoning", "json"], "context": 1000000, "output": 131072, "price": { "in": 1.4, "out": 4.4 } },
     "minimax-m3": { "provider": "go", "name": "minimax-m3", "privacy": ["P1", "P2"], "cost": "C1",
       "grade": "mid", "allowance": 180, "retention": 0, "inputs": ["text", "image", "video"], "caps": ["tools", "reasoning"], "context": 1000000, "output": 131072, "price": { "in": 0.3, "out": 1.2 } },
     "qwen3.7-plus": { "provider": "go", "name": "qwen3.7-plus", "privacy": ["P1", "P2"], "cost": "C1",
@@ -113,7 +111,7 @@
     // short questions that want a fast answer (Suite D121): a Go flash
     // model, Qwen for P0 and when Go is down
     "quick": { "pool": ["glm-5.3-flash", "qwen3.8-flash", "qwen-35b"] },
-    "coding": { "needs": ["tools"], "pool": ["glm-5.3", "kimi-k2.7-code", "minimax-m3", "glm-5.2", "glm-5.3-flash", "minimax-m3.1-flash", "qwen-35b"] },
+    "coding": { "needs": ["tools"], "pool": ["glm-5.3", "kimi-k2.7-code", "minimax-m3", "glm-5.3-flash", "minimax-m3.1-flash", "qwen-35b"] },
     "planning": { "needs": ["reasoning"], "pool": ["kimi-k3.1-pro", "glm-5.3", "qwen3.8-max", "gemini-4-argon", "qwen3.7-plus", "qwen-35b"] },
     // the home server's classifier, then the Qwen box when it's awake (Suite D67)
     "classifier": { "needs": ["json"], "pool": ["gemma-4-e4b", "qwen-35b"] },

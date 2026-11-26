@@ -27,18 +27,21 @@ func init() {
 }
 
 func Update() *Command {
-	var check, background, noDoctor bool
+	var check, background, noDoctor, fromMain bool
 	var channel string
 	return &Command{
 		Name:  "update",
-		Usage: "Installs a newer release if there is one, syncs the Bud Neovim config, restores pinned plugins, and runs bud doctor; --check only looks",
+		Usage: "Installs a newer release if there is one, syncs the Bud Neovim config, restores pinned plugins, and runs bud doctor; --check only looks; --from-main builds main from source instead",
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&check, "check", false, "only report whether a newer release exists")
 			fs.BoolVar(&background, "background", false, "the check bud starts at launch: install a stable release (update.auto), or note it for the dashboard")
 			fs.BoolVar(&noDoctor, "no-doctor", false, "skip the full bud doctor and the app rebuild at the end, for scripts that only want the sync")
+			fs.BoolVar(&fromMain, "from-main", false, "development: build the tip of main from source and install it, instead of a release (needs git and Go; the build is unsigned)")
 			fs.StringVar(&channel, "channel", "", "release channel to check: "+strings.Join(updater.Channels, " or ")+" (default: update.channel in config.json)")
 		},
-		Run: func(g *Globals, args []string) error { return update(g, args, check, background, noDoctor, channel) },
+		Run: func(g *Globals, args []string) error {
+			return update(g, args, check, background, noDoctor, fromMain, channel)
+		},
 	}
 }
 
@@ -60,6 +63,9 @@ var (
 	checkRelease  = updater.Check
 	fetchRelease  = updater.Fetch
 	checkBinary   = updater.CheckBinary
+	fetchMain     = updater.FetchMain
+	lockSource    = updater.LockSource
+	buildMain     = updater.BuildMain
 	execBinary    = syscall.Exec
 	executable    = os.Executable
 	applyConfig   = nvim.Apply
@@ -67,9 +73,12 @@ var (
 	doctorChecks  = doctor.Run
 )
 
-func update(g *Globals, args []string, check, background, noDoctor bool, channel string) error {
+func update(g *Globals, args []string, check, background, noDoctor, fromMain bool, channel string) error {
 	if len(args) > 0 {
 		return usageErrorf("update takes no arguments")
+	}
+	if fromMain && (check || background || channel != "") {
+		return usageErrorf("--from-main builds main and installs it now, so it can't go with --check, --background or --channel")
 	}
 	if channel != "" && !slices.Contains(updater.Channels, channel) {
 		return usageErrorf("--channel must be one of %s, not %q", strings.Join(updater.Channels, ", "), channel)
@@ -122,7 +131,12 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 		refreshBundles(g, p)
 		return checkHealth("updated to " + version.String() + ", but ")
 	}
-	if err := selfUpdate(g, p, channel, noDoctor); err != nil {
+	if fromMain {
+		err = selfUpdateFromMain(g, p, noDoctor)
+	} else {
+		err = selfUpdate(g, p, channel, noDoctor)
+	}
+	if err != nil {
 		return err
 	}
 	if err := applyConfig(); err != nil {
@@ -261,20 +275,26 @@ func swapIn(g *Globals, p *paths.Paths, r *updater.Release, target string) ([]st
 	}
 	defer os.RemoveAll(dir)
 
-	ctx := context.Background()
-	bin, err := fetchRelease(ctx, r, runtime.GOOS, runtime.GOARCH, dir, g.Logf)
+	bin, err := fetchRelease(context.Background(), r, runtime.GOOS, runtime.GOARCH, dir, g.Logf)
 	if err != nil {
 		return nil, err
 	}
-	if err := checkBinary(ctx, bin); err != nil {
-		return nil, err
+
+	return before, installBinary(g, p, bin, target)
+}
+
+// installBinary checks that bin runs, then swaps it in at target, keeping
+// this bud as bud.prev
+func installBinary(g *Globals, p *paths.Paths, bin, target string) error {
+	if err := checkBinary(context.Background(), bin); err != nil {
+		return err
 	}
 	if err := updater.Swap(bin, target, p.PrevBinary()); err != nil {
-		return nil, err
+		return err
 	}
 	g.Logf("kept %s as %s", version.String(), p.PrevBinary())
 
-	return before, nil
+	return nil
 }
 
 // selfUpdate swaps in the channel's newest release and re-execs it to finish
@@ -313,8 +333,13 @@ func selfUpdate(g *Globals, p *paths.Paths, channel string, noDoctor bool) error
 		return err
 	}
 
-	// the new binary holds the new embedded config, so it does the sync
-	env := append(os.Environ(), updatedFromEnv+"="+s.Current, failingBeforeEnv+"="+strings.Join(before, ","))
+	return handOff(g, target, s.Current, before, noDoctor)
+}
+
+// handOff re-execs the freshly swapped-in bud at target to finish the update.
+// The new binary holds the new embedded config, so it does the sync
+func handOff(g *Globals, target, from string, before []string, noDoctor bool) error {
+	env := append(os.Environ(), updatedFromEnv+"="+from, failingBeforeEnv+"="+strings.Join(before, ","))
 	args := updateArgs(g, target)
 	// only forward: a rollback execs an older bud, which may not know the flag
 	if noDoctor {
@@ -325,6 +350,69 @@ func selfUpdate(g *Globals, p *paths.Paths, channel string, noDoctor bool) error
 	}
 
 	return nil
+}
+
+// selfUpdateFromMain is the development update (bud update --from-main): it
+// builds the tip of main from source and swaps that in, so there's no waiting
+// for a nightly or a release. The build is unsigned, so the release key and
+// checksums that guard a release can't vouch for it, and this says so. It
+// only returns when there's nothing to install or this binary isn't bud's to
+// replace (D20), like selfUpdate. Content isn't touched: it comes from its own
+// signed channel (bud sync), and a bud built from main reads whatever content
+// format main does
+func selfUpdateFromMain(g *Globals, p *paths.Paths, noDoctor bool) error {
+	fmt.Printf("Building bud from the tip of %s. A source build is unsigned: it skips the release signature and checksum check that stable and nightly updates get.\n", updater.SourceBranch)
+	ctx := context.Background()
+	dir := p.Source()
+	// held from the fetch until the build is done, so another run can't change the checkout under it
+	unlock, err := lockSource(dir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	commit, err := fetchMain(ctx, dir)
+	if err != nil {
+		return err
+	}
+	short := updater.ShortCommit(commit)
+	if updater.SourceCommit(version.String()) == short {
+		fmt.Printf("bud %s is already built from main (%s).\n", version.String(), short)
+		return nil
+	}
+
+	target, why, err := replaceable(p, "built from main ("+short+")")
+	if err != nil {
+		return err
+	}
+	if target == "" {
+		fmt.Println(why)
+		return nil
+	}
+
+	base, err := updater.SourceBase(dir)
+	if err != nil {
+		return err
+	}
+	v := updater.SourceVersion(base, now(), commit)
+	tmp, err := os.MkdirTemp("", "bud-update-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+
+	fmt.Printf("Building bud %s (the first build can take a minute)...\n", v)
+	bin := filepath.Join(tmp, "bud")
+	if err := buildMain(ctx, dir, bin, v); err != nil {
+		return err
+	}
+	before := failingChecks()
+	if err := installBinary(g, p, bin, target); err != nil {
+		return err
+	}
+
+	fmt.Printf("Updating bud %s to %s...\nContent stays on its own channel; run bud sync to pick up newer content.\n", version.String(), v)
+
+	return handOff(g, target, version.String(), before, noDoctor)
 }
 
 // backgroundUpdate is the check launching bud starts at most once a day (D9).

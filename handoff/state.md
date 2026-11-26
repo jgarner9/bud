@@ -6,6 +6,8 @@ Where Bud stands at the handoff from Claude Code to OpenCode. Linear (team JGA, 
 
 Working tree, 2026-11-26: `internal/mail`'s IMAP client is now the go-imap library behind a thin adapter (JGA-399, Suite D138, PR in review). `wire.go`, `utf7.go` and the hand-written transcripts are gone, and the package's tests run against go-imap's own in-process server. It is bud's second third-party Go module, after tidwall/jsonc. Nothing about the mail tools' behaviour changes; the one check it can't make is the first live run against iCloud.
 
+Working tree: `bud update --from-main` builds the tip of main from source and installs it, so a device needn't wait for the nightly or a release. It's explicit opt-in and unsigned, and says so; content stays on its own channel (`bud sync`). The signed update path is unchanged. Not yet run on the home server: after merge, update bud there with it once and check `bud version`.
+
 Working tree: a selected overlay fragment can supply a 1Password reference for a rendered OpenCode provider's `{env:VAR}` key. `bud agent` uses the synced reference file at launch; explicit registry references cannot be redirected.
 
 Interactive `bud agent` now gives OpenCode a resizing terminal inside `op run`. The Linux resize check used the real OpenCode TUI with a pipe-producing stand-in for `op`; native macOS verification is pending.

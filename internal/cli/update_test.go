@@ -54,7 +54,7 @@ func TestUpdateCheck(t *testing.T) {
 			return tt.status, tt.err
 		}
 		var err error
-		out := captureStdout(t, func() { err = update(&Globals{}, nil, true, false, false, "") })
+		out := captureStdout(t, func() { err = update(&Globals{}, nil, true, false, false, false, "") })
 		if err != nil || !strings.Contains(out, tt.want) {
 			t.Errorf("got %q, %v; want %q", out, err, tt.want)
 		}
@@ -64,7 +64,7 @@ func TestUpdateCheck(t *testing.T) {
 		}
 	}
 
-	captureStdout(t, func() { update(&Globals{}, nil, true, false, false, "nightly") })
+	captureStdout(t, func() { update(&Globals{}, nil, true, false, false, false, "nightly") })
 	if asked != "nightly" {
 		t.Errorf("--channel nightly checked %q", asked)
 	}
@@ -271,7 +271,7 @@ func TestUpdateSyncsAndChecks(t *testing.T) {
 	doctorChecks = func(doctor.Options) []doctor.Result { steps = append(steps, "doctor"); return nil }
 
 	var err error
-	out := captureStdout(t, func() { err = update(&Globals{}, nil, false, false, false, "") })
+	out := captureStdout(t, func() { err = update(&Globals{}, nil, false, false, false, false, "") })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestUpdateAfterRollback(t *testing.T) {
 		return nil, nil
 	}
 
-	err := update(&Globals{}, nil, false, false, false, "")
+	err := update(&Globals{}, nil, false, false, false, false, "")
 	if !synced || err == nil || !strings.Contains(err.Error(), "0.6.0 was rolled back") || !strings.Contains(err.Error(), "doctor failed: nvim") {
 		t.Fatalf("synced %v, err %v", synced, err)
 	}
@@ -467,5 +467,102 @@ func TestDevArgs(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	if err := devUnlink(nil); err == nil || !strings.Contains(err.Error(), "isn't linked") {
 		t.Errorf("unlink when not linked: %v", err)
+	}
+}
+
+func TestSelfUpdateFromMain(t *testing.T) {
+	state, data, cache := t.TempDir(), t.TempDir(), t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	t.Setenv("XDG_DATA_HOME", data)
+	t.Setenv("XDG_CACHE_HOME", cache)
+	p, err := paths.Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed := filepath.Join(t.TempDir(), "bud")
+	os.WriteFile(installed, []byte("old"), 0o755)
+	os.MkdirAll(filepath.Dir(p.InstallReceipt()), 0o755)
+	os.WriteFile(p.InstallReceipt(), []byte(`{"method":"install.sh","path":"`+installed+`"}`), 0o644)
+
+	origFetch, origBuild, origBin, origExec, origExe, origFailing, origRelease := fetchMain, buildMain, checkBinary, execBinary, executable, failingChecks, fetchRelease
+	t.Cleanup(func() {
+		fetchMain, buildMain, checkBinary, execBinary, executable, failingChecks, fetchRelease = origFetch, origBuild, origBin, origExec, origExe, origFailing, origRelease
+	})
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+	var fetchedDir, builtVersion string
+	fetchMain = func(_ context.Context, dir string) (string, error) {
+		fetchedDir = dir
+		os.MkdirAll(dir, 0o755)
+		return commit, os.WriteFile(filepath.Join(dir, "VERSION"), []byte("1.1.0\n"), 0o644)
+	}
+	buildMain = func(_ context.Context, _, out, v string) error {
+		builtVersion = v
+		return os.WriteFile(out, []byte("new"), 0o755)
+	}
+	checkBinary = func(context.Context, string) error { return nil }
+	fetchRelease = func(context.Context, *updater.Release, string, string, string, func(string, ...any)) (string, error) {
+		t.Fatal("downloaded a release for --from-main")
+		return "", nil
+	}
+	failingChecks = func() []string { return []string{"git"} }
+	var execArgs, execEnv []string
+	execBinary = func(_ string, args, env []string) error {
+		execArgs, execEnv = args, env
+		return nil
+	}
+	executable = func() (string, error) { return installed, nil }
+
+	out := captureStdout(t, func() { err = selfUpdateFromMain(&Globals{}, p, true) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fetchedDir != p.Source() {
+		t.Errorf("fetched into %q, want %q", fetchedDir, p.Source())
+	}
+	if want := "1.1.1-nightly."; !strings.HasPrefix(builtVersion, want) || !strings.HasSuffix(builtVersion, ".main.0123456") {
+		t.Errorf("built version %q", builtVersion)
+	}
+	for _, want := range []string{"unsigned", "skips the release signature", "bud sync"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	for path, want := range map[string]string{installed: "new", p.PrevBinary(): "old"} {
+		if b, _ := os.ReadFile(path); string(b) != want {
+			t.Errorf("%s = %q, want %q", path, b, want)
+		}
+	}
+	if want := []string{installed, "update", "--no-doctor"}; !slices.Equal(execArgs, want) {
+		t.Errorf("exec %v, want %v", execArgs, want)
+	}
+	if !slices.Contains(execEnv, updatedFromEnv+"="+version.String()) || !slices.Contains(execEnv, failingBeforeEnv+"=git") {
+		t.Errorf("env missing %s or %s", updatedFromEnv, failingBeforeEnv)
+	}
+
+	// already built from this commit: nothing to do
+	orig := version.Version
+	t.Cleanup(func() { version.Version = orig })
+	version.Version = builtVersion
+	builtVersion, execArgs = "", nil
+	out = captureStdout(t, func() { err = selfUpdateFromMain(&Globals{}, p, false) })
+	if err != nil || builtVersion != "" || execArgs != nil || !strings.Contains(out, "already built from main (0123456)") {
+		t.Errorf("same commit: %q, %v, built %q, exec %v", out, err, builtVersion, execArgs)
+	}
+
+	// a bud install.sh didn't install isn't replaced, and nothing is built
+	version.Version = ""
+	os.Remove(p.InstallReceipt())
+	out = captureStdout(t, func() { err = selfUpdateFromMain(&Globals{}, p, false) })
+	if err != nil || builtVersion != "" || !strings.Contains(out, "install.sh didn't install this bud") {
+		t.Errorf("no receipt: %q, %v, built %q", out, err, builtVersion)
+	}
+
+	// a failed fetch or build leaves the installed bud alone
+	os.WriteFile(p.InstallReceipt(), []byte(`{"method":"install.sh","path":"`+installed+`"}`), 0o644)
+	os.WriteFile(installed, []byte("old"), 0o755)
+	buildMain = func(context.Context, string, string, string) error { return errors.New("compile failed") }
+	captureStdout(t, func() { err = selfUpdateFromMain(&Globals{}, p, false) })
+	if b, _ := os.ReadFile(installed); err == nil || string(b) != "old" {
+		t.Errorf("failed build: %v, installed %q", err, b)
 	}
 }

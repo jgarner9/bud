@@ -94,17 +94,20 @@ func runMailMCP(g *Globals, args []string, f mailFlags) error {
 	if f.record != "" {
 		return recordMail(g, acct, f.record)
 	}
+	p, perr := paths.Resolve()
 	if f.log == "" {
-		p, err := paths.Resolve()
-		if err != nil {
-			return err
+		if perr != nil {
+			return perr
 		}
 		f.log = p.MailActions()
 	}
 	if acct.Log, err = mail.NewLog(f.log); err != nil {
 		return err
 	}
-	if p, err := paths.Resolve(); err == nil {
+	// --log can run without bud's paths; the shared audit log can't, so say so
+	if perr != nil {
+		g.Noticef("audit: the shared audit log is off (%v); fix it and restart", perr)
+	} else {
 		acct.Log.Audit = openAudit(g, p)
 	}
 	// sends need the From address; without it bud mail-mcp still reads

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -62,11 +63,16 @@ func (l *Log) Append(acts ...Action) error {
 	if err := f.Chmod(0o600); err != nil {
 		return fmt.Errorf("set the mail action log to 0600: %w", err)
 	}
+	// stamp a copy, so the file and the audit log get the same time and the
+	// caller's actions are left as they were
+	acts = slices.Clone(acts)
+	for i := range acts {
+		if acts[i].Time.IsZero() {
+			acts[i].Time = l.now().UTC()
+		}
+	}
 	w := bufio.NewWriter(f)
 	for _, a := range acts {
-		if a.Time.IsZero() {
-			a.Time = l.now().UTC()
-		}
 		b, err := json.Marshal(a)
 		if err != nil {
 			return err

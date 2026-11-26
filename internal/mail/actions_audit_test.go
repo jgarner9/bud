@@ -37,6 +37,16 @@ func TestActionsAlsoGoToTheSharedAuditLogWithoutTheirContent(t *testing.T) {
 	if events[1].Action != "send" || events[1].Detail["recipients"] != float64(2) {
 		t.Errorf("send event %+v", events[1])
 	}
+	// the file and the audit log carry the same time for each action
+	acts, err := l.Read()
+	if err != nil || len(acts) != 2 {
+		t.Fatalf("read back %v, %v", acts, err)
+	}
+	for i, e := range events {
+		if !e.Time.Equal(acts[i].Time) {
+			t.Errorf("action %d: audit time %v, file time %v", i, e.Time, acts[i].Time)
+		}
+	}
 	for _, e := range events {
 		b := strings.ToLower(e.Action + e.Target)
 		for k, v := range e.Detail {

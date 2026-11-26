@@ -9,7 +9,7 @@ One JSON object per line, written in a single `write` on a file opened `O_APPEND
 | Field | Meaning |
 | --- | --- |
 | `time` | UTC |
-| `source` | `gateway`, `ops`, `router`, `mail` or `memory-review` |
+| `source` | `gateway`, `ops`, `router`, `mail`, `memory-review` or `improve` |
 | `kind` | `tool_call`, `approval`, `spend` or `mail_action` |
 | `tier` | The privacy tier (`P0`, `P1`, `P2`), when the event has one |
 | `actor`, `action`, `target` | Who, what and on what, as the leaf names them |

@@ -50,7 +50,7 @@ func checkCheckout(dir string) error {
 	return nil
 }
 
-// CheckBudRepo says whether dir is still a bud git checkout Claude can work in:
+// CheckBudRepo says whether dir is still a bud git checkout that an agent can work in:
 // it exists, has bud's source and is a git repo. A remembered path (JGA-226)
 // goes through this each time it's used, since the dir may have been moved or
 // removed since
@@ -109,7 +109,7 @@ func Link(checkout, dir string) error {
 		return err
 	}
 	for _, e := range entries {
-		// dot entries (a Claude Code .claude/, editor droppings) never ship,
+		// dot entries (an agent's hidden config dir, editor droppings) never ship,
 		// since go:embed leaves them out, so they're never linked (JGA-167)
 		if strings.HasPrefix(e.Name(), ".") {
 			continue

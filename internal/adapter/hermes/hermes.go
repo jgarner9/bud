@@ -60,6 +60,9 @@ var owned = []string{
 	"terminal.backend", "terminal.docker_mount_cwd_to_workspace",
 	"gateway.standalone",
 	"plugins", "platforms.signal",
+	// where a delegated subagent's requests go (Suite D135): the router's
+	// always-P0 endpoint, which an override could point around
+	"delegation",
 }
 
 // ConfigVersion is the config schema version of the Hermes release bud
@@ -452,6 +455,16 @@ func routed(r *registry.Registry, base, tier string) map[string]any {
 		"model":              map[string]any{"default": RouterModel, "provider": "custom:" + RouterProvider},
 		"providers":          map[string]any{RouterProvider: provider},
 		"fallback_providers": []any{},
+		// a delegated subagent carries its own conversation id and no
+		// parent's, so the router can't hold it at the parent's tier. It
+		// goes to the router's always-P0 endpoint instead (Suite D135).
+		// The router asks for no key; Hermes wants one for a direct endpoint
+		"delegation": map[string]any{
+			"base_url": base + "/p0/v1",
+			"api_key":  "bud-router",
+			"api_mode": "chat_completions",
+			"model":    RouterModel,
+		},
 	}
 }
 

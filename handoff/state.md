@@ -32,6 +32,7 @@ Earlier in the same run (2026-11-21 and the night after): R6b approvals at Bud-o
 | Issue | What | PR | Decisions |
 | --- | --- | --- | --- |
 | JGA-394 | `bud resume`, the `/handoff` command and the timer in `server/resume/`: a session that hands off queues its resume prompt, and the home server starts the next orchestrator in tmux | this PR | D132 |
+| JGA-411 | The resumed orchestrator gets its Go key: `bud resume run` and `launch` start opencode under `op run` with `opencode.env` (`--op-env-file`, `--op-token-file`), and the unit passes both | this PR | |
 
 Not set up on the home server yet: revisit item 31.
 

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,6 +28,7 @@ var (
 	resumeNow             = time.Now
 	resumeTmux            = func(path string) resume.Tmux { return resume.ExecTmux{Path: path} }
 	resumeStart           = startChild
+	resumeExec            = syscall.Exec
 	resumeQueue           = func() (resume.Queue, error) {
 		p, err := paths.Resolve()
 		if err != nil {
@@ -42,8 +44,16 @@ func Resume() *Command {
 	var dir, agent, opencode, tmux string
 	var minAge time.Duration
 	var maxPerDay int
+	var sec resumeSecrets
 	tmuxFlag := func(fs *flag.FlagSet) {
 		fs.StringVar(&tmux, "tmux", "tmux", "the tmux binary")
+	}
+	secretFlags := func(fs *flag.FlagSet) {
+		fs.Func("op-env-file", "an env file of op:// references op run resolves into opencode's environment; repeat for more", func(v string) error {
+			sec.envFiles = append(sec.envFiles, v)
+			return nil
+		})
+		fs.StringVar(&sec.tokenFile, "op-token-file", "", "the env file holding OP_SERVICE_ACCOUNT_TOKEN for op run (default: op's own sign-in)")
 	}
 	return &Command{
 		Name:  "resume",
@@ -63,21 +73,23 @@ func Resume() *Command {
 				Usage: "what the timer runs: start the queued prompt's orchestrator in tmux, once",
 				Flags: func(fs *flag.FlagSet) {
 					tmuxFlag(fs)
+					secretFlags(fs)
 					fs.StringVar(&opencode, "opencode", "opencode", "the opencode binary")
 					fs.DurationVar(&minAge, "min-age", 2*time.Minute, "how long a prompt waits, so the session that queued it can finish")
 					fs.IntVar(&maxPerDay, "max-per-day", 8, "the most orchestrators started in any 24 hours; 0 for no cap")
 				},
 				Run: func(g *Globals, args []string) error {
-					return resumeRunRun(g, args, tmux, opencode, minAge, maxPerDay)
+					return resumeRunRun(g, args, tmux, opencode, minAge, maxPerDay, sec)
 				},
 			},
 			{
 				Name:  "launch",
 				Usage: "run inside the tmux session: start opencode with a consumed entry's prompt: launch <entry.json>",
 				Flags: func(fs *flag.FlagSet) {
+					secretFlags(fs)
 					fs.StringVar(&opencode, "opencode", "opencode", "the opencode binary")
 				},
-				Run: func(g *Globals, args []string) error { return resumeLaunch(args, opencode) },
+				Run: func(g *Globals, args []string) error { return resumeLaunch(args, opencode, sec) },
 			},
 			{
 				Name:  "status",
@@ -144,7 +156,27 @@ func resumeQueueRun(g *Globals, args []string, dir, agent string) error {
 	return nil
 }
 
-func resumeRunRun(g *Globals, args []string, tmux, opencode string, minAge time.Duration, maxPerDay int) error {
+// resumeSecrets is where an orchestrator's provider keys and tool secrets
+// come from: op:// references that op run resolves when launch starts
+// opencode, so no value is in a file, an argument or tmux's environment
+type resumeSecrets struct {
+	envFiles  []string
+	tokenFile string
+}
+
+// flags are the launch flags that pass these on
+func (s resumeSecrets) flags() []string {
+	var out []string
+	for _, f := range s.envFiles {
+		out = append(out, "--op-env-file", f)
+	}
+	if s.tokenFile != "" {
+		out = append(out, "--op-token-file", s.tokenFile)
+	}
+	return out
+}
+
+func resumeRunRun(g *Globals, args []string, tmux, opencode string, minAge time.Duration, maxPerDay int, sec resumeSecrets) error {
 	if len(args) > 0 {
 		return usageErrorf("resume run takes no arguments")
 	}
@@ -163,7 +195,7 @@ func resumeRunRun(g *Globals, args []string, tmux, opencode string, minAge time.
 		return fmt.Errorf("find this bud binary: %w", err)
 	}
 	r := &resume.Runner{
-		Queue: q, Tmux: resumeTmux(tmux), Bud: bud, Opencode: opencode,
+		Queue: q, Tmux: resumeTmux(tmux), Bud: bud, Opencode: opencode, LaunchFlags: sec.flags(),
 		MinAge: minAge, MaxPerDay: maxPerDay, Now: resumeNow,
 	}
 	msg, err := r.Run()
@@ -175,7 +207,7 @@ func resumeRunRun(g *Globals, args []string, tmux, opencode string, minAge time.
 	return nil
 }
 
-func resumeLaunch(args []string, opencode string) error {
+func resumeLaunch(args []string, opencode string, sec resumeSecrets) error {
 	if len(args) != 1 {
 		return usageErrorf("resume launch takes one consumed entry file")
 	}
@@ -201,6 +233,12 @@ func resumeLaunch(args []string, opencode string) error {
 	if err != nil {
 		return fail(fmt.Errorf("find opencode: %w; fix the unit's PATH or pass --opencode to bud resume run", err))
 	}
+	if len(sec.envFiles) > 0 {
+		// run this launch again under op run, which puts the resolved
+		// secrets in its environment; the second launch has no env files,
+		// so it starts opencode, and reports, as below
+		return fail(resumeUnderOp(args[0], bin, sec))
+	}
 	if err := os.Chdir(e.Dir); err != nil {
 		return fail(err)
 	}
@@ -221,12 +259,93 @@ func resumeLaunch(args []string, opencode string) error {
 	return wait()
 }
 
+// resumeUnderOp replaces this process with op run over a second launch. It
+// returns only when the exec failed. op's own sign-in is used unless the
+// token file names a service account
+func resumeUnderOp(entry, opencode string, sec resumeSecrets) error {
+	op, err := exec.LookPath("op")
+	if err != nil {
+		return fmt.Errorf("find op for --op-env-file: %w; install the 1Password CLI or fix the unit's PATH", err)
+	}
+	for _, f := range sec.envFiles {
+		if _, err := os.Stat(f); err != nil {
+			return fmt.Errorf("--op-env-file: %w; bud sync writes opencode.env, and server/resume/README.md says what goes in the others", err)
+		}
+	}
+	envv := os.Environ()
+	if sec.tokenFile != "" {
+		token, err := readEnvValue(sec.tokenFile, "OP_SERVICE_ACCOUNT_TOKEN")
+		if err != nil {
+			return fmt.Errorf("--op-token-file: %w", err)
+		}
+		envv = append(withoutEnv(envv, "OP_SERVICE_ACCOUNT_TOKEN"), "OP_SERVICE_ACCOUNT_TOKEN="+token)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("find this bud binary: %w", err)
+	}
+	// --no-masking leaves opencode on the pane's terminal; masking would pipe
+	// its output and the TUI couldn't start
+	argv := []string{op, "run", "--no-masking"}
+	for _, f := range sec.envFiles {
+		argv = append(argv, "--env-file="+f)
+	}
+	argv = append(argv, "--", self, "resume", "launch", "--opencode", opencode, entry)
+	if err := resumeExec(op, argv, envv); err != nil {
+		return fmt.Errorf("start op run: %w", err)
+	}
+
+	return nil
+}
+
+// readEnvValue reads key's value from a systemd-style env file: KEY=value
+// lines, # comments, an optional export and quotes. The value is never
+// printed
+func readEnvValue(path, key string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
+		k, v, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(k) != key {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+			v = v[1 : len(v)-1]
+		}
+		if v == "" {
+			break
+		}
+		return v, nil
+	}
+
+	return "", fmt.Errorf("%s doesn't set %s", path, key)
+}
+
+// withoutEnv drops key from an environment list
+func withoutEnv(envv []string, key string) []string {
+	var out []string
+	for _, kv := range envv {
+		if !strings.HasPrefix(kv, key+"=") {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
 // startChild starts argv on this terminal and returns a wait that forwards
 // the signals that stop a tmux pane and returns how the child exited, and a
 // stop that kills and reaps the child instead
 func startChild(bin string, argv []string) (wait func() error, stop func(), err error) {
 	cmd := exec.Command(bin, argv[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	// the service account token was for op run alone: the orchestrator, and
+	// every command it runs, gets the resolved secrets but never the token
+	// that reads the vault
+	cmd.Env = withoutEnv(os.Environ(), "OP_SERVICE_ACCOUNT_TOKEN")
 	sigs := make(chan os.Signal, 4)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	if err := cmd.Start(); err != nil {

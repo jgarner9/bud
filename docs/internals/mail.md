@@ -44,7 +44,7 @@ What the adapter decides, and the library doesn't:
 - **Search.** Search text with a line break is refused, and a Message-ID that isn't plain printable ASCII is refused, before anything is sent.
 - **Deadlines.** The library's `Wait` calls take no context, so every call runs under a guard: when the context is canceled or its deadline passes, the guard closes the connection, and the error that follows is reported as the context's own. A server that stops answering can't hold a call past its two minutes.
 
-What changed in kind from the old hand-written client: the library doesn't cap the size of a literal or a response line the way `wire.go` did (1 MiB and 64 KiB). Every fetch bud makes asks for a bounded range, and the server it talks to is iCloud's, so the cap isn't needed for what bud does, but it isn't there as a backstop either.
+What changed in kind from the old hand-written client: the library doesn't cap the size of a literal or a response line the way `wire.go` did (1 MiB and 64 KiB). Instead every fetch asks the server for a bounded range (`<0.N>`: at most 64 KiB of header fields per message in a summary, at most 1 MiB for a body), which a well-behaved server honors. A server that ignored the range could still make the library buffer a large literal; the server bud talks to is iCloud's.
 
 ## Messages
 

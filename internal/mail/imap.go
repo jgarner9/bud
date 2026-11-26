@@ -387,6 +387,9 @@ func (c *Client) Search(ctx context.Context, cr Criteria) ([]uint32, error) {
 	return slices.Compact(uids), nil
 }
 
+// maxHeader caps the header bytes a summary fetches per message
+const maxHeader = 64 << 10
+
 // headerFields are the headers a summary fetches
 const headerFields = "DATE FROM TO CC SUBJECT MESSAGE-ID IN-REPLY-TO REFERENCES REPLY-TO"
 
@@ -426,6 +429,8 @@ func (c *Client) FetchSummaries(ctx context.Context, uids []uint32) ([]Summary, 
 		Specifier:    imap.PartSpecifierHeader,
 		HeaderFields: strings.Fields(headerFields),
 		Peek:         true,
+		// the library buffers a whole literal, so ask the server to stop
+		Partial: &imap.SectionPartial{Offset: 0, Size: maxHeader},
 	}
 	var msgs []*imapclient.FetchMessageBuffer
 	err := c.guard(ctx, "fetch the summaries", func() error {

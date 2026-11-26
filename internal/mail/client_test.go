@@ -289,6 +289,23 @@ func TestSearchAndFetchReadWithoutMarkingSeen(t *testing.T) {
 	}
 }
 
+func TestASummaryAsksForAtMostMaxHeaderBytes(t *testing.T) {
+	ctx := context.Background()
+	m := newMemServer(t)
+	m.add(t, "INBOX", msg("x\r\n", "Subject: "+strings.Repeat("s", 3*maxHeader), "Message-ID: <big@example.com>"))
+	c := dialMem(t, m)
+	if _, err := c.Examine(ctx, "INBOX"); err != nil {
+		t.Fatal(err)
+	}
+	sums, err := c.FetchSummaries(ctx, []uint32{1})
+	if err != nil || len(sums) != 1 {
+		t.Fatalf("summaries %+v, %v", sums, err)
+	}
+	if n := len(sums[0].Header); n == 0 || n > maxHeader {
+		t.Errorf("the header is %d bytes, want 1 to %d", n, maxHeader)
+	}
+}
+
 func TestOpeningAFolderThatIsNotThereNamesTheFix(t *testing.T) {
 	c := dialMem(t, newMemServer(t))
 	_, err := c.Examine(context.Background(), "Nope")

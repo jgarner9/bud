@@ -477,8 +477,6 @@ func TestCheckClaude(t *testing.T) {
 	on := config.Defaults()
 	off := on
 	off.AI.Claude.Autostart = false
-	openclaw := config.Defaults()
-	openclaw.AI.Backend = "openclaw"
 
 	for _, c := range []struct {
 		name   string
@@ -493,7 +491,6 @@ func TestCheckClaude(t *testing.T) {
 		{"missing", on, claude.Status{}, nil, Warn, "not installed"},
 		{"provider elsewhere", on, claude.Status{Bin: "/c", Version: "2.1.0", Elsewhere: "Amazon Bedrock"}, nil, Warn, "runs it on Amazon Bedrock"},
 		{"missing and not wanted", off, claude.Status{}, nil, OK, "autostart is off"},
-		{"missing on another backend", openclaw, claude.Status{}, nil, OK, "ai.backend is openclaw"},
 		{"broken", on, claude.Status{Bin: "/c"}, errors.New("boom"), Warn, "boom"},
 	} {
 		claudeCheck = func() (claude.Status, error) { return c.status, c.err }
@@ -638,27 +635,28 @@ func fakeServers(names ...string) string {
 	return strings.Join(entries, ", ")
 }
 
-// the AI backend check only warns, and names each problem's fix (D131)
+// the OpenCode check only warns, and names each problem's fix (Suite D139)
 func TestCheckAgent(t *testing.T) {
 	orig := agentCheck
 	t.Cleanup(func() { agentCheck = orig })
-	agentCheck = func(cfg config.Settings, quick bool) agent.Status {
-		return agent.Status{Backend: "openclaw", Version: "OpenClaw 2026.11.3", Gateway: "home:18789", Reachable: true}
+	agentCheck = func(quick bool) agent.Status {
+		return agent.Status{Version: "2.3.2"}
 	}
-	cfg := config.Defaults()
-	cfg.AI.Backend = "openclaw"
-	r := checkAgent(cfg, false)
-	if r.Status != OK || r.Detail != "openclaw: OpenClaw 2026.11.3, Gateway at home:18789 answering" {
+	r := checkAgent(false)
+	if r.Name != "opencode" || r.Status != OK || r.Detail != "2.3.2" {
 		t.Errorf("ready: %+v", r)
 	}
-	agentCheck = func(cfg config.Settings, quick bool) agent.Status {
-		return agent.Status{Backend: "openclaw", Problems: []agent.Problem{
-			{What: "openclaw isn't installed", Fix: "npm install -g openclaw", Hard: true},
-			{What: "the Gateway token file can be read by others", Fix: "chmod 600 f"},
+	agentCheck = func(quick bool) agent.Status { return agent.Status{} }
+	if r := checkAgent(true); r.Status != OK || r.Detail != "installed" {
+		t.Errorf("quick: %+v", r)
+	}
+	agentCheck = func(quick bool) agent.Status {
+		return agent.Status{Problems: []agent.Problem{
+			{What: "opencode isn't installed", Fix: "npm install -g @opencode/cli@2.3.2", Hard: true},
 		}}
 	}
-	r = checkAgent(config.Defaults(), true)
-	if r.Status != Warn || !strings.Contains(r.Detail, "isn't installed; the Gateway") || r.Fix != "npm install -g openclaw; chmod 600 f" {
+	r = checkAgent(true)
+	if r.Status != Warn || r.Detail != "opencode isn't installed" || r.Fix != "npm install -g @opencode/cli@2.3.2" {
 		t.Errorf("problems: %+v", r)
 	}
 }

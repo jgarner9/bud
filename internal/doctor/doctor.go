@@ -95,8 +95,7 @@ type Options struct {
 	Quick bool
 	// Net adds the sync checks that use the network: whether the device's
 	// channel offers newer content, and whether the registry's model
-	// endpoints answer. The ai backend check's gateway probe follows Quick,
-	// as it did before
+	// endpoints answer
 	Net bool
 
 	// netDeadline is the one deadline every --net check shares, set by Run
@@ -142,11 +141,7 @@ func Run(opts Options) []Result {
 		}
 	}
 
-	// the claude backend still runs Claude Code directly (until 1.1 task 6),
-	// which the claude code check covers
-	if cfg.AI.Backend != "claude" {
-		results = append(results, checkAgent(cfg, opts.Quick))
-	}
+	results = append(results, checkAgent(opts.Quick))
 
 	cr, status := checkClaude(cfg)
 	results = append(results, cr)
@@ -250,9 +245,6 @@ func checkClaude(cfg config.Settings) (Result, claude.Status) {
 	switch {
 	case err != nil:
 		r.Status, r.Detail = Warn, err.Error()
-	case s.Bin == "" && cfg.AI.Backend != "claude":
-		// another backend runs the editor's AI (D131)
-		r.Detail = "not installed (ai.backend is " + cfg.AI.Backend + ")"
 	case s.Bin == "" && !cfg.AI.Claude.Autostart:
 		r.Detail = "not installed (ai.claude.autostart is off)"
 	case s.Bin == "":
@@ -271,26 +263,18 @@ func checkClaude(cfg config.Settings) (Result, claude.Status) {
 // agentCheck is swappable in tests
 var agentCheck = agent.Check
 
-// AgentCheck is the AI backend check's name
-const AgentCheck = "ai backend"
+// AgentCheck is the OpenCode check's name, which the dashboard reads
+const AgentCheck = "opencode"
 
-// checkAgent checks the backend ai.backend names (D131): its command, and
-// for OpenClaw the Gateway (not with --quick, which skips the network). It
-// only warns: bud works without AI
-func checkAgent(cfg config.Settings, quick bool) Result {
+// checkAgent checks that OpenCode, the one agent bud talks to (Suite D139),
+// is installed. It only warns: bud works without AI
+func checkAgent(quick bool) Result {
 	r := Result{Name: AgentCheck}
-	st := agentCheck(cfg, quick)
-	var detail []string
-	if st.Version != "" {
-		detail = append(detail, st.Version)
-	}
-	if st.Reachable {
-		detail = append(detail, "Gateway at "+st.Gateway+" answering")
-	}
+	st := agentCheck(quick)
 	if len(st.Problems) == 0 {
-		r.Detail = st.Backend
-		if len(detail) > 0 {
-			r.Detail += ": " + strings.Join(detail, ", ")
+		r.Detail = "installed"
+		if st.Version != "" {
+			r.Detail = st.Version
 		}
 		return r
 	}
@@ -300,7 +284,7 @@ func checkAgent(cfg config.Settings, quick bool) Result {
 		fixes = append(fixes, p.Fix)
 	}
 	r.Status = Warn
-	r.Detail = st.Backend + ": " + strings.Join(whats, "; ")
+	r.Detail = strings.Join(whats, "; ")
 	r.Fix = strings.Join(fixes, "; ")
 	return r
 }

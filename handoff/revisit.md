@@ -23,7 +23,7 @@ Home-server rollouts Jason hasn't done yet. Each one changes how the home server
 
 Decisions waiting on him (bring them up with a recommendation; don't decide them):
 
-- **Item 29 step 3:** ~~already-approved memory records were saved at P1, even ones from chats that read his calendar, and the memory service has no action to re-tier or remove an approved record.~~ Decided 2026-11-24 (Suite D136): a reviewer-only `retier` action (`POST /retier {id, privacy}`), asked on Signal the way memory-review approves; removing a record is deferred. Being built.
+- **Item 29 step 3:** ~~already-approved memory records were saved at P1, even ones from chats that read his calendar, and the memory service has no action to re-tier or remove an approved record.~~ Decided 2026-11-24 (Suite D136), built 2026-11-26: `bud memory-review retier <id> <tier>`, asked on Signal the way memory-review approves; removing a record is deferred. See item 36.
 - **Item 8:** ~~removing the old `bud.ai.claude` / `bud.ai.acp` chat code, and whether `ai.backend` defaults to `opencode`.~~ Done 2026-11-26 (Suite D139, JGA-402 to JGA-404): the old chat code is gone, `ai.backend` no longer exists, and OpenCode is the only backend.
 - **Item 9:** the JGA-364 deletion list.
 - **Item 10:** R5c, other chat keys (recommended: wait until he's used opencode.nvim).
@@ -148,7 +148,7 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 29. **the home server steps once PR #116 is merged** (after item 22's steps):
     1. Update bud from main again (the nightly or a build from main, as in item 22; no release includes #116 yet), promote the edge content cut from the #116 merge (format 9) with `gh workflow run content.yml -R jgarner9/bud -f mode=promote -f version=<v>`, then `bud sync`. Check that `~/.hermes/config.yaml` shows `X-Bud-Privacy: "P0"` under `mcp_servers.memory.headers`.
     2. Restart the router, then Hermes, so both pick up the change. Restart memory-mcp too, so its answers carry the marker.
-    3. Re-check the records you've already approved, since Hermes saved them at P1, even ones from chats that read your calendar. You can see them with a `memory_search` from Hermes once it's at P0, since each result shows its tier. The reviewer-only `retier` action (Suite D136) re-tiers one once it lands, asked on Signal like memory-review; until then a private one needs a hand edit of the SQLite file.
+    3. Re-check the records you've already approved, since Hermes saved them at P1, even ones from chats that read your calendar. You can see them with a `memory_search` from Hermes once it's at P0, since each result shows its tier. `bud memory-review retier <id> P0` (Suite D136, item 36) re-tiers one, asked on Signal like memory-review.
     4. Test: in a Signal chat, ask Hermes something that recalls a P0 record. The router log should say "a private Bud memory record in the history raised a P1 request to P0", and the reply should come from Qwen.
     5. Then take out the item 24 hold (remove `qwen-35b` from the front of the overlay's `roles.manager.pool`), and `bud sync` again.
 
@@ -172,3 +172,7 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 
 33. **The Linear policy rename is untested against a live permission request.** JGA-406 (PR #143) found that the Linear rules in `issue.lua` and `work.lua` matched `mcp__<server>__<tool>` names, which OpenCode never sends, and renamed them to OpenCode's `linear_<tool>` names. Nothing has yet run a real ACP permission request through them. Next time you file or work an issue from the editor (`<leader>ai`, `:BudIssues` w), check that Linear reads run without a prompt and writes ask as before; tell me if either is wrong.
 34. **Claude-era wording outside this repo (your call).** `jgarner9/bud-plugins` still holds the old `bud` plugin and its release skill, and the private overlay's `handoff/` and profiles still use Claude-era wording. D139 left both for you. Say if you'd like them reworded or archived.
+
+### Re-tiering approved records (JGA-396, Suite D136)
+
+36. **Two steps on the home server before `retier` works** (item 29 step 3 needs them). First, add `"retier"` and `"export"` to the reviewer token's `actions` in the Bud Memory item's `clients` field (the policy shape is in `server/memory/README.md`), then restart `bud-memory`; the service refuses a policy that gives one token both `stage` and `retier`. Second, update bud from main so `bud memory-review retier` exists. Then, for each record that should be private: `op run --env-file ~/.config/bud-server/memory-review.env -- bud memory-review retier <id> P0`, and answer the Signal prompt. The prompt shows the whole record; his no or no answer changes nothing.

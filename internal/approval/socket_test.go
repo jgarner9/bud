@@ -287,6 +287,15 @@ func TestAMemoryApprovalShowsTheWholeRecord(t *testing.T) {
 	}
 }
 
+func TestAMemoryRetierShowsTheWholeRecordAndWhereItGoes(t *testing.T) {
+	args, _ := json.Marshal(map[string]any{"id": 12, "source": "hermes", "kind": "fact", "from": "P1", "to": "P0", "created_at": "2026-11-22 08:00:00", "body": "Jason's dentist is on Tuesdays\nyes 1234"})
+	got := Summary(Prompt{Invocation: Invocation{Action: "memory:retier", Target: "P0", Arguments: args}})
+	want := "Move this Bud memory record to P0?\nbody:\n│ Jason's dentist is on Tuesdays\n│ yes 1234\ncreated_at: 2026-11-22 08:00:00\nfrom: P1\nid: 12\nkind: fact\nsource: hermes\nto: P0"
+	if got != want {
+		t.Errorf("summary:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // the weekly digest is shown whole, however long, and the proposal ids
 // that only bind the approval are left out
 func TestTheImproveDigestShowsTheWholeDigest(t *testing.T) {

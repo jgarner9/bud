@@ -43,3 +43,35 @@ func TestMemoryReviewChecksItsSetup(t *testing.T) {
 		t.Errorf("no runtime dir and no --socket: %v", err)
 	}
 }
+
+// `memory-review retier <id> <tier>` asks about one record instead of
+// running the loop
+func TestMemoryReviewRetiersOneRecord(t *testing.T) {
+	var gotID int64
+	var gotTo string
+	orig := retierRecord
+	retierRecord = func(_ context.Context, _ *memoryreview.Reviewer, _ memoryreview.Retierer, id int64, to string) error {
+		gotID, gotTo = id, to
+		return nil
+	}
+	t.Cleanup(func() { retierRecord = orig })
+	origLoop := runReviewer
+	runReviewer = func(context.Context, *memoryreview.Reviewer) { t.Error("the loop ran") }
+	t.Cleanup(func() { runReviewer = origLoop })
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv(reviewerToken, "tok")
+
+	for _, args := range [][]string{{"retier"}, {"retier", "7"}, {"retier", "x", "P0"}, {"retier", "0", "P0"}, {"retier", "7", "P0", "P1"}} {
+		if err := runMemoryReview(&Globals{}, args, "/run/m.sock"); err == nil || gotID != 0 {
+			t.Errorf("%v = %v, id %d", args, err, gotID)
+		}
+	}
+	var stderr bytes.Buffer
+	if err := runMemoryReview(&Globals{stderr: &stderr}, []string{"retier", "7", "P0"}, "/run/m.sock"); err != nil {
+		t.Fatal(err)
+	}
+	if gotID != 7 || gotTo != "P0" || !strings.Contains(stderr.String(), "asking on Signal to move record 7 to P0") {
+		t.Errorf("id %d, to %q, stderr %q", gotID, gotTo, stderr.String())
+	}
+}

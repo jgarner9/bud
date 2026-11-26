@@ -212,6 +212,21 @@ func (c *Client) Discard(ctx context.Context, id int64) error {
 	return err
 }
 
+// ErrNotApproved means a record Retier was given is still staged, so it
+// can't be moved
+var ErrNotApproved = errors.New("the record isn't approved")
+
+// Retier moves an approved record to another tier (Suite D136). Only a
+// reviewer token may, and both the record's tier and the new one must be
+// among its tiers; a staged record returns ErrNotApproved
+func (c *Client) Retier(ctx context.Context, id int64, privacy string) error {
+	err := c.post(ctx, "retier", map[string]any{"id": id, "privacy": privacy}, nil)
+	if se, ok := errors.AsType[*StatusError](err); ok && se.Status == http.StatusConflict {
+		return fmt.Errorf("memory retier: record %d: %w", id, ErrNotApproved)
+	}
+	return err
+}
+
 // ExportedRecord is an approved record as the export action lists it
 type ExportedRecord struct {
 	ID        int64  `json:"id"`

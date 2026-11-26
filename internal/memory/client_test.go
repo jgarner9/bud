@@ -134,6 +134,9 @@ func TestClientActions(t *testing.T) {
 	if err := c.Discard(ctx, 6); err != nil || !reflect.DeepEqual(f.got["discard"], map[string]any{"id": 6.0}) {
 		t.Errorf("Discard sent %v, %v", f.got["discard"], err)
 	}
+	if err := c.Retier(ctx, 7, "P0"); err != nil || !reflect.DeepEqual(f.got["retier"], map[string]any{"id": 7.0, "privacy": "P0"}) {
+		t.Errorf("Retier sent %v, %v", f.got["retier"], err)
+	}
 }
 
 func TestClientErrors(t *testing.T) {
@@ -161,6 +164,10 @@ func TestClientErrors(t *testing.T) {
 	}
 	if err := New(sock, "tok").Discard(context.Background(), 1); !errors.Is(err, ErrApproved) {
 		t.Errorf("a 409 on discard = %v, want ErrApproved", err)
+	}
+
+	if err := New(sock, "tok").Retier(context.Background(), 1, "P0"); !errors.Is(err, ErrNotApproved) {
+		t.Errorf("a 409 on retier = %v, want ErrNotApproved", err)
 	}
 
 	f.status = 0

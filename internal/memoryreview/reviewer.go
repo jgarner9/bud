@@ -31,6 +31,17 @@ type Records interface {
 // Action is the approval action a memory record is asked under
 const Action = "memory:approve"
 
+// RetierAction is the approval action a re-tier is asked under (Suite D136)
+const RetierAction = "memory:retier"
+
+// Retierer is the memory service as the reviewer token sees an approved
+// record: it can list them, which is how a re-tier shows what it moves, and
+// move one
+type Retierer interface {
+	Export(ctx context.Context) (*memory.Export, error)
+	Retier(ctx context.Context, id int64, privacy string) error
+}
+
 // Scope is the fixed approval scope every memory prompt shares: the
 // reviewer runs alone on the home server, with no session of its own
 var Scope = approval.Scope{Runtime: "memory-review", Profile: "server", Session: "memory-review", Surface: "signal", Actor: "memory-review"}
@@ -226,6 +237,53 @@ func (r *Reviewer) ask(ctx context.Context, rec memory.Record) {
 		r.quiet[rec.ID] = r.now().Add(rest)
 	}
 	r.mu.Unlock()
+}
+
+// Retier asks Jason on Signal to move approved record id to tier to (Suite
+// D136), showing the whole record and its tiers, and moves it only on his
+// yes. Anything else, a timeout included, leaves the record where it is
+func (r *Reviewer) Retier(ctx context.Context, src Retierer, id int64, to string) error {
+	if to != "P0" && to != "P1" && to != "P2" {
+		return fmt.Errorf("re-tier record %d: %q isn't a tier; use P0, P1 or P2", id, to)
+	}
+	export, err := src.Export(ctx)
+	if err != nil {
+		return fmt.Errorf("re-tier record %d: read the approved records: %w", id, err)
+	}
+	var found *memory.ExportedRecord
+	for i := range export.Records {
+		if export.Records[i].ID == id {
+			found = &export.Records[i]
+		}
+	}
+	if found == nil {
+		return fmt.Errorf("re-tier record %d: no approved record with that id in the reviewer's tiers; a staged one is approved first", id)
+	}
+	if found.Privacy == to {
+		return fmt.Errorf("re-tier record %d: it is already %s", id, to)
+	}
+	args, _ := json.Marshal(map[string]any{
+		"id": id, "source": found.Source, "kind": found.Kind, "from": found.Privacy, "to": to,
+		"created_at": found.CreatedAt, "body": found.Body,
+	})
+	call := approval.Invocation{Action: RetierAction, Target: to, Arguments: args}
+	if utf8.RuneCountInString(approval.Summary(approval.Prompt{Invocation: call, ExpiresAt: r.now().Add(time.Hour)})) > approval.MaxSummary {
+		return fmt.Errorf("re-tier record %d: it is too long to show whole on Signal, so move it by hand with the service's retier action", id)
+	}
+	err = r.Approvals.Dispatch(ctx, Scope, call, time.Time{}, r.review(), func(ctx context.Context, _ approval.Invocation) error {
+		return src.Retier(ctx, id, to)
+	})
+	switch {
+	case err == nil:
+		r.logf("memory-review: Jason moved record %d from %s to %s", id, found.Privacy, to)
+		return nil
+	case errors.Is(err, approval.ErrDeclined):
+		return fmt.Errorf("re-tier record %d: Jason said no, so it stays %s", id, found.Privacy)
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Errorf("re-tier record %d: nobody answered, so it stays %s; run it again to ask again", id, found.Privacy)
+	default:
+		return fmt.Errorf("re-tier record %d: %w", id, err)
+	}
 }
 
 // review withdraws each prompt a minute before it expires, so the

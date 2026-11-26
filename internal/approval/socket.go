@@ -204,6 +204,12 @@ var titles = map[string]struct {
 		title: func(string) string { return "Save this to Bud memory? A no deletes it." },
 		whole: []string{"body"},
 	},
+	// moving an approved record to another tier (Suite D136): the target is
+	// the new tier, so the title says where it goes
+	"memory:retier": {
+		title: func(to string) string { return "Move this Bud memory record to " + to + "?" },
+		whole: []string{"body"},
+	},
 	// the weekly self-improvement digest (internal/improve): the whole
 	// digest, since a yes opens every proposal it lists as a draft PR
 	"improve:digest": {

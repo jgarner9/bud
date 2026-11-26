@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"jgarner.dev/bud/internal/approval"
+	"jgarner.dev/bud/internal/audit"
 	"jgarner.dev/bud/internal/mcpgateway"
 	"jgarner.dev/bud/internal/paths"
 )
@@ -63,19 +64,21 @@ func runMCPGateway(g *Globals, args []string, configPath, registryPath string) e
 	if logPath == "" {
 		logPath = p.MCPAudit()
 	}
-	audit, err := mcpgateway.OpenAudit(logPath)
+	fileLog, err := mcpgateway.OpenAudit(logPath)
 	if err != nil {
 		return err
 	}
-	defer audit.Close()
-	gw, err := mcpgateway.New(c, audit, os.Getenv)
+	defer fileLog.Close()
+	gw, err := mcpgateway.New(c, fileLog, os.Getenv)
 	if err != nil {
 		return err
 	}
+	shared := openAudit(g, p)
+	gw.SetEvents(shared)
 
 	gw.SetRules(rules)
 	gw.SetApprovals(mcpgateway.Approvals{
-		Store: approval.Store{Path: p.ApprovalStore()},
+		Store: approval.Store{Path: p.ApprovalStore(), Audit: shared, Source: audit.SourceGateway},
 		Review: func(s approval.Scope) approval.Review {
 			return approval.SocketReview(p.ReviewSocket(), p.ReviewSecret(), s)
 		},

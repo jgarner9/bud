@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"jgarner.dev/bud/internal/audit"
 )
 
 // Store persists approvals in one private JSON file. Expired records are
@@ -17,7 +19,13 @@ import (
 // Create fails closed at the request or byte limit. Callers must authenticate
 // requests, enforce policy and isolate the store from agent tools; file mode
 // alone does not isolate processes running as the same user.
-type Store struct{ Path string }
+type Store struct {
+	Path string
+	// Audit, with Source, records each Dispatch in the shared audit log (Suite
+	// D140); nil records nothing. A failed write never changes a decision
+	Audit  *audit.Log
+	Source string
+}
 
 var ErrNotFound = errors.New("approval request not found")
 var ErrDuplicate = errors.New("approval request ID already exists")

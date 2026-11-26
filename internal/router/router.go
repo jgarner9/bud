@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"jgarner.dev/bud/internal/audit"
 	"jgarner.dev/bud/internal/registry"
 )
 
@@ -70,6 +71,7 @@ type Router struct {
 	ledger  *Ledger
 	cap     float64
 	logf    func(string, ...any)
+	events  *audit.Log
 
 	health       *health
 	probeEvery   time.Duration
@@ -116,6 +118,9 @@ type Options struct {
 	// fragments (bud sync renders them): a conversation holding a call to
 	// one of their tools is raised to P0 (Suite D119)
 	P0Servers []string
+	// Audit receives a spend event for each charged response (Suite D140);
+	// nil writes none
+	Audit *audit.Log
 	// StickyPath keeps the conversations a rule or the provenance check
 	// raised to P0, so they stay P0 across a restart; "" keeps them in
 	// memory only
@@ -142,7 +147,7 @@ func New(reg *registry.Registry, getenv func(string) string, opts Options) (*Rou
 	if err != nil {
 		return nil, err
 	}
-	rt := &Router{reg: reg, rules: rules, targets: map[string]target{}, ledger: opts.Ledger, cap: opts.TopUpCap, logf: opts.Logf, noted: map[string]bool{}}
+	rt := &Router{reg: reg, rules: rules, targets: map[string]target{}, ledger: opts.Ledger, cap: opts.TopUpCap, logf: opts.Logf, events: opts.Audit, noted: map[string]bool{}}
 	if rt.logf == nil {
 		rt.logf = log.Printf
 	}
@@ -243,6 +248,21 @@ func (rt *Router) charge(id string, u *usage) {
 	if err := rt.ledger.chargeUsage(id, cost, u); err != nil {
 		rt.logf("router: %v", err)
 	}
+	if cost <= 0 {
+		return
+	}
+	rt.events.Record(audit.Event{
+		Source: audit.SourceRouter,
+		Kind:   audit.KindSpend,
+		Action: "charge",
+		Target: id,
+		Detail: map[string]any{
+			"usd":               cost,
+			"prompt_tokens":     u.Prompt,
+			"completion_tokens": u.Completion,
+			"top_up_month":      rt.ledger.TopUp(),
+		},
+	})
 }
 
 func (rt *Router) noteUntracked(id string) {

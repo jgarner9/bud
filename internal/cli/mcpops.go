@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"jgarner.dev/bud/internal/approval"
+	"jgarner.dev/bud/internal/audit"
 	"jgarner.dev/bud/internal/mcpops"
 	"jgarner.dev/bud/internal/paths"
 	models "jgarner.dev/bud/internal/registry"
@@ -50,7 +51,7 @@ func runMCPOps(g *Globals, args []string, listen string) error {
 	src.Registry = func() (*models.Registry, error) { return loadRouterRegistry("") }
 	srv := mcpops.New(mcpops.Tools(src))
 	srv.SetApprovals(mcpops.Approvals{
-		Store: approval.Store{Path: p.ApprovalStore()},
+		Store: approval.Store{Path: p.ApprovalStore(), Audit: openAudit(g, p), Source: audit.SourceOps},
 		Review: func(s approval.Scope) approval.Review {
 			return approval.SocketReview(p.ReviewSocket(), p.ReviewSecret(), s)
 		},

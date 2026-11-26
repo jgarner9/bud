@@ -104,6 +104,9 @@ func runMailMCP(g *Globals, args []string, f mailFlags) error {
 	if acct.Log, err = mail.NewLog(f.log); err != nil {
 		return err
 	}
+	if p, err := paths.Resolve(); err == nil {
+		acct.Log.Audit = openAudit(g, p)
+	}
 	// sends need the From address; without it bud mail-mcp still reads
 	// and cleans up, and the send tools say what to set
 	if from := os.Getenv("BUD_MAIL_FROM"); from != "" {

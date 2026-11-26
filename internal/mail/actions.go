@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"jgarner.dev/bud/internal/audit"
 )
 
 // Action is one line of the action log: a move to the trash, a restore or
@@ -27,9 +29,12 @@ type Action struct {
 
 // Log is the append-only action log (paths.MailActions), mode 0600
 type Log struct {
-	path string
-	mu   sync.Mutex
-	now  func() time.Time
+	// Audit also gets an event for each action (Suite D140), with the folders
+	// and a recipient count and nothing a message said; nil writes none
+	Audit *audit.Log
+	path  string
+	mu    sync.Mutex
+	now   func() time.Time
 }
 
 // NewLog opens the log at path, making its directory
@@ -70,6 +75,19 @@ func (l *Log) Append(acts ...Action) error {
 	}
 	if err := w.Flush(); err != nil {
 		return fmt.Errorf("write the mail action log: %w", err)
+	}
+	for _, a := range acts {
+		detail := map[string]any{}
+		if a.Folder != "" {
+			detail["folder"] = a.Folder
+		}
+		if a.ToFolder != "" {
+			detail["to_folder"] = a.ToFolder
+		}
+		if len(a.Recipients) > 0 {
+			detail["recipients"] = len(a.Recipients)
+		}
+		l.Audit.Record(audit.Event{Time: a.Time, Source: audit.SourceMail, Kind: audit.KindMailAction, Action: a.Action, Target: "mail", Detail: detail})
 	}
 	return nil
 }

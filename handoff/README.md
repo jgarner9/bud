@@ -31,7 +31,7 @@ These are his standing preferences. Follow them in every reply, commit and PR.
 
 ## The skills
 
-In Claude Code these were the `bud` plugin's skills (from `jgarner9/bud-plugins`). If your OpenCode session can't load them, these are the rules that matter most:
+These began as the `bud` plugin's skills in `jgarner9/bud-plugins` (now archived) and live in `content/skills/` here. If your OpenCode session can't load them, these are the rules that matter most:
 
 - **bud:code-style** (writing, reviewing or committing code): the repo's `AGENTS.md`, formatter and surrounding code win. Standard library first (D1 here); `flag.FlagSet` CLIs, flags before positionals; one source of truth per concern; deterministic output; JSON config that keeps unknown keys; build only what was asked. Functions return errors; only the entry point prints one `bud: message` line and picks the exit code (0, 1, 2 for usage). Errors say what was being done, lowercase, and what to do next. gofmt, `go vet`, shellcheck and stylua clean. Lowercase conventional commits with the issue id: `fix: skip dot entries in dev link (JGA-167)`, one commit per task once the checks pass.
 - **bud:planning** (specs, plans, decisions, issues): read what exists before asking; ask only what changes the plan; give options with a recommendation. Decisions are numbered and dated with the reason, never renumbered or deleted; a changed one is marked superseded and the new one gets the next number. Open questions have their own section. Tasks are one commit each with their own check, ordered by dependency. Status lives in Linear (team JGA, project "Bud Suite"); the plan and Linear never disagree. Don't file issues for a plan he hasn't approved, and never put secrets in a doc or issue.

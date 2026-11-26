@@ -36,7 +36,7 @@ Decisions waiting on him (bring them up with a recommendation; don't decide them
 - **Item 28:** moving bud-kb's remote onto the home server so P0 facts can reach the KB (recommended: wait a few weeks).
 - Older open items from the 2026-11-22 handoff: the JGA-368 hard-kill and backup-restore checks, the mail `--record` output for JGA-317, and a separate vault for the memory reviewer token and the bud-planning service account (both can read the whole Bud vault today).
 
-Work an agent can pick up without him: **JGA-390** — decided 2026-11-24 (Suite D135): a delegated subagent runs through an always-P0 router path, whatever the parent's tier. Being built. See [state.md](state.md).
+Work an agent can pick up without him: the re-tier action (JGA-396, Suite D136), then the narrower Bud 2.0 backlog in [state.md](state.md). JGA-390 (Suite D135, the always-P0 subagent path) is built; its rollout check is item 35.
 
 Closed since the list was last read: item 19 (the `improve:digest` prompt title) landed in PR #110; item 25's memory gap became D130 (PR #116).
 
@@ -127,7 +127,7 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 24. **To hold P1 back** after updating, put `qwen-35b` first in the overlay's `roles.manager.pool`. P1 chats then stay on Qwen, while everything else ships. **Chosen 2026-11-22 18:33 UTC ("Merge, hold P1 on the home server"):** #114 is merged as 39bdd7a; do this overlay change before the step 3 sync, and keep it until memory records carry a tier.
 25. **Known gaps after #114 (decision; my recommendation follows each):**
     - ~~**Bud memory search results** can hold private records and now reach Go in P1 chats.~~ **Decided 2026-11-22 (Suite D130, JGA-389, PR #116):** Hermes reaches memory at P0, and the router keeps a chat that recalls a P0 record local. See item 29.
-    - **A delegated subagent (JGA-390, left for OpenCode)** gets its own conversation id, so P0 data the parent writes into its task prompt isn't held. Recommendation: send subagents through a router path that is always P0, once Hermes's delegation config is checked.
+    - ~~**A delegated subagent (JGA-390)** gets its own conversation id, so P0 data the parent writes into its task prompt isn't held.~~ **Decided 2026-11-24 (Suite D135), built 2026-11-26:** subagents go to the router's always-P0 `/p0/v1` endpoint. See item 35.
 
 ### KB curator and Hugo site (JGA-311, JGA-312, PR #115)
 
@@ -172,6 +172,10 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 
 33. **The Linear policy rename is untested against a live permission request.** JGA-406 (PR #143) found that the Linear rules in `issue.lua` and `work.lua` matched `mcp__<server>__<tool>` names, which OpenCode never sends, and renamed them to OpenCode's `linear_<tool>` names. Nothing has yet run a real ACP permission request through them. Next time you file or work an issue from the editor (`<leader>ai`, `:BudIssues` w), check that Linear reads run without a prompt and writes ask as before; tell me if either is wrong.
 34. **Claude-era wording outside this repo (your call).** `jgarner9/bud-plugins` still holds the old `bud` plugin and its release skill, and the private overlay's `handoff/` and profiles still use Claude-era wording. D139 left both for you. Say if you'd like them reworded or archived.
+
+### Subagents at P0 (JGA-390, Suite D135)
+
+35. **Rollout check on the home server, with item 22 or 29's sync.** `bud sync` writes a `delegation:` block into the private Hermes profile (`base_url` is the router's `/p0/v1`). Hermes's docs describe `delegation.base_url`, `api_key`, `api_mode` and `model`, but this repo can't show that Hermes 0.23.2 reads them. After the sync and restarts, ask Hermes on Signal for something it delegates (say, "use a subagent to list three tools you have") and check the router's journal: the subagent's requests should arrive as `POST /p0/v1/chat/completions` and be served by Qwen. If they still arrive on `/v1`, 0.23.2 ignores the block; tell me and I'll look at the other option from D135 (a parent-id header) or a Hermes upgrade. A P1 chat that delegates is now local for the subagent, so expect it slower.
 
 ### Re-tiering approved records (JGA-396, Suite D136)
 

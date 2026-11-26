@@ -392,3 +392,48 @@ func TestTheClientsSessionIDGoesUpstreamAndAMissingOneIsAOneShot(t *testing.T) {
 		t.Errorf("requests with no id got %q and %q, want two different oneshot- ids", got[1], got[2])
 	}
 }
+
+// Suite D135: the /p0 endpoint answers every request as P0, whatever
+// X-Bud-Privacy says, for a Hermes subagent that carries no parent id
+func TestTheP0EndpointIgnoresTheClientsTier(t *testing.T) {
+	rt, _, body := tierServer(t)
+	for _, hdr := range []map[string]string{nil, {"X-Bud-Privacy": "P1"}, {"X-Bud-Privacy": "P2"}, {"X-Bud-Privacy": "bogus"}} {
+		*body = ""
+		if w := do(t, rt, "POST", "/p0/v1/chat/completions", chat("p1"), hdr); w.Code != 403 || !strings.Contains(w.Body.String(), "can't take P0 requests") || *body != "" {
+			t.Errorf("p1 model with %v: code %d body %s, upstream got %q", hdr, w.Code, w.Body, *body)
+		}
+		if w := do(t, rt, "POST", "/p0/v1/chat/completions", chat("local"), hdr); w.Code != 200 {
+			t.Errorf("local model with %v: code %d body %s", hdr, w.Code, w.Body)
+		}
+	}
+}
+
+func TestTheP0EndpointListsOnlyP0Models(t *testing.T) {
+	rt, _, _ := tierServer(t)
+	w := do(t, rt, "GET", "/p0/v1/models", "", map[string]string{"X-Bud-Privacy": "P1"})
+	if w.Code != 200 || strings.Contains(w.Body.String(), `"p1"`) || !strings.Contains(w.Body.String(), `"local"`) {
+		t.Fatalf("code %d body %s", w.Code, w.Body)
+	}
+}
+
+func TestOnlyV1PathsExistUnderTheP0Prefix(t *testing.T) {
+	rt, _, _ := tierServer(t)
+	// an invalid tier header doesn't turn the 404 into a 400 either
+	for _, path := range []string{"/p0/chat/completions", "/p0/v1/other", "/p0", "/p0/"} {
+		for _, hdr := range []map[string]string{nil, {"X-Bud-Privacy": "bogus"}} {
+			if w := do(t, rt, "POST", path, chat("local"), hdr); w.Code != 404 {
+				t.Errorf("%s with %v = %d, want 404", path, hdr, w.Code)
+			}
+		}
+	}
+}
+
+// the request a P0 subagent can't send to the cloud: a calendar result in a
+// P1 conversation goes local on the /p0 path even with no tool call in it
+func TestAP0EndpointRequestNeverReachesTheCloud(t *testing.T) {
+	rig := newProvRig(t)
+	w := do(t, rig.rt, "POST", "/p0/v1/chat/completions", compressed, map[string]string{"X-Bud-Privacy": "P1", SessionHeader: "child-1"})
+	if w.Code != 200 || rig.cloudBytes != 0 {
+		t.Fatalf("code %d, cloud bytes %d", w.Code, rig.cloudBytes)
+	}
+}

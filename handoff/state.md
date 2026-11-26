@@ -53,6 +53,7 @@ Not set up on the home server yet: revisit item 31.
 | | The 2026-11-19 approval-hook investigation lands in docs/internals: Hermes v0.23.2 and OpenCode 2.3.2 hook and permission boundaries, identity, cancellation and the one-call enforcement gaps, groundwork for the approval and audit-log follow-ups (JGA-374, JGA-376, D134) | this PR | |
 | | glm-5.2 removed from the registry and the coding pool: Go's model list no longer has it (`bud registry refresh`, 2026-11-24). Once revisit item 21's improve scan runs, it proposes this class of change itself | this PR | |
 | JGA-400 | The release skill is a written review checklist an OpenCode session walks (correctness, tests, docs, secrets, shell and file safety, signing and install paths), so a release no longer needs Claude Code; AGENTS.md and handoff/README.md say so | this PR | D139 a |
+| JGA-400 to JGA-408 | Plan to make bud OpenCode-only: nine tasks that delete Claude Code, the backend switch, the bud-ide plugin and cloud work, then reword the docs. Suite D139, BASE D154; plan in `design/opencode-only-plan.md`. Nothing built yet | this PR | D139 |
 
 ## The home server
 

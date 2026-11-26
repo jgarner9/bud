@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"jgarner.dev/bud/internal/approval"
@@ -24,7 +25,7 @@ func MemoryReview() *Command {
 	var socket string
 	return &Command{
 		Name:  "memory-review",
-		Usage: "Asks Jason on Signal about each staged memory record: a yes approves it, a no deletes it",
+		Usage: "Asks Jason on Signal about each staged memory record: a yes approves it, a no deletes it; `retier <id> <P0|P1|P2>` asks to move an approved record to another tier",
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&socket, "socket", "", "the memory service's socket (default $XDG_RUNTIME_DIR/bud-memory/memory.sock)")
 		},
@@ -36,12 +37,31 @@ func MemoryReview() *Command {
 // service's reviewer token
 const reviewerToken = "BUD_MEMORY_TOKEN_REVIEWER"
 
+// retierRecord is swappable so tests don't ask on Signal
+var retierRecord = func(ctx context.Context, r *memoryreview.Reviewer, svc memoryreview.Retierer, id int64, to string) error {
+	return r.Retier(ctx, svc, id, to)
+}
+
 // runReviewer is swappable so tests stop before the loop
 var runReviewer = func(ctx context.Context, r *memoryreview.Reviewer) { r.Run(ctx) }
 
 func runMemoryReview(g *Globals, args []string, socket string) error {
-	if len(args) > 0 {
-		return usageErrorf("memory-review takes no arguments")
+	retier := len(args) > 0 && args[0] == "retier"
+	if len(args) > 0 && !retier {
+		return usageErrorf("memory-review takes no arguments, or `retier <id> <P0|P1|P2>`")
+	}
+	var id int64
+	if retier {
+		if len(args) != 3 {
+			return usageErrorf("usage: memory-review retier <id> <P0|P1|P2>")
+		}
+		var err error
+		if id, err = strconv.ParseInt(args[1], 10, 64); err != nil || id < 1 {
+			return usageErrorf("%q isn't a record id; use the number memory_search shows", args[1])
+		}
+		if args[2] != "P0" && args[2] != "P1" && args[2] != "P2" {
+			return usageErrorf("%q isn't a tier; use P0, P1 or P2", args[2])
+		}
 	}
 	p, err := paths.Resolve()
 	if err != nil {
@@ -60,8 +80,9 @@ func runMemoryReview(g *Globals, args []string, socket string) error {
 		return fmt.Errorf("memory-review: %s is empty; run it under op run with server/memory-review/memory-review.env", reviewerToken)
 	}
 
+	svc := memory.New(socket, tok)
 	r := &memoryreview.Reviewer{
-		Records:   memory.New(socket, tok),
+		Records:   svc,
 		Approvals: approval.Store{Path: p.ApprovalStore()},
 		Review:    approval.SocketReview(p.ReviewSocket(), p.ReviewSecret(), memoryreview.Scope),
 		Status:    p.MemoryReviewStatus(),
@@ -69,6 +90,18 @@ func runMemoryReview(g *Globals, args []string, socket string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if retier {
+		g.Noticef("memory-review: asking on Signal to move record %d to %s", id, args[2])
+		if err := retierRecord(ctx, r, svc, id, args[2]); err != nil {
+			return err
+		}
+		out := g.stdout
+		if out == nil {
+			out = os.Stdout
+		}
+		fmt.Fprintf(out, "record %d is now %s\n", id, args[2])
+		return nil
+	}
 	g.Noticef("memory-review: reviewing %s through %s", socket, p.ReviewSocket())
 	runReviewer(ctx, r)
 

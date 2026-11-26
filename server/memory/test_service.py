@@ -193,6 +193,75 @@ class ServiceTest(unittest.TestCase):
             self.assertEqual(200, status)
             self.assertNotEqual(ids[1], data["id"])
 
+    # Suite D136: the reviewer moves an approved record to another tier
+    def test_reviewer_retiers_approved_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "memory.sock")
+            ready = threading.Event()
+            holder = []
+            narrow = "n" * 32
+
+            def serve():
+                server = MemoryServer(path, str(Path(tmp) / "memory.db"), {
+                    AGENT: {"actions": ["stage", "search"], "tiers": ["P0", "P1", "P2"]},
+                    CLOUD: {"actions": ["search"], "tiers": ["P1", "P2"]},
+                    REVIEWER: {"actions": ["approve", "retier", "search"], "tiers": ["P0", "P1", "P2"]},
+                    narrow: {"actions": ["approve", "retier"], "tiers": ["P1", "P2"]},
+                })
+                holder.append(server)
+                ready.set()
+                try:
+                    server.serve_forever()
+                finally:
+                    server.server_close()
+
+            thread = threading.Thread(target=serve)
+            thread.start()
+            self.assertTrue(ready.wait(3))
+            self.addCleanup(thread.join, 3)
+            self.addCleanup(holder[0].shutdown)
+
+            def request(token, endpoint, payload):
+                return UnixHTTP(path).post(endpoint, token, payload)
+
+            def stage(key, privacy):
+                status, data = request(AGENT, "/stage", {"source": "synthetic", "dedupe_key": key, "kind": "fact", "privacy": privacy, "body": "quince orchard " + key})
+                self.assertEqual(200, status)
+                return data["id"]
+
+            def sees(token, query):
+                return sorted(r["id"] for r in request(token, "/search", {"query": query})[1]["records"])
+
+            staged, private = stage("1", "P1"), stage("2", "P1")
+            # a staged record isn't approved, so it can't be moved
+            self.assertEqual(409, request(REVIEWER, "/retier", {"id": staged, "privacy": "P0", "from": "P1"})[0])
+            self.assertEqual(200, request(REVIEWER, "/approve", {"id": private})[0])
+            self.assertEqual([private], sees(CLOUD, "quince"))
+
+            # the agent has no retier action, and bad payloads are refused
+            self.assertEqual(403, request(AGENT, "/retier", {"id": private, "privacy": "P0", "from": "P1"})[0])
+            for bad in ({"id": private, "privacy": "P0"}, {"privacy": "P0", "from": "P1"}, {"id": str(private), "privacy": "P0", "from": "P1"}, {"id": private, "privacy": "P9", "from": "P1"}, {"id": private, "privacy": "P0", "from": "P9"}, {"id": private, "privacy": "P0", "from": "P1", "state": "staged"}, {"id": private, "privacy": "P0", "from": "P1", "body_hash": 5}):
+                with self.subTest(payload=bad):
+                    self.assertEqual(400, request(REVIEWER, "/retier", bad)[0])
+            # a reviewer that can't see P0 can't move a record there
+            self.assertEqual(404, request(narrow, "/retier", {"id": private, "privacy": "P0", "from": "P1"})[0])
+            self.assertEqual([private], sees(CLOUD, "quince"))
+
+            # the record changed since it was shown: another tier, or another body
+            body_hash = hashlib.sha256("quince orchard 2".encode()).hexdigest()
+            self.assertEqual(409, request(REVIEWER, "/retier", {"id": private, "privacy": "P0", "from": "P2"})[0])
+            self.assertEqual(409, request(REVIEWER, "/retier", {"id": private, "privacy": "P0", "from": "P1", "body_hash": "0" * 64})[0])
+            self.assertEqual([private], sees(CLOUD, "quince"))
+            self.assertEqual((200, {"retiered": True, "from": "P1", "to": "P0"}), request(REVIEWER, "/retier", {"id": private, "privacy": "P0", "from": "P1", "body_hash": body_hash}))
+            # the P1 reader no longer finds it; the P0 reader does, by its text
+            self.assertEqual([], sees(CLOUD, "quince"))
+            self.assertEqual([private], sees(AGENT, "quince"))
+            # and a reviewer that can't see P0 can't move it back out
+            self.assertEqual(404, request(narrow, "/retier", {"id": private, "privacy": "P1", "from": "P0"})[0])
+            self.assertEqual(404, request(REVIEWER, "/retier", {"id": 9999, "privacy": "P0", "from": "P1"})[0])
+            self.assertEqual((200, {"retiered": True, "from": "P0", "to": "P2"}), request(REVIEWER, "/retier", {"id": private, "privacy": "P2", "from": "P0"}))
+            self.assertEqual([private], sees(CLOUD, "quince"))
+
     def test_invalid_policy_and_existing_socket_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "memory.sock")
@@ -201,7 +270,7 @@ class ServiceTest(unittest.TestCase):
                 MemoryServer(path, db, {})
             with self.assertRaises(ValueError):
                 MemoryServer(path, db, {AGENT: {"actions": ["stage", "approve"], "tiers": ["P0"]}})
-            for action in ("staged", "discard"):
+            for action in ("staged", "discard", "retier"):
                 with self.subTest(action=action), self.assertRaises(ValueError):
                     MemoryServer(path, db, {AGENT: {"actions": ["stage", action], "tiers": ["P0"]}})
             with self.assertRaises(ValueError):

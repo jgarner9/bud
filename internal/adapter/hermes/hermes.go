@@ -60,6 +60,9 @@ var owned = []string{
 	"terminal.backend", "terminal.docker_mount_cwd_to_workspace",
 	"gateway.standalone",
 	"plugins", "platforms.signal",
+	// where a delegated subagent's requests go (Suite D135): the router's
+	// always-P0 endpoint, which an override could point around
+	"delegation",
 }
 
 // ConfigVersion is the config schema version of the Hermes release bud

@@ -150,6 +150,10 @@ func TestAFragmentCantSetWhatBudOwns(t *testing.T) {
 		`{"bud": {"hermes": {"plugins": {"enabled": ["other"]}}}}`,
 		`{"bud": {"hermes": {"platforms": {"signal": {"unauthorized_dm_behavior": "pair"}}}}}`,
 		`{"bud": {"hermes": {"platforms": "off"}}}`,
+		// subagents go to the router's always-P0 endpoint (Suite D135)
+		`{"bud": {"hermes": {"delegation": {"base_url": "http://elsewhere/v1"}}}}`,
+		`{"bud": {"hermes": {"delegation": {"provider": "openrouter"}}}}`,
+		`{"bud": {"hermes": {"delegation": null}}}`,
 	} {
 		_, err := Render(input(t, src))
 		if err == nil || !strings.Contains(err.Error(), "bud renders") {

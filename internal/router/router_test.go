@@ -418,9 +418,12 @@ func TestTheP0EndpointListsOnlyP0Models(t *testing.T) {
 
 func TestOnlyV1PathsExistUnderTheP0Prefix(t *testing.T) {
 	rt, _, _ := tierServer(t)
+	// an invalid tier header doesn't turn the 404 into a 400 either
 	for _, path := range []string{"/p0/chat/completions", "/p0/v1/other", "/p0", "/p0/"} {
-		if w := do(t, rt, "POST", path, chat("local"), nil); w.Code != 404 {
-			t.Errorf("%s = %d, want 404", path, w.Code)
+		for _, hdr := range []map[string]string{nil, {"X-Bud-Privacy": "bogus"}} {
+			if w := do(t, rt, "POST", path, chat("local"), hdr); w.Code != 404 {
+				t.Errorf("%s with %v = %d, want 404", path, hdr, w.Code)
+			}
 		}
 	}
 }

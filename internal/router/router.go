@@ -313,8 +313,11 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tier, valid := registry.RequestTier(r.Header.Get(registry.PrivacyHeader))
 	// the always-P0 endpoint serves the same paths under P0Prefix and takes
 	// no tier from the client, so a bad header can't lower it or fail it
-	if rest, ok := strings.CutPrefix(r.URL.Path, P0Prefix+"/"); ok {
-		r.URL.Path, r.URL.RawPath = "/"+rest, ""
+	if rest, ok := strings.CutPrefix(r.URL.Path, P0Prefix); ok && (rest == "" || rest[0] == '/') {
+		if rest == "" {
+			rest = "/"
+		}
+		r.URL.Path, r.URL.RawPath = rest, ""
 		tier, valid = "P0", true
 	}
 	if !valid {

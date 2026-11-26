@@ -9,7 +9,6 @@ One JSON file (D2), by default `~/.local/state/bud/mcp-gateway.json` (`paths.MCP
 ```json
 {
   "listen": "127.0.0.1:8790",
-  "audit_log": "",
   "servers": {
     "linear": {
       "url": "https://mcp.linear.app/mcp",
@@ -23,7 +22,7 @@ One JSON file (D2), by default `~/.local/state/bud/mcp-gateway.json` (`paths.MCP
 | Key | What it is |
 | --- | --- |
 | `listen` | `host:port`. The host must be a loopback address or a tailnet address (100.64.0.0/10, fd7a:115c:a1e0::/48), never a wildcard or a LAN address. |
-| `audit_log` | Where the gateway's own call log goes. Empty means `~/.local/state/bud/mcp-audit.jsonl` (`paths.MCPAudit`). Every call is also written to the shared [audit log](audit.md), which will replace this file. |
+| `audit_log` | No longer used (Suite D140): every call is written to the shared [audit log](audit.md), and the gateway says so at start if this is set. A leftover `mcp-audit.jsonl` is no longer written and can be deleted. |
 | `servers.<name>` | One upstream server. Devices reach it at `http://<listen>/<name>/mcp`. Names are lowercase letters, digits and `-`. |
 | `.url` | The upstream's Streamable HTTP endpoint. `https`, or `http` to a loopback or tailnet host. |
 | `.privacy` | The session tiers that may use it. A server outside the house (any host that isn't loopback or tailnet) may not list `P0` (D81). |
@@ -42,7 +41,7 @@ The privacy rules come from the model registry, not this file: `--registry <file
 3. **Privacy rules.** The registry's `privacy_rules` (Suite D23, D112; `docs/registry.md`) can only raise the tier. `texts` (`rules.go`) reads every string value inside each message's `params`, however deeply nested: a tool call's arguments, a prompt's arguments, a resource's URI. Object keys are skipped, since they're the tool's own field names, and a body that isn't JSON gives nothing to read (the approval gate refuses it on a server with an `approval` block; elsewhere the upstream answers it). `registry.Raise` picks the most private tier and the first rule, by name, that gave it, the same function the router uses. The raised tier then counts for the rest of the request: the P0 tool rule below, the audit record's `tier`, the approval scope's profile and the `X-Bud-Privacy` sent to an upstream inside the house. The answer carries `X-Bud-Privacy-Raised: <rule>` (an upstream's header of that name is dropped), a refusal's message names the rule and says to leave out what it matched, and the audit record gets `raised: <rule>`. The log line is `mcp-gateway: rule <name> raised a <tier> request to <tier>`; the matched text is never logged. A tool's result isn't read here: it reaches a cloud model only through the router, whose rules read every message, the tool's included.
 4. **The P0 tool rule.** When the server's `privacy` doesn't list the session's tier, every request to it is refused: 403 with a JSON-RPC error (`-32001`) for each request in the body, and an audit entry for each. No byte goes upstream, so a P0 session can't even list the tools.
 5. **Forwarding.** The body (up to 4 MiB) is read and parsed as JSON-RPC, one message or a batch, then sent to the upstream URL with the method, `Mcp-Session-Id` and `Accept` kept. The client's `Authorization`, `Cookie`, `X-Bud-Privacy` and the key header are dropped, and the key header is set from the environment. An upstream on loopback or the tailnet (a Bud-owned server such as `bud memory-mcp`) then gets `X-Bud-Privacy` set to the tier the gateway checked, P0 when the client sent none, so it can filter by tier; an upstream outside the house never sees it (Suite D108). Responses stream back as they arrive, so server-sent events work. `GET` (the event stream) and `DELETE` (ending a session) are forwarded the same way.
-6. **The audit log.** Each `tools/call` becomes one JSON line once the upstream's response ends (for an event stream, when the stream closes; a client that leaves mid-stream still gets its record): time, server, tier (after the privacy rules), the rule that raised it if one did, client address, tool, the argument names (sorted; the values are left out, since they can hold private text or keys), the decision (`allowed` or `refused`), the HTTP status and the milliseconds taken. A refused request that isn't a tool call is logged with its method and no tool. Other allowed methods (`initialize`, `tools/list`) aren't logged. The file is appended to, and is set to mode 0600 at start even if it already existed. The status is the final one, never an interim 1xx.
+6. **The audit log.** Calls go to the shared [audit log](audit.md) (Suite D140) as `tool_call` events, with the server as the target and the method, status, milliseconds, raising rule and argument names in `detail`. Each `tools/call` becomes one line once the upstream's response ends (for an event stream, when the stream closes; a client that leaves mid-stream still gets its record): time, server, tier (after the privacy rules), the rule that raised it if one did, client address, tool, the argument names (sorted; the values are left out, since they can hold private text or keys), the decision (`allowed` or `refused`), the HTTP status and the milliseconds taken. A refused request that isn't a tool call is logged with its method and no tool. Other allowed methods (`initialize`, `tools/list`) aren't logged. The file is appended to, and is set to mode 0600 at start even if it already existed. The status is the final one, never an interim 1xx.
 
 A JSON-RPC error inside a 200 response (the tool itself failing) isn't read back, so the log says the call went upstream, not that it worked.
 
@@ -79,7 +78,3 @@ Every failure denies and sends nothing upstream: a denial, expiry (one hour at m
 The audit log records the decision for each asking call: `approved` (forwarded; the status is the upstream's), `denied`, `expired`, `unavailable`, `failed`, `canceled` (status 499, client left) or `refused` (batch). Argument values are never logged. Whether MCP clients tolerate a long hold is still unmeasured (design open question 2).
 
 The `ops` server is the exception: `approval` on a server named `ops` is a config error. Ops enforces approvals at its own leaf, outside its mutex (see `mcp-ops.md`), so a gateway review as well would ask twice. Calls to `ops` pass through unreviewed here.
-
-## Not yet
-
-- The audit log is a JSONL file until the one approval and audit log (JGA-348) exists; its writer then takes these records.

@@ -29,7 +29,9 @@ import (
 
 // Config is mcp-gateway.json
 type Config struct {
-	Listen   string            `json:"listen"`
+	Listen string `json:"listen"`
+	// AuditLog is no longer used: calls go to the shared audit log (Suite
+	// D140). The key is still read so an older config loads
 	AuditLog string            `json:"audit_log,omitempty"`
 	Servers  map[string]Server `json:"servers"`
 }

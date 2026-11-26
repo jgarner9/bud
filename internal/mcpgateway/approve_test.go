@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -15,6 +16,7 @@ import (
 
 	"jgarner.dev/bud/internal/approval"
 	"jgarner.dev/bud/internal/argrule"
+	"jgarner.dev/bud/internal/audit"
 )
 
 // approvalGateway is newGateway with an approval block: get_* is allowed and
@@ -35,11 +37,10 @@ func approvalGatewayWith(t *testing.T, upstreamURL string, review approval.Revie
 		t.Fatal(err)
 	}
 	logPath := filepath.Join(t.TempDir(), "audit.jsonl")
-	a, err := OpenAudit(logPath)
+	a, err := audit.Open(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = a.Close() })
 	g, err := New(c, a, func(string) string { return "" })
 	if err != nil {
 		t.Fatal(err)
@@ -143,8 +144,7 @@ func TestScopeUsesTheSessionHeaderOrTheClientAndTier(t *testing.T) {
 	up, _ := fakeUpstream(t)
 	var scopes []approval.Scope
 	c := &Config{Listen: "127.0.0.1:0", Servers: map[string]Server{"linear": {URL: up.URL + "/mcp", Privacy: []string{"P1"}, Approval: &Approval{}}}}
-	a, _ := OpenAudit(filepath.Join(t.TempDir(), "a.jsonl"))
-	t.Cleanup(func() { _ = a.Close() })
+	a, _ := audit.Open(filepath.Join(t.TempDir(), "a.jsonl"))
 	g, err := New(c, a, func(string) string { return "" })
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +197,11 @@ func TestEveryFailureSendsNothingUpstreamAndReturnsIsError(t *testing.T) {
 				g.appr.Timeout = 100 * time.Millisecond
 			}
 			if tc.breakDir {
-				// a file where the dir should be, so Create can't succeed
+				// a file where the dir should be, so Create can't succeed (the
+				// audit log is created by its first write, so make the file now)
+				if err := os.WriteFile(logPath, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
 				g.appr.Store = approval.Store{Path: filepath.Join(logPath, "approvals.json")}
 			}
 			w := call(g, "P1", body)

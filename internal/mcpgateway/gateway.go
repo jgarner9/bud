@@ -44,7 +44,6 @@ const refusedCode = -32001
 // /<name>/mcp
 type Gateway struct {
 	servers map[string]*upstream
-	audit   *Audit
 	events  *audit.Log
 	now     func() time.Time
 	appr    Approvals
@@ -66,10 +65,6 @@ type Approvals struct {
 // SetApprovals sets the approval wiring; call it before serving
 func (g *Gateway) SetApprovals(a Approvals) { g.appr = a }
 
-// SetEvents sets the shared audit log (Suite D140) each call is also written
-// to; nil writes none. Call it before serving
-func (g *Gateway) SetEvents(l *audit.Log) { g.events = l }
-
 // SetRules sets the registry's privacy rules (Suite D23, D112), which can
 // only raise a request's tier; call it before serving
 func (g *Gateway) SetRules(rules []registry.CompiledRule) { g.rules = rules }
@@ -89,12 +84,12 @@ type upstream struct {
 
 // New builds the gateway from a validated config, reading each key with
 // getenv (os.Getenv outside tests)
-func New(c *Config, audit *Audit, getenv func(string) string) (*Gateway, error) {
+func New(c *Config, events *audit.Log, getenv func(string) string) (*Gateway, error) {
 	keys, err := c.keys(getenv)
 	if err != nil {
 		return nil, err
 	}
-	g := &Gateway{servers: map[string]*upstream{}, audit: audit, now: time.Now, mux: http.NewServeMux()}
+	g := &Gateway{servers: map[string]*upstream{}, events: events, now: time.Now, mux: http.NewServeMux()}
 	for _, name := range sortedNames(c.Servers) {
 		s := c.Servers[name]
 		u, err := url.Parse(s.URL)
@@ -270,10 +265,6 @@ func (g *Gateway) refuse(w http.ResponseWriter, r *http.Request, up *upstream, m
 
 func (g *Gateway) log(rec Record) {
 	rec.Time = g.now().UTC()
-	if err := g.audit.Write(rec); err != nil {
-		// the call already happened; losing its record is worth a loud line
-		log.Printf("mcp-gateway: audit log: %v", err)
-	}
 	action := rec.Method
 	if rec.Tool != "" {
 		action = "mcp:" + rec.Server + "/" + rec.Tool

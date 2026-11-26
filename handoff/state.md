@@ -47,6 +47,7 @@ Not set up on the home server yet: revisit item 31.
 
 | Issue | What | PR | Decisions |
 | --- | --- | --- | --- |
+| | The syncer tests' git commits no longer inherit the machine's commit signing (one `-c commit.gpgsign=false` in the test helper), so the golden tests run anywhere | this PR | |
 | | The 2026-11-19 approval-hook investigation lands in docs/internals: Hermes v0.23.2 and OpenCode 2.3.2 hook and permission boundaries, identity, cancellation and the one-call enforcement gaps, groundwork for the approval and audit-log follow-ups (JGA-374, JGA-376, D134) | this PR | |
 | | glm-5.2 removed from the registry and the coding pool: Go's model list no longer has it (`bud registry refresh`, 2026-11-24). Once revisit item 21's improve scan runs, it proposes this class of change itself | this PR | |
 

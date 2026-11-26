@@ -103,7 +103,6 @@ type UI struct {
 type AI struct {
 	Agent    Agent    `json:"agent"`
 	Issues   Issues   `json:"issues"`
-	Work     Work     `json:"work"`
 	Planning Planning `json:"planning"`
 }
 
@@ -130,13 +129,6 @@ type Agent struct {
 	Autostart bool `json:"autostart"`
 	// an agent nothing has used for this long is stopped (D49); 0 never
 	IdleMinutes int `json:"idle_minutes"`
-}
-
-// Work is where <leader>aw has the agent fix an issue (JGA-237)
-type Work struct {
-	// "local": a git worktree next to the repo (the default); "cloud": a cloud
-	// session that clones the repo from GitHub and pushes a branch
-	Where string `json:"where"`
 }
 
 // Issues is where issues filed from the editor go (JGA-123): Linear's team and
@@ -173,7 +165,7 @@ func Defaults() Settings {
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
 		AI: AI{Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30},
-			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"},
+			Issues:   Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}},
 			Planning: Planning{PasswordFile: "~/.config/bud/planning-password"}},
 	}
 }
@@ -190,7 +182,6 @@ func (s Settings) Validate() error {
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
 		{"ai.agent.chat_layout", s.AI.Agent.ChatLayout, []string{"pane", "full"}},
 		{"ai.agent.chat_ui", s.AI.Agent.ChatUI, []string{"tui", "bud"}},
-		{"ai.work.where", s.AI.Work.Where, []string{"local", "cloud"}},
 	}
 	for _, c := range checks {
 		if !slices.Contains(c.allowed, c.value) {

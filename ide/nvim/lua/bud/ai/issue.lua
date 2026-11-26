@@ -40,7 +40,8 @@ end
 
 -- linear_tool splits a Linear MCP tool's name into whether it only reads
 local function linear_tool(tool)
-  local name = tool:match("^mcp__.*[Ll]inear[^_]*__(.+)$")
+  -- OpenCode names an MCP tool <server>_<tool>, and bud's server is "linear"
+  local name = tool:match("^[Ll]inear_(.+)$")
   if not name then
     return nil
   end
@@ -243,7 +244,7 @@ local function on_filed(run, d)
   finish(run)
   local filed, why = M.parse(d.text, "bud-filed")
   if not filed then
-    vim.notify("bud: Claude didn't confirm what it filed (" .. why .. "):\n" .. (d.text or ""), vim.log.levels.WARN)
+    vim.notify("bud: OpenCode didn't confirm what it filed (" .. why .. "):\n" .. (d.text or ""), vim.log.levels.WARN)
     return
   end
   local lines = {}
@@ -253,7 +254,7 @@ local function on_filed(run, d)
     table.insert(M.filed, f)
     table.insert(lines, ("%s %s  %s"):format(f.action or "filed", f.id or "?", f.title or f.error or ""))
   end
-  table.insert(lines, "w in :BudIssues has Claude fix one")
+  table.insert(lines, "w in :BudIssues has OpenCode fix one")
   vim.notify("bud: " .. table.concat(lines, "\n"), vim.log.levels.INFO)
 end
 
@@ -402,7 +403,7 @@ local function on_proposed(run, d)
   end
   if type(proposal.issues) ~= "table" or #proposal.issues == 0 then
     finish(run)
-    vim.notify("bud: Claude proposed nothing" .. (proposal.notes and (": " .. proposal.notes) or ""))
+    vim.notify("bud: OpenCode proposed nothing" .. (proposal.notes and (": " .. proposal.notes) or ""))
     return
   end
   run.state, run.proposal = "review", proposal
@@ -441,7 +442,7 @@ function M.start(report, target, root, ctx)
     finish(run)
     return nil
   end
-  vim.notify("bud: Claude is looking into it; the issues to file show up here")
+  vim.notify("bud: OpenCode is looking into it; the issues to file show up here")
   return run
 end
 
@@ -495,7 +496,7 @@ function M.target(kind, cb)
   end)
 end
 
--- checkout finds the bud checkout Claude works in for an issue about bud, when
+-- checkout finds the bud checkout OpenCode works in for an issue about bud, when
 -- none is linked or remembered, or the remembered one has moved or gone: it
 -- says so, asks for a path, and saves it for next time. An empty answer files
 -- against the synced config instead, as before
@@ -596,7 +597,7 @@ function M.capture(kind, target, root, ctx)
 end
 
 -- list_lines draws :BudIssues: what was filed this session, and the issues
--- Claude is working or has worked (bud.ai.work); rows[line] is the id there
+-- OpenCode is working or has worked (bud.ai.work); rows[line] is the id there
 function M.list_lines(filed, runs)
   local lines, rows, seen = { "" }, {}, {}
   local function row(id, what, title, run)
@@ -604,8 +605,7 @@ function M.list_lines(filed, runs)
     table.insert(lines, ("  %-10s %-9s %s"):format(id, state, title or ""))
     rows[#lines] = id
     if run then
-      local where = run.cloud and ("cloud  " .. (run.url or "")) or vim.fn.fnamemodify(run.worktree, ":~")
-      table.insert(lines, ("  %-10s %s"):format("", run.branch .. "  " .. where))
+      table.insert(lines, ("  %-10s %s"):format("", run.branch .. "  " .. vim.fn.fnamemodify(run.worktree, ":~")))
       rows[#lines] = id
       if run.summary then
         table.insert(lines, ("  %-10s %s"):format("", run.summary))
@@ -630,20 +630,20 @@ function M.list_lines(filed, runs)
   return lines, rows
 end
 
--- work hands id to Claude to fix (bud.ai.work), in the repo it was filed
+-- work hands id to OpenCode to fix (bud.ai.work), in the repo it was filed
 -- for, else the current one
-function M.work(id, title, where)
+function M.work(id, title)
   local repo
   for _, f in ipairs(M.filed) do
     if f.id == id then
       repo, title = f.repo, title or f.title
     end
   end
-  return require("bud.ai.work").start(id, title, repo or vim.fn.getcwd(), where)
+  return require("bud.ai.work").start(id, title, repo or vim.fn.getcwd())
 end
 
--- list shows :BudIssues: <CR> opens an issue, w has Claude fix it, d shows
--- the fix's diff, a answers Claude's question
+-- list shows :BudIssues: <CR> opens an issue, w has OpenCode fix it, d shows
+-- the fix's diff, a answers its question
 function M.list()
   local work = require("bud.ai.work")
   if #M.filed == 0 and next(work.runs) == nil then
@@ -684,14 +684,11 @@ function M.list()
   end)
   map("a", function(id)
     local run = work.runs[id]
-    if run and run.cloud then
-      return vim.notify("bud: " .. id .. " runs in the cloud; talk to it at " .. (run.url or "claude.ai/code"))
-    end
     if not run or run.state ~= "waiting" then
-      return vim.notify("bud: Claude isn't waiting on an answer for " .. id)
+      return vim.notify("bud: OpenCode isn't waiting on an answer for " .. id)
     end
     close(win)
-    vim.ui.input({ prompt = "Answer Claude about " .. id .. ": " }, function(text)
+    vim.ui.input({ prompt = "Answer OpenCode about " .. id .. ": " }, function(text)
       if text and text ~= "" then
         work.answer(id, text)
       end
@@ -705,16 +702,28 @@ function M.list()
 end
 
 -- work_prompt asks which issue to work, the last filed by default
-local function work_prompt(id, where)
+local function work_prompt(id)
   if id and id ~= "" then
-    return M.work(id:upper(), nil, where)
+    return M.work(id:upper())
   end
   local last = M.filed[#M.filed]
-  vim.ui.input({ prompt = "Issue for Claude to fix: ", default = last and last.id or "" }, function(text)
+  vim.ui.input({ prompt = "Issue for OpenCode to fix: ", default = last and last.id or "" }, function(text)
     if text and text ~= "" then
       M.work(vim.trim(text):upper())
     end
   end)
+end
+
+-- command runs :BudIssue [bud|work ID]. Work is always local, so a third
+-- word (the removed where choice) is refused rather than ignored
+function M.command(args)
+  if args[1] == "work" then
+    if #args > 2 then
+      return vim.notify("bud: :BudIssue work takes only an issue id; work is always local", vim.log.levels.ERROR)
+    end
+    return work_prompt(args[2])
+  end
+  M.open(args[1] == "bud" and "bud" or "project")
 end
 
 function M.setup()
@@ -727,18 +736,15 @@ function M.setup()
   end, { desc = "File an issue about bud" })
   vim.keymap.set("n", "<leader>aw", function()
     work_prompt()
-  end, { desc = "Have Claude fix an issue" })
+  end, { desc = "Have OpenCode fix an issue" })
   vim.api.nvim_create_user_command("BudIssue", function(o)
-    if o.fargs[1] == "work" then
-      return work_prompt(o.fargs[2], o.fargs[3])
-    end
-    M.open(o.fargs[1] == "bud" and "bud" or "project")
+    M.command(o.fargs)
   end, {
     nargs = "*",
-    desc = "File an issue with Claude (about this project, or bud), or have Claude fix one (work ID [local|cloud])",
+    desc = "File an issue with OpenCode (about this project, or bud), or have OpenCode fix one (work ID)",
     complete = function(_, line)
       if line:match("^%s*%S+%s+work%s+%S+%s+") then
-        return { "local", "cloud" }
+        return {}
       end
       return { "bud", "work" }
     end,

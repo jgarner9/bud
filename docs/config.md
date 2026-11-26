@@ -74,7 +74,6 @@ bud config edit                           # open it in bud's editor, then check 
 | `ai.issues.bud.team` | `"JGA"` | Where issues about bud itself (`<leader>aB`) go: bud's own tracker. |
 | `ai.issues.bud.project` | `"Bud IDE"` | The Linear project in that team. |
 | `ai.issues.bud.checkout` | unset | The bud checkout the agent reads and works in for issues about bud. `<leader>aB` asks for it once and saves it with `bud issue checkout <path>`; it is checked each time, and asked for again if the dir was moved or removed. A `bud dev link` checkout takes precedence. |
-| `ai.work.where` | `"local"` | Where `<leader>aw` has the agent fix an issue: `local` is a git worktree beside the repo; `cloud` starts a cloud session that clones the repo from GitHub, works the issue and pushes a branch (the repo needs a GitHub `origin` with the base branch pushed). `:BudIssue work ID cloud` or `local` picks per issue. See [filing issues](issues.md#in-the-cloud). |
 
 ## Tools
 

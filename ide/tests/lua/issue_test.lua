@@ -143,16 +143,16 @@ local function ask(tool, root)
   })
   return got
 end
-eq(ask("mcp__linear__list_issues").behavior, "allow", "read while proposing")
-eq(ask("mcp__linear__save_issue").behavior, "deny", "write while proposing")
-eq(ask("mcp__Linear__save_issue").behavior, "deny", "a differently named linear server too")
-eq(ask("mcp__Linear__list_issues").behavior, "allow", "its reads too")
-eq(issue.policy({ tool = "mcp__linear__save_issue", root = "/elsewhere" }), nil, "another root")
+eq(ask("linear_list_issues").behavior, "allow", "read while proposing")
+eq(ask("linear_save_issue").behavior, "deny", "write while proposing")
+eq(ask("linear_get_issue").behavior, "allow", "reads by get too")
+eq(issue.policy({ tool = "linear_save_issue", root = "/elsewhere" }), nil, "another root")
 eq(issue.policy({ tool = "Bash", root = repo }), nil, "not Linear")
+eq(issue.policy({ tool = "calendar_list_events", root = repo }), nil, "another server")
 run.state = "filing"
-eq(ask("mcp__linear__save_issue").behavior, "allow", "write once filing")
+eq(ask("linear_save_issue").behavior, "allow", "write once filing")
 issue.runs.t = nil
-eq(issue.policy({ tool = "mcp__linear__save_issue", root = repo }), nil, "no report in flight")
+eq(issue.policy({ tool = "linear_save_issue", root = repo }), nil, "no report in flight")
 
 -- target: what bud issue target says, and none for bud without a tracker
 issue.bud = function(args)

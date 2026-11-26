@@ -79,8 +79,8 @@ func TestEventsNeedASourceAndKind(t *testing.T) {
 			t.Errorf("%+v should be refused", e)
 		}
 	}
-	if _, err := os.Stat(path); err == nil {
-		t.Error("a refused event must not create the file")
+	if events, _ := Read(path); len(events) != 0 {
+		t.Errorf("a refused event was written: %+v", events)
 	}
 }
 
@@ -99,6 +99,26 @@ func TestNilLogDropsEvents(t *testing.T) {
 	}
 	if l.Path() != "" {
 		t.Error("a nil log has no path")
+	}
+}
+
+func TestOpenCreatesTheFilePrivately(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state", "audit.jsonl")
+	if _, err := Open(path); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 || fi.Size() != 0 {
+		t.Fatalf("log %v, %v", fi, err)
+	}
+}
+
+func TestOpenFailsWhereTheLogCantBeMade(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "file"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(filepath.Join(dir, "file", "audit.jsonl")); err == nil {
+		t.Fatal("a path under a file should be refused")
 	}
 }
 

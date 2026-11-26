@@ -185,10 +185,6 @@ func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway
 // file every leaf writes its approval-tier and spend events to
 func (p *Paths) Audit() string { return filepath.Join(p.State, "audit.jsonl") }
 
-// MCPAudit is where the MCP gateway logs every tool call until its events
-// move to the shared audit log (JGA-395, Suite D140)
-func (p *Paths) MCPAudit() string { return filepath.Join(p.State, "mcp-audit.jsonl") }
-
 // MailActions is bud mail-mcp's log of every move, restore and send (Suite
 // D36, D106), which the cleanup digest and restores read
 func (p *Paths) MailActions() string { return filepath.Join(p.State, "mail-actions.jsonl") }

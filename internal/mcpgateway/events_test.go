@@ -2,21 +2,16 @@ package mcpgateway
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"jgarner.dev/bud/internal/audit"
 )
 
-func TestACallAlsoWritesASharedAuditEventWithoutItsArgumentValues(t *testing.T) {
+func TestACallWritesASharedAuditEventWithoutItsArgumentValues(t *testing.T) {
 	up, _ := fakeUpstream(t)
 	g, _ := newGateway(t, up.URL, "P1", "P2")
-	shared, err := audit.Open(filepath.Join(t.TempDir(), "audit.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	g.SetEvents(shared)
+	shared := g.events
 	if w := call(g, "P1", toolCall); w.Code != 200 {
 		t.Fatalf("status %d: %s", w.Code, w.Body)
 	}

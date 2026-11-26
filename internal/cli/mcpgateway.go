@@ -60,21 +60,14 @@ func runMCPGateway(g *Globals, args []string, configPath, registryPath string) e
 	if err != nil {
 		return err
 	}
-	logPath := c.AuditLog
-	if logPath == "" {
-		logPath = p.MCPAudit()
-	}
-	fileLog, err := mcpgateway.OpenAudit(logPath)
-	if err != nil {
-		return err
-	}
-	defer fileLog.Close()
-	gw, err := mcpgateway.New(c, fileLog, os.Getenv)
-	if err != nil {
-		return err
+	if c.AuditLog != "" {
+		g.Noticef("mcp-gateway: audit_log is no longer used; calls go to %s", p.Audit())
 	}
 	shared := openAudit(g, p)
-	gw.SetEvents(shared)
+	gw, err := mcpgateway.New(c, shared, os.Getenv)
+	if err != nil {
+		return err
+	}
 
 	gw.SetRules(rules)
 	gw.SetApprovals(mcpgateway.Approvals{
@@ -86,6 +79,6 @@ func runMCPGateway(g *Globals, args []string, configPath, registryPath string) e
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	g.Noticef("mcp-gateway: serving %d servers on %s, %d privacy rules, audit log %s", len(c.Servers), c.Listen, len(rules), logPath)
+	g.Noticef("mcp-gateway: serving %d servers on %s, %d privacy rules, audit log %s", len(c.Servers), c.Listen, len(rules), shared.Path())
 	return serveGateway(ctx, c, gw)
 }

@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"jgarner.dev/bud/internal/audit"
 	"jgarner.dev/bud/internal/tailnet"
 )
 
@@ -54,11 +55,10 @@ func newGateway(t *testing.T, upstream string, privacy ...string) (*Gateway, str
 		t.Fatal(err)
 	}
 	logPath := filepath.Join(t.TempDir(), "audit.jsonl")
-	a, err := OpenAudit(logPath)
+	a, err := audit.Open(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = a.Close() })
 	env := map[string]string{"LINEAR_API_KEY": "lin_secret"}
 	g, err := New(c, a, func(k string) string { return env[k] })
 	if err != nil {
@@ -83,20 +83,34 @@ func call(g http.Handler, tier, body string, edit ...func(*http.Request)) *httpt
 	return w
 }
 
+// readAudit reads the shared audit log back as the calls the gateway made
 func readAudit(t *testing.T, path string) []Record {
 	t.Helper()
-	b, err := os.ReadFile(path)
+	events, err := audit.Read(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var out []Record
-	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-		if line == "" {
+	for _, e := range events {
+		if e.Source != audit.SourceGateway || e.Kind != audit.KindToolCall {
 			continue
 		}
-		var r Record
-		if err := json.Unmarshal([]byte(line), &r); err != nil {
-			t.Fatalf("audit line %q: %v", line, err)
+		r := Record{Time: e.Time, Server: e.Target, Tier: e.Tier, Client: e.Actor, Decision: e.Decision}
+		r.Method, _ = e.Detail["method"].(string)
+		r.Raised, _ = e.Detail["raised"].(string)
+		if v, ok := e.Detail["status"].(float64); ok {
+			r.Status = int(v)
+		}
+		if v, ok := e.Detail["ms"].(float64); ok {
+			r.Millis = int64(v)
+		}
+		if strings.HasPrefix(e.Action, "mcp:") {
+			_, r.Tool, _ = strings.Cut(strings.TrimPrefix(e.Action, "mcp:"), "/")
+		}
+		if args, ok := e.Detail["args"].([]any); ok {
+			for _, a := range args {
+				r.Args = append(r.Args, a.(string))
+			}
 		}
 		out = append(out, r)
 	}
@@ -333,21 +347,6 @@ func TestInterimStatusesAreNotTheAuditedOne(t *testing.T) {
 	sw.WriteHeader(http.StatusBadGateway)
 	if sw.code() != http.StatusBadGateway {
 		t.Errorf("code = %d", sw.code())
-	}
-}
-
-func TestAnExistingAuditLogIsMadePrivate(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "audit.jsonl")
-	if err := os.WriteFile(p, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	a, err := OpenAudit(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer a.Close()
-	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o600 {
-		t.Errorf("mode %v", fi.Mode().Perm())
 	}
 }
 

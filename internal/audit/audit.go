@@ -70,8 +70,9 @@ type Log struct {
 	now  func() time.Time
 }
 
-// Open makes the log's directory and sets it to 0700, and sets an existing
-// file to 0600. The file itself is created by the first Write
+// Open makes the log's directory (0700) and its file (0600), or tightens
+// them if they exist, so a log that can't be written fails here and not at
+// the first event
 func Open(path string) (*Log, error) {
 	if path == "" {
 		return nil, errors.New("the audit log needs a path")
@@ -83,7 +84,12 @@ func Open(path string) (*Log, error) {
 	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("make the audit log's directory private (chmod 700 %s): %w", filepath.Dir(path), err)
 	}
-	if err := os.Chmod(path, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open the audit log: %w", err)
+	}
+	defer f.Close()
+	if err := f.Chmod(0o600); err != nil {
 		return nil, fmt.Errorf("make the audit log private (chmod 600 %s): %w", path, err)
 	}
 	return &Log{path: path, now: time.Now}, nil

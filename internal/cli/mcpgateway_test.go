@@ -56,7 +56,7 @@ func TestMCPGatewayReadsItsConfigAndNeedsItsKeys(t *testing.T) {
 	if served == nil || served.Listen != "127.0.0.1:8790" {
 		t.Errorf("served %+v", served)
 	}
-	if fi, err := os.Stat(filepath.Join(state, "bud", "mcp-audit.jsonl")); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(filepath.Join(state, "bud", "audit.jsonl")); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Errorf("audit log: %v %v", fi, err)
 	}
 	if err := runMCPGateway(&Globals{}, []string{"x"}, "", reg); err == nil {

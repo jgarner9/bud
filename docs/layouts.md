@@ -2,7 +2,7 @@
 
 A layout says which panes open around the editor when a project opens. bud ships four in `ide/layouts/`:
 
-- `default`: the explorer (oil) on the left, focused; `<leader>ac` opens Claude Code's pane on the right and `<leader>t` the terminal along the bottom, under the editor and that pane and right of the explorer, whichever opens first.
+- `default`: the explorer (oil) on the left, focused; `<leader>ac` opens OpenCode's chat on the right and `<leader>t` the terminal along the bottom, under the editor and that pane and right of the explorer, whichever opens first.
 - `focus`: the editor alone.
 - `debug`: the file tree and the debugger panel along the bottom; F5 starts debugging.
 - `review`: the changed files on the left, and the working tree's diff in its own tab (`:DiffviewClose` gets back).
@@ -31,4 +31,4 @@ return {
 }
 ```
 
-`kind` is `tree` (the oil explorer), `git`, `chat` or `debug`; `side` is `left`, `right` or `bottom`; `size` is columns (rows for bottom), or a share of the screen under 1. `focus = true` puts the cursor in that pane once the layout opens, unless files were named on the command line. A kind that isn't available is skipped, such as `git` outside a repo or `chat` without Claude Code. `diff = true` opens the working tree's diff in its own tab. A Lua module can add its own kind with `require("bud.layout").register(kind, { available = fn, open = fn })`.
+`kind` is `tree` (the oil explorer), `git`, `chat` or `debug`; `side` is `left`, `right` or `bottom`; `size` is columns (rows for bottom), or a share of the screen under 1. `focus = true` puts the cursor in that pane once the layout opens, unless files were named on the command line. A kind that isn't available is skipped, such as `git` outside a repo or `chat` when the `opencode` command isn't installed (unless `ai.agent.chat_ui` is `bud`, which draws its own chat). `diff = true` opens the working tree's diff in its own tab. A Lua module can add its own kind with `require("bud.layout").register(kind, { available = fn, open = fn })`.

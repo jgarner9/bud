@@ -48,7 +48,7 @@ The digest is due from `--digest-day` at `--digest-hour` local time (Sunday 10:0
 `Fit` then cuts the text until the prompt fits `approval.MaxSummary`.
 
 It is asked through `approval.Store.Dispatch` with `approval.SocketReview`, like memory-review. The action is `improve:digest`, the target `github`, and the arguments `{"digest": text, "proposals": [ids]}`. The scope is fixed (`improve.Scope`), and the prompt is withdrawn a minute before it expires.
-- **Yes:** each shown proposal is opened as a draft pull request. Before that, every file on the default branch is checked against the proposal's before contents, and a mismatch makes it stale. The change goes on a new branch `bud-proposal/<id>`, one commit per file through the contents API, labelled `bud-proposal`. The PR body has the evidence, the criteria and the rollout. Jason approves each change by merging its PR himself. Claude threads never merge a `bud-proposal` PR.
+- **Yes:** each shown proposal is opened as a draft pull request. Before that, every file on the default branch is checked against the proposal's before contents, and a mismatch makes it stale. The change goes on a new branch `bud-proposal/<id>`, one commit per file through the contents API, labelled `bud-proposal`. The PR body has the evidence, the criteria and the rollout. Jason approves each change by merging its PR himself. Agent sessions never merge a `bud-proposal` PR.
 - **His no** (`approval.ErrDeclined`): the shown proposals become `denied`, and their changes are dropped for good.
 - **No answer, or the plugin stopping:** nothing changes, and it is asked again the next day.
 

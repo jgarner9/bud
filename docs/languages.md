@@ -10,7 +10,7 @@ $EDITOR ~/.local/share/bud/user-tools/languages/zig.lua
 bud lang enable zig     # installs its tools and turns it on
 ```
 
-Or ask Claude: `:BudGen "add Zig support"` drafts the spec and shows it to you as a diff first.
+Or ask OpenCode: `:BudGen "add Zig support"` drafts the spec and shows it to you as a diff first.
 
 ## The spec
 

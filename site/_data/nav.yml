@@ -4,9 +4,6 @@
   pages:
     - { file: setup, title: Setting up }
     - { file: architecture, title: Architecture }
-    - { file: backends, title: AI backends }
-    - { file: openclaw, title: OpenClaw in bud }
-    - { file: claude-code, title: Claude Code in bud }
     - { file: troubleshooting, title: Troubleshooting }
 - title: Reference
   pages:
@@ -22,4 +19,3 @@
     - { file: layouts, title: Layouts }
     - { file: tools, title: Writing a tool }
     - { file: issues, title: Filing issues }
-    - { file: claude-tui, title: Building a Claude TUI }

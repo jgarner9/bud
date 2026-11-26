@@ -32,9 +32,9 @@ return M
 
 Yours go in `~/.local/share/bud/user-tools/<name>/` and load the next time bud starts, after the first screen, so they never slow startup. One of yours with the same name as one of bud's wins. bud ships one, `ide/tools/test-file/` (`:BudTestFile`), which is a good one to copy. The folder name is the tool's name, and bud reads only `description` from the manifest; `commands` and `keymaps` are for people. `:BudTools` lists them in the editor.
 
-## Letting Claude write it
+## Letting OpenCode write it
 
-`:BudGen "a command that opens the test file for the current file"` (or `bud tools gen "..."` from the shell) has Claude write the tool. Each file it writes comes up as a diff you accept or reject, then the tool is loaded in a headless Neovim first: it's turned on only if that works, and turned off with the error if not. Ask for changes in the same split.
+`:BudGen "a command that opens the test file for the current file"` (or `bud tools gen "..."` from the shell) has OpenCode write the tool. Each file it writes comes up as a diff you accept or reject, then the tool is loaded in a headless Neovim first: it's turned on only if that works, and turned off with the error if not. Ask for changes in the same split.
 
 ## Managing them
 

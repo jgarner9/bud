@@ -90,7 +90,6 @@ Each area of the code has a paragraph in `docs/internals/`. Read the file before
 | A command in `internal/cli/` other than the above: colour, completion, `bud config`, uninstall, launch and open, install, `bud lang`, projects, dev link, migrations, version, `bud plugin` (the embedded `bud-ide` plugin) | `docs/internals/cli.md` |
 | `bud bundle` and the desktop apps | `docs/internals/bundles.md` |
 | `bud update`, rollback, the background check | `docs/internals/updater.md` |
-| `bud claude`, the Claude Code check | `docs/internals/claude-code.md` |
 | `bud.ai.acp`, the OpenCode transport and the fake ACP agent | `docs/internals/acp.md` |
 | `bud.ai.*`: the session, the TUI pane, permissions, chat, inline actions, tools, the generator, filing and working issues | `docs/internals/session.md` |
 | Anything under `ide/nvim/`: plugins, lazy loading, languages, layouts, debugging, UI, the dashboard, the settings screen | `docs/internals/neovim.md` |

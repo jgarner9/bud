@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"jgarner.dev/bud/internal/locate"
@@ -65,14 +66,14 @@ func runLocate(g *Globals, rest []string, kind, lang string, max int, out toolOu
 	}
 
 	opts := locate.Options{Query: rest[0], Paths: rest[1:], Kind: kind, Lang: langName, Max: max}
-	if p, err := lookPath("rg"); err == nil {
+	if p, err := exec.LookPath("rg"); err == nil {
 		opts.Tools.RG = p
-	} else if p, err := lookPath("grep"); err == nil {
+	} else if p, err := exec.LookPath("grep"); err == nil {
 		opts.Tools.Grep = p
 	}
 	if locate.IsSymbol(opts.Query) {
-		opts.LookAstGrep = func() string { return locate.FindAstGrep(lookPath, nil) }
-	} else if p, err := lookPath("repomap"); err == nil {
+		opts.LookAstGrep = func() string { return locate.FindAstGrep(exec.LookPath, nil) }
+	} else if p, err := exec.LookPath("repomap"); err == nil {
 		opts.Tools.Repomap = p
 	}
 

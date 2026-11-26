@@ -26,7 +26,7 @@ func Config() *Command {
 	var force, changed bool
 	return &Command{
 		Name:  "config",
-		Usage: "Reads and writes bud's machine config by dotted key (update.channel, ai.claude.resume, ...)",
+		Usage: "Reads and writes bud's machine config by dotted key (update.channel, ai.agent.idle_minutes, ...)",
 		Subs: []*Command{
 			{Name: "ls", Usage: "print the whole config, defaults filled in; --changed only what config.json sets", Flags: func(fs *flag.FlagSet) {
 				fs.BoolVar(&changed, "changed", false, "only what config.json sets, not the defaults")

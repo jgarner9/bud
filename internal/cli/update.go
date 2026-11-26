@@ -139,7 +139,7 @@ func update(g *Globals, args []string, check, background, noDoctor bool, channel
 }
 
 // checkHealth runs the full doctor after bud update has synced everything,
-// so you see right away whether the Neovim config, and Claude Code
+// so you see right away whether the Neovim config and OpenCode
 // are all right, and lists what isn't with its fix. A Fail, new or not, makes
 // bud update exit 1, as bud doctor does, though an update is kept: only quick
 // checks that broke roll it back (finishUpdate). updated starts the error

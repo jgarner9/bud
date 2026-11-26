@@ -404,7 +404,7 @@ func TestPluginPathExtractsAndPrints(t *testing.T) {
 	if strings.TrimSpace(out.String()) != want {
 		t.Fatalf("printed %q, want %q", out.String(), want)
 	}
-	if _, err := os.Stat(filepath.Join(want, ".claude-plugin", "plugin.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(want, "agents")); err != nil {
 		t.Fatal(err)
 	}
 	if err := pluginPath(&Globals{}, []string{"x"}); err == nil {

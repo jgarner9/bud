@@ -3,9 +3,8 @@ package cli
 import (
 	"flag"
 	"os"
-	"slices"
-	"strings"
 
+	backend "jgarner.dev/bud/internal/agent"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -13,8 +12,9 @@ func init() {
 	RegisterCommand(Chat())
 }
 
-// chatAgent is the agent chat runs as, from bud-ide (JGA-165)
-const chatAgent = "bud-ide:chat"
+// chatAgent is the synced agent chat runs as (content/agents/chat.md): it
+// reads, searches and looks things up, but edits nothing
+const chatAgent = "chat"
 
 // Chat opens OpenCode's own TUI from the shell, in a dir that's no project's
 func Chat() *Command {
@@ -27,12 +27,6 @@ func Chat() *Command {
 		},
 		Run: func(g *Globals, args []string) error { return chat(g, args, resume) },
 	}
-}
-
-// chatEnv is this environment without BUD_BIN, so bud-ide's SessionStart
-// hook leaves out its notes on working inside bud (chat isn't a project)
-func chatEnv() []string {
-	return slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, "BUD_BIN=") })
 }
 
 func chat(g *Globals, args []string, resume bool) error {
@@ -48,7 +42,7 @@ func chat(g *Globals, args []string, resume bool) error {
 		return err
 	}
 	if resume {
-		return usageErrorf("--resume is Claude Code's; OpenCode keeps one chat, which opens where it left off")
+		return usageErrorf("--resume isn't supported: OpenCode keeps one chat, which opens where it left off")
 	}
-	return execOpenCodeTUI(g, dir)
+	return execOpenCode(g, backend.ChatTUI(dir, chatAgent), dir)
 }

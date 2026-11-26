@@ -22,7 +22,7 @@ Until you press `y`, Claude can read Linear but not write to it: bud refuses its
 
 The same steps work for a bug and for a new feature; a feature just comes back labelled as one. Do it once to see it.
 
-1. **Once per machine:** `bud install`, then `bud claude setup` so Claude Code is logged in. Linear needs to be connected in Claude Code (the claude.ai Linear connector).
+1. **Once per machine:** `bud install`, then `bud ai setup` so OpenCode is installed. Linear needs to be connected to OpenCode as an MCP server.
 2. **Once per project:** in the project's folder, run `bud issue set --team ENG --project Web` to say where its issues go (or press `<leader>ai` and let bud ask). `bud issue target` shows the answer.
 3. **Open the project** with `bud` (press its number on the dashboard, or `bud launch <path>`).
 4. **Say what you want.** Press `<leader>ai`, press `i`, and write the summary on the first line and the detail below. For a feature, say what you want to be able to do. Press `<Esc>`, then `<CR>` to send.

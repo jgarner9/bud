@@ -15,7 +15,7 @@ bud [global flags] <command> [command flags] [args]
 | `--layout <name>` | The pane layout to open the editor with, just this once. |
 | `--no-update` | Skip the background update check at launch. |
 
-`-y` is short for `--yes` on `install`, `uninstall`, `claude setup`, `lang enable` and `lang rm`.
+`-y` is short for `--yes` on `install`, `uninstall`, `lang enable` and `lang rm`.
 
 ## Opening things
 
@@ -37,7 +37,7 @@ bud [global flags] <command> [command flags] [args]
 | `bud update --no-doctor` | Skips the app rebuild and the doctor at the end, for scripts. |
 | `bud update --background` | What bud starts by itself at launch, detached and at most once a day, so launching never waits on the network. It installs a newer stable release when `update.auto` is on, else only notes it for the dashboard. `--no-update` skips it. You don't normally run it. |
 | `bud doctor [--quick] [--json] [--net]` | Health checks with the fix for each problem; exits 1 when something is broken. `--quick` skips the slow ones: the startup timing, which the dashboard leaves out. On a device with a profile set, it also checks what `bud sync` left: the profile and registry validate, every file the sync wrote is unchanged, which layer (public or your overlay) each piece of content comes from, and the config on disk is what this bud would render. `--net` adds the checks that go online: whether the device's channel has newer content, whether each model endpoint answers and lists the registry's models, and whether a provider that reports model facts (OpenCode Go does) disagrees with the registry about any of them, and, when `BUD_SEARXNG_URL` is set, whether that SearXNG instance answers JSON searches. The `--net` checks share one 30-second deadline. It doesn't check your MCP servers or rules, which are yours (D144). |
-| `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. Claude Code stays (see Troubleshooting). |
+| `bud uninstall [--keep-config] [--yes]` | Lists everything bud put on the machine and removes it after asking. `--keep-config` keeps `config.json` and your tools. |
 | `bud bootstrap [--config] user@host` | Installs this version of bud on another machine over SSH, minimal profile by default. `--config` copies your `config.json` across first. |
 | `bud version` | Prints the version. |
 | `bud completion bash\|zsh\|fish` | Prints shell completion. Add `eval "$(bud completion zsh)"` to your shell rc. |
@@ -98,25 +98,21 @@ OpenCode is the one AI agent bud runs (Suite D139); there is no backend to choos
 | `bud ai status [--json]` | Whether OpenCode is installed, which version, and a fix for each problem. |
 | `bud ai setup [--yes]` | Installs the pinned OpenCode with npm if it's missing (asking first), then prints the status. |
 | `bud agent [path]` | OpenCode's own TUI in a project, from the shell. When `bud sync` has written `opencode.env`, it runs through `op run` against a private OpenCode server; otherwise it launches OpenCode directly. |
-| `bud chat` | OpenCode's own TUI in a directory that belongs to no project. `--resume` is Claude Code's and is refused. |
+| `bud chat` | OpenCode's own TUI, run as the synced `chat` agent (it reads and looks things up but can't edit files or run commands), in a directory that belongs to no project. `--resume` is refused: OpenCode keeps one chat, which opens where it left off. |
 
-## Claude Code
+## Plugin, tools and issues
 
 | Command | What it does |
 | --- | --- |
-| `bud claude status` | Whether Claude Code is installed and logged in. |
-| `bud claude setup [--yes]` | Installs Claude Code with Anthropic's installer if it's missing, then runs its login. See [Claude Code in bud](claude-code.md#setting-it-up). |
-| `bud plugin path` | Unpacks the `bud-ide` plugin bud ships (if needed) and prints its dir; the editor passes it to Claude Code with `--plugin-dir`. |
+| `bud plugin path` | Unpacks the `bud-ide` plugin bud ships (if needed) and prints its dir. |
 | `bud tools ls` | Your tools and bud's, and whether each is on. |
-| `bud tools gen "<description>"` | Has Claude write a tool or language spec, in the editor. See [tools](tools.md). |
+| `bud tools gen "<description>"` | Has the agent write a tool or language spec, in the editor. See [tools](tools.md). |
 | `bud tools enable` / `disable [--reason] <name>` | Turns a tool on or off. |
 | `bud tools rm [--yes] <name>` | Deletes one of your tools, after asking. |
 | `bud tools promote [--repo dir] [--yes] <name>` | Moves one of yours into a bud checkout's `ide/tools/`, commits and pushes it, after asking. `--repo` defaults to the `bud dev link` checkout. |
 | `bud issue target [--bud] [--json] [dir]` | Where an issue filed from the editor goes in Linear. `--json` prints it for the editor. |
 | `bud issue set --team T [--project P] [--global] [project]` / `unset [project]` | Sets or clears it. See [filing issues](issues.md). |
 | `bud issue checkout [path]` / `--unset` | Saves the bud checkout `<leader>aB` works in (checked to still be a bud git checkout), forgets it, or with neither says what is saved. See [filing issues](issues.md). |
-
-How the pieces fit together is in [Claude Code in bud](claude-code.md).
 
 ## The home server
 

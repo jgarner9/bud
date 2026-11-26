@@ -7,7 +7,6 @@ import (
 )
 
 func main() {
-	cli.UseClaudeConfig()
 	cli.UseManagedBin()
 	app := cli.NewApp()
 	os.Exit(cli.ExitCode(app.Run(), os.Stderr))

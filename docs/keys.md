@@ -40,8 +40,8 @@ Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that f
 | `<leader>ac` | Show or hide the chat, opencode.nvim (D150). |
 | `<leader>gs` | Show or hide the git pane (changed files, neo-tree). |
 | `<leader>aP` | Home planning: OpenCode's own TUI attached to the home server's planning OpenCode (`ai.planning.url`), in a pane apart from local coding (D152). bud checks the server first and says why when it's unavailable; hiding the pane keeps it attached, and the server keeps running when it closes. `:BudPlan` does the same. |
-| `<leader>av` | bud's own chat with the AI, on any backend: the conversation drawn in Neovim, a prompt under it (`<CR>` sends, `<C-c>` stops the reply, `<Up>`/`<Down>` recall your earlier messages, `<C-x><C-o>` after a `/` completes the backend's commands). Pane or full screen by `ai.agent.chat_layout`; `ai.agent.chat_ui = "bud"` puts it on `<leader>ac` too. |
-| `<leader>aF` | The AI chat full screen, in a tab of its own, or back to the pane. `ai.agent.chat_layout = "full"` makes `<leader>ac` open it that way (except with `ai.backend = "opencode"`, where `<leader>ac` is opencode.nvim). |
+| `<leader>av` | bud's own chat with the AI: the conversation drawn in Neovim, a prompt under it (`<CR>` sends, `<C-c>` stops the reply, `<Up>`/`<Down>` recall your earlier messages, `<C-x><C-o>` after a `/` completes the agent's commands). Pane or full screen by `ai.agent.chat_layout`; `ai.agent.chat_ui = "bud"` puts it in the layout's chat pane too. |
+| `<leader>aF` | The AI pane full screen, in a tab of its own, or back to the pane. `ai.agent.chat_layout = "full"` makes the layout's chat pane open that way; `<leader>ac` is always opencode.nvim. |
 
 The panes are locked: only these keys open and close them. `:q`, `:close` or `:only` puts a pane straight back with an error naming its key, and a file opened while a pane has the cursor (`:e`, a picker, a buffer switch) opens in the editor window instead, with the same error. `:qa` and the `<leader>q` keys still quit bud, and `:q` in the last file window takes the panes with it, so it quits as it would without them.
 

@@ -954,16 +954,11 @@ function M.setup()
   })
   vim.keymap.set("n", "<leader>ch", function()
     require("bud.ai.chat").toggle()
-  end, { desc = "Chat (Claude Code, chat mode)" })
-  vim.api.nvim_create_user_command("BudChat", function(o)
-    require("bud.ai.chat").open({ resume = o.args == "resume" })
-  end, {
-    nargs = "?",
-    desc = "Chat with Claude Code in chat mode; resume picks an earlier chat",
-    complete = function()
-      return { "resume" }
-    end,
-  })
+  end, { desc = "Chat (OpenCode)" })
+  -- chat is OpenCode's TUI now (D139), whose /sessions picks an earlier chat
+  vim.api.nvim_create_user_command("BudChat", function()
+    require("bud.ai.chat").open()
+  end, { desc = "Chat with OpenCode; its /sessions picks an earlier chat" })
   vim.keymap.set("n", "<leader>ac", function()
     require("bud.ai.term").chat_key()
   end, { desc = "Claude Code (its own TUI)" })

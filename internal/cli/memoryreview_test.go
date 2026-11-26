@@ -62,14 +62,23 @@ func TestMemoryReviewRetiersOneRecord(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv(reviewerToken, "tok")
 
-	for _, args := range [][]string{{"retier"}, {"retier", "7"}, {"retier", "x", "P0"}, {"retier", "0", "P0"}, {"retier", "7", "P0", "P1"}} {
+	for _, args := range [][]string{{"retier"}, {"retier", "7"}, {"retier", "x", "P0"}, {"retier", "0", "P0"}, {"retier", "7", "P0", "P1"}, {"retier", "7", "P7"}} {
 		if err := runMemoryReview(&Globals{}, args, "/run/m.sock"); err == nil || gotID != 0 {
 			t.Errorf("%v = %v, id %d", args, err, gotID)
 		}
 	}
-	var stderr bytes.Buffer
-	if err := runMemoryReview(&Globals{stderr: &stderr}, []string{"retier", "7", "P0"}, "/run/m.sock"); err != nil {
+	// a bad tier is a usage error before any setup, even with no token
+	t.Setenv(reviewerToken, "")
+	if err := runMemoryReview(&Globals{}, []string{"retier", "7", "P7"}, "/run/m.sock"); err == nil || !strings.Contains(err.Error(), "isn't a tier") {
+		t.Errorf("a bad tier = %v, want a usage error naming the tiers", err)
+	}
+	t.Setenv(reviewerToken, "tok")
+	var stderr, stdout bytes.Buffer
+	if err := runMemoryReview(&Globals{stderr: &stderr, stdout: &stdout}, []string{"retier", "7", "P0"}, "/run/m.sock"); err != nil {
 		t.Fatal(err)
+	}
+	if stdout.String() != "record 7 is now P0\n" {
+		t.Errorf("stdout = %q, want the result on the injected writer", stdout.String())
 	}
 	if gotID != 7 || gotTo != "P0" || !strings.Contains(stderr.String(), "asking on Signal to move record 7 to P0") {
 		t.Errorf("id %d, to %q, stderr %q", gotID, gotTo, stderr.String())

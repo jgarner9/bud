@@ -3,6 +3,8 @@
 import hashlib
 import sqlite3
 
+from vectors import StaleRecord
+
 KINDS = ("observation", "fact", "summary")
 PRIVACY_TIERS = ("P0", "P1", "P2")
 
@@ -104,18 +106,25 @@ class Store:
                 raise PermissionError(record_id)
             self.db.execute("DELETE FROM records WHERE id = ? AND state = 'staged'", (record_id,))
 
-    def retier(self, record_id, privacy):
-        """Move an approved record to another tier. The FTS index keys on the
-        body and the vector tables on the id and body hash, so nothing else
-        has to change; every reader filters on records.privacy."""
-        if privacy not in PRIVACY_TIERS:
+    def retier(self, record_id, privacy, current, body_hash=None):
+        """Move an approved record from the tier current to privacy, only if it
+        is still at current (and still has body_hash, when given), so a record
+        that changed after it was shown for approval isn't moved. The FTS
+        index keys on the body and the vector tables on the id and body hash,
+        so nothing else has to change; every reader filters on
+        records.privacy."""
+        if privacy not in PRIVACY_TIERS or current not in PRIVACY_TIERS:
             raise ValueError("privacy must be P0, P1, or P2")
+        query = "UPDATE records SET privacy = ? WHERE id = ? AND state = 'approved' AND privacy = ?"
+        args = [privacy, record_id, current]
+        if body_hash:
+            query += " AND body_hash = ?"
+            args.append(body_hash)
         with self.db:
-            cursor = self.db.execute(
-                "UPDATE records SET privacy = ? WHERE id = ? AND state = 'approved'", (privacy, record_id)
-            )
+            cursor = self.db.execute(query, args)
             if cursor.rowcount != 1:
-                raise KeyError(record_id)
+                raise StaleRecord(record_id)
+
 
     def staged(self, privacy, after=0, limit=20):
         """List staged records in the allowed tiers, in id order above after."""

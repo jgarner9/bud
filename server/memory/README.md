@@ -51,12 +51,12 @@ resolved value has this shape, with real tokens held only in 1Password.
 }
 ```
 
-`retier` (`POST /retier {id, privacy}`, Suite D136) moves an approved record
+`retier` (`POST /retier {id, privacy, from, body_hash?}`, Suite D136) moves an approved record
 to another tier, so a record saved at P1 before D130 can become P0. It is for
 the reviewer identity only, like `approve` and `discard`, and the service
 refuses a client that holds both it and `stage`. Both the record's current
 tier and the new one must be among the client's tiers (404 otherwise), and a
-staged record is refused (409): only approved records move. Nothing else is
+staged record is refused (409): only approved records move. `from` is the tier the caller showed Jason, and `body_hash` (optional) the body it showed; a record that is no longer at that tier or body is refused (409, "changed"), so nothing moves that he did not see. Nothing else is
 rewritten, since every reader filters on `records.privacy` and the FTS index
 and vector tables don't copy it. The reviewer also holds `export` so
 `bud memory-review retier` can show the record it asks about.

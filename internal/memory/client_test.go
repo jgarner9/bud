@@ -18,6 +18,8 @@ type fakeService struct {
 	got     map[string]map[string]any
 	replies map[string]string
 	status  int
+	// reason is the error a non-200 status carries; "forbidden" when empty
+	reason string
 }
 
 func serve(t *testing.T, f *fakeService) string {
@@ -45,7 +47,11 @@ func serve(t *testing.T, f *fakeService) string {
 		f.got[action] = body
 		if f.status != 0 {
 			w.WriteHeader(f.status)
-			w.Write([]byte(`{"error": "forbidden"}`))
+			reason := f.reason
+			if reason == "" {
+				reason = "forbidden"
+			}
+			json.NewEncoder(w).Encode(map[string]string{"error": reason})
 			return
 		}
 		w.Write([]byte(f.replies[action]))
@@ -134,8 +140,11 @@ func TestClientActions(t *testing.T) {
 	if err := c.Discard(ctx, 6); err != nil || !reflect.DeepEqual(f.got["discard"], map[string]any{"id": 6.0}) {
 		t.Errorf("Discard sent %v, %v", f.got["discard"], err)
 	}
-	if err := c.Retier(ctx, 7, "P0"); err != nil || !reflect.DeepEqual(f.got["retier"], map[string]any{"id": 7.0, "privacy": "P0"}) {
+	if err := c.Retier(ctx, 7, "P1", "P0", "h7"); err != nil || !reflect.DeepEqual(f.got["retier"], map[string]any{"id": 7.0, "from": "P1", "privacy": "P0", "body_hash": "h7"}) {
 		t.Errorf("Retier sent %v, %v", f.got["retier"], err)
+	}
+	if err := c.Retier(ctx, 7, "P1", "P0", ""); err != nil || !reflect.DeepEqual(f.got["retier"], map[string]any{"id": 7.0, "from": "P1", "privacy": "P0"}) {
+		t.Errorf("Retier with no hash sent %v, %v", f.got["retier"], err)
 	}
 }
 
@@ -166,9 +175,14 @@ func TestClientErrors(t *testing.T) {
 		t.Errorf("a 409 on discard = %v, want ErrApproved", err)
 	}
 
-	if err := New(sock, "tok").Retier(context.Background(), 1, "P0"); !errors.Is(err, ErrNotApproved) {
+	if err := New(sock, "tok").Retier(context.Background(), 1, "P1", "P0", ""); !errors.Is(err, ErrNotApproved) {
 		t.Errorf("a 409 on retier = %v, want ErrNotApproved", err)
 	}
+	f.reason = "record changed since it was read"
+	if err := New(sock, "tok").Retier(context.Background(), 1, "P1", "P0", "h"); !errors.Is(err, ErrStale) {
+		t.Errorf("a 409 for a changed record = %v, want ErrStale", err)
+	}
+	f.reason = ""
 
 	f.status = 0
 	f.replies = map[string]string{"search": "not json"}
@@ -187,7 +201,7 @@ func TestExport(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := &Export{
-		Records:    []ExportedRecord{{ID: 3, Source: "hermes", Kind: "fact", Privacy: "P1", Body: "b", CreatedAt: "2026-11-21 10:00:00", State: "approved"}},
+		Records:    []ExportedRecord{{ID: 3, Source: "hermes", Kind: "fact", Privacy: "P1", Body: "b", BodyHash: "h", CreatedAt: "2026-11-21 10:00:00", State: "approved"}},
 		References: []Reference{{RecordID: 3, Source: "opencode", ReferencedAt: "2026-11-22 09:00:00"}},
 	}
 	if !reflect.DeepEqual(got, want) {

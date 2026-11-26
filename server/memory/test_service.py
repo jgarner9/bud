@@ -234,27 +234,32 @@ class ServiceTest(unittest.TestCase):
 
             staged, private = stage("1", "P1"), stage("2", "P1")
             # a staged record isn't approved, so it can't be moved
-            self.assertEqual(409, request(REVIEWER, "/retier", {"id": staged, "privacy": "P0"})[0])
+            self.assertEqual(409, request(REVIEWER, "/retier", {"id": staged, "privacy": "P0", "from": "P1"})[0])
             self.assertEqual(200, request(REVIEWER, "/approve", {"id": private})[0])
             self.assertEqual([private], sees(CLOUD, "quince"))
 
             # the agent has no retier action, and bad payloads are refused
-            self.assertEqual(403, request(AGENT, "/retier", {"id": private, "privacy": "P0"})[0])
-            for bad in ({"id": private}, {"privacy": "P0"}, {"id": str(private), "privacy": "P0"}, {"id": private, "privacy": "P9"}, {"id": private, "privacy": "P0", "state": "staged"}):
+            self.assertEqual(403, request(AGENT, "/retier", {"id": private, "privacy": "P0", "from": "P1"})[0])
+            for bad in ({"id": private, "privacy": "P0"}, {"privacy": "P0", "from": "P1"}, {"id": str(private), "privacy": "P0", "from": "P1"}, {"id": private, "privacy": "P9", "from": "P1"}, {"id": private, "privacy": "P0", "from": "P9"}, {"id": private, "privacy": "P0", "from": "P1", "state": "staged"}, {"id": private, "privacy": "P0", "from": "P1", "body_hash": 5}):
                 with self.subTest(payload=bad):
                     self.assertEqual(400, request(REVIEWER, "/retier", bad)[0])
             # a reviewer that can't see P0 can't move a record there
-            self.assertEqual(404, request(narrow, "/retier", {"id": private, "privacy": "P0"})[0])
+            self.assertEqual(404, request(narrow, "/retier", {"id": private, "privacy": "P0", "from": "P1"})[0])
             self.assertEqual([private], sees(CLOUD, "quince"))
 
-            self.assertEqual((200, {"retiered": True, "from": "P1", "to": "P0"}), request(REVIEWER, "/retier", {"id": private, "privacy": "P0"}))
+            # the record changed since it was shown: another tier, or another body
+            body_hash = hashlib.sha256("quince orchard 2".encode()).hexdigest()
+            self.assertEqual(409, request(REVIEWER, "/retier", {"id": private, "privacy": "P0", "from": "P2"})[0])
+            self.assertEqual(409, request(REVIEWER, "/retier", {"id": private, "privacy": "P0", "from": "P1", "body_hash": "0" * 64})[0])
+            self.assertEqual([private], sees(CLOUD, "quince"))
+            self.assertEqual((200, {"retiered": True, "from": "P1", "to": "P0"}), request(REVIEWER, "/retier", {"id": private, "privacy": "P0", "from": "P1", "body_hash": body_hash}))
             # the P1 reader no longer finds it; the P0 reader does, by its text
             self.assertEqual([], sees(CLOUD, "quince"))
             self.assertEqual([private], sees(AGENT, "quince"))
             # and a reviewer that can't see P0 can't move it back out
-            self.assertEqual(404, request(narrow, "/retier", {"id": private, "privacy": "P1"})[0])
-            self.assertEqual(404, request(REVIEWER, "/retier", {"id": 9999, "privacy": "P0"})[0])
-            self.assertEqual((200, {"retiered": True, "from": "P0", "to": "P2"}), request(REVIEWER, "/retier", {"id": private, "privacy": "P2"}))
+            self.assertEqual(404, request(narrow, "/retier", {"id": private, "privacy": "P1", "from": "P0"})[0])
+            self.assertEqual(404, request(REVIEWER, "/retier", {"id": 9999, "privacy": "P0", "from": "P1"})[0])
+            self.assertEqual((200, {"retiered": True, "from": "P0", "to": "P2"}), request(REVIEWER, "/retier", {"id": private, "privacy": "P2", "from": "P0"}))
             self.assertEqual([private], sees(CLOUD, "quince"))
 
     def test_invalid_policy_and_existing_socket_fail_closed(self):

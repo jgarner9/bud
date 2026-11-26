@@ -225,13 +225,21 @@ func TestReadStatusWithNoFile(t *testing.T) {
 type fakeApproved struct {
 	records []memory.ExportedRecord
 	moved   map[int64]string
+	// calls are the (from, hash) each Retier was given
+	calls [][2]string
+	// err is what Retier answers with
+	err error
 }
 
 func (f *fakeApproved) Export(context.Context) (*memory.Export, error) {
 	return &memory.Export{Records: f.records}, nil
 }
 
-func (f *fakeApproved) Retier(_ context.Context, id int64, privacy string) error {
+func (f *fakeApproved) Retier(_ context.Context, id int64, from, privacy, bodyHash string) error {
+	f.calls = append(f.calls, [2]string{from, bodyHash})
+	if f.err != nil {
+		return f.err
+	}
 	if f.moved == nil {
 		f.moved = map[int64]string{}
 	}
@@ -240,7 +248,7 @@ func (f *fakeApproved) Retier(_ context.Context, id int64, privacy string) error
 }
 
 func approvedP1(id int64, body string) memory.ExportedRecord {
-	return memory.ExportedRecord{ID: id, Source: "hermes", Kind: "fact", Privacy: "P1", Body: body, CreatedAt: "2026-11-22 08:00:00", State: "approved"}
+	return memory.ExportedRecord{ID: id, Source: "hermes", Kind: "fact", Privacy: "P1", Body: body, CreatedAt: "2026-11-22 08:00:00", State: "approved", BodyHash: "hash" + string(rune('0'+id))}
 }
 
 // Suite D136: a yes moves the record, and the prompt shows it whole with
@@ -269,6 +277,9 @@ func TestARetierMovesTheRecordOnlyOnHisYes(t *testing.T) {
 			}
 			if !reflect.DeepEqual(f.moved, tc.moved) {
 				t.Errorf("moved %v, want %v", f.moved, tc.moved)
+			}
+			if tc.moved != nil && !reflect.DeepEqual(f.calls, [][2]string{{"P1", "hash2"}}) {
+				t.Errorf("the service was told %v, want the tier and body hash that were shown", f.calls)
 			}
 			if got.Invocation.Action != "memory:retier" || got.Invocation.Target != "P0" {
 				t.Errorf("invocation = %+v", got.Invocation)
@@ -304,5 +315,15 @@ func TestARetierAsksNothingForARecordItCannotMove(t *testing.T) {
 	}
 	if asked || len(f.moved) != 0 {
 		t.Errorf("asked %v, moved %v", asked, f.moved)
+	}
+}
+
+// a record that changed while the prompt was open isn't moved, and the
+// answer says so
+func TestARetierOfARecordThatChangedMovesNothing(t *testing.T) {
+	f := &fakeApproved{records: []memory.ExportedRecord{approvedP1(2, "the dentist is on Tuesdays")}, err: memory.ErrStale}
+	r := newReviewer(t, &fakeRecords{}, answer(approval.AllowOnce, true))
+	if err := r.Retier(context.Background(), f, 2, "P0"); err == nil || !strings.Contains(err.Error(), "changed while the prompt was open") || len(f.moved) != 0 {
+		t.Errorf("err = %v, moved %v", err, f.moved)
 	}
 }

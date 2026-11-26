@@ -167,8 +167,11 @@ class MemoryHandler(BaseHTTPRequestHandler):
             elif action == "retier":
                 # Suite D136: an approved record saved at the wrong tier moves
                 # to the right one. Both tiers must be the reviewer's own, so
-                # a narrower reviewer can't move a record out of its sight
-                if set(payload) != {"id", "privacy"} or type(payload["id"]) is not int or payload["privacy"] not in PRIVACY_TIERS:
+                # a narrower reviewer can't move a record out of its sight.
+                # The caller says which tier (and body) it showed Jason, and
+                # a record that changed while the prompt was open is refused
+                keys = set(payload) - {"body_hash"}
+                if keys != {"id", "privacy", "from"} or type(payload["id"]) is not int or payload["privacy"] not in PRIVACY_TIERS or payload["from"] not in PRIVACY_TIERS or not isinstance(payload.get("body_hash", ""), str):
                     raise ValueError()
                 row = self.server.store.db.execute(
                     "SELECT privacy, state FROM records WHERE id = ?", (payload["id"],)
@@ -179,7 +182,11 @@ class MemoryHandler(BaseHTTPRequestHandler):
                 if row[1] != "approved":
                     self.reply(409, {"error": "record isn't approved"})
                     return
-                self.server.store.retier(payload["id"], payload["privacy"])
+                try:
+                    self.server.store.retier(payload["id"], payload["privacy"], payload["from"], payload.get("body_hash"))
+                except StaleRecord:
+                    self.reply(409, {"error": "record changed since it was read"})
+                    return
                 result = {"retiered": True, "from": row[0], "to": payload["privacy"]}
             elif action in ("vector_put", "reference"):
                 if action == "vector_put":

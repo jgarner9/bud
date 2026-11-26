@@ -39,7 +39,7 @@ const RetierAction = "memory:retier"
 // move one
 type Retierer interface {
 	Export(ctx context.Context) (*memory.Export, error)
-	Retier(ctx context.Context, id int64, privacy string) error
+	Retier(ctx context.Context, id int64, from, to, bodyHash string) error
 }
 
 // Scope is the fixed approval scope every memory prompt shares: the
@@ -271,7 +271,7 @@ func (r *Reviewer) Retier(ctx context.Context, src Retierer, id int64, to string
 		return fmt.Errorf("re-tier record %d: it is too long to show whole on Signal, so move it by hand with the service's retier action", id)
 	}
 	err = r.Approvals.Dispatch(ctx, Scope, call, time.Time{}, r.review(), func(ctx context.Context, _ approval.Invocation) error {
-		return src.Retier(ctx, id, to)
+		return src.Retier(ctx, id, found.Privacy, to, found.BodyHash)
 	})
 	switch {
 	case err == nil:
@@ -281,6 +281,8 @@ func (r *Reviewer) Retier(ctx context.Context, src Retierer, id int64, to string
 		return fmt.Errorf("re-tier record %d: Jason said no, so it stays %s", id, found.Privacy)
 	case errors.Is(err, context.DeadlineExceeded):
 		return fmt.Errorf("re-tier record %d: nobody answered, so it stays %s; run it again to ask again", id, found.Privacy)
+	case errors.Is(err, memory.ErrStale):
+		return fmt.Errorf("re-tier record %d: it changed while the prompt was open, so nothing moved; run it again", id)
 	default:
 		return fmt.Errorf("re-tier record %d: %w", id, err)
 	}

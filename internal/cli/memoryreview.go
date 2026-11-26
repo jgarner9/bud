@@ -59,6 +59,9 @@ func runMemoryReview(g *Globals, args []string, socket string) error {
 		if id, err = strconv.ParseInt(args[1], 10, 64); err != nil || id < 1 {
 			return usageErrorf("%q isn't a record id; use the number memory_search shows", args[1])
 		}
+		if args[2] != "P0" && args[2] != "P1" && args[2] != "P2" {
+			return usageErrorf("%q isn't a tier; use P0, P1 or P2", args[2])
+		}
 	}
 	p, err := paths.Resolve()
 	if err != nil {
@@ -92,7 +95,11 @@ func runMemoryReview(g *Globals, args []string, socket string) error {
 		if err := retierRecord(ctx, r, svc, id, args[2]); err != nil {
 			return err
 		}
-		fmt.Printf("record %d is now %s\n", id, args[2])
+		out := g.stdout
+		if out == nil {
+			out = os.Stdout
+		}
+		fmt.Fprintf(out, "record %d is now %s\n", id, args[2])
 		return nil
 	}
 	g.Noticef("memory-review: reviewing %s through %s", socket, p.ReviewSocket())

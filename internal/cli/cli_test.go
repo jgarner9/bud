@@ -394,20 +394,3 @@ func TestPrompterHelpers(t *testing.T) {
 		t.Errorf("no terminal: %v", err)
 	}
 }
-
-func TestPluginPathExtractsAndPrints(t *testing.T) {
-	var out bytes.Buffer
-	if err := pluginPath(&Globals{stdout: &out}, nil); err != nil {
-		t.Fatal(err)
-	}
-	want := wantPlugin(t)[1]
-	if strings.TrimSpace(out.String()) != want {
-		t.Fatalf("printed %q, want %q", out.String(), want)
-	}
-	if _, err := os.Stat(filepath.Join(want, "agents")); err != nil {
-		t.Fatal(err)
-	}
-	if err := pluginPath(&Globals{}, []string{"x"}); err == nil {
-		t.Fatal("args accepted")
-	}
-}

@@ -100,11 +100,10 @@ OpenCode is the one AI agent bud runs (Suite D139); there is no backend to choos
 | `bud agent [path]` | OpenCode's own TUI in a project, from the shell. When `bud sync` has written `opencode.env`, it runs through `op run` against a private OpenCode server; otherwise it launches OpenCode directly. |
 | `bud chat` | OpenCode's own TUI, run as the synced `chat` agent (it reads and looks things up but can't edit files or run commands), in a directory that belongs to no project. `--resume` is refused: OpenCode keeps one chat, which opens where it left off. |
 
-## Plugin, tools and issues
+## Tools and issues
 
 | Command | What it does |
 | --- | --- |
-| `bud plugin path` | Unpacks the `bud-ide` plugin bud ships (if needed) and prints its dir. |
 | `bud tools ls` | Your tools and bud's, and whether each is on. |
 | `bud tools gen "<description>"` | Has the agent write a tool or language spec, in the editor. See [tools](tools.md). |
 | `bud tools enable` / `disable [--reason] <name>` | Turns a tool on or off. |

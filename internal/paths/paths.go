@@ -15,7 +15,7 @@ const AppName = "bud"
 
 type Paths struct {
 	Config string // ~/.config/bud: synced copy of the embedded nvim/ (bud-owned, D21)
-	Data   string // ~/.local/share/bud: plugins, Mason, bud-managed binaries, user tools
+	Data   string // ~/.local/share/bud: Mason, bud-managed binaries, user tools
 	State  string // ~/.local/state/bud: machine config, project registry
 	Cache  string // ~/.cache/bud: Neovim's stdpath("cache"), logs and bytecode
 	// Runtime is $XDG_RUNTIME_DIR/bud, or empty when that is unset or relative.
@@ -80,10 +80,6 @@ func (p *Paths) Migrations() string { return filepath.Join(p.State, "migrations.
 
 // InstallReceipt is written by install.sh and names the binary it installed (D20)
 func (p *Paths) InstallReceipt() string { return filepath.Join(p.State, "install.json") }
-
-// Plugins is where bud extracts its embedded Claude Code plugin (D142), one
-// dir per version
-func (p *Paths) Plugins() string { return filepath.Join(p.Data, "plugins") }
 
 // UserTools holds generated tools that haven't been promoted into the repo
 func (p *Paths) UserTools() string { return filepath.Join(p.Data, "user-tools") }

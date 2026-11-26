@@ -5,7 +5,7 @@ description: How the bud repo (a Go CLI that installs, syncs and updates the Bud
 
 # Working on bud
 
-bud is one Go module and one binary (`cmd/bud`, `internal/`). It installs a device from its profile, syncs the signed content bundle and the overlay into each runtime's config (`bud sync`), checks for drift (`bud doctor`), updates itself, and launches the Neovim IDE, an isolated config (`NVIM_APPNAME=bud`) built from `ide/`. The binary is the release: `ide/nvim/`, `ide/languages/`, `ide/layouts/`, `ide/tools/`, `ide/migrations/`, `ide/bundles/` and `ide/plugins/` are embedded (`embed.go`), and the IDE parts are copied into `~/.config/bud`. `content/` is not embedded: CI packs it into a signed content release, and `bud sync` brings it to each device.
+bud is one Go module and one binary (`cmd/bud`, `internal/`). It installs a device from its profile, syncs the signed content bundle and the overlay into each runtime's config (`bud sync`), checks for drift (`bud doctor`), updates itself, and launches the Neovim IDE, an isolated config (`NVIM_APPNAME=bud`) built from `ide/`. The binary is the release: `ide/nvim/`, `ide/languages/`, `ide/layouts/`, `ide/tools/`, `ide/migrations/` and `ide/bundles/` are embedded (`embed.go`), and the IDE parts are copied into `~/.config/bud`. `content/` is not embedded: CI packs it into a signed content release, and `bud sync` brings it to each device.
 
 Read `AGENTS.md` at the repo root first: it holds the rules and points to `docs/internals/`, where each area of the code has a page; read the page for the area you are changing. `BASE.md` is the IDE's plan plus a numbered decision log (D1, D2, ...); when a decision changes, update it there too.
 
@@ -29,3 +29,7 @@ Read `AGENTS.md` at the repo root first: it holds the rules and points to `docs/
 ## Checking
 
 `just check` is what CI runs: gofmt, stylua and selene, go vet, shellcheck, `go test ./...`, the Lua and script tests and the smoke test. Run the narrow test while you work (`just test -run TestName ./internal/<pkg>`) and `just check` once before you commit. Tests swap package-level vars and restore them with `t.Cleanup`. Commits are lowercase conventional (`feat:`, `fix:`, `chore:`, `docs:`) with the issue id.
+
+## When you're running inside bud's editor
+
+bud's Neovim IDE starts OpenCode sessions for its chat, issue filing and inline actions. In one of them, replies often show in a narrow side pane: lead with the answer, keep it short, and use code blocks for code, since the user can send a block straight into the editor. Problem reports and feature requests sent from the editor go through the `file-issue` skill.

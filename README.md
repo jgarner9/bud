@@ -50,7 +50,7 @@ bud main.go  # open a file
 
 Bud embeds its Neovim config, pins plugins in a lockfile, and runs with `NVIM_APPNAME=bud`. The editor includes project search, completion, formatting, debugging and rendered Markdown. Eight [language specs](docs/languages.md) ship with it, and [layouts](docs/layouts.md) control which panes open around the editor. Press <kbd>Space</kbd> for key hints or see [the full keymap](docs/keys.md).
 
-The AI is [OpenCode](https://opencode.ai), the one agent Bud runs: the chat is opencode.nvim, and inline actions, commit messages, `:BudGen` and filing issues use an OpenCode session of their own. Bud stores no model keys; OpenCode keeps its own logins. Use `bud ai status` to check that it is installed and `bud ai setup` to install it. [Setting up](docs/setup.md) covers it and [Keys](docs/keys.md#opencode) lists what each key does.
+The AI is [OpenCode](https://opencode.ai), the one agent Bud runs: the chat is opencode.nvim, inline actions type into the project's OpenCode terminal pane, and commit messages, `:BudGen`, filing issues and working an issue run on headless OpenCode sessions (`opencode acp`) that bud starts. Bud stores no model keys; OpenCode keeps its own logins. Use `bud ai status` to check that it is installed and `bud ai setup` to install it. [Setting up](docs/setup.md) covers it and [Keys](docs/keys.md#opencode) lists what each key does.
 
 ## Sync, updates and health
 

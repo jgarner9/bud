@@ -74,7 +74,7 @@ Markdown files open rendered: headings, lists, code blocks, tables and checkboxe
 
 ## OpenCode
 
-OpenCode is the only AI bud runs, so the AI keys all sit under `<leader>a`. The chat is opencode.nvim (D150): bud keeps its own `<leader>o` keys off and maps the few it needs here. The inline actions, commit messages, issues and `:BudGen` run on a separate OpenCode session that bud starts per project (`opencode acp`).
+OpenCode is the only AI bud runs, and its keys sit under `<leader>a`, plus `<leader>ch` for the standalone chat. Three things are involved. The chat is opencode.nvim (D150): bud keeps its own `<leader>o` keys off and maps the few it needs here. The project's OpenCode terminal pane is OpenCode's own TUI, which the inline actions type into and the layouts' `chat` pane shows. Commit messages, issues, working an issue and `:BudGen` run on headless sessions (`opencode acp`) that bud starts without a window: the project's own for commit messages, and one of their own for each issue filed or worked.
 
 | Keys | Does |
 | --- | --- |
@@ -84,12 +84,12 @@ OpenCode is the only AI bud runs, so the AI keys all sit under `<leader>a`. The 
 | `<leader>ap` · `<leader>aS` | Pick the model · pick a session. |
 | `<leader>ay` · `<leader>an` | Allow the waiting request once · deny it, from any window. In the chat, `1`/`2`/`3` (or `j`/`k` and `<CR>`) also answer it, with allow always as the third choice. |
 | `<leader>ch` | Chat in OpenCode's own TUI, in its own tab, outside any project (`bud chat` from the shell). |
-| `<leader>ae` · `<leader>af` · `<leader>at` | Explain · refactor · write tests for the selection, on the project's session. |
-| `<leader>am` | In a commit message buffer: draft the message from the staged diff. |
-| `<leader>ar` | Restart this project's session. |
+| `<leader>ae` · `<leader>af` · `<leader>at` | Explain · refactor · write tests for the selection: typed into the project's OpenCode terminal pane, which opens beside the code if it isn't showing. |
+| `<leader>am` | In a commit message buffer: draft the message from the staged diff, on the project's headless session. |
+| `<leader>ar` | Restart this project's headless session. |
 | `<leader>ai` · `<leader>aB` · `<leader>aw` | File an issue about this project · about bud · have OpenCode fix one. |
-| `ga` (or `:w`, `:wq`, `:x`, `ZZ`) · `q` | In an edit the project's session proposes: accept · reject (closing either side any other way rejects it too). |
-| `y` · `a` · `n` · `r` | In a permission prompt from the project's session: allow · allow for this session · deny · deny and say why. |
+| `ga` (or `:w`, `:wq`, `:x`, `ZZ`) · `q` | In an edit a headless session proposes: accept · reject (closing either side any other way rejects it too). |
+| `y` · `a` · `n` · `r` | In a permission prompt from a headless session: allow · allow for this session · deny · deny and say why. |
 
 `:Opencode` has every other action in the chat, such as `:Opencode revert all prompt` to undo the last prompt's edits. In the chat, edits are written when OpenCode allows them and reviewed afterwards with `<leader>ad`, so commit first if you want git to hold the way back.
 

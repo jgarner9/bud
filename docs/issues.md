@@ -37,7 +37,7 @@ Something wrong with bud itself while you do this: `<leader>aB` files it in bud'
 
 ## Having OpenCode fix one
 
-`w` on an issue in `:BudIssues` (or `<leader>aw`) hands it to OpenCode in a git worktree of its own, next to your repo: `<repo>.worktrees/<id>`, on a branch named after the issue (`jga-12-dashboard-drops-a-row`) from your default branch. Your checkout and open buffers never change.
+`w` on an issue in `:BudIssues` (or `<leader>aw`) hands it to OpenCode in a git worktree of its own, next to your repo: `<repo>.worktrees/<id>`, on a branch named after the issue (`jga-12-dashboard-drops-a-row`). It starts from the remote's default branch when `origin/HEAD` is known, and otherwise from the branch you have checked out (or its commit, if detached). Your checkout and open buffers never change.
 
 OpenCode reads the issue, moves it to In Progress, makes the fix, runs the project's checks, commits on that branch with the issue id and moves the issue to In Review. Its edits inside the worktree go through without asking; shell commands (the checks, git) still ask you, and so would an edit anywhere else. The statusline shows how many are in progress, and a question from OpenCode shows up as a notification: answer it with `a` in `:BudIssues`.
 

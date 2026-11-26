@@ -902,17 +902,6 @@
           },
           "modelID": "gemini-4-argon"
         },
-        "glm-5.2": {
-          "cost": {
-            "input": 1.4,
-            "output": 4.4
-          },
-          "limit": {
-            "context": 1000000,
-            "output": 131072
-          },
-          "modelID": "glm-5.2"
-        },
         "glm-5.3": {
           "cost": {
             "input": 1.4,

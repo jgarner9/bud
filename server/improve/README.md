@@ -18,4 +18,4 @@ Hermes with the bud-signal plugin and its reviewer secret (`server/hermes/`) and
 4. Install and start the timer with the commands at the top of `bud-improve.service`, as the user Hermes runs as.
 5. Check it: `systemctl --user start bud-improve` runs a round now; `journalctl --user -u bud-improve` shows what it measured and queued, and `bud improve list` and `bud improve show` print the queue and the digest it would ask. The ops `reviews` tool counts the proposals by status.
 
-Claude threads never merge a `bud-proposal` pull request: merging one is Jason's approval of that change.
+Agent sessions never merge a `bud-proposal` pull request: merging one is Jason's approval of that change.

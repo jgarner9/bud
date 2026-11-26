@@ -24,7 +24,7 @@ Home-server rollouts Jason hasn't done yet. Each one changes how the home server
 Decisions waiting on him (bring them up with a recommendation; don't decide them):
 
 - **Item 29 step 3:** ~~already-approved memory records were saved at P1, even ones from chats that read his calendar, and the memory service has no action to re-tier or remove an approved record.~~ Decided 2026-11-24 (Suite D136): a reviewer-only `retier` action (`POST /retier {id, privacy}`), asked on Signal the way memory-review approves; removing a record is deferred. Being built.
-- **Item 8:** removing the old `bud.ai.claude` / `bud.ai.acp` chat code (a delete he reviews) and whether `ai.backend` defaults to `opencode`.
+- **Item 8:** ~~removing the old `bud.ai.claude` / `bud.ai.acp` chat code, and whether `ai.backend` defaults to `opencode`.~~ Done 2026-11-26 (Suite D139, JGA-402 to JGA-404): the old chat code is gone, `ai.backend` no longer exists, and OpenCode is the only backend.
 - **Item 9:** the JGA-364 deletion list.
 - **Item 10:** R5c, other chat keys (recommended: wait until he's used opencode.nvim).
 - **Item 11:** R9, the custom TUI (JGA-375): a design session before any code.
@@ -59,11 +59,11 @@ Worked through on 2026-11-22 (UTC) by the thread "Continue Bud roadmap tasks" on
 
 ### Laptop
 
-7. **Live test of opencode.nvim chat keys.** `bud config set ai.backend opencode`, then `<leader>ac`, a permission prompt (`<leader>ay` / `<leader>an`), `<leader>ad` after an edit, `<leader>ap`, and `<leader>aP` once the planning server runs.
+7. **Live test of opencode.nvim chat keys.** Press `<leader>ac` for the chat, then try a permission prompt (`<leader>ay` / `<leader>an`), `<leader>ad` after an edit, `<leader>ap`, and `<leader>aP` once the planning server runs.
 
 ### Decisions for you
 
-8. **JGA-350 follow-ups.** Removing the old `bud.ai.claude` / `bud.ai.acp` chat code (a delete you review), and whether the default `ai.backend` moves from `claude` to `opencode`.
+8. ~~**JGA-350 follow-ups.** Removing the old `bud.ai.claude` / `bud.ai.acp` chat code (a delete you review), and whether the default `ai.backend` moves from `claude` to `opencode`.~~ **DONE 2026-11-26 (Suite D139, JGA-402 to JGA-404).** The old chat code and the `ai.backend` key are gone; OpenCode is the only backend, and `bud.ai.agent` and `bud.ai.acp` stay as the programmatic session.
 9. **JGA-364 deletion list** needs your review before anything is removed.
 10. **R5c** (other chat keys): recommended to wait until you've used opencode.nvim for a while.
 11. **R9 custom TUI (JGA-375):** a design session before any code.
@@ -167,3 +167,8 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 ### JSONC parsing (BASE D153)
 
 32. **The one stdlib exception.** You granted a D1 exception in chat overnight ("I'm giving a D1 exception here") for a tested JSONC library, and the swap was done on it: `StripJSONC` now wraps github.com/tidwall/jsonc. The library the note named didn't exist; tidwall's is the only established one that keeps byte offsets and line breaks, which `bud registry refresh --write`'s in-place editing relies on. If you'd rather keep the homegrown stripper — its error for an unterminated comment was friendlier — say so and the PR reverts.
+
+### OpenCode-only follow-ups (Suite D139)
+
+33. **The Linear policy rename is untested against a live permission request.** JGA-406 (PR #143) found that the Linear rules in `issue.lua` and `work.lua` matched `mcp__<server>__<tool>` names, which OpenCode never sends, and renamed them to OpenCode's `linear_<tool>` names. Nothing has yet run a real ACP permission request through them. Next time you file or work an issue from the editor (`<leader>ai`, `:BudIssues` w), check that Linear reads run without a prompt and writes ask as before; tell me if either is wrong.
+34. **Claude-era wording outside this repo (your call).** `jgarner9/bud-plugins` still holds the old `bud` plugin and its release skill, and the private overlay's `handoff/` and profiles still use Claude-era wording. D139 left both for you. Say if you'd like them reworded or archived.

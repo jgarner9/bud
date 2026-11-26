@@ -1,6 +1,6 @@
 # CLI internals
 
-The Go side of bud, one paragraph per area. CLAUDE.md keeps the registry, prompts, errors, embedded config and paths.
+The Go side of bud, one paragraph per area. AGENTS.md keeps the registry, prompts, errors, embedded config and paths.
 
 **Colour** (`internal/cli/color.go`, JGA-109): `paint(w, style, s)` adds ANSI codes only when `w` is a terminal `*os.File`, `TERM` isn't `dumb` and `NO_COLOR` is unset, so tests (buffers) and pipes stay plain. Pad text before painting it, or the codes break the columns: `cell(w, style, s, width)` does both. The list and status commands share one palette (JGA-159): names bold, kinds, paths and descriptions dim, on/enabled green (`onStyle`), attention yellow, broken red; `config ls`/`get` bold the JSON keys (`paintJSONKeys`). `TestListsColourLikePlain` forces `colorOn` and checks that stripping the codes gives back the plain output byte for byte.
 

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-How to work on this repository. OpenCode reads only this file (Bud Suite D17); `CLAUDE.md` imports it, so Claude Code reads the same text. Edit this file, not `CLAUDE.md`.
+How to work on this repository. OpenCode reads this file (Bud Suite D17). `content/AGENTS.md` is a different file: the one that syncs to every device.
 
 ## What this is
 
@@ -9,7 +9,7 @@ This repo is growing into the Bud Suite monorepo (Suite D22, D56): one Go module
 | Path | What it holds |
 | --- | --- |
 | `cmd/bud/`, `internal/` | The one Go module and binary: install, sync, update, doctor, the IDE launcher |
-| `ide/` | The Neovim IDE: `nvim/`, `languages/`, `layouts/`, `tools/`, `migrations/`, `bundles/`, `plugins/` and its Lua tests, all embedded in the binary |
+| `ide/` | The Neovim IDE: `nvim/`, `languages/`, `layouts/`, `tools/`, `migrations/`, `bundles/` and its Lua tests, all embedded in the binary |
 | `content/` | What syncs to every device running OpenCode: `AGENTS.md`, skills, agents, commands, plugins and `env/` (the model registry and config fragments) |
 | `profiles/` | Example device profiles only; real ones live in the private overlay |
 | `server/` | Home-server service units for the MCP gateway, calendar, ops and Signal, plus Hermes setup and its Bud plugin |
@@ -20,17 +20,17 @@ Nothing personal goes in this public repo: no hostnames, tailnet names, home pat
 
 ## Resuming work
 
-Work moved from Claude Code to OpenCode on 2026-11-22. Before starting a task, read [handoff/README.md](handoff/README.md): how Jason works (lead with the answer, plain Unicode and no emoji, options with a recommendation, he decides design), the PR workflow, and links to the current state, the open items waiting on him and the Suite decision log (D1 onward). Keep `handoff/state.md` and `handoff/revisit.md` current in the same PR as the work. Host names and exact home-server commands are in the private overlay's `handoff/`, never here.
+Before starting a task, read [handoff/README.md](handoff/README.md): how Jason works (lead with the answer, plain Unicode and no emoji, options with a recommendation, he decides design), the PR workflow, and links to the current state, the open items waiting on him and the Suite decision log (D1 onward). Keep `handoff/state.md` and `handoff/revisit.md` current in the same PR as the work. Host names and exact home-server commands are in the private overlay's `handoff/`, never here.
 
 ## The IDE
 
 Bud's IDE is a Neovim-based editor driven by a small Go CLI (`bud`). The CLI installs, launches, updates and syncs an isolated Neovim config (`NVIM_APPNAME=bud`, so it never touches `~/.config/nvim`). `BASE.md` is the full plan plus a numbered decision log (D1, D2, ...). Nearly all of it is built, but a few parts are still marked as later, so check the code before assuming a planned feature exists. When a decision changes, update `BASE.md` too.
 
-The IDE chat is the pinned sudo-tee/opencode.nvim talking to local OpenCode (D150, superseding the ACP plan in D131/D132 and D138-D140; Suite D96). `bud.ai.agent` and `bud.ai.acp` stay as the programmatic session behind `:BudGen`, issue filing, working an issue, inline actions and commit drafts, and they run only `opencode acp` (Suite D139); the Claude Code session and the IDE bridge are gone (JGA-402). Don't extend opencode.nvim with a fork; bud's changes live in `bud.ai.opencode`. Don't add a model provider or an API client unless asked.
+The IDE chat is the pinned sudo-tee/opencode.nvim talking to local OpenCode (D150, superseding the ACP plan in D131/D132 and D138-D140; Suite D96). `bud.ai.agent` and `bud.ai.acp` stay as the programmatic session behind `:BudGen`, issue filing, working an issue, inline actions and commit drafts, and they run only `opencode acp` (Suite D139); there is no other backend and no IDE bridge. Don't extend opencode.nvim with a fork; bud's changes live in `bud.ai.opencode`. Don't add a model provider or an API client unless asked.
 
 ## Docs
 
-`docs/` holds the user docs: `setup.md` (the whole setup in order, including Claude Code and the plugins), `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), references for every command (`commands.md`) and key (`keys.md`), the AI backends (`backends.md`, with `openclaw.md` as the worked example), an overview of Claude Code in bud (`claude-code.md`), the architecture diagrams (`architecture.md`, Mermaid, updated in the same change as the code they draw), and how-tos for languages, tools, layouts, filing issues, building a Claude TUI and troubleshooting. The README keeps short descriptions and links to these. Keep them in step when behaviour changes. The same files are the docs site, https://bud.jgarner.dev (D110): `site/` holds only the landing page, layout and styles, `scripts/site.sh` copies `docs/*.md` in beside them, and `.github/workflows/pages.yml` builds it with GitHub Pages' Jekyll on a push to main. A new page in `docs/` needs a line in `site/_data/nav.yml`, and a link out of `docs/` (to the README, say) has to be a full URL, since only `docs/*.md` is on the site. `docs/internals/` is the other kind: how each part of the code works, for working on bud (see "Where the detail is"). Move detail there when a paragraph here grows, and keep this file short, since it loads in every session.
+`docs/` holds the user docs: `setup.md` (the whole setup in order, including OpenCode and the synced content), `config.md` (every key and its default; `TestDocsCoverEveryKey` fails when a setting is missing from it, so add a row when you add one), references for every command (`commands.md`) and key (`keys.md`), the architecture diagrams (`architecture.md`, Mermaid, updated in the same change as the code they draw), and how-tos for languages, tools, layouts, filing issues and troubleshooting. The README keeps short descriptions and links to these. Keep them in step when behaviour changes. The same files are the docs site, https://bud.jgarner.dev (D110): `site/` holds only the landing page, layout and styles, `scripts/site.sh` copies `docs/*.md` in beside them, and `.github/workflows/pages.yml` builds it with GitHub Pages' Jekyll on a push to main. A new page in `docs/` needs a line in `site/_data/nav.yml`, and a link out of `docs/` (to the README, say) has to be a full URL, since only `docs/*.md` is on the site. `docs/internals/` is the other kind: how each part of the code works, for working on bud (see "Where the detail is"). Move detail there when a paragraph here grows, and keep this file short, since it loads in every session.
 
 ## Commands
 

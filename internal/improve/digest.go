@@ -217,7 +217,7 @@ func candidateText(c Candidate) string {
 // Body is the pull request's description
 func Body(p Proposal) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Proposed by `bud improve` (%s, Suite D47, D125 to D129). Nothing applies it until you merge it; Claude threads don't merge `%s` pull requests.\n\n", p.ID, Label)
+	fmt.Fprintf(&b, "Proposed by `bud improve` (%s, Suite D47, D125 to D129). Nothing applies it until you merge it; agent sessions don't merge `%s` pull requests.\n\n", p.ID, Label)
 	if p.Reverts != "" {
 		fmt.Fprintf(&b, "This reverts %s.\n\n", p.Reverts)
 	}

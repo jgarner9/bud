@@ -714,6 +714,18 @@ local function work_prompt(id)
   end)
 end
 
+-- command runs :BudIssue [bud|work ID]. Work is always local, so a third
+-- word (the removed where choice) is refused rather than ignored
+function M.command(args)
+  if args[1] == "work" then
+    if #args > 2 then
+      return vim.notify("bud: :BudIssue work takes only an issue id; work is always local", vim.log.levels.ERROR)
+    end
+    return work_prompt(args[2])
+  end
+  M.open(args[1] == "bud" and "bud" or "project")
+end
+
 function M.setup()
   table.insert(require("bud.ai.permissions").policies, M.policy)
   vim.keymap.set({ "n", "x" }, "<leader>ai", function()
@@ -726,10 +738,7 @@ function M.setup()
     work_prompt()
   end, { desc = "Have OpenCode fix an issue" })
   vim.api.nvim_create_user_command("BudIssue", function(o)
-    if o.fargs[1] == "work" then
-      return work_prompt(o.fargs[2])
-    end
-    M.open(o.fargs[1] == "bud" and "bud" or "project")
+    M.command(o.fargs)
   end, {
     nargs = "*",
     desc = "File an issue with OpenCode (about this project, or bud), or have OpenCode fix one (work ID)",

@@ -174,6 +174,14 @@ end
 issue.work("JGA-9")
 eq(started, { "JGA-9", "Other", repo }, "work uses the filed repo")
 
+-- a third word (the removed where choice) is refused, not ignored
+started = nil
+issue.command({ "work", "JGA-9", "extra" })
+eq(started, nil, "nothing started with an extra argument")
+assert(notified[#notified]:find("takes only an issue id", 1, true), notified[#notified])
+issue.command({ "work", "JGA-9" })
+eq(started, { "JGA-9", "Other", repo }, "the plain form still works")
+
 agent.stop_all()
 vim.fn.delete(tmp, "rf")
 print("work_test: ok")

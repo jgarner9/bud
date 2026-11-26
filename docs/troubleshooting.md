@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled language, the synced config, the startup time, Claude Code and the project registry, plus what `bud sync` left on a device with a profile set, and each problem comes with the command that fixes it. `bud doctor --net` also asks whether newer content is out, whether the model endpoints answer, and whether the embedding server returns vectors of the size the registry names.
+Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled language, the synced config, the startup time, OpenCode and the project registry, plus what `bud sync` left on a device with a profile set, and each problem comes with the command that fixes it. `bud doctor --net` also asks whether newer content is out, whether the model endpoints answer, and whether the embedding server returns vectors of the size the registry names.
 
 ## Common problems
 
@@ -12,9 +12,9 @@ Start with `bud doctor`. It checks Neovim, the tools bud needs, every enabled la
 
 **Pasting is slow over SSH.** It shouldn't be: over SSH (`SSH_CONNECTION` set) bud doesn't tie `p` and `y` to the system clipboard, since there that clipboard goes through your terminal (OSC 52), and many terminals never answer a paste request. `"+y` copies to your own machine's clipboard through the terminal; `"+p` pastes only where the terminal allows it.
 
-**The AI backend isn't answering** (OpenClaw, Codex, OpenCode, a custom agent). `bud ai status` prints the backend, the command it runs and each problem with a `fix:` line: the command not installed, a bad `ai.custom.command`, and for OpenClaw a missing or world-readable token file, a bad `ai.openclaw.url`, or a Gateway that "didn't answer" or "isn't answering bud". `bud doctor` warns about the same under "ai backend". In the editor, `:BudAgent` shows the project's session and why it stopped; `:BudAgent restart` starts it again once fixed. [AI backends](backends.md) and [OpenClaw in bud](openclaw.md) cover the setup.
+**OpenCode isn't answering.** `bud ai status` says whether OpenCode is installed, which version and command it runs, and prints each problem with a `fix:` line, such as the command not being installed (`bud ai setup` installs it with npm, asking first). `bud doctor` warns about the same under "opencode". In the editor, `:BudAgent` shows the project's session and why it stopped; `:BudAgent restart` starts it again once fixed. The chat (`<leader>ac`) is opencode.nvim and starts or attaches to its own local `opencode` server, so a chat that works with the project's session stopped, or the reverse, points at that one's own problem. Signing in to a model is OpenCode's step, not bud's: run `opencode` and connect a provider there.
 
-**Claude can't edit anything.** Edits come as diffs to accept with `ga` or `:w`; a prompt that was closed counts as no. Allowing something for the rest of the session (`a`) only lasts until you quit.
+**OpenCode can't edit anything.** In the project's session, edits come as diffs to accept with `ga` or `:w`; a prompt that was closed counts as no. Allowing something for the rest of the session (`a`) only lasts until you quit. In the chat, permission requests are answered in the chat (`1`/`2`/`3`) or with `<leader>ay` and `<leader>an`.
 
 **An update went wrong.** bud checks itself after an update and goes back to the previous version if a check that passed before fails, saying why. `~/.cache/bud/update.log` has the background updates. `bud update` (or `:BudUpdate` in the editor) runs one by hand, then runs the full `bud doctor`, listing anything that isn't right with its fix. A failing check makes `bud update` exit 1, as `bud doctor` does (warnings don't); when a release went in, the error starts "updated to X.Y.Z, but", and the new release stays. `bud update --no-doctor` skips the check.
 

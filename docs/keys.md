@@ -1,13 +1,13 @@
 # Keys
 
-Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that follow, grouped: `a` Claude, `c` code, `g` git, `h` hunks, `q` quit, `u` interface. Language servers use Neovim's own keys.
+Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that follow, grouped: `a` AI, `c` code, `g` git, `h` hunks, `q` quit, `u` interface. Language servers use Neovim's own keys.
 
 ## Everywhere
 
 | Keys | Does |
 | --- | --- |
 | `;` | The command line, without Shift. `:` repeats the last `f`/`t` jump instead. |
-| `jk` | Leave Insert mode (so does Esc). In the terminal, Claude Code's pane and chat, go to Normal mode; Esc there goes to the program, so it can interrupt Claude Code. |
+| `jk` | Leave Insert mode (so does Esc). In the terminal and OpenCode's chat, go to Normal mode; Esc there goes to the program, so it can interrupt OpenCode. |
 | `<leader>w` | Window commands, as `<C-w>`: `h` `j` `k` `l` to move, `+` `-` `<` `>` to resize. |
 | `<leader>d` | The dashboard. |
 | `<leader>,` | Settings. |
@@ -70,25 +70,11 @@ The panes are locked: only these keys open and close them. `:q`, `:close` or `:o
 | --- | --- |
 | `<leader>um` | Switch this markdown file between rendered and plain text. |
 
-Markdown files open rendered: headings, lists, code blocks, tables and checkboxes are drawn in place. In Normal mode the line under the cursor shows as written, and Insert mode shows the whole file as text, so small edits don't need the toggle. A diff (Claude's edit review, `<leader>gd`) always shows the text, and so does a file over 250 KB, since rendering one that size freezes the editor for a moment; there `<leader>um` isn't mapped. `bud config set ui.markdown false` opens markdown as text instead; `<leader>um` still renders one.
-
-## Claude Code
-
-| Keys | Does |
-| --- | --- |
-| `<leader>ac` | Claude Code's own TUI, beside the code, on this project's session. |
-| `<leader>as` | Share the selection (or this line) with Claude Code. |
-| `<leader>ae` · `<leader>af` · `<leader>at` | Explain · refactor · write tests for the selection. |
-| `<leader>am` | In a commit message buffer: draft the message from the staged diff. |
-| `<leader>ar` | Restart this project's session. |
-| `<leader>ch` | Chat: Claude Code in chat mode, in its own tab. |
-| `<leader>ai` · `<leader>aB` · `<leader>aw` | File an issue about this project · about bud · have Claude fix one. |
-| `ga` (or `:w`, `:wq`, `:x`, `ZZ`) · `q` | In a proposed edit: accept · reject (closing either side any other way rejects it too). |
-| `y` · `a` · `n` · `r` | In a permission prompt: allow · allow for this session · deny · deny and say why. |
+Markdown files open rendered: headings, lists, code blocks, tables and checkboxes are drawn in place. In Normal mode the line under the cursor shows as written, and Insert mode shows the whole file as text, so small edits don't need the toggle. A diff (an edit OpenCode proposes, or `<leader>gd`) always shows the text, and so does a file over 250 KB, since rendering one that size freezes the editor for a moment; there `<leader>um` isn't mapped. `bud config set ui.markdown false` opens markdown as text instead; `<leader>um` still renders one.
 
 ## OpenCode
 
-The chat is opencode.nvim (D150), whatever `ai.backend` says: the IDE only talks to OpenCode (D139). bud keeps its own `<leader>o` keys off and maps these instead.
+OpenCode is the only AI bud runs, so the AI keys all sit under `<leader>a`. The chat is opencode.nvim (D150): bud keeps its own `<leader>o` keys off and maps the few it needs here. The inline actions, commit messages, issues and `:BudGen` run on a separate OpenCode session that bud starts per project (`opencode acp`).
 
 | Keys | Does |
 | --- | --- |
@@ -97,8 +83,15 @@ The chat is opencode.nvim (D150), whatever `ai.backend` says: the IDE only talks
 | `<leader>ad` | Review the session's changes: changed files on the left, before and after on the right. `r` picks a range of prompts, `c` leaves a comment the next prompt carries, `q` closes. |
 | `<leader>ap` · `<leader>aS` | Pick the model · pick a session. |
 | `<leader>ay` · `<leader>an` | Allow the waiting request once · deny it, from any window. In the chat, `1`/`2`/`3` (or `j`/`k` and `<CR>`) also answer it, with allow always as the third choice. |
+| `<leader>ch` | Chat in OpenCode's own TUI, in its own tab, outside any project (`bud chat` from the shell). |
+| `<leader>ae` · `<leader>af` · `<leader>at` | Explain · refactor · write tests for the selection, on the project's session. |
+| `<leader>am` | In a commit message buffer: draft the message from the staged diff. |
+| `<leader>ar` | Restart this project's session. |
+| `<leader>ai` · `<leader>aB` · `<leader>aw` | File an issue about this project · about bud · have OpenCode fix one. |
+| `ga` (or `:w`, `:wq`, `:x`, `ZZ`) · `q` | In an edit the project's session proposes: accept · reject (closing either side any other way rejects it too). |
+| `y` · `a` · `n` · `r` | In a permission prompt from the project's session: allow · allow for this session · deny · deny and say why. |
 
-`:Opencode` has every other action, such as `:Opencode revert all prompt` to undo the last prompt's edits.
+`:Opencode` has every other action in the chat, such as `:Opencode revert all prompt` to undo the last prompt's edits. In the chat, edits are written when OpenCode allows them and reviewed afterwards with `<leader>ad`, so commit first if you want git to hold the way back.
 
 ## Debugging
 

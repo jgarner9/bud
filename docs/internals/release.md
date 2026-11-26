@@ -1,6 +1,6 @@
 # Release tooling
 
-Bootstrap, the nightly build and release signing. The release flow itself is in CLAUDE.md.
+Bootstrap, the nightly build and release signing. The release flow itself is in AGENTS.md.
 
 **Bootstrap.** `bud bootstrap [--config] user@host` (`internal/cli/bootstrap.go`) runs the install.sh one-liner over `ssh -t` with `--profile` (default minimal), `--yes` and `--version` of this bud (`releaseVersion`); `--config` pipes `config.json` into the remote state dir first. Tests swap `runSSH`.
 

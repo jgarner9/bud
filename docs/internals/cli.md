@@ -1,6 +1,6 @@
 # CLI internals
 
-The Go side of bud, one paragraph per area. CLAUDE.md keeps the registry, prompts, errors, embedded config and paths.
+The Go side of bud, one paragraph per area. AGENTS.md keeps the registry, prompts, errors, embedded config and paths.
 
 **Colour** (`internal/cli/color.go`, JGA-109): `paint(w, style, s)` adds ANSI codes only when `w` is a terminal `*os.File`, `TERM` isn't `dumb` and `NO_COLOR` is unset, so tests (buffers) and pipes stay plain. Pad text before painting it, or the codes break the columns: `cell(w, style, s, width)` does both. The list and status commands share one palette (JGA-159): names bold, kinds, paths and descriptions dim, on/enabled green (`onStyle`), attention yellow, broken red; `config ls`/`get` bold the JSON keys (`paintJSONKeys`). `TestListsColourLikePlain` forces `colorOn` and checks that stripping the codes gives back the plain output byte for byte.
 
@@ -8,9 +8,9 @@ The Go side of bud, one paragraph per area. CLAUDE.md keeps the registry, prompt
 
 **`bud config`** (`internal/cli/configcmd.go`, JGA-93): `ls [--changed]`, `get`, `set [--force]` (value parsed as JSON, else a string; unknown keys refused unless `--force` via `config.Known`; the whole file must pass `Settings()` before it's saved), `unset` (`File.Unset`), `edit` (bud's nvim, then checked; tests swap `editFile`), `path`. `File.Effective` is a key's value with defaults filled in.
 
-**Uninstall.** `bud uninstall` removes the synced files in `~/.config/bud` (manifest-tracked only, via `nvim.RemoveConfig`), the whole data, state and cache dirs (`--keep-config` spares `config.json` and `user-tools/`), and any app bundle `bundle.Find` says bud built. It leaves Claude Code's config in place. It removes the binary only when `install.sh` recorded installing it in `~/.local/state/bud/install.json` (`installer.ReadReceipt`, D20); self-update will use the same record. It always lists what it will remove and asks first, unless `--yes`.
+**Uninstall.** `bud uninstall` removes the synced files in `~/.config/bud` (manifest-tracked only, via `nvim.RemoveConfig`), the whole data, state and cache dirs (`--keep-config` spares `config.json` and `user-tools/`), and any app bundle `bundle.Find` says bud built. It leaves OpenCode and its config in place. It removes the binary only when `install.sh` recorded installing it in `~/.local/state/bud/install.json` (`installer.ReadReceipt`, D20); self-update will use the same record. It always lists what it will remove and asks first, unless `--yes`.
 
-**Launching.** `open` resolves its args into a workspace: no args is the cwd, one dir is a project, and files open from the root found by walking up to `.git` (else the first file's dir). Then `nvim.Launch` `chdir`s and replaces the bud process with nvim via `syscall.Exec`. Nothing runs after that, which is why plans for in-editor processes (like the Claude Code session in BASE.md 4.2) live in Lua, not Go.
+**Launching.** `open` resolves its args into a workspace: no args is the cwd, one dir is a project, and files open from the root found by walking up to `.git` (else the first file's dir). Then `nvim.Launch` `chdir`s and replaces the bud process with nvim via `syscall.Exec`. Nothing runs after that, which is why plans for in-editor processes (like the OpenCode session in BASE.md 4.2) live in Lua, not Go.
 
 **Launch.** `bud launch [--terminal] [--layout] [path ...]` (`internal/cli/launch.go`, D46) opens a new terminal window running this binary as `bud ... open <abs paths>`, after checking the paths, layout and terminal up front. `internal/launcher` has one file per terminal (`kitty.go`, `ghostty.go`) registering a `command` that builds the argv; on macOS both go through `open -n -a <app> --args`, and the inner command carries the caller's `PATH` via `/usr/bin/env`. Terminals are found with `installer.Lookup`/`Terminal.Locate`. Tests swap `launchWindow` and `launchTerminals`.
 

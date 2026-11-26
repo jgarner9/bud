@@ -1,12 +1,10 @@
 -- The Agent Client Protocol (ACP v1) over a job's stdin and stdout (D131).
--- Every backend bud talks to (OpenClaw through `openclaw acp`, Claude Code
--- through claude-agent-acp, Codex through codex-acp, OpenCode's `opencode
--- acp`) is an ACP agent: JSON-RPC 2.0, one message per line, with requests
--- going both ways. This module is only the protocol; bud.ai.agent is the
+-- The agent bud talks to (OpenCode, through `opencode acp`) is an ACP agent:
+-- JSON-RPC 2.0, one message per line, with requests going both ways. This module is only the protocol; bud.ai.agent is the
 -- session on top of it. See docs/internals/acp.md.
 --
 --   local acp = require("bud.ai.acp")
---   local conn = acp.connect({ "openclaw", "acp" }, {
+--   local conn = acp.connect({ "opencode", "acp" }, {
 --     cwd = root,
 --     on_notification = function(method, params) end,   -- session/update
 --     on_request = function(method, params, respond) end, -- respond(result) or respond(nil, err)
@@ -219,7 +217,7 @@ function M.text(content)
 end
 
 -- why is an error's message with the detail an agent put in its data
--- (OpenClaw answers "Internal error" with the reason in data.details)
+-- (an agent may answer "Internal error" with the reason in data.details)
 function M.why(err)
   if type(err) ~= "table" then
     return tostring(err)

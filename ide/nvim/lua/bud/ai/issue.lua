@@ -10,7 +10,7 @@
 -- while a report is being proposed or reviewed and allows them once you've
 -- said y; reads are allowed throughout (bud.ai.permissions.policies).
 
--- the configured backend's session (D131)
+-- the OpenCode session (D131)
 local ai = require("bud.ai.session")
 
 local M = {}

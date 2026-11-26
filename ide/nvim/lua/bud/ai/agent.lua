@@ -1,7 +1,6 @@
--- The agent alongside the editor, on whichever backend ai.backend names
--- (D131-D133, BASE.md 4.4). It takes bud.ai.claude's place with the same
--- calls and events, so a consumer moves over by changing its require. Under
--- it, bud.ai.acp speaks the Agent Client Protocol to the backend's process.
+-- The agent alongside the editor: one OpenCode process per session, spoken
+-- to over ACP (D131-D133, BASE.md 4.4; OpenCode only since D139). Under it,
+-- bud.ai.acp speaks the Agent Client Protocol to `opencode acp`.
 --
 -- One agent process per project root, started after the first screen. A
 -- Neovim keeps the sessions of its last three projects and stops any nothing
@@ -66,16 +65,17 @@ function M.on(event, fn)
   end
 end
 
--- backend is the configured backend's name
-function M.backend()
-  return cfg().get("ai.backend", "claude")
+-- BACKEND is the one agent bud runs, named in the status line and in
+-- permission prompts (D139)
+local BACKEND = "opencode"
+
+-- backend is its name, kept as a stub for bud.ai.claude until it goes (JGA-402)
+M.backend = function()
+  return BACKEND
 end
 
 -- Each project's ACP session id is saved, so the next start reattaches
--- with session/load and the conversation (and, on OpenClaw, the TUI and the
--- web UI's thread) carries on (D139). OpenClaw names a session its bridge
--- made agent:<agent>:acp-bridge:<id>, and keeps its working dir: one named
--- with --session runs its tools in the agent's workspace instead.
+-- with session/load and the conversation carries on (D139).
 
 M.ids_file = function()
   return vim.fn.stdpath("state") .. "/agent-sessions.json"
@@ -91,21 +91,22 @@ local function read_ids()
   return ok and type(ids) == "table" and ids or {}
 end
 
--- saved_id is root's saved session id for backend, nil when there's none
-function M.saved_id(root, backend)
+-- saved_id is root's saved session id, nil when there's none (an id saved
+-- for another agent doesn't count)
+function M.saved_id(root)
   local saved = read_ids()[root]
-  if type(saved) == "table" and saved.backend == (backend or M.backend()) then
+  if type(saved) == "table" and saved.backend == BACKEND then
     return saved.id
   end
 end
 
-local function save_id(root, backend, id)
+local function save_id(root, id)
   local ids = read_ids()
   local saved = ids[root]
-  if type(saved) == "table" and saved.backend == backend and saved.id == id then
+  if type(saved) == "table" and saved.backend == BACKEND and saved.id == id then
     return
   end
-  ids[root] = id and { backend = backend, id = id } or nil
+  ids[root] = id and { backend = BACKEND, id = id } or nil
   local file = M.ids_file()
   vim.fn.mkdir(vim.fs.dirname(file), "p")
   -- a temp file renamed over it, so a crash never leaves half a file
@@ -118,111 +119,26 @@ local function save_id(root, backend, id)
   end
 end
 
--- bridge_key is the Gateway session key of the ACP session id
-function M.bridge_key(id, agent_id)
-  -- empty is unset, as in Go's BridgeKey: the settings screen can save ""
-  if agent_id == nil or agent_id == "" then
-    agent_id = "main"
-  end
-  return ("agent:%s:acp-bridge:%s"):format(agent_id, id)
+-- argv is the command line that starts the agent: OpenCode's ACP server
+function M.argv()
+  return { "opencode", "acp" }
 end
 
--- argv is the command line that starts backend as an ACP agent, or nil and
--- why it can't. get reads a setting (bud.config.get)
-function M.argv(backend, get)
-  get = get or function(key, default)
-    return cfg().get(key, default)
-  end
-  if backend == "openclaw" then
-    local argv = { "openclaw", "acp" }
-    local url, token = get("ai.openclaw.url", ""), get("ai.openclaw.token_file", "")
-    if url ~= "" then
-      vim.list_extend(argv, { "--url", url })
-    end
-    if token ~= "" then
-      vim.list_extend(argv, { "--token-file", vim.fn.expand(token) })
-    end
-    return argv
-  elseif backend == "claude" then
-    return { "claude-agent-acp" }
-  elseif backend == "codex" then
-    return { "codex-acp" }
-  elseif backend == "opencode" then
-    return { "opencode", "acp" }
-  elseif backend == "custom" then
-    local cmd = get("ai.custom.command", {})
-    if type(cmd) ~= "table" or not cmd[1] then
-      return nil, "ai.backend is custom but ai.custom.command is empty"
-    end
-    return vim.deepcopy(cmd)
-  end
-  return nil, ("ai.backend: %q isn't a backend bud knows"):format(tostring(backend))
+-- tui is OpenCode's own TUI on root, for the AI pane: { argv, env }
+function M.tui(root)
+  return { argv = { "opencode", root } }
 end
 
--- agent_id is ai.openclaw.agent, empty meaning main as in Go
-local function agent_id(get)
-  local v = get("ai.openclaw.agent", "")
-  return (v ~= nil and v ~= "") and v or "main"
-end
-
--- token reads the Gateway token from ai.openclaw.token_file, for the TUI,
--- which takes it only from the environment (OPENCLAW_GATEWAY_TOKEN) or argv
-local function token(get)
-  local file = get("ai.openclaw.token_file", "")
-  if file == "" then
-    return nil
-  end
-  local ok, lines = pcall(vim.fn.readfile, vim.fn.expand(file), "", 1)
-  return ok and lines[1] and vim.trim(lines[1]) or nil
-end
-
--- tui is the backend's own TUI on root's session, for the AI pane: { argv,
--- env }, or nil and why there's none. OpenClaw's opens the same Gateway
--- session bud's calls use (D139), so the pane and bud share one thread
-function M.tui(root, get)
-  get = get or function(key, default)
-    return cfg().get(key, default)
-  end
-  local backend = M.backend()
-  if backend == "openclaw" then
-    local argv = { "openclaw", "tui" }
-    local url = get("ai.openclaw.url", "")
-    if url ~= "" then
-      vim.list_extend(argv, { "--url", url })
-    end
-    local id = M.session_id(root)
-    if not id then
-      return nil, "the project's OpenClaw session didn't start: " .. (M.get(root) and M.get(root).why or "no answer")
-    end
-    vim.list_extend(argv, { "--session", M.bridge_key(id, agent_id(get)) })
-    local t = token(get)
-    return { argv = argv, env = t and { OPENCLAW_GATEWAY_TOKEN = t } or nil }
-  elseif backend == "codex" then
-    return { argv = { "codex" } }
-  elseif backend == "opencode" then
-    return { argv = { "opencode", root } }
-  elseif backend == "claude" then
-    return nil, "the claude backend's TUI is Claude Code's own (bud.ai.claude)"
-  end
-  return nil, ("the %s backend has no TUI bud knows"):format(backend)
-end
-
--- tui_bin is the command the backend's TUI runs, nil when it has none
-function M.tui_bin(backend)
-  return ({ openclaw = "openclaw", codex = "codex", opencode = "opencode" })[backend or M.backend()]
-end
-
--- session_id is root's ACP session id once the backend has opened it (a
+-- session_id is root's ACP session id once the agent has opened it (a
 -- saved id only after session/load accepted it, so the pane never lands on
--- a session the backend dropped), starting the session and waiting up to
--- wait ms (default 15 s) when needed. A Gateway that can't be reached fails
--- within seconds, which ends the wait
+-- a session it dropped), starting the session and waiting up to wait ms
+-- (default 15 s) when needed
 function M.session_id(root, wait)
   root = root or vim.fn.getcwd()
   root = vim.uv.fs_realpath(root) or root
   local s = M.session(root)
   if s.status == "starting" then
-    vim.notify(("bud: starting %s…"):format(s.backend or M.backend()))
+    vim.notify(("bud: starting %s…"):format(BACKEND))
     vim.cmd.redraw()
     vim.wait(wait or 15000, function()
       return s.status == "ready" or s.status == "busy" or s.status == "error" or s.status == "missing"
@@ -233,32 +149,9 @@ function M.session_id(root, wait)
   end
 end
 
--- chat_tui is the backend's own TUI for chat (<leader>ch, bud chat): on
--- OpenClaw, the Gateway's one chat session, agent:<agent>:bud:chat, the
--- same key bud chat opens (internal/agent.ChatKey); elsewhere in dir
-function M.chat_tui(dir, get)
-  get = get or function(key, default)
-    return cfg().get(key, default)
-  end
-  if M.backend() == "openclaw" then
-    local argv = { "openclaw", "tui" }
-    local url = get("ai.openclaw.url", "")
-    if url ~= "" then
-      vim.list_extend(argv, { "--url", url })
-    end
-    vim.list_extend(argv, {
-      "--session",
-      ("agent:%s:bud:chat"):format(agent_id(get)),
-    })
-    local t = token(get)
-    return { argv = argv, env = t and { OPENCLAW_GATEWAY_TOKEN = t } or nil }
-  end
-  return M.tui(dir, get)
-end
-
--- M.command lets tests swap the backend's command line for the fake agent's
+-- M.command lets tests swap the command line for the fake agent's
 M.command = function(_root)
-  return M.argv(M.backend())
+  return M.argv()
 end
 
 local function root_of(root)
@@ -391,15 +284,6 @@ M.permission = function(req, respond)
   return require("bud.ai.permissions").acp(req, respond)
 end
 
--- patch is the unified diff a finished edit reports, when the backend says
--- what it changed only afterwards: OpenClaw puts it in rawOutput.details
--- (D134: review after the write)
-function M.patch(update)
-  local out = type(update.rawOutput) == "table" and update.rawOutput or {}
-  local details = type(out.details) == "table" and out.details or {}
-  return type(details.patch) == "string" and details.patch or nil
-end
-
 local function tool_name(call)
   return call.title or call.name or call.kind or "a tool"
 end
@@ -442,7 +326,6 @@ function M.handle(s, update)
       kind = call.kind,
       output = acp.text(update.content),
       diffs = acp.diffs(call),
-      patch = M.patch(update),
       raw = call,
     }, s)
   elseif kind == "plan" then
@@ -494,8 +377,8 @@ local function on_request(s, method, params, respond)
       s.asking[answer] = withdraw
     end
   elseif method == "fs/read_text_file" or method == "fs/write_text_file" then
-    -- only the session's project, by the path checked: a backend reached over
-    -- the network must not read or write the rest of this machine through bud
+    -- only the session's project, by the path checked: the agent must not
+    -- read or write the rest of this machine through bud
     local path, why = M.resolve(s.root, params.path)
     if not path then
       return respond(nil, { code = -32602, message = why })
@@ -565,7 +448,7 @@ start = function(s)
     set_status(s, "error", why)
     return
   end
-  s.backend = s.backend or M.backend()
+  s.backend = BACKEND
   s.tools, s.asking, s.queue, s.reply = {}, {}, s.queue or {}, nil
   set_status(s, "starting")
   -- declared first: the callbacks below compare against it
@@ -628,7 +511,7 @@ start = function(s)
         s.options = res.configOptions
       end
       if s.key == s.root then
-        save_id(s.root, s.backend, s.id)
+        save_id(s.root, s.id)
       end
       set_status(s, "ready")
       flush(s)
@@ -638,14 +521,14 @@ start = function(s)
       conn:request("session/new", { cwd = s.root, mcpServers = {} }, opened)
     end
     if s.key == s.root and not s.id then
-      s.id = M.saved_id(s.root, s.backend)
+      s.id = M.saved_id(s.root)
     end
     if s.id and s.caps.loadSession then
       s.loading = true
       conn:request("session/load", { sessionId = s.id, cwd = s.root, mcpServers = {} }, function(lerr, res)
         s.loading = false
         if lerr then
-          -- gone from the backend: start a new one
+          -- gone from the agent: start a new one
           return new()
         end
         opened(nil, res or { sessionId = s.id })
@@ -760,7 +643,7 @@ function M.send(text, opts)
   if not (s.conn and s.conn:running()) and s.status ~= "starting" then
     start(s)
   end
-  -- a backend that can't start takes nothing: a queued message would go out
+  -- an agent that can't start takes nothing: a queued message would go out
   -- whenever it next starts, long after it mattered
   if s.status == "missing" or s.status == "error" then
     return false
@@ -873,11 +756,11 @@ function M.statusline()
     return ""
   end
   local marks = { starting = "…", ready = "●", busy = "◐", stopped = "○", missing = "✗", error = "✗" }
-  return ("%s %s"):format(s.backend or M.backend(), marks[s.status] or s.status)
+  return ("%s %s"):format(BACKEND, marks[s.status] or s.status)
 end
 
 -- share points the agent at lines first..last (1-based) of path (D131):
--- typed into the backend's TUI when it's running, without pressing Enter,
+-- typed into the TUI when it's running, without pressing Enter,
 -- else sent with the next message as its selection
 function M.share(path, first, last)
   local rel = vim.fn.fnamemodify(path, ":.")
@@ -892,14 +775,13 @@ function M.share(path, first, last)
       or vim.list_slice(vim.fn.readfile(path), first, last)
     s.shared = { path = path, first = first, last = last, text = table.concat(lines, "\n") }
   end
-  vim.notify(("bud: shared %s with %s"):format(where, M.backend()))
+  vim.notify(("bud: shared %s with %s"):format(where, BACKEND))
 end
 
 -- own_chat says whether the AI chat is bud's own (D138): ai.agent.chat_ui =
--- "bud" on a backend that runs over ACP; the claude backend keeps Claude
--- Code's TUI until it does (D140)
+-- "bud", instead of OpenCode's TUI
 function M.own_chat()
-  return cfg().get("ai.agent.chat_ui", "tui") == "bud" and M.backend() ~= "claude"
+  return cfg().get("ai.agent.chat_ui", "tui") == "bud"
 end
 
 -- autostart says whether a project's agent starts when it opens
@@ -908,18 +790,17 @@ function M.autostart()
   return cfg().get("ai.agent.autostart", true) ~= false
 end
 
--- setup starts the agent for how bud was opened, like bud.ai.claude's (the
--- 4.2 table): a project dir, or files from their root, and nothing for bare
--- bud; it adds the status line and the idle reap
+-- setup starts the agent for how bud was opened (the 4.2 table): a project
+-- dir, or files from their root, and nothing for bare bud; it adds the
+-- status line and the idle reap
 local idle_timer
--- options lists the session's settings the backend offers (ACP config
--- options: OpenClaw's thought_level, reasoning_level, fast_mode and the like)
+-- options lists the session's settings OpenCode offers (ACP config options)
 function M.options(root)
   local s = M.get(root)
   return s and s.options or {}
 end
 
--- set_option sets one of them; cb(err) when the backend has answered
+-- set_option sets one of them; cb(err) when the agent has answered
 function M.set_option(root, id, value, cb)
   local s = M.get(root)
   local opt
@@ -938,7 +819,7 @@ function M.set_option(root, id, value, cb)
   if not (s and s.conn and s.id) then
     return fail("no session to set it on")
   elseif not opt then
-    return fail(("%s offers no setting %q"):format(s.backend or M.backend(), id))
+    return fail(("%s offers no setting %q"):format(BACKEND, id))
   end
   local params = { sessionId = s.id, configId = id }
   if opt.type == "boolean" then
@@ -965,7 +846,7 @@ end
 local function pick_option(root)
   local opts = M.options(root)
   if #opts == 0 then
-    return vim.notify(("bud: %s offers no settings"):format(M.backend()))
+    return vim.notify(("bud: %s offers no settings"):format(BACKEND))
   end
   vim.ui.select(opts, {
     prompt = "Setting",
@@ -994,9 +875,9 @@ end
 function M.describe(root)
   local s = M.get(root)
   if not s then
-    return ("%s: no session for this project yet"):format(M.backend())
+    return ("%s: no session for this project yet"):format(BACKEND)
   end
-  local parts = { ("%s: %s"):format(s.backend or M.backend(), s.status) }
+  local parts = { ("%s: %s"):format(BACKEND, s.status) }
   if s.why then
     table.insert(parts, "(" .. s.why .. ")")
   end
@@ -1034,7 +915,7 @@ function M.setup()
     M.command_line(o.args)
   end, {
     nargs = "?",
-    desc = "The AI backend's session: its status, restart or stop it, or set an option",
+    desc = "The AI session: its status, restart or stop it, or set an option",
     complete = function()
       return { "status", "restart", "stop", "option" }
     end,

@@ -1,6 +1,6 @@
 -- bud's own chat with the agent (D138): the conversation drawn in Neovim from
--- bud.ai.agent's events, on any ACP backend, so it takes bud's colours, keys
--- and layout instead of a backend's TUI. A markdown buffer holds the
+-- bud.ai.agent's events, so it takes bud's colours, keys and layout instead
+-- of OpenCode's TUI. A markdown buffer holds the
 -- conversation, replies stream into it and tool calls show as one line each
 -- with their state; a prompt line under it sends. It opens as a pane on the
 -- right or full screen (ai.agent.chat_layout), locked like the other panes
@@ -11,7 +11,7 @@
 --
 -- In the prompt: <CR> sends, <C-c> stops the reply, <Up>/<Down> recall your
 -- earlier messages, <C-x><C-o> after a /
--- completes the backend's slash commands. In the conversation: q
+-- completes the agent's slash commands. In the conversation: q
 -- goes back to the editor.
 
 local M = {}
@@ -26,6 +26,9 @@ local views = {} -- root -> { log, input, wins = {}, tools = {}, unsub = {} }
 local function agent()
   return require("bud.ai.agent")
 end
+
+-- agent_name is the agent's name in headings and the winbar
+local agent_name = "opencode"
 
 local function root_of(root)
   root = root or vim.fn.getcwd()
@@ -119,7 +122,7 @@ end
 local function title(v)
   local s = agent().get(v.root)
   local status = s and s.status or "stopped"
-  return (" %s · %s · %s"):format(agent().backend(), vim.fs.basename(v.root), status)
+  return (" %s · %s · %s"):format(agent_name, vim.fs.basename(v.root), status)
 end
 
 local function redraw_title(v)
@@ -153,7 +156,7 @@ local function listen(v)
         v.in_user, v.thinking = false, false
         if not v.replying then
           v.replying = true
-          append(v, { "", "## " .. agent().backend(), "", "" })
+          append(v, { "", "## " .. agent_name, "", "" })
         end
         append(v, vim.split(d.text, "\n", { plain = true }), true)
       end
@@ -172,8 +175,7 @@ local function listen(v)
         set_line(v, t.line, ("> %s %s"):format(marks[d.status] or marks.in_progress, t.name))
         local patch = d.status == "completed" and M.patch(d) or nil
         if patch then
-          -- what an edit changed (D134): OpenClaw's own patch, or one made
-          -- from the ACP diff the backend sent (OpenCode, Claude Code)
+          -- what an edit changed (D134): one made from the ACP diff OpenCode sent
           local diff = vim.split(vim.trim(patch), "\n", { plain = true })
           table.insert(diff, 1, "```diff")
           table.insert(diff, "```")
@@ -217,7 +219,7 @@ local function listen(v)
   }
 end
 
--- complete is the prompt's completion of the backend's slash commands
+-- complete is the prompt's completion of the agent's slash commands
 -- (<C-x><C-o> after a /): what the agent listed in available_commands_update
 function M.complete(findstart, base)
   if findstart == 1 then
@@ -236,13 +238,9 @@ function M.complete(findstart, base)
   return items
 end
 
--- patch is the unified diff to show for a finished tool update: the one the
--- backend reported (OpenClaw), else one made from its ACP diffs, each file's
--- under its name; nil when it changed nothing
+-- patch is the unified diff to show for a finished tool update, made from its
+-- ACP diffs, each file's under its name; nil when it changed nothing
 function M.patch(d)
-  if d.patch then
-    return d.patch
-  end
   local parts = {}
   for _, diff in ipairs(d.diffs or {}) do
     local old, new = diff.old or "", diff.new or ""
@@ -329,7 +327,7 @@ local function create(root)
     M.focus(root)
   end, "Type a message")
   listen(v)
-  append(v, { ("# Chat with %s about %s"):format(agent().backend(), vim.fs.basename(root)) })
+  append(v, { ("# Chat with %s about %s"):format(agent_name, vim.fs.basename(root)) })
   agent().session(root)
   return v
 end
@@ -508,7 +506,7 @@ function M.setup()
   for group, link in pairs(M.highlights) do
     vim.api.nvim_set_hl(0, group, { link = link, default = true })
   end
-  vim.keymap.set("n", "<leader>av", M.toggle, { desc = "Chat in bud (any backend)" })
+  vim.keymap.set("n", "<leader>av", M.toggle, { desc = "Chat in bud" })
 end
 
 -- _reset forgets every view, for tests

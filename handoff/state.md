@@ -55,6 +55,12 @@ Not set up on the home server yet: revisit item 31.
 | JGA-400 | The release skill is a written review checklist an OpenCode session walks (correctness, tests, docs, secrets, shell and file safety, signing and install paths), so a release no longer needs Claude Code; AGENTS.md and handoff/README.md say so | this PR | D139 a |
 | JGA-400 to JGA-408 | Plan to make bud OpenCode-only: nine tasks that delete Claude Code, the backend switch, the bud-ide plugin and cloud work, then reword the docs. Suite D139, BASE D154; plan in `design/opencode-only-plan.md`. Nothing built yet | this PR | D139 |
 
+## Built on 2026-11-26
+
+| Issue | What | PR | Decisions |
+| --- | --- | --- | --- |
+| JGA-401 | The IDE's Lua talks only to OpenCode: `bud.ai.agent` always starts `opencode acp` and never reads `ai.backend`, `bud.ai.session` is `bud.ai.agent`, and the pane, chat, dashboard, settings screen and `<leader>ac` take the OpenCode path unconditionally. The OpenClaw, Codex, custom and Claude Code backends, their fixtures and `term_backend_test.lua` are gone; `docs/internals/acp.md` describes only the OpenCode transport. `bud.ai.claude` is untouched and still calls a one-line `agent.backend()` stub; JGA-402 deletes both. Follow-ups: the dashboard now reads the Go doctor's check by the name `opencode` (JGA-403 renames the `ai backend` check to match), and the tests that still drive `bud.ai.claude` (`gen`, `issue`, `work`, `claude_*`, `open`) route the session to it through `lib/claude_backend.lua` until JGA-402 ports or deletes them | this PR | D139 (plan) |
+
 ## The home server
 
 Fully set up and verified by Jason as of 2026-11-22 08:20 UTC: gateway, router, Hermes (both profiles), signal-cli and bud-signal, embeddings, the memory service with memory-mcp through the gateway (Hermes's own memory off), calendar, contacts, mail, and the planning OpenCode as the `bud-planning` user.

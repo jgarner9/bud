@@ -1,14 +1,12 @@
--- For tests of the claude backend (bud.ai.claude and Claude Code's TUI in the
--- AI pane): ai.backend reads "claude" unless the test's config.json says
--- otherwise, whatever the default is (claude for now, D140).
+-- For the tests that still drive bud.ai.claude directly (it goes with
+-- JGA-402): bud.ai.session and bud.ai.agent.backend() answer for Claude Code,
+-- as they did before the IDE talked only to OpenCode (D139).
 --
 --   dofile("tests/lua/lib/claude_backend.lua")
 
-local config = require("bud.config")
-local get = config.get
-config.get = function(key, default)
-  if key == "ai.backend" then
-    return get(key, "claude")
-  end
-  return get(key, default)
+require("bud.ai.session").module = function()
+  return require("bud.ai.claude")
+end
+require("bud.ai.agent").backend = function()
+  return "claude"
 end

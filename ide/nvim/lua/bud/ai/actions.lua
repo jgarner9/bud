@@ -1,9 +1,8 @@
 -- Inline actions (BASE.md 4, JGA-90): explain, refactor or write tests for a
--- selection in the project's Claude Code TUI (bud.ai.term, JGA-165), whose
--- edits come as diffs to accept or reject (the IDE bridge's openDiff); and
--- draft a commit message on the project's headless session.
+-- selection in the project's OpenCode TUI (bud.ai.term, JGA-165); and draft a
+-- commit message on the project's headless session.
 
--- the configured backend's session (D131)
+-- the OpenCode session (D131)
 local ai = require("bud.ai.session")
 
 local M = {}
@@ -15,7 +14,7 @@ M.prompts = {
   tests = "Write tests for the code at %s, next to the project's existing tests and in their style. Make the edits.",
 }
 
--- range is the visual selection, or the current line, as @path#La-b
+-- range is the visual selection, or the current line, as path#La-b
 function M.range()
   local name = vim.api.nvim_buf_get_name(0)
   if name == "" or vim.bo.buftype ~= "" then
@@ -30,14 +29,8 @@ function M.range()
   return first == last and ("%s#L%d"):format(rel, first) or ("%s#L%d-%d"):format(rel, first, last)
 end
 
--- mention is how the prompt points at where: Claude Code's @path#La-b, which
--- its TUI resolves; other backends (D131) get "path lines a-b" in words,
--- since their TUIs don't read Claude Code's syntax
-function M.mention(where, backend)
-  backend = backend or require("bud.ai.agent").backend()
-  if backend == "claude" then
-    return "@" .. where
-  end
+-- mention is how the prompt points at where: "path lines a-b" in words
+function M.mention(where)
   local path, a, b = where:match("^(.-)#L(%d+)%-?(%d*)$")
   if not path then
     return where
@@ -109,7 +102,7 @@ function M.commit()
     unsub()
     return
   end
-  vim.notify("bud: Claude is drafting the commit message…")
+  vim.notify("bud: OpenCode is drafting the commit message…")
 end
 
 function M.setup()

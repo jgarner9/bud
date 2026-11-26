@@ -1,7 +1,6 @@
 -- Run with: nvim --clean --headless -l tests/lua/view_test.lua (just lua-test)
 -- bud's own chat (D138) on the fake ACP agent: streamed replies, tool calls
--- with their state, OpenClaw's after-the-fact patch, errors, the pane and
--- full screen, and the lock
+-- with their state, errors, the pane and full screen, and the lock
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
 
@@ -22,7 +21,6 @@ local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp .. "/proj", "p")
 local proj = vim.uv.fs_realpath(tmp .. "/proj")
 require("bud.config").file = tmp .. "/config.json"
-vim.fn.writefile({ vim.json.encode({ ai = { backend = "openclaw" } }) }, tmp .. "/config.json")
 require("bud.lock").setup()
 
 local agent = require("bud.ai.agent")
@@ -60,24 +58,19 @@ eq(vim.bo[vim.api.nvim_win_get_buf(win)].filetype, "markdown", "markdown")
 wait(function()
   return agent.status(proj) == "ready"
 end, "the agent")
-assert(vim.wo[win].winbar:find("openclaw · proj · ready", 1, true), vim.wo[win].winbar)
+assert(vim.wo[win].winbar:find("opencode · proj · ready", 1, true), vim.wo[win].winbar)
 
 -- a streamed reply
 turn("hello")
-assert(text():find("## you\n\nhello\n\n## openclaw\n\nHello from the fake.", 1, true), text())
+assert(text():find("## you\n\nhello\n\n## opencode\n\nHello from the fake.", 1, true), text())
 
 -- a tool call shows as one line with its state
 vim.fn.writefile({ "old" }, proj .. "/f.txt")
 turn("edit " .. proj .. "/f.txt")
 assert(text():find("> ✓ Edit " .. proj .. "/f.txt", 1, true), text())
--- the ACP diff the backend sent, shown as one (as OpenCode sends)
+-- the ACP diff the agent sent, shown as one
 assert(text():find("-old\n+edited", 1, true), text())
 eq(view.patch({ diffs = { { path = "a.txt", old = "x\n", new = "x\n" } } }), nil, "no change, no diff")
-
--- OpenClaw's edit: the patch it reports afterwards is shown (D134)
-turn("replay " .. repo .. "/tests/fixtures/openclaw/edit.log")
-assert(text():find("```diff\n--- notes.txt\n+++ notes.txt", 1, true), text())
-assert(text():find("+gamma", 1, true), text())
 
 -- thinking is one line, a plan a checklist
 turn("think")
@@ -87,7 +80,7 @@ eq(#vim.tbl_filter(function(l)
 end, view.lines(proj)), 1, "one thinking line for two thoughts")
 assert(text():find("Thought about it.", 1, true), text())
 
--- the backend's slash commands complete in the prompt
+-- the agent's slash commands complete in the prompt
 vim.cmd.cd(proj)
 eq(
   vim.tbl_map(function(i)
@@ -100,7 +93,7 @@ eq(
 -- each part of the conversation has its own highlight group, to restyle
 view.setup()
 eq(view.group("## you"), "BudChatYou", "your heading")
-eq(view.group("## openclaw"), "BudChatAgent", "the agent's heading")
+eq(view.group("## opencode"), "BudChatAgent", "the agent's heading")
 eq(view.group("> ✓ Edit x"), "BudChatToolDone", "a finished tool")
 eq(view.group("> thinking…"), "BudChatThinking", "thinking")
 eq(view.group("plain text"), nil, "the reply itself")
@@ -123,7 +116,7 @@ end
 view.recall(proj, -1)
 eq(prompt_line(), "› think", "the latest")
 view.recall(proj, -1)
-assert(prompt_line():find("^› replay "), prompt_line())
+assert(prompt_line():find("^› edit "), prompt_line())
 view.recall(proj, 1)
 eq(prompt_line(), "› think", "forward again")
 view.recall(proj, 1)
@@ -160,7 +153,7 @@ eq(#vim.api.nvim_tabpage_list_wins(0), 2, "conversation and prompt only")
 view.close(proj)
 eq(#vim.api.nvim_list_tabpages(), tabs, "the tab goes")
 
--- a backend that can't start says so in the chat
+-- an agent that can't start says so in the chat
 local command = agent.command
 agent.command = function()
   return { "no-such-acp-agent-bud-test" }
@@ -174,10 +167,7 @@ assert(text():find("> ✗ not sent: no%-such%-acp%-agent%-bud%-test isn't instal
 agent.command = command
 
 -- ai.agent.chat_ui = "bud": <leader>ac (term.toggle) and <leader>aF use it
-vim.fn.writefile(
-  { vim.json.encode({ ai = { backend = "openclaw", agent = { chat_ui = "bud" } } }) },
-  tmp .. "/config.json"
-)
+vim.fn.writefile({ vim.json.encode({ ai = { agent = { chat_ui = "bud" } } }) }, tmp .. "/config.json")
 local term = require("bud.ai.term")
 term.toggle()
 eq(view.showing(proj), true, "<leader>ac opened bud's chat")
@@ -194,18 +184,11 @@ eq(view.showing(proj), false, "<leader>ac closed it")
 require("bud.layout.panes")
 eq(require("bud.layout").providers.chat.available(), true, "the layout's chat pane is available")
 
--- on the claude backend chat_ui = "bud" doesn't apply: Claude Code's TUI
--- stays, everywhere alike (D140)
-vim.fn.writefile(
-  { vim.json.encode({ ai = { backend = "claude", agent = { chat_ui = "bud" } } }) },
-  tmp .. "/config.json"
-)
-eq(agent.own_chat(), false, "not on claude")
-vim.fn.writefile(
-  { vim.json.encode({ ai = { backend = "openclaw", agent = { chat_ui = "bud" } } }) },
-  tmp .. "/config.json"
-)
-eq(agent.own_chat(), true, "on openclaw")
+-- chat_ui = "bud" is what turns bud's own chat on
+eq(agent.own_chat(), true, "chat_ui = bud")
+vim.fn.writefile({ "{}" }, tmp .. "/config.json")
+eq(agent.own_chat(), false, "OpenCode's TUI by default")
+vim.fn.writefile({ vim.json.encode({ ai = { agent = { chat_ui = "bud" } } }) }, tmp .. "/config.json")
 
 -- chat mode (<leader>ch) is bud's chat too, full screen, outside the project
 local chat = require("bud.ai.chat")

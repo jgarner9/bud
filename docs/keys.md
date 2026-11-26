@@ -37,7 +37,7 @@ Leader is <kbd>Space</kbd>. Press it and wait, and a panel lists the keys that f
 | `<leader>e` · `<leader>E` | Go to the explorer pane, or back from it · close it. |
 | `-` | Edit the parent directory as a buffer (oil). |
 | `<leader>t` | Show or hide the terminal along the bottom. |
-| `<leader>ac` | Show or hide Claude Code's pane. With `ai.backend` set to `opencode` it shows or hides opencode.nvim instead (D150). |
+| `<leader>ac` | Show or hide the chat, opencode.nvim (D150). |
 | `<leader>gs` | Show or hide the git pane (changed files, neo-tree). |
 | `<leader>aP` | Home planning: OpenCode's own TUI attached to the home server's planning OpenCode (`ai.planning.url`), in a pane apart from local coding (D152). bud checks the server first and says why when it's unavailable; hiding the pane keeps it attached, and the server keeps running when it closes. `:BudPlan` does the same. |
 | `<leader>av` | bud's own chat with the AI, on any backend: the conversation drawn in Neovim, a prompt under it (`<CR>` sends, `<C-c>` stops the reply, `<Up>`/`<Down>` recall your earlier messages, `<C-x><C-o>` after a `/` completes the backend's commands). Pane or full screen by `ai.agent.chat_layout`; `ai.agent.chat_ui = "bud"` puts it on `<leader>ac` too. |
@@ -88,7 +88,7 @@ Markdown files open rendered: headings, lists, code blocks, tables and checkboxe
 
 ## OpenCode
 
-With `ai.backend` set to `opencode`, the chat is opencode.nvim (D150). bud keeps its own `<leader>o` keys off and maps these instead; on any other backend they say how to switch.
+The chat is opencode.nvim (D150), whatever `ai.backend` says: the IDE only talks to OpenCode (D139). bud keeps its own `<leader>o` keys off and maps these instead.
 
 | Keys | Does |
 | --- | --- |

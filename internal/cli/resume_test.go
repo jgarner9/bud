@@ -224,7 +224,7 @@ func TestResumeLaunchRunsUnderOp(t *testing.T) {
 	dir := t.TempDir()
 	envFile := filepath.Join(dir, "opencode.env")
 	tokenFile := filepath.Join(dir, "token.env")
-	if err := os.WriteFile(envFile, []byte("OPENCODE_GO_API_KEY=op://v/i/f\n"), 0o600); err != nil {
+	if err := os.WriteFile(envFile, []byte("OPENCODE_GO_API_KEY=op://vault/item/field\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(tokenFile, []byte("# the service account\nexport OP_SERVICE_ACCOUNT_TOKEN=\"ops_secret\"\n"), 0o600); err != nil {

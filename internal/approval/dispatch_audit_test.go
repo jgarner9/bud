@@ -46,23 +46,24 @@ func TestDispatchRecordsEachOutcome(t *testing.T) {
 	}
 	for _, tt := range []struct {
 		name    string
+		wait    time.Duration // 0 waits as long as the store allows
 		review  Review
 		execute func(context.Context, Invocation) error
 		want    string
 	}{
-		{"approved", allow, func(context.Context, Invocation) error { return nil }, "approved"},
-		{"approved then the tool failed", allow, func(context.Context, Invocation) error { return errors.New("boom") }, "approved_failed"},
-		{"denied", func(_ context.Context, p Prompt) (Reply, error) {
+		{"approved", 0, allow, func(context.Context, Invocation) error { return nil }, "approved"},
+		{"approved then the tool failed", 0, allow, func(context.Context, Invocation) error { return errors.New("boom") }, "approved_failed"},
+		{"denied", 0, func(_ context.Context, p Prompt) (Reply, error) {
 			return Reply{ID: p.ID, Scope: scope, Choice: DenyOnce}, nil
 		}, nil, "denied"},
-		{"declined", func(_ context.Context, p Prompt) (Reply, error) {
+		{"declined", 0, func(_ context.Context, p Prompt) (Reply, error) {
 			return Reply{ID: p.ID, Scope: scope, Choice: DenyOnce, Answered: true}, nil
 		}, nil, "declined"},
-		{"expired", func(ctx context.Context, _ Prompt) (Reply, error) {
+		{"expired", 50 * time.Millisecond, func(ctx context.Context, _ Prompt) (Reply, error) {
 			<-ctx.Done()
 			return Reply{}, ctx.Err()
 		}, nil, "expired"},
-		{"review failed", func(context.Context, Prompt) (Reply, error) { return Reply{}, errors.New("no signal") }, nil, "failed"},
+		{"review failed", 0, func(context.Context, Prompt) (Reply, error) { return Reply{}, errors.New("no signal") }, nil, "failed"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			store, path := auditedStore(t)
@@ -70,7 +71,11 @@ func TestDispatchRecordsEachOutcome(t *testing.T) {
 			if exec == nil {
 				exec = unexpectedExecutor(t)
 			}
-			_ = store.Dispatch(context.Background(), scope, call, time.Now().Add(50*time.Millisecond), tt.review, exec)
+			var deadline time.Time
+			if tt.wait > 0 {
+				deadline = time.Now().Add(tt.wait)
+			}
+			_ = store.Dispatch(context.Background(), scope, call, deadline, tt.review, exec)
 			got := decisions(t, path)
 			if len(got) != 2 || got[0] != "requested" || got[1] != tt.want {
 				t.Fatalf("recorded %v, want [requested %s]", got, tt.want)

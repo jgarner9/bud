@@ -13,10 +13,10 @@
 #
 # The orchestrator's model key and tool secrets (OPENCODE_GO_API_KEY, the
 # GitHub token) are op:// references in opencode.env, which bud sync writes.
-# launch runs opencode under op run with that file, through the service
-# account whose token --op-token-file names, so the values reach only
-# opencode: not this unit, the tmux server or a file. The token itself is
-# dropped before opencode starts, so its shell commands can't read the vault.
+# launch resolves them with op read through the service account whose token
+# --op-token-file names, so the values reach only opencode: not this unit,
+# the tmux server or a file. The token is held by op read alone, for a moment,
+# so opencode's shell commands can't read the vault.
 #
 # KillMode=process keeps the tmux server this run starts alive after the
 # oneshot exits; the default would kill the orchestrator with it. PATH must

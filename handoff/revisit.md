@@ -161,4 +161,4 @@ curl -s --unix-socket /run/user/1000/bud-memory/memory.sock -H "Authorization: B
 
 ### Resumed orchestrator's Go key (JGA-411)
 
-The timer's tmux session had no `OPENCODE_GO_API_KEY`, so a resumed session failed with "OpenCode Go requires an API key". `bud resume` now starts opencode under `op run` with `opencode.env` and the service account in `op-service-account.env`. On archie after the update: reinstall the unit (`server/resume/bud-resume.service` has new flags) and `systemctl --user daemon-reload`. That service account must be able to read the Go key's item; if it can't, `bud resume status` shows op's error.
+The timer's tmux session had no `OPENCODE_GO_API_KEY`, so a resumed session failed with "OpenCode Go requires an API key". `bud resume` now resolves `opencode.env` with `op read` and the service account in `op-service-account.env`. On archie after the update: reinstall the unit (`server/resume/bud-resume.service` has new flags) and `systemctl --user daemon-reload`. That service account must be able to read the Go key's item; if it can't, `bud resume status` shows op's error.

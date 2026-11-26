@@ -80,7 +80,7 @@ func TestResumeQueueRunLaunch(t *testing.T) {
 	}
 	var gotBin string
 	var gotArgv []string
-	resumeStart = func(b string, argv []string) (func() error, func(), error) {
+	resumeStart = func(b string, argv, _ []string) (func() error, func(), error) {
 		gotBin, gotArgv = b, argv
 		return func() error { return nil }, func() { t.Error("a good launch stopped opencode") }, nil
 	}
@@ -153,10 +153,10 @@ func TestResumeLaunchRecordsAMissingOpencode(t *testing.T) {
 }
 
 func TestStartChildReportsFailures(t *testing.T) {
-	if _, _, err := startChild(filepath.Join(t.TempDir(), "missing"), []string{"missing"}); err == nil {
+	if _, _, err := startChild(filepath.Join(t.TempDir(), "missing"), []string{"missing"}, nil); err == nil {
 		t.Fatal("a missing binary started")
 	}
-	wait, _, err := startChild("/bin/sh", []string{"/bin/sh", "-c", "exit 3"})
+	wait, _, err := startChild("/bin/sh", []string{"/bin/sh", "-c", "exit 3"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestStartChildReportsFailures(t *testing.T) {
 }
 
 func TestStartChildStopKillsTheChild(t *testing.T) {
-	_, stop, err := startChild("/bin/sh", []string{"/bin/sh", "-c", "sleep 60"})
+	_, stop, err := startChild("/bin/sh", []string{"/bin/sh", "-c", "sleep 60"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestResumeLaunchStopsOpencodeWhenRecordingFails(t *testing.T) {
 	origStart := resumeStart
 	t.Cleanup(func() { resumeStart = origStart })
 	stopped := false
-	resumeStart = func(string, []string) (func() error, func(), error) {
+	resumeStart = func(string, []string, []string) (func() error, func(), error) {
 		os.Remove(path) // so MarkLaunched can't read the entry
 		return func() error { t.Error("waited on a start that wasn't recorded"); return nil }, func() { stopped = true }, nil
 	}
@@ -220,60 +220,66 @@ func TestResumeRunRejectsNegativeFlags(t *testing.T) {
 	}
 }
 
-func TestResumeLaunchRunsUnderOp(t *testing.T) {
+func TestResumeLaunchResolvesSecretsWithoutTheToken(t *testing.T) {
 	dir := t.TempDir()
 	envFile := filepath.Join(dir, "opencode.env")
 	tokenFile := filepath.Join(dir, "token.env")
-	if err := os.WriteFile(envFile, []byte("OPENCODE_GO_API_KEY=op://vault/item/field\n"), 0o600); err != nil {
+	if err := os.WriteFile(envFile, []byte("# refs\nOPENCODE_GO_API_KEY=op://vault/item/field\nPLAIN=kept\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(tokenFile, []byte("# the service account\nexport OP_SERVICE_ACCOUNT_TOKEN=\"ops_secret\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(tokenFile, []byte("export OP_SERVICE_ACCOUNT_TOKEN=\"ops_token\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	bin := filepath.Join(dir, "bin")
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, n := range []string{"op", "opencode"} {
-		if err := os.WriteFile(filepath.Join(bin, n), []byte("#!/bin/sh\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
+	// a fake op that answers read only when it holds the token
+	fakeOp := "#!/bin/sh\n[ \"$1\" = read ] && [ \"$OP_SERVICE_ACCOUNT_TOKEN\" = ops_token ] && printf resolved-key\n"
+	if err := os.WriteFile(filepath.Join(bin, "op"), []byte(fakeOp), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "opencode"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	t.Setenv("OP_SERVICE_ACCOUNT_TOKEN", "inherited")
 	path := filepath.Join(dir, "entry.json")
 	if err := os.WriteFile(path, []byte(`{"version":1,"queued_at":"2026-11-24T01:00:00Z","dir":"`+dir+`","prompt":"go"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	origExec := resumeExec
-	t.Cleanup(func() { resumeExec = origExec })
+	origStart := resumeStart
+	t.Cleanup(func() { resumeStart = origStart })
 	var gotArgv, gotEnv []string
-	resumeExec = func(_ string, argv, envv []string) error {
+	resumeStart = func(_ string, argv, envv []string) (func() error, func(), error) {
 		gotArgv, gotEnv = argv, envv
-		return nil
+		return func() error { return nil }, func() {}, nil
 	}
+	wd, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(wd) })
 	sec := resumeSecrets{envFiles: []string{envFile}, tokenFile: tokenFile}
 	if err := resumeLaunch([]string{path}, "opencode", sec); err != nil {
 		t.Fatal(err)
 	}
-	if len(gotArgv) < 8 || gotArgv[1] != "run" || gotArgv[3] != "--env-file="+envFile || gotArgv[len(gotArgv)-1] != path {
-		t.Fatalf("argv %q", gotArgv)
+	if !slices.Contains(gotEnv, "OPENCODE_GO_API_KEY=resolved-key") || !slices.Contains(gotEnv, "PLAIN=kept") {
+		t.Errorf("opencode's environment lacks the secrets")
 	}
-	// the second launch carries no env files, so it starts opencode instead of looping
-	if slices.Contains(gotArgv, "--op-env-file") {
-		t.Errorf("the inner launch repeats --op-env-file: %q", gotArgv)
+	for _, kv := range gotEnv {
+		if strings.HasPrefix(kv, "OP_SERVICE_ACCOUNT_TOKEN=") {
+			t.Errorf("opencode got the service account token")
+		}
 	}
-	if !slices.Contains(gotEnv, "OP_SERVICE_ACCOUNT_TOKEN=ops_secret") {
-		t.Error("op run didn't get the service account token")
-	}
-	if strings.Contains(strings.Join(gotArgv, " "), "ops_secret") {
-		t.Error("the token is in the argument list")
+	if strings.Contains(strings.Join(gotArgv, " "), "resolved-key") {
+		t.Error("a secret is in opencode's arguments")
 	}
 }
 
-func TestResumeUnderOpNeedsEveryFile(t *testing.T) {
+func TestResumeSecretsNeedOpAndAnEnvFile(t *testing.T) {
+	if err := (resumeSecrets{tokenFile: "t"}).validate(); err == nil {
+		t.Error("a token file with no env file was accepted")
+	}
 	t.Setenv("PATH", t.TempDir())
-	err := resumeUnderOp("e.json", "opencode", resumeSecrets{envFiles: []string{"/no/such/file"}})
-	if err == nil || !strings.Contains(err.Error(), "op") {
+	if _, err := (resumeSecrets{envFiles: []string{"/no/such/file"}}).resolve(); err == nil || !strings.Contains(err.Error(), "op") {
 		t.Fatalf("without op: %v", err)
 	}
 	if _, err := readEnvValue(filepath.Join(t.TempDir(), "none"), "X"); err == nil {

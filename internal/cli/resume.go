@@ -28,7 +28,6 @@ var (
 	resumeNow             = time.Now
 	resumeTmux            = func(path string) resume.Tmux { return resume.ExecTmux{Path: path} }
 	resumeStart           = startChild
-	resumeExec            = syscall.Exec
 	resumeQueue           = func() (resume.Queue, error) {
 		p, err := paths.Resolve()
 		if err != nil {
@@ -164,6 +163,16 @@ type resumeSecrets struct {
 	tokenFile string
 }
 
+// validate refuses a token file with nothing for it to open: it would be
+// ignored, which reads as working
+func (s resumeSecrets) validate() error {
+	if s.tokenFile != "" && len(s.envFiles) == 0 {
+		return usageErrorf("--op-token-file needs at least one --op-env-file")
+	}
+
+	return nil
+}
+
 // flags are the launch flags that pass these on
 func (s resumeSecrets) flags() []string {
 	var out []string
@@ -179,6 +188,9 @@ func (s resumeSecrets) flags() []string {
 func resumeRunRun(g *Globals, args []string, tmux, opencode string, minAge time.Duration, maxPerDay int, sec resumeSecrets) error {
 	if len(args) > 0 {
 		return usageErrorf("resume run takes no arguments")
+	}
+	if err := sec.validate(); err != nil {
+		return err
 	}
 	if maxPerDay < 0 {
 		return usageErrorf("--max-per-day must be 0 or more")
@@ -211,6 +223,9 @@ func resumeLaunch(args []string, opencode string, sec resumeSecrets) error {
 	if len(args) != 1 {
 		return usageErrorf("resume launch takes one consumed entry file")
 	}
+	if err := sec.validate(); err != nil {
+		return err
+	}
 	e, err := resume.Read(args[0])
 	if err != nil {
 		return err
@@ -233,11 +248,9 @@ func resumeLaunch(args []string, opencode string, sec resumeSecrets) error {
 	if err != nil {
 		return fail(fmt.Errorf("find opencode: %w; fix the unit's PATH or pass --opencode to bud resume run", err))
 	}
-	if len(sec.envFiles) > 0 {
-		// run this launch again under op run, which puts the resolved
-		// secrets in its environment; the second launch has no env files,
-		// so it starts opencode, and reports, as below
-		return fail(resumeUnderOp(args[0], bin, sec))
+	envv, err := sec.resolve()
+	if err != nil {
+		return fail(err)
 	}
 	if err := os.Chdir(e.Dir); err != nil {
 		return fail(err)
@@ -245,7 +258,7 @@ func resumeLaunch(args []string, opencode string, sec resumeSecrets) error {
 	// opencode runs as a child, not through exec, so a failed start comes
 	// back here before launched_at is written: the runner can't read a
 	// start as good when opencode never ran
-	wait, stop, err := resumeStart(bin, resume.Argv(bin, e))
+	wait, stop, err := resumeStart(bin, resume.Argv(bin, e), envv)
 	if err != nil {
 		return fail(fmt.Errorf("start opencode: %w", err))
 	}
@@ -259,67 +272,98 @@ func resumeLaunch(args []string, opencode string, sec resumeSecrets) error {
 	return wait()
 }
 
-// resumeUnderOp replaces this process with op run over a second launch. It
-// returns only when the exec failed. op's own sign-in is used unless the
-// token file names a service account
-func resumeUnderOp(entry, opencode string, sec resumeSecrets) error {
+// resolve returns the environment opencode starts with: this process's, minus
+// the service account token, plus every variable the env files name. An
+// op:// reference is read with op read, a short-lived child that alone gets
+// the token, so the token is never in this long-lived process's environment
+// or in opencode's, and the values come back over a pipe. A value that isn't
+// a reference is passed as it is
+func (s resumeSecrets) resolve() ([]string, error) {
+	envv := withoutEnv(os.Environ(), "OP_SERVICE_ACCOUNT_TOKEN")
+	if len(s.envFiles) == 0 {
+		return envv, nil
+	}
+	opEnv := os.Environ()
+	if s.tokenFile != "" {
+		token, err := readEnvValue(s.tokenFile, "OP_SERVICE_ACCOUNT_TOKEN")
+		if err != nil {
+			return nil, fmt.Errorf("--op-token-file: %w", err)
+		}
+		opEnv = append(withoutEnv(opEnv, "OP_SERVICE_ACCOUNT_TOKEN"), "OP_SERVICE_ACCOUNT_TOKEN="+token)
+	}
 	op, err := exec.LookPath("op")
 	if err != nil {
-		return fmt.Errorf("find op for --op-env-file: %w; install the 1Password CLI or fix the unit's PATH", err)
+		return nil, fmt.Errorf("find op for --op-env-file: %w; install the 1Password CLI or fix the unit's PATH", err)
 	}
-	for _, f := range sec.envFiles {
-		if _, err := os.Stat(f); err != nil {
-			return fmt.Errorf("--op-env-file: %w; bud sync writes opencode.env, and server/resume/README.md says what goes in the others", err)
-		}
-	}
-	envv := os.Environ()
-	if sec.tokenFile != "" {
-		token, err := readEnvValue(sec.tokenFile, "OP_SERVICE_ACCOUNT_TOKEN")
+	for _, f := range s.envFiles {
+		pairs, err := readEnvFile(f)
 		if err != nil {
-			return fmt.Errorf("--op-token-file: %w", err)
+			return nil, fmt.Errorf("--op-env-file: %w; bud sync writes opencode.env, and server/resume/README.md says what goes in the others", err)
 		}
-		envv = append(withoutEnv(envv, "OP_SERVICE_ACCOUNT_TOKEN"), "OP_SERVICE_ACCOUNT_TOKEN="+token)
-	}
-	self, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("find this bud binary: %w", err)
-	}
-	// --no-masking leaves opencode on the pane's terminal; masking would pipe
-	// its output and the TUI couldn't start
-	argv := []string{op, "run", "--no-masking"}
-	for _, f := range sec.envFiles {
-		argv = append(argv, "--env-file="+f)
-	}
-	argv = append(argv, "--", self, "resume", "launch", "--opencode", opencode, entry)
-	if err := resumeExec(op, argv, envv); err != nil {
-		return fmt.Errorf("start op run: %w", err)
+		for _, kv := range pairs {
+			val := kv[1]
+			if strings.HasPrefix(val, "op://") {
+				cmd := exec.Command(op, "read", "--no-newline", val)
+				cmd.Env = opEnv
+				out, err := cmd.Output()
+				if err != nil {
+					return nil, fmt.Errorf("op read for %s in %s: %w%s", kv[0], f, err, stderrOf(err))
+				}
+				val = string(out)
+			}
+			envv = append(withoutEnv(envv, kv[0]), kv[0]+"="+val)
+		}
 	}
 
-	return nil
+	return envv, nil
 }
 
-// readEnvValue reads key's value from a systemd-style env file: KEY=value
-// lines, # comments, an optional export and quotes. The value is never
-// printed
-func readEnvValue(path, key string) (string, error) {
+// stderrOf is what a failed command said, for the error: op's message names
+// the item, never a value
+func stderrOf(err error) string {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+		return ": " + strings.TrimSpace(string(ee.Stderr))
+	}
+
+	return ""
+}
+
+// readEnvFile reads a systemd-style env file: KEY=value lines, # comments, an
+// optional export and quotes around the value
+func readEnvFile(path string) ([][2]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+	var out [][2]string
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
 		k, v, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(k) != key {
+		k = strings.TrimSpace(k)
+		if !ok || k == "" || strings.HasPrefix(k, "#") {
 			continue
 		}
 		v = strings.TrimSpace(v)
 		if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
 			v = v[1 : len(v)-1]
 		}
-		if v == "" {
-			break
+		out = append(out, [2]string{k, v})
+	}
+
+	return out, nil
+}
+
+// readEnvValue reads key's value from an env file; it's never printed
+func readEnvValue(path, key string) (string, error) {
+	pairs, err := readEnvFile(path)
+	if err != nil {
+		return "", err
+	}
+	for _, kv := range pairs {
+		if kv[0] == key && kv[1] != "" {
+			return kv[1], nil
 		}
-		return v, nil
 	}
 
 	return "", fmt.Errorf("%s doesn't set %s", path, key)
@@ -339,13 +383,13 @@ func withoutEnv(envv []string, key string) []string {
 // startChild starts argv on this terminal and returns a wait that forwards
 // the signals that stop a tmux pane and returns how the child exited, and a
 // stop that kills and reaps the child instead
-func startChild(bin string, argv []string) (wait func() error, stop func(), err error) {
+func startChild(bin string, argv, envv []string) (wait func() error, stop func(), err error) {
 	cmd := exec.Command(bin, argv[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	// the service account token was for op run alone: the orchestrator, and
-	// every command it runs, gets the resolved secrets but never the token
-	// that reads the vault
-	cmd.Env = withoutEnv(os.Environ(), "OP_SERVICE_ACCOUNT_TOKEN")
+	// resolve already left out the service account token: the orchestrator,
+	// and every command it runs, gets the secrets but never the token that
+	// reads the vault
+	cmd.Env = envv
 	sigs := make(chan os.Signal, 4)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	if err := cmd.Start(); err != nil {

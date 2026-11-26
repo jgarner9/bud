@@ -14,7 +14,7 @@ On the home server, as the user who will run the orchestrator:
 - `tmux`, and `opencode` at the pinned version, on the unit's `PATH` (edit `Environment=PATH=` in the unit if `opencode` lives somewhere else).
 - A bud checkout the orchestrator works in, with `git` able to push to it and `gh` signed in.
 - `bud sync` done, so OpenCode has the profile's config, the `/handoff` command and the unattended-deny plugin.
-- The model key. `opencode.env` (`~/.local/state/bud/opencode.env`, written by `bud sync`) holds the registry's `op://` references, `OPENCODE_GO_API_KEY` among them, and `~/.config/bud-server/op-service-account.env` holds `OP_SERVICE_ACCOUNT_TOKEN` for a service account that can read them. The unit passes both to `bud resume run`, which starts opencode under `op run`. `opencode auth list` shows only logins made with `opencode auth login`; a Go key that comes from `op run` doesn't appear there. Without them OpenCode stops at once with "OpenCode Go requires an API key".
+- The model key. `opencode.env` (`~/.local/state/bud/opencode.env`, written by `bud sync`) holds the registry's `op://` references, `OPENCODE_GO_API_KEY` among them, and `~/.config/bud-server/op-service-account.env` holds `OP_SERVICE_ACCOUNT_TOKEN` for a service account that can read them. The unit passes both to `bud resume run`, whose `launch` resolves the references with `op read` and starts opencode with the values. `opencode auth list` shows only logins made with `opencode auth login`; a Go key that comes from 1Password doesn't appear there. Without them OpenCode stops at once with "OpenCode Go requires an API key".
 - Lingering on (`loginctl enable-linger`), so user units run without a login.
 
 ## Using it

@@ -1,5 +1,5 @@
 -- A terminal along the bottom that <leader>t shows and hides (JGA-110): under
--- the editor and Claude Code's pane, right of the explorer (arrange). jk
+-- the editor and the AI pane, right of the explorer (arrange). jk
 -- goes to Normal mode (bud.escape), where <leader>t hides it and <leader>w
 -- moves to another window. Hiding keeps the shell running, so the next press
 -- brings back the same session; it's only replaced once its shell exits.
@@ -29,7 +29,7 @@ local function plain(w)
 end
 
 -- arrange lays out the current tab around the terminal: side panes (windows
--- marked vim.w.bud_side, Claude Code's pane) beside the editor, the terminal
+-- marked vim.w.bud_side, the AI pane) beside the editor, the terminal
 -- under both, and the explorer the full height on the left. Nothing changes
 -- when the terminal isn't open in this tab
 function M.arrange()

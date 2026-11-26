@@ -1,6 +1,5 @@
 -- Run with: nvim --clean --headless -l tests/lua/chat_key_test.lua (just lua-test)
--- <leader>ac opens opencode.nvim (D150) and starts no ACP session, whatever
--- config.json says about ai.backend (D139)
+-- <leader>ac opens opencode.nvim (D150) and starts no ACP session
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
 
@@ -13,9 +12,6 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp, "p")
 require("bud.config").file = tmp .. "/config.json"
-local function backend(name)
-  vim.fn.writefile({ vim.json.encode({ ai = { backend = name } }) }, tmp .. "/config.json")
-end
 
 local term = require("bud.ai.term")
 -- nvim stands in for the opencode executable
@@ -37,11 +33,6 @@ end
 
 term.chat_key()
 eq({ opened, toggled, sessions }, { 1, 0, 0 }, "opens opencode.nvim only")
-
--- a stale ai.backend in config.json changes nothing
-backend("claude")
-term.chat_key()
-eq({ opened, toggled, sessions }, { 2, 0, 0 }, "ai.backend is not read")
 
 term.toggle, agent.session = toggle, session
 print("ok")

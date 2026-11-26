@@ -13,9 +13,6 @@ end
 local tmp = vim.fn.tempname()
 vim.fn.mkdir(tmp, "p")
 require("bud.config").file = tmp .. "/config.json"
-local function backend(name)
-  vim.fn.writefile({ vim.json.encode({ ai = { backend = name } }) }, tmp .. "/config.json")
-end
 
 local ran = {}
 vim.api.nvim_create_user_command("Opencode", function(o)
@@ -54,13 +51,6 @@ eq(ran, { "2,3 add_visual_selection" }, "share passes the lines as a range")
 ran, notes = {}, {}
 eq(oc.run(), true, "a bare run toggles")
 eq(ran, { "" }, "a bare run is :Opencode with no argument")
-
--- a stale ai.backend in config.json changes nothing (D139)
-backend("claude")
-ran, notes = {}, {}
-press("<leader>ad")
-eq(ran, { "diff open" }, "ai.backend is not read")
-eq(notes, {}, "and says nothing")
 
 oc.executable = tmp .. "/no-such-opencode"
 ran, notes = {}, {}

@@ -1,7 +1,7 @@
 -- Filing an issue from the editor (JGA-125): <leader>ai for this project,
 -- <leader>aB for bud itself. A float takes the report, bud attaches where you
 -- were (the file and lines, diagnostics there, recent messages, versions), and
--- a session of its own runs bud-ide's file-issue skill (JGA-124, D77, D142) in two
+-- a session of its own runs the file-issue skill (JGA-124, D77; synced content) in two
 -- rounds: it proposes issues as a bud-issues block, you review them, and only
 -- on y does it file them in Linear and answer with a bud-filed block. Where
 -- they go comes from bud issue target (JGA-123).
@@ -36,12 +36,6 @@ function M.bud(args)
     return nil, vim.trim(res.stderr ~= "" and res.stderr or res.stdout)
   end
   return res.stdout
-end
-
--- skill_installed says whether the bud-ide plugin, whose file-issue skill this
--- runs, can be handed to the session: it ships inside bud (D142)
-function M.skill_installed()
-  return require("bud.ai.claude").plugin_dir() ~= nil
 end
 
 -- linear_tool splits a Linear MCP tool's name into whether it only reads
@@ -139,7 +133,7 @@ function M.prompt(report, target, ctx)
     return "> " .. l
   end, vim.split(report, "\n", { plain = true }))
   return table.concat({
-    "Use the bud-ide:file-issue skill. This is round 1: propose only, don't file anything yet.",
+    "Use the file-issue skill. This is round 1: propose only, don't file anything yet.",
     "",
     ("Target: team %q%s."):format(
       target.team,
@@ -536,13 +530,6 @@ end
 -- open takes a report for this project (kind "project") or bud ("bud")
 function M.open(kind)
   kind = kind or "project"
-  if not M.skill_installed() then
-    vim.notify(
-      "bud: couldn't unpack the bud-ide plugin (its file-issue skill): is the bud binary on PATH?",
-      vim.log.levels.WARN
-    )
-    return
-  end
   -- read before the float takes the cursor
   local ctx = M.context()
   vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)

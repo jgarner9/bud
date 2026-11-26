@@ -69,11 +69,6 @@ end
 -- permission prompts (D139)
 local BACKEND = "opencode"
 
--- backend is its name, kept as a stub for bud.ai.claude until it goes (JGA-402)
-M.backend = function()
-  return BACKEND
-end
-
 -- Each project's ACP session id is saved, so the next start reattaches
 -- with session/load and the conversation carries on (D139).
 
@@ -790,9 +785,6 @@ function M.autostart()
   return cfg().get("ai.agent.autostart", true) ~= false
 end
 
--- setup starts the agent for how bud was opened (the 4.2 table): a project
--- dir, or files from their root, and nothing for bare bud; it adds the
--- status line and the idle reap
 local idle_timer
 -- options lists the session's settings OpenCode offers (ACP config options)
 function M.options(root)
@@ -909,7 +901,46 @@ function M.command_line(args)
   vim.notify(M.describe())
 end
 
+-- opened starts the agent for a project opened from inside bud (the
+-- dashboard, <leader>p), unless ai.agent.autostart is off
+function M.opened(root)
+  if M.autostart() then
+    M.session(root)
+  end
+end
+
+-- setup runs from VimEnter on vim.schedule, after the first screen (D35). It
+-- adds the AI keys and commands, the status line and the idle reap, and starts
+-- the agent for how bud was opened (the 4.2 table): a project dir, or files
+-- from their root, and nothing for bare bud
 function M.setup()
+  vim.keymap.set("n", "<leader>ch", function()
+    require("bud.ai.chat").toggle()
+  end, { desc = "Chat (OpenCode)" })
+  -- chat is OpenCode's TUI (D139), whose /sessions picks an earlier chat
+  vim.api.nvim_create_user_command("BudChat", function()
+    require("bud.ai.chat").open()
+  end, { desc = "Chat with OpenCode; its /sessions picks an earlier chat" })
+  vim.keymap.set("n", "<leader>ac", function()
+    require("bud.ai.term").chat_key()
+  end, { desc = "OpenCode (its own TUI)" })
+  vim.keymap.set("n", "<leader>aF", function()
+    require("bud.ai.term").full()
+  end, { desc = "AI chat full screen, or back" })
+  vim.keymap.set("n", "<leader>ar", function()
+    M.restart()
+  end, { desc = "Restart the AI session" })
+  vim.keymap.set({ "n", "x" }, "<leader>as", function()
+    local first, last = vim.fn.line("v"), vim.fn.line(".")
+    if vim.fn.mode() == "n" then
+      first, last = last, last
+    end
+    vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
+    require("bud.ai.opencode").share(math.min(first, last), math.max(first, last))
+  end, { desc = "Share the selection with the AI" })
+  require("bud.ai.actions").setup()
+  require("bud.ai.issue").setup()
+  require("bud.ai.view").setup()
   require("bud.statusline").add(M.statusline)
   vim.api.nvim_create_user_command("BudAgent", function(o)
     M.command_line(o.args)

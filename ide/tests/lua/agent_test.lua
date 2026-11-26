@@ -33,9 +33,6 @@ end
 eq(agent.argv(), { "opencode", "acp" }, "opencode acp")
 eq(agent.tui(proj).argv, { "opencode", proj }, "opencode on the project")
 
--- config.json's ai.backend isn't read (D139)
-vim.fn.writefile({ vim.json.encode({ ai = { backend = "claude" } }) }, tmp .. "/config.json")
-
 -- opencode isn't installed: missing, with why
 agent.command = function()
   return { "no-such-acp-agent-bud-test" }
@@ -377,7 +374,7 @@ wait(function()
   return s.status == "ready"
 end, "ready again after the reap")
 
--- bud.ai.session is bud.ai.agent, whatever ai.backend says (D139)
+-- bud.ai.session is bud.ai.agent (D139)
 local session = require("bud.ai.session")
 eq(session.module(), agent, "bud.ai.agent")
 eq(session.status(proj), agent.status(proj), "calls go to it")
@@ -420,6 +417,22 @@ assert(described:find("fake%-acp 1.0.0"), described)
 -- the status line names the agent
 vim.cmd.cd(proj)
 assert(agent.statusline():find("opencode", 1, true), agent.statusline())
+
+-- a project opened from inside bud starts its agent, unless ai.agent.autostart is off
+agent._reset()
+vim.fn.writefile({ vim.json.encode({ ai = { agent = { autostart = false } } }) }, tmp .. "/config.json")
+agent.opened(proj)
+eq(agent.get(proj), nil, "autostart off: nothing starts")
+vim.fn.writefile({ vim.json.encode({ ai = { agent = { autostart = true } } }) }, tmp .. "/config.json")
+agent.opened(proj)
+assert(agent.get(proj), "autostart on: the session starts")
+
+-- setup adds the AI commands and keys (it runs after the first screen)
+agent.setup()
+eq({ vim.fn.exists(":BudAgent"), vim.fn.exists(":BudChat") }, { 2, 2 }, "the commands")
+for _, key in ipairs({ "<leader>ch", "<leader>ac", "<leader>aF", "<leader>ar", "<leader>as" }) do
+  eq(vim.fn.maparg(key, "n") ~= "", true, key .. " is mapped")
+end
 
 agent._reset()
 vim.fn.delete(tmp, "rf")

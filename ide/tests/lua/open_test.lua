@@ -1,8 +1,6 @@
 -- Run with: nvim --clean --headless -l tests/lua/open_test.lua (just lua-test)
 
 vim.opt.rtp:prepend(vim.fn.getcwd() .. "/nvim")
--- the claude backend (D131): bud.ai.claude and Claude Code's TUI
-dofile("tests/lua/lib/claude_backend.lua")
 dofile("tests/lua/lib/nui.lua")
 
 local tmp = vim.fn.tempname()
@@ -122,7 +120,7 @@ local cli = require("bud.cli")
 cli.bin = function()
   return nil
 end
-require("bud.ai.claude").opened = function() end
+require("bud.ai.agent").opened = function() end
 local laid
 require("bud.layout").open_project = function(path)
   laid = path

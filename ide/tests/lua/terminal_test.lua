@@ -80,8 +80,8 @@ terminal.toggle()
 eq(terminal.buf_id() ~= buf, true, "a fresh shell")
 terminal.toggle()
 
--- arrange: the terminal goes under the editor and the side pane (Claude
--- Code's), right of the explorer, which keeps the full height
+-- arrange: the terminal goes under the editor and the side pane (the AI
+-- pane), right of the explorer, which keeps the full height
 vim.o.columns, vim.o.lines = 200, 50
 vim.cmd("only")
 local main = vim.api.nvim_get_current_win()

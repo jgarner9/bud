@@ -154,3 +154,24 @@ func TestConcurrentWritersNeverInterleave(t *testing.T) {
 		t.Fatalf("got %d events, want %d", len(got), writers*each)
 	}
 }
+
+func TestOpenFixesAnExistingDirsMode(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "state")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(filepath.Join(dir, "audit.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0o700 {
+		t.Fatalf("dir mode %v", fi.Mode().Perm())
+	}
+}
+
+// A read that fails partway must say so, not return a short log as whole
+func TestReadReportsAFailedRead(t *testing.T) {
+	got, err := Read(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "read the audit log") {
+		t.Fatalf("got %v, %v", got, err)
+	}
+}

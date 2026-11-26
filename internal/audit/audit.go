@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -67,14 +68,18 @@ type Log struct {
 	now  func() time.Time
 }
 
-// Open makes the log's directory (mode 0700) and sets an existing file to
-// 0600. The file itself is created by the first Write
+// Open makes the log's directory and sets it to 0700, and sets an existing
+// file to 0600. The file itself is created by the first Write
 func Open(path string) (*Log, error) {
 	if path == "" {
 		return nil, errors.New("the audit log needs a path")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("make the audit log's directory: %w", err)
+	}
+	// MkdirAll leaves an existing directory's mode alone
+	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("make the audit log's directory private (chmod 700 %s): %w", filepath.Dir(path), err)
 	}
 	if err := os.Chmod(path, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("make the audit log private (chmod 600 %s): %w", path, err)
@@ -147,8 +152,11 @@ func Read(path string) ([]Event, error) {
 				out = append(out, e)
 			}
 		}
-		if err != nil {
+		if errors.Is(err, io.EOF) {
 			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read the audit log: %w", err)
 		}
 	}
 	return out, nil

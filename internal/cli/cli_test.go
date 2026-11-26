@@ -365,11 +365,19 @@ func TestAppRunSubcommands(t *testing.T) {
 
 func TestArgChecks(t *testing.T) {
 	var usage *UsageError
-	if err := update(&Globals{}, []string{"now"}, false, false, false, ""); !errors.As(err, &usage) {
+	if err := update(&Globals{}, []string{"now"}, false, false, false, false, ""); !errors.As(err, &usage) {
 		t.Errorf("update with an argument: %v, want a UsageError", err)
 	}
-	if err := update(&Globals{}, nil, true, false, false, "beta"); !errors.As(err, &usage) {
+	if err := update(&Globals{}, nil, true, false, false, false, "beta"); !errors.As(err, &usage) {
 		t.Errorf("update --channel beta: %v, want a UsageError", err)
+	}
+	for name, args := range map[string][3]bool{"--check": {true, false, false}, "--background": {false, true, false}} {
+		if err := update(&Globals{}, nil, args[0], args[1], args[2], true, ""); !errors.As(err, &usage) {
+			t.Errorf("update --from-main %s: %v, want a UsageError", name, err)
+		}
+	}
+	if err := update(&Globals{}, nil, false, false, false, true, "nightly"); !errors.As(err, &usage) {
+		t.Errorf("update --from-main --channel: %v, want a UsageError", err)
 	}
 }
 

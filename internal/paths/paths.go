@@ -71,6 +71,9 @@ func (p *Paths) UpdateState() string { return filepath.Join(p.State, "update.jso
 // UpdateLog is where the detached background update check writes
 func (p *Paths) UpdateLog() string { return filepath.Join(p.Cache, "update.log") }
 
+// Source is bud's checkout of main that `bud update --from-main` builds from
+func (p *Paths) Source() string { return filepath.Join(p.Cache, "source") }
+
 // Chat is where bud's chat runs OpenCode (JGA-165), a dir that's no
 // project's, so its conversations are kept apart; nvim's stdpath("state")/chat
 func (p *Paths) Chat() string { return filepath.Join(p.State, "chat") }

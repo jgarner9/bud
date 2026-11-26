@@ -110,7 +110,20 @@ try:
             timeout = max(0, deadline - time.monotonic())
             if not select.select([master], [], [], timeout)[0]:
                 raise RuntimeError('missing %r: %r' % (expected, buf))
-            buf += os.read(master, 8192)
+            try:
+                chunk = os.read(master, 8192)
+            except OSError:
+                # Linux answers EIO once the child has closed its end, and
+                # the last report can be lost with it, since the probe exits
+                # as soon as it has printed it
+                chunk = b''
+            if not chunk:
+                if (rows, cols) == (50, 160):
+                    # the exit status below is the proof: the probe exits 42
+                    # only after it has seen this size
+                    break
+                raise RuntimeError('the child ended before %r: %r' % (expected, buf))
+            buf += chunk
     sys.exit(os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]))
 finally:
     os.close(master)

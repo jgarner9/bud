@@ -11,7 +11,7 @@
 | `--smtp` | `smtp.mail.me.com:587` | The SMTP server. STARTTLS is required, except to a loopback host (tests); a server that doesn't offer it is refused before the password is sent. |
 | `--trash` | `Deleted Messages` | Where cleanup moves mail when no folder has the `\Trash` special-use flag. |
 | `--record` | | Instead of serving, run one scripted read-only session (login, capabilities, `LIST`, `STATUS`, `EXAMINE`, `SEARCH`, a summary and a body fetch, logout) and write it to this file in the transcript format, with the login, every literal and every address redacted, then print whether the server has `MOVE` and `UIDPLUS` and which folder is the trash. The file must not exist yet. |
-| `--log` | `~/.local/state/bud/mail-actions.jsonl` | The action log (`paths.MailActions`), mode 0600: one JSON line per move to the trash, restore and send, naming the message by Message-ID with its sender and subject, or for a send its recipients and subject. Never a body. |
+| `--log` | `~/.local/state/bud/mail-actions.jsonl` | The action log (`paths.MailActions`), mode 0600: one JSON line per move to the trash, restore and send, naming the message by Message-ID with its sender and subject, or for a send its recipients and subject. Never a body. Each action is also written to the shared [audit log](audit.md), with only the folders and a recipient count. |
 
 ## The tools
 

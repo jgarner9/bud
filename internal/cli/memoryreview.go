@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"jgarner.dev/bud/internal/approval"
+	"jgarner.dev/bud/internal/audit"
 	"jgarner.dev/bud/internal/memory"
 	"jgarner.dev/bud/internal/memoryreview"
 	"jgarner.dev/bud/internal/paths"
@@ -83,7 +84,7 @@ func runMemoryReview(g *Globals, args []string, socket string) error {
 	svc := memory.New(socket, tok)
 	r := &memoryreview.Reviewer{
 		Records:   svc,
-		Approvals: approval.Store{Path: p.ApprovalStore()},
+		Approvals: approval.Store{Path: p.ApprovalStore(), Audit: openAudit(g, p), Source: audit.SourceMemoryReview},
 		Review:    approval.SocketReview(p.ReviewSocket(), p.ReviewSecret(), memoryreview.Scope),
 		Status:    p.MemoryReviewStatus(),
 		Logf:      func(f string, a ...any) { fmt.Fprintf(os.Stderr, f+"\n", a...) },

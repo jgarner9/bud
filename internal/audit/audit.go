@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -27,6 +28,7 @@ const (
 	SourceRouter       = "router"
 	SourceMail         = "mail"
 	SourceMemoryReview = "memory-review"
+	SourceImprove      = "improve"
 )
 
 // The kinds of event
@@ -129,6 +131,14 @@ func (l *Log) Write(e Event) error {
 		return fmt.Errorf("write the audit log: %w", err)
 	}
 	return f.Close()
+}
+
+// Record is Write for a caller whose own work has already happened or must
+// not depend on the log: a failure is logged and dropped, never returned
+func (l *Log) Record(e Event) {
+	if err := l.Write(e); err != nil {
+		log.Printf("audit: %v", err)
+	}
 }
 
 // Read returns every event in the file at path, oldest first, skipping lines

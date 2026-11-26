@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"jgarner.dev/bud/internal/approval"
+	"jgarner.dev/bud/internal/audit"
 	"jgarner.dev/bud/internal/registry"
 	"jgarner.dev/bud/internal/tailnet"
 )
@@ -44,6 +45,7 @@ const refusedCode = -32001
 type Gateway struct {
 	servers map[string]*upstream
 	audit   *Audit
+	events  *audit.Log
 	now     func() time.Time
 	appr    Approvals
 	rules   []registry.CompiledRule
@@ -63,6 +65,10 @@ type Approvals struct {
 
 // SetApprovals sets the approval wiring; call it before serving
 func (g *Gateway) SetApprovals(a Approvals) { g.appr = a }
+
+// SetEvents sets the shared audit log (Suite D140) each call is also written
+// to; nil writes none. Call it before serving
+func (g *Gateway) SetEvents(l *audit.Log) { g.events = l }
 
 // SetRules sets the registry's privacy rules (Suite D23, D112), which can
 // only raise a request's tier; call it before serving
@@ -268,6 +274,28 @@ func (g *Gateway) log(rec Record) {
 		// the call already happened; losing its record is worth a loud line
 		log.Printf("mcp-gateway: audit log: %v", err)
 	}
+	action := rec.Method
+	if rec.Tool != "" {
+		action = "mcp:" + rec.Server + "/" + rec.Tool
+	}
+	detail := map[string]any{"method": rec.Method, "status": rec.Status, "ms": rec.Millis}
+	if rec.Raised != "" {
+		detail["raised"] = rec.Raised
+	}
+	if len(rec.Args) > 0 {
+		detail["args"] = rec.Args
+	}
+	g.events.Record(audit.Event{
+		Time:     rec.Time,
+		Source:   audit.SourceGateway,
+		Kind:     audit.KindToolCall,
+		Tier:     rec.Tier,
+		Actor:    rec.Client,
+		Action:   action,
+		Target:   rec.Server,
+		Decision: rec.Decision,
+		Detail:   detail,
+	})
 }
 
 // message is the part of a JSON-RPC message the gateway reads

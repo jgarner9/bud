@@ -18,6 +18,7 @@ import (
 
 	bud "jgarner.dev/bud"
 	"jgarner.dev/bud/internal/approval"
+	"jgarner.dev/bud/internal/audit"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/content"
 	"jgarner.dev/bud/internal/doctor"
@@ -142,7 +143,7 @@ func improveRun(g *Globals, args []string, public, overlay, day string, hour int
 		Channel: func(ctx context.Context) (*content.Channel, error) {
 			return syncer.FetchChannel(ctx, s.Content.Mirror)
 		},
-		Approvals:  approval.Store{Path: p.ApprovalStore()},
+		Approvals:  approval.Store{Path: p.ApprovalStore(), Audit: openAudit(g, p), Source: audit.SourceImprove},
 		Review:     approval.SocketReview(p.ReviewSocket(), p.ReviewSecret(), improve.Scope),
 		DigestDay:  wd,
 		DigestHour: hour,

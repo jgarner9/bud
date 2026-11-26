@@ -23,7 +23,7 @@ One JSON file (D2), by default `~/.local/state/bud/mcp-gateway.json` (`paths.MCP
 | Key | What it is |
 | --- | --- |
 | `listen` | `host:port`. The host must be a loopback address or a tailnet address (100.64.0.0/10, fd7a:115c:a1e0::/48), never a wildcard or a LAN address. |
-| `audit_log` | Where the audit log goes. Empty means `~/.local/state/bud/mcp-audit.jsonl` (`paths.MCPAudit`). |
+| `audit_log` | Where the gateway's own call log goes. Empty means `~/.local/state/bud/mcp-audit.jsonl` (`paths.MCPAudit`). Every call is also written to the shared [audit log](audit.md), which will replace this file. |
 | `servers.<name>` | One upstream server. Devices reach it at `http://<listen>/<name>/mcp`. Names are lowercase letters, digits and `-`. |
 | `.url` | The upstream's Streamable HTTP endpoint. `https`, or `http` to a loopback or tailnet host. |
 | `.privacy` | The session tiers that may use it. A server outside the house (any host that isn't loopback or tailnet) may not list `P0` (D81). |

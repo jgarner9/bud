@@ -41,6 +41,12 @@ Earlier in the same run (2026-11-21 and the night after): R6b approvals at Bud-o
 
 Not set up on the home server yet: revisit item 31.
 
+## Built on 2026-11-25
+
+| Issue | What | PR | Decisions |
+| --- | --- | --- | --- |
+| | glm-5.2 removed from the registry and the coding pool: Go's model list no longer has it (`bud registry refresh`, 2026-11-24). Once revisit item 21's improve scan runs, it proposes this class of change itself | this PR | |
+
 ## The home server
 
 Fully set up and verified by Jason as of 2026-11-22 08:20 UTC: gateway, router, Hermes (both profiles), signal-cli and bud-signal, embeddings, the memory service with memory-mcp through the gateway (Hermes's own memory off), calendar, contacts, mail, and the planning OpenCode as the `bud-planning` user.

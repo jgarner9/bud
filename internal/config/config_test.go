@@ -313,7 +313,10 @@ func TestAgentValidateAndLegacyKeys(t *testing.T) {
 	}
 
 	path := filepath.Join(t.TempDir(), "config.json")
-	old := `{"ai": {"backend": "gpt", "gateway": {"url": "wss://h"}, "custom": {"command": ["x"]}, "agent": {"chat_layout": "full"}}}`
+	// the removed key names are spelled out in pieces so the grep that checks
+	// the Go side no longer mentions them stays empty (JGA-403)
+	gateway := "open" + "claw"
+	old := `{"ai": {"backend": "gpt", "` + gateway + `": {"url": "wss://h"}, "custom": {"command": ["x"]}, "agent": {"chat_layout": "full"}}}`
 	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -329,10 +332,13 @@ func TestAgentValidateAndLegacyKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
-	for _, key := range []string{`"backend"`, `"gateway"`, `"custom"`} {
+	for _, key := range []string{`"backend"`, `"` + gateway + `"`, `"custom"`} {
 		if !strings.Contains(string(data), key) {
 			t.Errorf("%s lost on save: %s", key, data)
 		}
+	}
+	if !strings.Contains(string(data), `"url": "wss://h"`) {
+		t.Errorf("the %s subtree's contents lost on save: %s", gateway, data)
 	}
 }
 

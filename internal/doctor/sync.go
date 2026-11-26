@@ -26,8 +26,7 @@ import (
 // The drift checks (build plan task 1.9, Suite D46): what bud sync left on
 // this device against its ledger, what this bud would render now, and with
 // --net whether the channel has moved on and the registry's endpoints
-// answer (--net gates only these; the ai backend check has its own rules). A device with no profile set has never been synced, so it gets
-// none of them
+// answer (--net gates only these). A device with no profile set has never been synced, so it gets none of them
 
 // swappable in tests
 var (

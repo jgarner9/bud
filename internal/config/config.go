@@ -101,13 +101,7 @@ type UI struct {
 }
 
 type AI struct {
-	// which agent bud talks to (D131): "claude" (the default for now, D140:
-	// Claude Code directly, not yet over ACP), or over ACP "openclaw" (D132),
-	// "claude", "codex", "opencode", or "custom" for ai.custom.command
-	Backend  string   `json:"backend"`
 	Agent    Agent    `json:"agent"`
-	OpenClaw OpenClaw `json:"openclaw"`
-	Custom   Custom   `json:"custom"`
 	Claude   Claude   `json:"claude"`
 	Issues   Issues   `json:"issues"`
 	Work     Work     `json:"work"`
@@ -125,7 +119,7 @@ type Planning struct {
 	PasswordFile string `json:"password_file"`
 }
 
-// Agent is how the agent shows in the editor, whatever the backend
+// Agent is how the OpenCode agent shows in the editor
 type Agent struct {
 	// how the AI chat opens (D137): "pane", the pull-out on the right, or
 	// "full", a tab of its own
@@ -138,28 +132,6 @@ type Agent struct {
 	// an agent nothing has used for this long is stopped (D49); 0 never
 	IdleMinutes int `json:"idle_minutes"`
 }
-
-// OpenClaw is the Gateway the openclaw backend reaches (D132)
-type OpenClaw struct {
-	// the Gateway's WebSocket URL, such as wss://home.tailnet.ts.net:18789;
-	// empty uses the openclaw CLI's own gateway.remote.url
-	URL string `json:"url"`
-	// a file holding the Gateway token, kept out of config.json and
-	// process listings; empty uses the CLI's own credentials
-	TokenFile string `json:"token_file"`
-	// the OpenClaw agent bud's sessions run as: each project gets the
-	// Gateway session agent:<this>:bud:<project>
-	Agent string `json:"agent"`
-}
-
-// Custom is an ACP agent bud doesn't know by name (ai.backend = "custom")
-type Custom struct {
-	// the agent's command line, such as ["gemini", "--experimental-acp"]
-	Command []string `json:"command"`
-}
-
-// Backends are the ACP agents bud knows by name (D131)
-var Backends = []string{"openclaw", "claude", "codex", "opencode", "custom"}
 
 // Work is where <leader>aw has Claude fix an issue (JGA-237)
 type Work struct {
@@ -216,7 +188,7 @@ func Defaults() Settings {
 		FormatOnSave: true,
 		Dashboard:    Dashboard{Style: "silly", Git: true, Health: true, Banners: true, Animate: true},
 		UI:           UI{Messages: true, CmdlineFloat: true, Breadcrumbs: true, Markdown: true},
-		AI: AI{Backend: "claude", Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30}, OpenClaw: OpenClaw{Agent: "main"}, Custom: Custom{Command: []string{}},
+		AI: AI{Agent: Agent{ChatLayout: "pane", ChatUI: "tui", Autostart: true, IdleMinutes: 30},
 			Claude: Claude{Autostart: true, Resume: "new", IdleMinutes: 30, Args: []string{}, Config: "home"},
 			Issues: Issues{Bud: IssueTarget{Team: "JGA", Project: "Bud IDE"}}, Work: Work{Where: "local"},
 			Planning: Planning{PasswordFile: "~/.config/bud/planning-password"}},
@@ -233,7 +205,6 @@ func (s Settings) Validate() error {
 		{"terminal", s.Terminal, Terminals},
 		{"update.channel", s.Update.Channel, []string{"stable", "nightly"}},
 		{"dashboard.style", s.Dashboard.Style, []string{"silly", "minimal"}},
-		{"ai.backend", s.AI.Backend, Backends},
 		{"ai.agent.chat_layout", s.AI.Agent.ChatLayout, []string{"pane", "full"}},
 		{"ai.agent.chat_ui", s.AI.Agent.ChatUI, []string{"tui", "bud"}},
 		{"ai.claude.resume", s.AI.Claude.Resume, []string{"continue", "new"}},
@@ -250,9 +221,6 @@ func (s Settings) Validate() error {
 		if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") || pu.Host == "" || pu.User != nil || strings.Trim(pu.Path, "/") != "" || pu.RawQuery != "" || pu.Fragment != "" || strings.HasSuffix(u, "#") || strings.HasSuffix(u, "?") {
 			return fmt.Errorf("ai.planning.url: %q isn't a server URL such as http://<tailnet IP>:8797 (no path, no password: that goes in ai.planning.password_file)", u)
 		}
-	}
-	if s.AI.Backend == "custom" && len(s.AI.Custom.Command) == 0 {
-		return fmt.Errorf("ai.backend: custom needs ai.custom.command, the agent's command line")
 	}
 
 	return nil

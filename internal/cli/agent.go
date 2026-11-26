@@ -14,22 +14,20 @@ import (
 	"syscall"
 
 	backend "jgarner.dev/bud/internal/agent"
-	"jgarner.dev/bud/internal/claude"
 	"jgarner.dev/bud/internal/config"
 	"jgarner.dev/bud/internal/paths"
-	"jgarner.dev/bud/internal/plugin"
 )
 
 func init() {
 	RegisterCommand(Agent())
 }
 
-// Agent opens Claude Code's own TUI in a project from the shell, outside
-// Neovim, on the same conversation the editor's session uses (BASE.md 4.2)
+// Agent opens OpenCode's own TUI in a project from the shell, outside Neovim
+// (Suite D139)
 func Agent() *Command {
 	return &Command{
 		Name:  "agent",
-		Usage: "Opens the AI backend's own TUI in a project, outside the editor: agent [path] (default: the current dir)",
+		Usage: "Opens OpenCode's own TUI in a project, outside the editor: agent [path] (default: the current dir)",
 		Run:   agent,
 	}
 }
@@ -42,26 +40,20 @@ var execClaude = func(dir string, argv, env []string) error {
 	return syscall.Exec(argv[0], argv, env)
 }
 
-// agentEnv is the environment Claude Code's TUI gets: this one, with
-// BUD_BIN pointing at this bud, as nvim's sessions have it, so bud-ide's
-// SessionStart hook knows the session is bud's and adds its notes on
-// working inside bud (D77)
-// execBackendTUI replaces bud with the configured backend's own TUI on the
-// session key (OpenClaw) or in dir (the others)
-func execBackendTUI(g *Globals, s config.Settings, key, dir string) error {
-	argv, extra, err := backend.TUI(s, key, dir)
-	if err != nil {
-		return err
-	}
+// execOpenCodeTUI replaces bud with OpenCode's own TUI in dir
+func execOpenCodeTUI(g *Globals, dir string) error {
+	argv := backend.TUI(dir)
 	bin, err := exec.LookPath(argv[0])
 	if err != nil {
 		return fmt.Errorf("%s isn't installed: run bud ai setup", argv[0])
 	}
 	argv[0] = bin
 	g.Logf("running %q in %s", argv, dir)
-	return execClaude(dir, argv, append(agentEnv(), extra...))
+	return execClaude(dir, argv, agentEnv())
 }
 
+// agentEnv is this environment with BUD_BIN pointing at this bud, as nvim's
+// sessions have it
 func agentEnv() []string {
 	env := os.Environ()
 	self, err := os.Executable()
@@ -81,70 +73,33 @@ func agent(g *Globals, args []string) error {
 	if err != nil {
 		return err
 	}
-	s := machineSettings()
-	if s.AI.Backend == "opencode" {
-		p, err := paths.Resolve()
+	p, err := paths.Resolve()
+	if err != nil {
+		return err
+	}
+	file := p.OpenCodeEnv()
+	if _, err := os.Stat(file); err == nil {
+		op, err := exec.LookPath("op")
 		if err != nil {
-			return err
+			return errors.New("op isn't installed: install the 1Password CLI to launch OpenCode with synced secrets")
 		}
-		file := p.OpenCodeEnv()
-		if _, err := os.Stat(file); err == nil {
-			op, err := exec.LookPath("op")
-			if err != nil {
-				return errors.New("op isn't installed: install the 1Password CLI to launch OpenCode with synced secrets")
-			}
-			bin, err := exec.LookPath("opencode")
-			if err != nil {
-				return errors.New("opencode isn't installed: run bud ai setup")
-			}
-			// A running shared server would keep its original environment.
-			// op needs its service token, but OpenCode only needs the resolved values.
-			child := []string{bin, "--standalone", ws.Root}
-			if isTerminal(os.Stdin) && isTerminal(os.Stdout) && isTerminal(os.Stderr) {
-				child = agentPTY(child)
-			}
-			argv := append([]string{op, "run", "--env-file=" + file, "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN"}, child...)
-			g.Logf("running %q in %s", argv, ws.Root)
-			return execClaude(ws.Root, argv, agentEnv())
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("checking the synced OpenCode environment: %w", err)
+		bin, err := exec.LookPath("opencode")
+		if err != nil {
+			return errors.New("opencode isn't installed: run bud ai setup")
 		}
-	}
-	if s.AI.Backend != "claude" {
-		// the backend's own TUI (D131); OpenClaw's on the session the
-		// editor saved for the project (D139)
-		root := ws.Root
-		if real, err := filepath.EvalSymlinks(root); err == nil {
-			root = real
+		// A running shared server would keep its original environment.
+		// op needs its service token, but OpenCode only needs the resolved values.
+		child := []string{bin, "--standalone", ws.Root}
+		if isTerminal(os.Stdin) && isTerminal(os.Stdout) && isTerminal(os.Stderr) {
+			child = agentPTY(child)
 		}
-		key := ""
-		if p, err := paths.Resolve(); err == nil {
-			if id := backend.SavedSession(p.State, root, s.AI.Backend); id != "" {
-				key = backend.BridgeKey(id, s.AI.OpenClaw.Agent)
-			}
-		}
-		if key == "" && s.AI.Backend == "openclaw" {
-			fmt.Fprintln(os.Stderr, "bud: this project has no OpenClaw session yet (opening it in bud starts one), so this is OpenClaw's main session")
-		}
-		return execBackendTUI(g, s, key, ws.Root)
+		argv := append([]string{op, "run", "--env-file=" + file, "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN"}, child...)
+		g.Logf("running %q in %s", argv, ws.Root)
+		return execClaude(ws.Root, argv, agentEnv())
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("checking the synced OpenCode environment: %w", err)
 	}
-	bin := claude.Find()
-	if bin == "" {
-		return errors.New("Claude Code isn't installed: run bud claude setup")
-	}
-
-	// bud agent is a session the IDE's own (D142), so it gets the plugin
-	flags, err := plugin.Args()
-	if err != nil {
-		return err
-	}
-	argv, err := tuiArgv(s, bin, append(flags, resumeFlags(s, ws.Root)...))
-	if err != nil {
-		return err
-	}
-	g.Logf("running %q in %s", argv, ws.Root)
-
-	return execClaude(ws.Root, argv, agentEnv())
+	return execOpenCodeTUI(g, ws.Root)
 }
 
 // agentPTY runs inside op run, whose output pipes still mask resolved secrets.

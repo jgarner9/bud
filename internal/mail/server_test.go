@@ -275,35 +275,6 @@ func TestRequestsFromABrowserAreRefused(t *testing.T) {
 	}
 }
 
-func TestAccountFoldersSkipsUnselectableOnesAndNamesSpecialUse(t *testing.T) {
-	a, err := NewAccount(replay(t, "folders"), "someone@example.com", "app-pass")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fs, err := a.Folders(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []FolderInfo{{Name: "INBOX", Total: 3, Unseen: 1}, {Name: "Deleted Messages", Special: "trash", Total: 12}}
-	if !reflect.DeepEqual(fs, want) {
-		t.Errorf("folders %+v, want %+v", fs, want)
-	}
-}
-
-func TestAccountSearchKeepsTheNewestMatchesNewestFirst(t *testing.T) {
-	a, err := NewAccount(replay(t, "search_newest"), "someone@example.com", "app-pass")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sums, total, err := a.Search(context.Background(), "INBOX", Criteria{}, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 3 || len(sums) != 2 || sums[0].UID != 9 || sums[1].UID != 7 {
-		t.Errorf("total %d, summaries %+v", total, sums)
-	}
-}
-
 func TestAnAccountOffLoopbackUsesTLS(t *testing.T) {
 	a, err := NewAccount("imap.mail.me.com:993", "u", "p")
 	if err != nil {

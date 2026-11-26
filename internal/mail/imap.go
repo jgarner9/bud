@@ -1,54 +1,32 @@
-// Package mail is bud's mail client for iCloud: a small IMAP client (the
-// subset RFC 9051 needs for reading, searching and moving mail) and, later,
+// Package mail is bud's mail client for iCloud: a thin adapter over the
+// go-imap library for reading, searching and moving mail (Suite D138) and
 // sends over net/smtp (Suite D106)
 package mail
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/emersion/go-imap/v2"
+	"github.com/emersion/go-imap/v2/imapclient"
+	"github.com/emersion/go-sasl"
 )
 
 // Client is one IMAP connection. It isn't safe for concurrent use; the
 // server opens one per tool call
 type Client struct {
 	conn   net.Conn
-	r      *reader
-	w      *bufio.Writer
-	tagN   int
-	caps   map[string]bool
+	c      *imapclient.Client
 	secure bool // TLS, or plain only to loopback
 
 	selected string // the selected folder, "" when none
 	writable bool   // selected with SELECT, not EXAMINE
-}
-
-// ServerError is a NO or BAD answer to a command
-type ServerError struct {
-	Command string
-	Status  string // NO or BAD
-	Code    string
-	Text    string
-}
-
-func (e *ServerError) Error() string {
-	msg := fmt.Sprintf("the IMAP server answered %s with %s", e.Command, e.Status)
-	if e.Code != "" {
-		msg += " [" + e.Code + "]"
-	}
-	if e.Text != "" {
-		msg += ": " + e.Text
-	}
-	return msg
 }
 
 // Dial connects to addr with implicit TLS (port 993) and reads the
@@ -77,161 +55,96 @@ func Dial(ctx context.Context, addr string, conf *tls.Config) (*Client, error) {
 
 // NewClient reads the server's greeting on conn
 func NewClient(ctx context.Context, conn net.Conn) (*Client, error) {
-	c := &Client{conn: conn, r: &reader{r: bufio.NewReader(conn)}, w: bufio.NewWriter(conn)}
+	c := &Client{conn: conn, c: imapclient.New(conn, nil)}
 	if _, ok := conn.(*tls.Conn); ok {
 		c.secure = true
 	} else if a, ok := conn.RemoteAddr().(*net.TCPAddr); ok && a.IP.IsLoopback() {
 		c.secure = true
 	}
-	defer c.deadline(ctx)()
-	g, err := c.r.readResp()
+	err := c.guard(ctx, "read the IMAP greeting", func() error { return c.c.WaitGreeting() })
 	if err != nil {
-		return nil, c.wrap(ctx, "read the IMAP greeting", err)
+		var ie *imap.Error
+		if errors.As(err, &ie) {
+			return nil, fmt.Errorf("the IMAP server refused the connection: %s %s", ie.Type, ie.Text)
+		}
+		return nil, err
 	}
-	if g.tag == "*" && g.kind == "PREAUTH" {
+	if c.c.State() == imap.ConnStateAuthenticated {
 		// bud always logs in itself; a connection authenticated some other
 		// way isn't the account it was given
 		return nil, errors.New("the IMAP server sent PREAUTH, an already logged-in connection: bud only uses connections it logs in itself")
 	}
-	if g.tag != "*" || g.kind != "OK" {
-		return nil, fmt.Errorf("the IMAP server refused the connection: %s %s", g.kind, g.text)
-	}
-	c.noteCaps(g)
 	return c, nil
 }
 
 // Close drops the connection without logging out
-func (c *Client) Close() error { return c.conn.Close() }
-
-// deadline applies ctx's deadline and cancellation to the connection
-// until the returned func runs
-func (c *Client) deadline(ctx context.Context) func() {
-	dl, _ := ctx.Deadline()
-	_ = c.conn.SetDeadline(dl)
-	stop := context.AfterFunc(ctx, func() { _ = c.conn.SetDeadline(time.Unix(1, 0)) })
-	return func() { stop() }
+func (c *Client) Close() error {
+	_ = c.c.Close()
+	return nil
 }
 
-func (c *Client) wrap(ctx context.Context, doing string, err error) error {
+// guard runs one library call under ctx. The library's Wait methods take no
+// context, so a cancel or expiry kills the connection, and an error that
+// arrives after ctx fired is reported as ctx's own
+func (c *Client) guard(ctx context.Context, doing string, fn func() error) error {
+	stop := context.AfterFunc(ctx, func() { _ = c.conn.Close() })
+	err := fn()
+	stop()
+	if err == nil {
+		return nil
+	}
 	if ctx.Err() != nil {
 		err = ctx.Err()
-	} else if _, ok := ctx.Deadline(); ok && errors.Is(err, os.ErrDeadlineExceeded) {
-		// the connection's deadline is ctx's, and can fire a moment first
-		err = context.DeadlineExceeded
 	}
 	return fmt.Errorf("%s: %w", doing, err)
 }
 
-// noteCaps keeps a [CAPABILITY ...] code from a status response
-func (c *Client) noteCaps(r *resp) {
-	if rest, ok := strings.CutPrefix(r.code, "CAPABILITY "); ok {
-		c.setCaps(strings.Fields(rest))
-	}
-}
-
-func (c *Client) setCaps(list []string) {
-	c.caps = map[string]bool{}
-	for _, s := range list {
-		c.caps[strings.ToUpper(s)] = true
-	}
-}
-
-// qstr is a string argument, sent quoted, or as a literal when it can't be
-type qstr string
-
-// run sends one command and reads to its tagged answer, returning the
-// untagged responses it saw. Parts are raw protocol text, except qstr
-func (c *Client) run(ctx context.Context, parts ...any) ([]*resp, error) {
-	defer c.deadline(ctx)()
-	name := fmt.Sprint(parts[0])
-	if name == "UID" && len(parts) > 1 {
-		name += " " + fmt.Sprint(parts[1])
-	}
-	c.tagN++
-	tag := "a" + strconv.Itoa(c.tagN)
-	var untagged []*resp
-	_, _ = c.w.WriteString(tag)
-	for _, p := range parts {
-		_ = c.w.WriteByte(' ')
-		s, isQ := p.(qstr)
-		if !isQ {
-			_, _ = fmt.Fprint(c.w, p)
-			continue
-		}
-		if !needsLiteral(string(s)) {
-			_, _ = c.w.WriteString(quote(string(s)))
-			continue
-		}
-		// a synchronizing literal: wait for the server's go-ahead
-		_, _ = fmt.Fprintf(c.w, "{%d}\r\n", len(s))
-		if err := c.w.Flush(); err != nil {
-			return nil, c.wrap(ctx, "send "+name, err)
-		}
-		for {
-			r, err := c.r.readResp()
-			if err != nil {
-				return nil, c.wrap(ctx, "send "+name, err)
-			}
-			if r.tag == "+" {
-				break
-			}
-			if r.tag == tag {
-				return nil, &ServerError{Command: name, Status: r.kind, Code: r.code, Text: r.text}
-			}
-			untagged = append(untagged, r)
-		}
-		_, _ = c.w.WriteString(string(s))
-	}
-	_, _ = c.w.WriteString("\r\n")
-	if err := c.w.Flush(); err != nil {
-		return nil, c.wrap(ctx, "send "+name, err)
-	}
-	return c.finish(ctx, tag, name, untagged)
-}
-
-func (c *Client) finish(ctx context.Context, tag, name string, untagged []*resp) ([]*resp, error) {
-	for {
-		r, err := c.r.readResp()
-		if err != nil {
-			return nil, c.wrap(ctx, "read the answer to "+name, err)
-		}
-		switch {
-		case r.tag == "*":
-			if r.kind == "BYE" && name != "LOGOUT" {
-				return nil, fmt.Errorf("the IMAP server closed the connection during %s: %s", name, r.text)
-			}
-			if r.kind == "CAPABILITY" {
-				var list []string
-				for _, f := range r.fields {
-					if s, ok := str(f); ok {
-						list = append(list, s)
-					}
-				}
-				c.setCaps(list)
-			}
-			c.noteCaps(r)
-			untagged = append(untagged, r)
-		case r.tag == tag:
-			c.noteCaps(r)
-			if r.kind != "OK" {
-				return nil, &ServerError{Command: name, Status: r.kind, Code: r.code, Text: r.text}
-			}
-			return untagged, nil
-		default:
-			return nil, fmt.Errorf("the IMAP server sent %s %s during %s", r.tag, r.kind, name)
-		}
-	}
-}
-
 // Has says the server lists the capability, asking for the list once if
-// the greeting didn't carry it
+// the greeting didn't carry it. A list that can't be had counts as absent
 func (c *Client) Has(ctx context.Context, capability string) (bool, error) {
-	if c.caps == nil {
-		if _, err := c.run(ctx, "CAPABILITY"); err != nil {
-			return false, err
+	caps, err := c.caps(ctx)
+	if err != nil {
+		return false, err
+	}
+	return hasCap(caps, capability), nil
+}
+
+func (c *Client) caps(ctx context.Context) (imap.CapSet, error) {
+	var caps imap.CapSet
+	err := c.guard(ctx, "read the IMAP capabilities", func() error {
+		caps = c.c.Caps()
+		if caps == nil && ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return nil
+	})
+	return caps, err
+}
+
+func hasCap(caps imap.CapSet, name string) bool {
+	if caps.Has(imap.Cap(name)) {
+		return true
+	}
+	for k := range caps {
+		if strings.EqualFold(string(k), name) {
+			return true
 		}
 	}
-	return c.caps[strings.ToUpper(capability)], nil
+	return false
+}
+
+// Capabilities lists the server's capabilities, sorted
+func (c *Client) Capabilities(ctx context.Context) ([]string, error) {
+	caps, err := c.caps(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for k := range caps {
+		out = append(out, string(k))
+	}
+	slices.Sort(out)
+	return out, nil
 }
 
 // ErrAuth is a refused login
@@ -244,66 +157,34 @@ func (c *Client) Login(ctx context.Context, user, pass string) error {
 	if !c.secure {
 		return errors.New("refusing to log in over a plain connection: use TLS (port 993)")
 	}
-	disabled, err := c.Has(ctx, "LOGINDISABLED")
+	caps, err := c.caps(ctx)
 	if err != nil {
 		return err
 	}
-	if disabled {
-		plain, err := c.Has(ctx, "AUTH=PLAIN")
-		if err != nil {
-			return err
-		}
-		if !plain {
-			return errors.New("the IMAP server disables LOGIN and doesn't offer AUTHENTICATE PLAIN, so bud can't log in")
-		}
+	if caps == nil {
+		return errors.New("the IMAP server's capabilities couldn't be read, so bud can't tell how to log in")
 	}
-	// capabilities often grow after login: keep a list the OK carries, else
-	// ask again when one is needed
-	c.caps = nil
-	if disabled {
-		err = c.authPlain(ctx, user, pass)
-	} else {
-		_, err = c.run(ctx, "LOGIN", qstr(user), qstr(pass))
+	disabled := hasCap(caps, string(imap.CapLoginDisabled))
+	if disabled && !hasCap(caps, string(imap.AuthCap(sasl.Plain))) {
+		return errors.New("the IMAP server disables LOGIN and doesn't offer AUTHENTICATE PLAIN, so bud can't log in")
 	}
-	var se *ServerError
-	if errors.As(err, &se) && se.Status == "NO" {
+	err = c.guard(ctx, "log in", func() error {
+		if disabled {
+			return c.c.Authenticate(sasl.NewPlainClient("", user, pass))
+		}
+		return c.c.Login(user, pass).Wait()
+	})
+	var ie *imap.Error
+	if errors.As(err, &ie) && ie.Type == imap.StatusResponseTypeNo {
 		return ErrAuth
 	}
 	return err
 }
 
-func (c *Client) authPlain(ctx context.Context, user, pass string) error {
-	defer c.deadline(ctx)()
-	c.tagN++
-	tag := "a" + strconv.Itoa(c.tagN)
-	_, _ = c.w.WriteString(tag + " AUTHENTICATE PLAIN\r\n")
-	if err := c.w.Flush(); err != nil {
-		return c.wrap(ctx, "send AUTHENTICATE", err)
-	}
-	r, err := c.r.readResp()
-	if err != nil {
-		return c.wrap(ctx, "read the answer to AUTHENTICATE", err)
-	}
-	if r.tag != "+" {
-		if r.tag == tag {
-			return &ServerError{Command: "AUTHENTICATE", Status: r.kind, Code: r.code, Text: r.text}
-		}
-		return fmt.Errorf("the IMAP server sent %s %s instead of a go-ahead for AUTHENTICATE", r.tag, r.kind)
-	}
-	_, _ = c.w.WriteString(base64.StdEncoding.EncodeToString([]byte("\x00"+user+"\x00"+pass)) + "\r\n")
-	if err := c.w.Flush(); err != nil {
-		return c.wrap(ctx, "send AUTHENTICATE", err)
-	}
-	_, err = c.finish(ctx, tag, "AUTHENTICATE", nil)
-	return err
-}
-
 // Logout ends the session and closes the connection
 func (c *Client) Logout(ctx context.Context) error {
-	_, err := c.run(ctx, "LOGOUT")
-	if cerr := c.conn.Close(); err == nil {
-		err = cerr
-	}
+	err := c.guard(ctx, "log out", func() error { return c.c.Logout().Wait() })
+	_ = c.c.Close()
 	return err
 }
 
@@ -326,30 +207,23 @@ func (f Folder) HasFlag(flag string) bool {
 
 // List returns every folder, INBOX first and the rest by name
 func (c *Client) List(ctx context.Context) ([]Folder, error) {
-	rs, err := c.run(ctx, "LIST", qstr(""), qstr("*"))
+	var data []*imap.ListData
+	err := c.guard(ctx, "list the folders", func() error {
+		var err error
+		data, err = c.c.List("", "*", nil).Collect()
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
 	var out []Folder
-	for _, r := range rs {
-		if r.kind != "LIST" || len(r.fields) < 3 {
-			continue
+	for _, d := range data {
+		f := Folder{Name: d.Mailbox}
+		if d.Delim != 0 {
+			f.Delim = string(d.Delim)
 		}
-		flags, _ := r.fields[0].([]any)
-		delim, _ := str(r.fields[1])
-		raw, ok := str(r.fields[2])
-		if !ok {
-			continue
-		}
-		name, err := decodeFolder(raw)
-		if err != nil {
-			return nil, err
-		}
-		f := Folder{Name: name, Delim: delim}
-		for _, fl := range flags {
-			if s, ok := str(fl); ok {
-				f.Flags = append(f.Flags, s)
-			}
+		for _, a := range d.Attrs {
+			f.Flags = append(f.Flags, string(a))
 		}
 		out = append(out, f)
 	}
@@ -373,30 +247,21 @@ type Status struct {
 
 // Status asks for a folder's counts without selecting it
 func (c *Client) Status(ctx context.Context, folder string) (Status, error) {
-	rs, err := c.run(ctx, "STATUS", qstr(encodeFolder(folder)), "(MESSAGES UNSEEN UIDNEXT UIDVALIDITY)")
+	var d *imap.StatusData
+	err := c.guard(ctx, "ask for the status of "+folder, func() error {
+		var err error
+		d, err = c.c.Status(folder, &imap.StatusOptions{NumMessages: true, NumUnseen: true, UIDNext: true, UIDValidity: true}).Wait()
+		return err
+	})
 	if err != nil {
 		return Status{}, err
 	}
-	var st Status
-	for _, r := range rs {
-		if r.kind != "STATUS" || len(r.fields) < 2 {
-			continue
-		}
-		items, _ := r.fields[1].([]any)
-		for i := 0; i+1 < len(items); i += 2 {
-			k, _ := str(items[i])
-			n, _ := num(items[i+1])
-			switch strings.ToUpper(k) {
-			case "MESSAGES":
-				st.Messages = n
-			case "UNSEEN":
-				st.Unseen = n
-			case "UIDNEXT":
-				st.UIDNext = n
-			case "UIDVALIDITY":
-				st.UIDValidity = n
-			}
-		}
+	st := Status{UIDNext: uint32(d.UIDNext), UIDValidity: d.UIDValidity}
+	if d.NumMessages != nil {
+		st.Messages = *d.NumMessages
+	}
+	if d.NumUnseen != nil {
+		st.Unseen = *d.NumUnseen
 	}
 	return st, nil
 }
@@ -408,42 +273,31 @@ type Mailbox struct {
 
 // Examine opens a folder read-only, so nothing a read does changes it
 func (c *Client) Examine(ctx context.Context, folder string) (Mailbox, error) {
-	return c.open(ctx, "EXAMINE", folder)
+	return c.open(ctx, folder, true)
 }
 
 // Select opens a folder for changes, as Move needs
 func (c *Client) Select(ctx context.Context, folder string) (Mailbox, error) {
-	return c.open(ctx, "SELECT", folder)
+	return c.open(ctx, folder, false)
 }
 
-func (c *Client) open(ctx context.Context, cmd, folder string) (Mailbox, error) {
+func (c *Client) open(ctx context.Context, folder string, readOnly bool) (Mailbox, error) {
 	c.selected, c.writable = "", false
-	rs, err := c.run(ctx, cmd, qstr(encodeFolder(folder)))
+	var d *imap.SelectData
+	err := c.guard(ctx, "open "+folder, func() error {
+		var err error
+		d, err = c.c.Select(folder, &imap.SelectOptions{ReadOnly: readOnly}).Wait()
+		return err
+	})
 	if err != nil {
-		var se *ServerError
-		if errors.As(err, &se) && se.Status == "NO" {
+		var ie *imap.Error
+		if errors.As(err, &ie) && ie.Type == imap.StatusResponseTypeNo && ctx.Err() == nil {
 			return Mailbox{}, fmt.Errorf("there's no folder %q: list_folders shows the names (%w)", folder, err)
 		}
 		return Mailbox{}, err
 	}
-	var mb Mailbox
-	for _, r := range rs {
-		switch {
-		case r.kind == "EXISTS" && r.hasNum:
-			mb.Exists = r.num
-		case r.kind == "OK":
-			k, v, _ := strings.Cut(r.code, " ")
-			n, _ := strconv.ParseUint(v, 10, 32)
-			switch strings.ToUpper(k) {
-			case "UIDVALIDITY":
-				mb.UIDValidity = uint32(n)
-			case "UIDNEXT":
-				mb.UIDNext = uint32(n)
-			}
-		}
-	}
-	c.selected, c.writable = folder, cmd == "SELECT"
-	return mb, nil
+	c.selected, c.writable = folder, !readOnly
+	return Mailbox{Exists: d.NumMessages, UIDValidity: d.UIDValidity, UIDNext: uint32(d.UIDNext)}, nil
 }
 
 // Criteria picks messages for Search. Empty fields are left out; all set
@@ -455,73 +309,86 @@ type Criteria struct {
 	Unseen                  bool
 }
 
-// Search returns the UIDs in the selected folder that match, ascending
-func (c *Client) Search(ctx context.Context, cr Criteria) ([]uint32, error) {
-	if c.selected == "" {
-		return nil, errors.New("search needs a folder: examine one first")
-	}
-	var keys []any
-	utf8 := false
-	add := func(key, v string) error {
+// criteria checks cr and turns it into the library's, refusing text that
+// could carry a second command
+func (cr Criteria) criteria() (*imap.SearchCriteria, error) {
+	out := &imap.SearchCriteria{}
+	header := func(key, v string) error {
 		if v == "" {
 			return nil
 		}
 		if strings.ContainsAny(v, "\r\n") {
 			return fmt.Errorf("the %s search text has a line break; search for one line", strings.ToLower(key))
 		}
-		for i := 0; i < len(v); i++ {
-			if v[i] >= 0x80 {
-				utf8 = true
-			}
-		}
-		keys = append(keys, key, qstr(v))
+		out.Header = append(out.Header, imap.SearchCriteriaHeaderField{Key: key, Value: v})
 		return nil
 	}
-	for _, kv := range [][2]string{{"FROM", cr.From}, {"TO", cr.To}, {"SUBJECT", cr.Subject}, {"TEXT", cr.Text}} {
-		if err := add(kv[0], kv[1]); err != nil {
+	for _, kv := range [][2]string{{"FROM", cr.From}, {"TO", cr.To}, {"SUBJECT", cr.Subject}} {
+		if err := header(kv[0], kv[1]); err != nil {
 			return nil, err
 		}
 	}
+	if cr.Text != "" {
+		if strings.ContainsAny(cr.Text, "\r\n") {
+			return nil, fmt.Errorf("the %s search text has a line break; search for one line", "text")
+		}
+		out.Text = []string{cr.Text}
+	}
 	if cr.MessageID != "" {
-		if strings.ContainsAny(cr.MessageID, "\r\n") || needsLiteral(cr.MessageID) {
+		if strings.ContainsAny(cr.MessageID, "\r\n") || plainOnly(cr.MessageID) {
 			return nil, fmt.Errorf("%q isn't a Message-ID", cr.MessageID)
 		}
-		keys = append(keys, "HEADER", "Message-ID", qstr(cr.MessageID))
+		out.Header = append(out.Header, imap.SearchCriteriaHeaderField{Key: "Message-ID", Value: cr.MessageID})
 	}
-	if !cr.Since.IsZero() {
-		keys = append(keys, "SINCE", cr.Since.Format("2-Jan-2006"))
-	}
-	if !cr.Before.IsZero() {
-		keys = append(keys, "BEFORE", cr.Before.Format("2-Jan-2006"))
-	}
+	out.Since, out.Before = cr.Since, cr.Before
 	if cr.Unseen {
-		keys = append(keys, "UNSEEN")
+		out.NotFlag = []imap.Flag{imap.FlagSeen}
 	}
-	if len(keys) == 0 {
-		keys = append(keys, "ALL")
+	return out, nil
+}
+
+// plainOnly is true for text that isn't plain printable ASCII of a sane
+// length, which no Message-ID is
+func plainOnly(s string) bool {
+	if len(s) > 1000 {
+		return true
 	}
-	parts := []any{"UID", "SEARCH"}
-	if utf8 {
-		parts = append(parts, "CHARSET", "UTF-8")
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] >= 0x7f {
+			return true
+		}
 	}
-	rs, err := c.run(ctx, append(parts, keys...)...)
+	return false
+}
+
+// Search returns the UIDs in the selected folder that match, ascending
+func (c *Client) Search(ctx context.Context, cr Criteria) ([]uint32, error) {
+	if c.selected == "" {
+		return nil, errors.New("search needs a folder: examine one first")
+	}
+	crit, err := cr.criteria()
+	if err != nil {
+		return nil, err
+	}
+	var d *imap.SearchData
+	err = c.guard(ctx, "search "+c.selected, func() error {
+		var err error
+		d, err = c.c.UIDSearch(crit, nil).Wait()
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
 	var uids []uint32
-	for _, r := range rs {
-		if r.kind != "SEARCH" {
-			continue
-		}
-		for _, f := range r.fields {
-			if n, ok := num(f); ok {
-				uids = append(uids, n)
-			}
-		}
+	for _, u := range d.AllUIDs() {
+		uids = append(uids, uint32(u))
 	}
 	slices.Sort(uids)
 	return slices.Compact(uids), nil
 }
+
+// maxHeader caps the header bytes a summary fetches per message
+const maxHeader = 64 << 10
 
 // headerFields are the headers a summary fetches
 const headerFields = "DATE FROM TO CC SUBJECT MESSAGE-ID IN-REPLY-TO REFERENCES REPLY-TO"
@@ -541,6 +408,14 @@ func (s Summary) Seen() bool {
 	return slices.ContainsFunc(s.Flags, func(f string) bool { return strings.EqualFold(f, `\Seen`) })
 }
 
+func uidSet(uids []uint32) imap.UIDSet {
+	var set imap.UIDSet
+	for _, u := range uids {
+		set.AddNum(imap.UID(u))
+	}
+	return set
+}
+
 // FetchSummaries fetches the summaries of uids in the selected folder, in
 // the order the server sends them. UIDs that no longer exist are left out
 func (c *Client) FetchSummaries(ctx context.Context, uids []uint32) ([]Summary, error) {
@@ -550,7 +425,25 @@ func (c *Client) FetchSummaries(ctx context.Context, uids []uint32) ([]Summary, 
 	if c.selected == "" {
 		return nil, errors.New("fetch needs a folder: examine one first")
 	}
-	rs, err := c.run(ctx, "UID", "FETCH", uidSet(uids), "(UID FLAGS RFC822.SIZE INTERNALDATE BODY.PEEK[HEADER.FIELDS ("+headerFields+")])")
+	section := &imap.FetchItemBodySection{
+		Specifier:    imap.PartSpecifierHeader,
+		HeaderFields: strings.Fields(headerFields),
+		Peek:         true,
+		// the library buffers a whole literal, so ask the server to stop
+		Partial: &imap.SectionPartial{Offset: 0, Size: maxHeader},
+	}
+	var msgs []*imapclient.FetchMessageBuffer
+	err := c.guard(ctx, "fetch the summaries", func() error {
+		var err error
+		msgs, err = c.c.Fetch(uidSet(uids), &imap.FetchOptions{
+			UID:          true,
+			Flags:        true,
+			RFC822Size:   true,
+			InternalDate: true,
+			BodySection:  []*imap.FetchItemBodySection{section},
+		}).Collect()
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -559,37 +452,17 @@ func (c *Client) FetchSummaries(ctx context.Context, uids []uint32) ([]Summary, 
 		want[u] = true
 	}
 	var out []Summary
-	for _, r := range rs {
-		items := fetchItems(r)
-		if items == nil {
+	for _, m := range msgs {
+		uid := uint32(m.UID)
+		if !want[uid] {
 			continue
 		}
-		s := Summary{}
-		for k, v := range items {
-			switch {
-			case k == "UID":
-				s.UID, _ = num(v)
-			case k == "RFC822.SIZE":
-				s.Size, _ = num(v)
-			case k == "FLAGS":
-				list, _ := v.([]any)
-				for _, f := range list {
-					if fs, ok := str(f); ok {
-						s.Flags = append(s.Flags, fs)
-					}
-				}
-			case k == "INTERNALDATE":
-				d, _ := str(v)
-				s.Received, _ = time.Parse("_2-Jan-2006 15:04:05 -0700", d)
-			case strings.HasPrefix(k, "BODY[HEADER.FIELDS"):
-				h, _ := str(v)
-				s.Header = []byte(h)
-			}
+		delete(want, uid)
+		s := Summary{UID: uid, Size: uint32(m.RFC822Size), Received: m.InternalDate, Header: m.FindBodySection(section)}
+		for _, f := range m.Flags {
+			s.Flags = append(s.Flags, string(f))
 		}
-		if want[s.UID] {
-			out = append(out, s)
-			delete(want, s.UID)
-		}
+		out = append(out, s)
 	}
 	return out, nil
 }
@@ -611,49 +484,32 @@ func (c *Client) FetchBody(ctx context.Context, uid uint32, max int) (Body, erro
 	if c.selected == "" {
 		return Body{}, errors.New("fetch needs a folder: examine one first")
 	}
-	if max <= 0 || max > maxLiteral {
-		max = maxLiteral
+	if max <= 0 || max > maxFetch {
+		max = maxFetch
 	}
-	rs, err := c.run(ctx, "UID", "FETCH", uidSet([]uint32{uid}), fmt.Sprintf("(UID RFC822.SIZE BODY.PEEK[]<0.%d>)", max))
+	section := &imap.FetchItemBodySection{Peek: true, Partial: &imap.SectionPartial{Offset: 0, Size: int64(max)}}
+	var msgs []*imapclient.FetchMessageBuffer
+	err := c.guard(ctx, "fetch the message", func() error {
+		var err error
+		msgs, err = c.c.Fetch(uidSet([]uint32{uid}), &imap.FetchOptions{
+			UID:         true,
+			RFC822Size:  true,
+			BodySection: []*imap.FetchItemBodySection{section},
+		}).Collect()
+		return err
+	})
 	if err != nil {
 		return Body{}, err
 	}
-	for _, r := range rs {
-		items := fetchItems(r)
-		if n, _ := num(items["UID"]); items == nil || n != uid {
+	for _, m := range msgs {
+		if uint32(m.UID) != uid {
 			continue
 		}
-		b := Body{UID: uid}
-		b.Size, _ = num(items["RFC822.SIZE"])
-		for k, v := range items {
-			if k == "BODY[]" || strings.HasPrefix(k, "BODY[]<") {
-				s, _ := str(v)
-				b.Raw = []byte(s)
-			}
-		}
+		b := Body{UID: uid, Size: uint32(m.RFC822Size), Raw: m.FindBodySection(section)}
 		b.Truncated = int(b.Size) > len(b.Raw)
 		return b, nil
 	}
 	return Body{}, ErrNoMessage
-}
-
-// fetchItems turns a FETCH response's list into item name to value, with
-// names upper-cased. It's nil for any other response
-func fetchItems(r *resp) map[string]any {
-	if r.kind != "FETCH" || len(r.fields) != 1 {
-		return nil
-	}
-	list, ok := r.fields[0].([]any)
-	if !ok {
-		return nil
-	}
-	items := map[string]any{}
-	for i := 0; i+1 < len(list); i += 2 {
-		if k, ok := list[i].(atom); ok {
-			items[strings.ToUpper(string(k))] = list[i+1]
-		}
-	}
-	return items
 }
 
 // Move moves uids from the selected folder to dest, with MOVE when the
@@ -670,52 +526,28 @@ func (c *Client) Move(ctx context.Context, uids []uint32, dest string) error {
 		return errors.New("move needs a folder opened with Select")
 	}
 	set := uidSet(uids)
-	box := qstr(encodeFolder(dest))
-	move, err := c.Has(ctx, "MOVE")
+	caps, err := c.caps(ctx)
 	if err != nil {
 		return err
 	}
-	if move {
-		_, err := c.run(ctx, "UID", "MOVE", set, box)
-		return err
-	}
-	plus, err := c.Has(ctx, "UIDPLUS")
-	if err != nil {
-		return err
-	}
-	if !plus {
+	switch {
+	case hasCap(caps, string(imap.CapMove)):
+		return c.guard(ctx, "move the messages", func() error {
+			_, err := c.c.Move(set, dest).Wait()
+			return err
+		})
+	case hasCap(caps, string(imap.CapUIDPlus)):
+		return c.guard(ctx, "move the messages", func() error {
+			if _, err := c.c.Copy(set, dest).Wait(); err != nil {
+				return err
+			}
+			deleted := &imap.StoreFlags{Op: imap.StoreFlagsAdd, Flags: []imap.Flag{imap.FlagDeleted}, Silent: true}
+			if err := c.c.Store(set, deleted, nil).Close(); err != nil {
+				return err
+			}
+			return c.c.UIDExpunge(set).Close()
+		})
+	default:
 		return errors.New("the IMAP server has neither MOVE nor UIDPLUS, so bud won't move mail: expunging without UIDPLUS could remove other messages")
 	}
-	if _, err := c.run(ctx, "UID", "COPY", set, box); err != nil {
-		return err
-	}
-	if _, err := c.run(ctx, "UID", "STORE", set, "+FLAGS.SILENT", `(\Deleted)`); err != nil {
-		return err
-	}
-	_, err = c.run(ctx, "UID", "EXPUNGE", set)
-	return err
-}
-
-// uidSet writes uids as an IMAP sequence set, sorted, with runs as ranges
-func uidSet(uids []uint32) string {
-	u := slices.Clone(uids)
-	slices.Sort(u)
-	u = slices.Compact(u)
-	var b strings.Builder
-	for i := 0; i < len(u); {
-		j := i
-		for j+1 < len(u) && u[j+1] == u[j]+1 {
-			j++
-		}
-		if b.Len() > 0 {
-			b.WriteByte(',')
-		}
-		b.WriteString(strconv.FormatUint(uint64(u[i]), 10))
-		if j > i {
-			b.WriteByte(':')
-			b.WriteString(strconv.FormatUint(uint64(u[j]), 10))
-		}
-		i = j + 1
-	}
-	return b.String()
 }

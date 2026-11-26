@@ -71,7 +71,7 @@ bud                 # the dashboard
 bud ~/code/thing    # open a project; this registers it too
 ```
 
-Leader is Space: press it and wait, and a panel shows what follows. `<leader>ac` opens Claude Code beside your code, `<leader>,` is settings, and `<leader>qq` quits. [Keys](keys.md) has the rest and [Claude Code in bud](claude-code.md) explains the AI side.
+Leader is Space: press it and wait, and a panel shows what follows. `<leader>ac` opens OpenCode's chat beside your code, `<leader>,` is settings, and `<leader>qq` quits. [Keys](keys.md) has the rest.
 
 Shell completion, if you want it: add `eval "$(bud completion zsh)"` (or `bash`, `fish`) to your shell's rc file.
 
@@ -84,12 +84,12 @@ bud bootstrap user@host            # this version of bud, minimal profile
 bud bootstrap --config user@host   # and copy your config.json across first
 ```
 
-For a second desktop, run step 1 there, then set up Claude Code's own config (`~/.claude`: MCP servers, settings and rules) the same way you did here, by copying it across or with whatever tool you keep it in. Your projects and editor settings (`config.json`) are per machine.
+For a second desktop, run step 1 there, then run step 3 for OpenCode. Your projects and editor settings (`config.json`) are per machine.
 
 ## Keeping it current, and taking it out
 
 - **Updates** install themselves in the background when a stable release is out (`update.auto`). `bud update` does it by hand: the new binary, the config, plugins, language tools, then `bud doctor`. If a check that passed before fails afterwards, it rolls back.
-- **`bud uninstall`** lists everything bud put on the machine and removes it after asking. Claude Code itself stays, since it's yours; [Troubleshooting](troubleshooting.md#starting-over) says how to remove those too.
+- **`bud uninstall`** lists everything bud put on the machine and removes it after asking. OpenCode itself stays installed.
 
 ## Making it yours
 

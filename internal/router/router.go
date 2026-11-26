@@ -34,6 +34,13 @@ const maxBody = 10 << 20
 // RolePrefix starts a model id that names a role instead of a model
 const RolePrefix = "bud/"
 
+// P0Prefix starts the paths of the router's always-P0 endpoint (Suite D135):
+// POST /p0/v1/chat/completions and the others answer as a P0 request whatever
+// X-Bud-Privacy says, so a delegated Hermes subagent, which carries no id of
+// its parent conversation, can't send what the parent wrote into its task
+// prompt to the cloud
+const P0Prefix = "/p0"
+
 // RaisedHeader names the privacy rule that raised a request's tier, so a
 // client can say why a request stayed local
 const RaisedHeader = registry.RaisedHeader
@@ -304,6 +311,12 @@ type resolved struct {
 
 func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tier, valid := registry.RequestTier(r.Header.Get(registry.PrivacyHeader))
+	// the always-P0 endpoint serves the same paths under P0Prefix and takes
+	// no tier from the client, so a bad header can't lower it or fail it
+	if rest, ok := strings.CutPrefix(r.URL.Path, P0Prefix+"/"); ok {
+		r.URL.Path, r.URL.RawPath = "/"+rest, ""
+		tier, valid = "P0", true
+	}
 	if !valid {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", fmt.Sprintf("%s is %q; use P0, P1 or P2", registry.PrivacyHeader, tier))
 		return

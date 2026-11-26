@@ -69,6 +69,7 @@ Not set up on the home server yet: revisit item 31.
 | JGA-406 | Working an issue is local only: `ai.work.where` is gone from `internal/config` and `docs/config.md`, and `bud.ai.work` loses the cloud path (`claude --cloud`, `start_cloud`, `cloud_prompt`, the `claude -p` Linear helper, the saved `cloud-runs.json`, the origin watcher and the `claude/` branch rule) with its tests. The work and issue prompts, notifications and command descriptions say OpenCode and point at `AGENTS.md`; `:BudIssue work ID` takes no `local`/`cloud` argument. The Linear policies in `issue.lua` and `work.lua` matched Claude's `mcp__<server>__<tool>` names, which OpenCode never sends, so they never fired; they now match OpenCode's `linear_<tool>` names (unconfirmed against a live ACP permission request). Left for JGA-407: the user-facing text in `docs/issues.md` still describes cloud work | this PR | D139 |
 | JGA-407 | The user docs and site describe OpenCode only: `docs/backends.md`, `openclaw.md`, `claude-code.md` and `claude-tui.md` and their nav lines are deleted, and `keys.md`, `issues.md` (cloud work gone), `troubleshooting.md`, `layouts.md`, `tools.md`, `languages.md`, `README.md`, `site/index.html`, the internals pages and the Linux desktop entry say OpenCode. `git grep -i -E 'claude\|openclaw\|codex'` over `docs`, `site`, `README.md` and `ide/bundles` prints nothing (worklog excepted) | this PR | D139 |
 | JGA-408 | The living docs say OpenCode only: the root `CLAUDE.md` is deleted (Jason confirmed all the D139 deletions on 2026-11-26), `AGENTS.md`, `HANDOFF.md` and the handoff files drop the Claude Code wording except history sentences, revisit item 8 is closed, BASE.md marks section 4's intro, 4.2, 4.3 and the decisions D154 supersedes, and the code comments that named Claude are reworded. The Linear policy rename in PR #143 still hasn't met a live ACP permission request (revisit item 33) | this PR | D139 |
+| JGA-390 | A delegated Hermes subagent always runs at P0 (D135): the router serves `/p0/v1/...` as P0 whatever `X-Bud-Privacy` says, and the private profile's Hermes config sends `delegation.base_url` there. Whether Hermes 0.23.2 honours `delegation.*` is unconfirmed (revisit item 35) | this PR | D135 |
 
 ## The home server
 
@@ -78,16 +79,15 @@ None of the 2026-11-22 builds are rolled out there yet. **Jason hasn't done revi
 
 ## Next, in order
 
-1. **JGA-390** (D135, decided 2026-11-24: an always-P0 subagent path). A delegated Hermes subagent gets its own conversation id, so P0 data the parent writes into its task prompt isn't held by the router's sticky P0. Jason chose option A: the subagent runs through its own router path that is always P0, whatever the parent's tier. Being built.
-2. **Re-tiering approved memory records** (D136, decided 2026-11-24: a reviewer-only `retier` action). Hermes saved every record at P1 until D130; the action is `POST /retier {id, privacy}`, asked on Signal like memory-review, and removing a record is deferred. Being built.
-3. **Help Jason through the rollouts** in [revisit.md](revisit.md) when he's at the home server: give paste blocks, read his output, and fix what breaks.
-4. **Then the rest of Bud 2.0** (below). Most need the home server, the Qwen box, Herdr or a design session with him, so recommend one and ask.
+1. **Re-tiering approved memory records** (D136, decided 2026-11-24: a reviewer-only `retier` action). Hermes saved every record at P1 until D130; the action is `POST /retier {id, privacy}`, asked on Signal like memory-review, and removing a record is deferred. Being built.
+2. **Help Jason through the rollouts** in [revisit.md](revisit.md) when he's at the home server: give paste blocks, read his output, and fix what breaks.
+3. **Then the rest of Bud 2.0** (below). Most need the home server, the Qwen box, Herdr or a design session with him, so recommend one and ask.
 
 ## Open in Bud 2.0 (Linear)
 
 | Issue | Status | What | Needs |
 | --- | --- | --- | --- |
-| JGA-390 | In Progress | Subagents stay P0 with a P0 parent | D135: always-P0 subagent path; being built |
+| JGA-390 | In Review | Subagents stay P0 with a P0 parent | Merge, then the rollout check in revisit item 35 |
 | JGA-321 | In Review | Self-improvement loop | Rollout (item 21), then Done |
 | JGA-395 | Backlog | Consolidate the fragmented audit logs into one shared store | JGA-348's narrow follow-up (D134), filed 2026-11-24; JGA-348 is closed as superseded by D97 |
 | JGA-399 | In Review | Replace the homegrown IMAP client in `internal/mail` with go-imap | Review and merge; then the first live iCloud run (revisit) |

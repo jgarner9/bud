@@ -656,3 +656,29 @@ func TestThePrivateProfileSendsTheRouterItsChatTier(t *testing.T) {
 		}
 	}
 }
+
+// Suite D135: a delegated subagent can't carry its parent's conversation id,
+// so the private profile sends it to the router's always-P0 endpoint
+func TestSubagentsGoToTheRoutersP0Endpoint(t *testing.T) {
+	for _, privacy := range []string{`"P1"`, `"P0"`} {
+		out, err := Render(input(t, `{"bud": {"privacy": `+privacy+`, "router": "http://100.64.0.5:8795"}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := string(out.Config)
+		for _, want := range []string{"delegation:\n", "base_url: \"http://100.64.0.5:8795/p0/v1\"", "model: \"bud/manager\""} {
+			if !strings.Contains(got, want) {
+				t.Errorf("privacy %s: no %q in:\n%s", privacy, want, got)
+			}
+		}
+	}
+	in := input(t, `{"bud": {"privacy": "P1", "router": "http://100.64.0.5:8795"}}`)
+	in.Cloud = true
+	cloud, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cloud.Config), "/p0/v1") {
+		t.Errorf("the cloud profile sends subagents to the router:\n%s", cloud.Config)
+	}
+}

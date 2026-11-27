@@ -63,7 +63,7 @@
         "command": ["uvx", "--from", "serena-agent==2.1.0", "serena", "start-mcp-server", "--context", "ide", "--project-from-cwd", "--open-web-dashboard", "false"],
         "privacy": ["P0", "P1", "P2"],
       },
-      // local embeddings by default, so nothing leaves the machine
+      // embeds on bud's own embedding server (the registry's embedding role), so nothing leaves the house; bud sync writes its settings (D151)
       "cocoindex": { "command": ["uvx", "--from", "cocoindex-code==0.2.43", "ccc", "mcp"], "privacy": ["P0", "P1", "P2"] },
       "playwright": { "command": ["npx", "-y", "@playwright/mcp@0.0.85"], "privacy": ["P1", "P2"] },
     },

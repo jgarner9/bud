@@ -81,6 +81,9 @@ type Output struct {
 	// Notes say what was left out of the config and why, such as an MCP
 	// server whose URL only the overlay sets
 	Notes []string
+	// Servers names the MCP servers in the config, so bud sync can write
+	// what a server needs beside it, such as cocoindex's settings
+	Servers []string
 }
 
 // Render builds opencode.jsonc. The same input always gives the same bytes
@@ -206,6 +209,7 @@ func Render(in Input) (*Output, error) {
 		return nil, err
 	}
 	out.Notes = tools.Notes()
+	out.Servers = tools.Names()
 	for _, v := range sortedKeys(tools.OpenCodeSecrets) {
 		ref := tools.OpenCodeSecrets[v]
 		for _, pid := range sortedKeys(r.Providers) {

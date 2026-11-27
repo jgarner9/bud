@@ -17,8 +17,9 @@ import (
 // Role is the registry role whose first usable model embeds the code
 const Role = "embedding"
 
-// Header opens the rendered file, so a hand edit is never a surprise loss
-const Header = "# Written by bud sync from the registry's embedding role. Edits here are\n# replaced on the next sync: change the registry instead.\n"
+// Header opens the rendered file and says what a hand edit does: sync leaves
+// the file as it is and names it (planFiles), so an edit is never lost
+const Header = "# Written by bud sync from the registry's embedding role. If you edit this file,\n# bud sync leaves it alone and says so; move it aside to let sync write it again.\n"
 
 // Render builds global_settings.yml. note is empty when it rendered, and
 // otherwise says why it didn't, which is never an error: a registry with no

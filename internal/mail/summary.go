@@ -6,9 +6,10 @@ import (
 )
 
 // StoredSummary is one line of bud mail-ingest's store, which list_summaries
-// reads (Suite D106, JGA-317). Everything but the provenance (Folder,
-// UIDValidity, UID, MessageID, Received, At, Model) is the sender's or a
-// local model's text and is untrusted
+// reads (Suite D106, JGA-317). Only the locator (Folder, UIDValidity, UID)
+// and the times and model name (Received, At, Model) are provenance bud
+// wrote. The rest, MessageID included since the sender chooses it, is the
+// sender's or a local model's text and is untrusted
 type StoredSummary struct {
 	Folder      string    `json:"folder"`
 	UIDValidity uint32    `json:"uidvalidity"`

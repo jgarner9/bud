@@ -68,5 +68,5 @@ The IMAP tests (`client_test.go`, with the account and cleanup tests in `server_
 
 ## Not yet
 
-- The first live run on the home server (`server/mail-mcp/README.md`), which settles Sent Messages, the trash's retention and whether iCloud has `MOVE` and `UIDPLUS`. `--record` captures that session; it is the one check the in-process server can't make for iCloud.
+- The live send and trash check on the home server (`server/mail-mcp/README.md`, step 8): whether a send leaves a copy in Sent Messages and how long the trash keeps mail. The first `--record` run (2026-11-27) settled the rest: iCloud has `UIDPLUS` but no `MOVE`, so the copy, flag and `UID EXPUNGE` fallback is the path that runs, and the `\Trash` folder is Deleted Messages.
 - JGA-317's isolated ingestion.

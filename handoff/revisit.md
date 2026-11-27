@@ -28,13 +28,13 @@ Decisions waiting on him (bring them up with a recommendation; don't decide them
 - **Item 9:** the JGA-364 deletion list.
 - **Item 10:** R5c, other chat keys (recommended: wait until he's used opencode.nvim).
 - **Item 11:** R9, the custom TUI (JGA-375): a design session before any code.
-- **JGA-399 (go-imap):** after it merges, the first live mail run on the home server is the one check left: iCloud's `MOVE` and `UIDPLUS`, whether it files a copy in Sent Messages, and how long the trash keeps mail. `bud mail-mcp --record` captures it, and its redacted transcript shows what the adapter sends and what iCloud answers. The module fetch and the Linear filing, which the overnight sessions had to leave for Jason, are done.
-- **Item 12:** JGA-317 summarizer shape — decided 2026-11-24 (Suite D133): a direct router call with no tools. Still waits on the mail `--record` output.
+- **JGA-399 (go-imap):** after it merges, the first live mail run on the home server is the one check left: iCloud's `MOVE` and `UIDPLUS`, whether it files a copy in Sent Messages, and how long the trash keeps mail. `bud mail-mcp --record` captured the read-only part on 2026-11-27: iCloud has `UIDPLUS` but no `MOVE`, so the copy, flag and `UID EXPUNGE` fallback is the live path; the `\Trash` folder is Deleted Messages (a second, unflagged "Trash" folder also exists and bud ignores it); `Sent Messages` carries `\Sent`. Still open: whether a send leaves a copy in Sent Messages, and how long the trash keeps mail. The live check is step 8 of `server/mail-mcp/README.md`. The module fetch and the Linear filing, which the overnight sessions had to leave for Jason, are done.
+- **Item 12:** JGA-317 summarizer shape — decided 2026-11-24 (Suite D133): a direct router call with no tools. The mail `--record` output is in (2026-11-27), so this no longer waits on it.
 - **Item 13:** the stale branch `claude/hermes-router` can be deleted.
 - **JGA-393:** whether laptop OpenCode goes through the router (Suite D70) for one spend meter and the same privacy rules, at the cost of coding needing the home server. Jason chose on 2026-11-24 to decide it later.
 - **Item 16:** router spend past the $10 cap (recommended: hold and ask on Signal, one yes covers one request or the rest of that turn, never a raised cap).
 - **Item 28:** moving bud-kb's remote onto the home server so P0 facts can reach the KB (recommended: wait a few weeks).
-- Older open items from the 2026-11-22 handoff: the JGA-368 hard-kill and backup-restore checks, the mail `--record` output for JGA-317, and a separate vault for the memory reviewer token and the bud-planning service account (both can read the whole Bud vault today).
+- Older open items from the 2026-11-22 handoff: the JGA-368 hard-kill and backup-restore checks, the live mail send and trash check (`server/mail-mcp/README.md` step 8; the `--record` output is in, 2026-11-27), and a separate vault for the memory reviewer token and the bud-planning service account (both can read the whole Bud vault today).
 
 Work an agent can pick up without him: the re-tier action (JGA-396, Suite D136), then the narrower Bud 2.0 backlog in [state.md](state.md). JGA-390 (Suite D135, the always-P0 subagent path) is built; its rollout check is item 35.
 
@@ -50,7 +50,7 @@ Started 2026-11-21 by the thread "Continue Bud roadmap tasks". Each item says wh
 
 Worked through on 2026-11-22 (UTC) by the thread "Continue Bud roadmap tasks" on the home server. What's left for you is in **one paste block** under "the home server: commands for Jason" at the end.
 
-1. ~~**Mail setup.**~~ RUNNING (2026-11-22 07:59 UTC). `bud-mail-mcp` is active, `list_folders` answers through the gateway at P0, and after a Hermes restart Hermes registers all 8 mail tools with no mail error. Self-test email via Signal worked (2026-11-22). Only the `--record` output for JGA-317 is still to share, if you ran it.
+1. ~~**Mail setup.**~~ RUNNING (2026-11-22 07:59 UTC). `bud-mail-mcp` is active, `list_folders` answers through the gateway at P0, and after a Hermes restart Hermes registers all 8 mail tools with no mail error. Self-test email via Signal worked (2026-11-22). The `--record` output for JGA-317 was captured 2026-11-27 (no `MOVE`, `UIDPLUS` present, trash is Deleted Messages).
 2. ~~**Calendar on the "iCloud" item.**~~ DONE. `calendar-mcp.env` points at `op://vault/iCloud/...` (backup `.pre-icloud`), and `list_calendars` answered through the gateway. Contacts was still on "iCloud CalDAV" too and was stopping the Hermes gateway from starting, so `contacts-mcp.env` and `hermes-contacts.env` now point at "iCloud" as well (backups `.pre-icloud`). This settles side note 1 in `r7-side-notes.md` the recommended way.
 3. ~~**Memory MCP.**~~ RUNNING (2026-11-22 07:35 UTC). Jason made the "Bud Memory" item (seven fields). `bud-embed`, `bud-memory` and `bud-memory-mcp` are enabled and active; `bud doctor --net` says "embeddings qwen3-embedding-0.6b (1024 dims) answered"; through the gateway a P1 `memory_stage` saved record 1 ("staged for Jason's review") and a P0 `memory_search` answered (empty, since nothing is approved yet). Overlay PR #8 sets `mcp.memory` to `"gateway": true` on server, dev and server-planning. Record 1 was approved by hand (part F), embedded and found by `memory_search` at P0 by vector. **Gap:** nothing approves staged records except a hand-run curl; bud-signal's reviewer handles tool approvals only.
 4. ~~**Hermes's own memory: off.**~~ DONE (2026-11-22 07:57 UTC). bud #103 and overlay #8 merged; content 2026.11.22.1 promoted; the home server synced. Both Hermes profiles have no `memory` toolset and register `mcp__memory__memory_search` / `memory_stage` (private P0, cloud P1). The cloud `config.yaml` was skipped as hand-edited again, so it was moved aside (`.pre-memory`), re-rendered, and its `telemetry` opt-out block appended back; the diff was only the memory change. Gateway, router and Hermes restarted; Signal connected.
@@ -67,7 +67,7 @@ Worked through on 2026-11-22 (UTC) by the thread "Continue Bud roadmap tasks" on
 9. **JGA-364 deletion list** needs your review before anything is removed.
 10. **R5c** (other chat keys): recommended to wait until you've used opencode.nvim for a while.
 11. **R9 custom TUI (JGA-375):** a design session before any code.
-12. **JGA-317 summarizer shape:** a direct router call with no tools (recommended) or a tool-less Hermes profile. Waits on item 1's recording.
+12. **JGA-317 summarizer shape:** a direct router call with no tools (recommended) or a tool-less Hermes profile. Item 1's recording is in (2026-11-27).
 13. **Stale branch** `claude/hermes-router` can be deleted from PR #77.
 
 ### Added by this thread

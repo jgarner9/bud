@@ -26,6 +26,10 @@ const EnvVar = "OP_SERVICE_ACCOUNT_TOKEN"
 // KeychainService is the macOS Keychain item the token lives in
 const KeychainService = "bud-op-service-account"
 
+// ErrNone is what Lookup wraps when no source has a token, so a caller can
+// carry on without one; any other error means a source is there but broken
+var ErrNone = errors.New("no 1Password service account token")
+
 // Where a token came from
 const (
 	FromEnvironment = "environment"
@@ -154,7 +158,7 @@ func (f Finder) missing(goos string) error {
 		how = append(how, "put "+EnvVar+"=... in "+f.File+" (mode 0600)")
 	}
 
-	return fmt.Errorf("no 1Password service account token: %s", strings.Join(how, ", or "))
+	return fmt.Errorf("%w: %s", ErrNone, strings.Join(how, ", or "))
 }
 
 // stderrOf is what a failed command said, for the error; the security tool's

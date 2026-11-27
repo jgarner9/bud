@@ -98,7 +98,7 @@ OpenCode is the one AI agent bud runs (Suite D139); there is no backend to choos
 | --- | --- |
 | `bud ai status [--json]` | Whether OpenCode is installed, which version, and a fix for each problem. |
 | `bud ai setup [--yes]` | Installs the pinned OpenCode with npm if it's missing (asking first), then prints the status. |
-| `bud agent [path]` | OpenCode's own TUI in a project, from the shell. When `bud sync` has written `opencode.env`, it runs through `op run` against a private OpenCode server; otherwise it launches OpenCode directly. |
+| `bud agent [path]` | OpenCode's own TUI in a project, from the shell. When `bud sync` has written `opencode.env`, it runs through `op run` against a private OpenCode server; otherwise it launches OpenCode directly. `op run` signs in with the service account token when bud can find one (its own environment, the macOS Keychain item `bud-op-service-account`, or `~/.config/bud-server/op-service-account.env`), so the launch needs no 1Password sign-in; OpenCode itself never gets the token (Suite D142, D144). |
 | `bud chat` | OpenCode's own TUI, run as the synced `chat` agent (it reads and looks things up but can't edit files or run commands), in a directory that belongs to no project. `--resume` is refused: OpenCode keeps one chat, which opens where it left off. |
 
 ## Tools and issues

@@ -1,6 +1,7 @@
 package optoken
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -114,7 +115,7 @@ func TestAnEmptyKeychainItemSaysHowToAddItAgain(t *testing.T) {
 func TestAFileThatDoesNotSetTheTokenIsAnError(t *testing.T) {
 	f := Finder{Getenv: noEnv, GOOS: "linux", File: tokenFile(t, "OTHER=1\n")}
 	_, err := f.Lookup()
-	if err == nil || !strings.Contains(err.Error(), "doesn't set "+EnvVar) {
+	if err == nil || errors.Is(err, ErrNone) || !strings.Contains(err.Error(), "doesn't set "+EnvVar) {
 		t.Fatalf("err = %v, want the file named as not setting the token", err)
 	}
 }
@@ -124,8 +125,8 @@ func TestNoTokenAnywhereSaysWhereToPutOne(t *testing.T) {
 	for goos, wantKeychain := range map[string]bool{"darwin": true, "linux": false} {
 		f := Finder{Getenv: noEnv, GOOS: goos, Security: fakeSecurity(t, "exit 44"), File: file}
 		_, err := f.Lookup()
-		if err == nil {
-			t.Fatalf("%s: a token was found with no source", goos)
+		if !errors.Is(err, ErrNone) {
+			t.Fatalf("%s: err = %v, want ErrNone", goos, err)
 		}
 		msg := err.Error()
 		if !strings.Contains(msg, EnvVar) || !strings.Contains(msg, file) {

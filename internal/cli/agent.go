@@ -11,6 +11,8 @@ import (
 	"syscall"
 
 	backend "jgarner.dev/bud/internal/agent"
+	"jgarner.dev/bud/internal/envfile"
+	"jgarner.dev/bud/internal/optoken"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -94,12 +96,39 @@ func agent(g *Globals, args []string) error {
 			child = agentPTY(child)
 		}
 		argv := append([]string{op, "run", "--env-file=" + file, "--", "/usr/bin/env", "-u", "OP_SERVICE_ACCOUNT_TOKEN"}, child...)
+		env, err := agentOpEnv(g, p, agentEnv())
+		if err != nil {
+			return err
+		}
 		g.Logf("running %q in %s", argv, ws.Root)
-		return execProcess(ws.Root, argv, agentEnv())
+		return execProcess(ws.Root, argv, env)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("checking the synced OpenCode environment: %w", err)
 	}
 	return execOpenCodeTUI(g, ws.Root)
+}
+
+// agentTokenFinder says where bud looks for the service account token;
+// swappable so tests never reach a real Keychain
+var agentTokenFinder = func(p *paths.Paths) optoken.Finder { return optoken.Finder{File: p.OpTokenFile()} }
+
+// agentOpEnv is the environment op run starts with: this one plus the service
+// account token optoken finds (the environment's own, the Keychain's or the
+// token file's), so the launch needs no sign-in (Suite D142, D144). The token is for op run alone: the OpenCode
+// child runs under env -u, and nothing is written to disk. With no token
+// anywhere, op authenticates however it can, as before; a token source that
+// exists but fails is an error
+func agentOpEnv(g *Globals, p *paths.Paths, env []string) ([]string, error) {
+	tok, err := agentTokenFinder(p).Lookup()
+	switch {
+	case errors.Is(err, optoken.ErrNone):
+		return env, nil
+	case err != nil:
+		return nil, fmt.Errorf("find the 1Password service account token for op run: %w", err)
+	}
+	g.Logf("op run uses the %s", tok)
+
+	return envfile.With(env, optoken.EnvVar, tok.Value()), nil
 }
 
 // agentPTY runs inside op run, whose output pipes still mask resolved secrets.

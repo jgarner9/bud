@@ -8,11 +8,15 @@ import (
 	"strings"
 	"testing"
 
+	"jgarner.dev/bud/internal/optoken"
 	"jgarner.dev/bud/internal/paths"
 )
 
 func TestAgentOpenCodeSyncedEnv(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv(optoken.EnvVar, "")
+	isolateTokenFinder(t)
 	p, err := paths.Resolve()
 	if err != nil {
 		t.Fatal(err)
@@ -61,6 +65,104 @@ func TestAgentOpenCodeSyncedEnv(t *testing.T) {
 	}
 	if err := run(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// isolateTokenFinder keeps a test off the real Keychain and token file
+func isolateTokenFinder(t *testing.T) {
+	t.Helper()
+	orig := agentTokenFinder
+	t.Cleanup(func() { agentTokenFinder = orig })
+	agentTokenFinder = func(p *paths.Paths) optoken.Finder {
+		return optoken.Finder{GOOS: "linux", File: p.OpTokenFile()}
+	}
+}
+
+func TestAgentGivesOpRunTheTokenAndOpenCodeNone(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv(optoken.EnvVar, "")
+	isolateTokenFinder(t)
+	p, err := paths.Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(p.State, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.OpenCodeEnv(), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir)
+	for _, name := range []string{"op", "opencode"} {
+		if err := os.WriteFile(filepath.Join(binDir, name), nil, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	project, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotArgv, gotEnv []string
+	orig := execProcess
+	t.Cleanup(func() { execProcess = orig })
+	execProcess = func(dir string, argv, env []string) error { gotArgv, gotEnv = argv, env; return nil }
+
+	const token = "ops_agent-test-token"
+	opToken := func() (string, bool) {
+		for _, kv := range gotEnv {
+			if v, ok := strings.CutPrefix(kv, optoken.EnvVar+"="); ok && v != "" {
+				return v, true
+			}
+		}
+		return "", false
+	}
+
+	// no token anywhere: op signs in however it can, as before
+	if err := agent(&Globals{}, []string{project}); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := opToken(); ok {
+		t.Errorf("op run got a token with none to give: %q", v)
+	}
+
+	// the token file's token reaches op run's environment, and the child is
+	// told to drop it
+	if err := os.MkdirAll(filepath.Dir(p.OpTokenFile()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.OpTokenFile(), []byte(optoken.EnvVar+"="+token+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent(&Globals{}, []string{project}); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := opToken(); v != token {
+		t.Errorf("op run's token = %q, want the token file's", v)
+	}
+	if !slices.Contains(gotArgv, "-u") || !slices.Contains(gotArgv, optoken.EnvVar) {
+		t.Errorf("argv %q doesn't strip the token from OpenCode's environment", gotArgv)
+	}
+	if strings.Contains(strings.Join(gotArgv, " "), token) {
+		t.Error("the token is in argv")
+	}
+
+	// a token file that exists but sets no token is an error, not a silent sign-in
+	if err := os.WriteFile(p.OpTokenFile(), []byte("OTHER=1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent(&Globals{}, []string{project}); err == nil || strings.Contains(err.Error(), token) {
+		t.Errorf("broken token file: %v", err)
+	}
+
+	// a token already in bud's environment wins over the file
+	t.Setenv(optoken.EnvVar, "ops_from-the-environment")
+	if err := agent(&Globals{}, []string{project}); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := opToken(); v != "ops_from-the-environment" {
+		t.Errorf("op run's token = %q, want the environment's", v)
 	}
 }
 

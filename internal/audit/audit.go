@@ -29,6 +29,8 @@ const (
 	SourceMail         = "mail"
 	SourceMemoryReview = "memory-review"
 	SourceImprove      = "improve"
+	// SourceSecrets is bud secrets run, which gives a command named secrets
+	SourceSecrets = "secrets"
 )
 
 // The kinds of event
@@ -41,6 +43,8 @@ const (
 	KindSpend = "spend"
 	// KindMailAction is a mail move, restore or send
 	KindMailAction = "mail_action"
+	// KindSecretRun is a command run with secrets, or refused them
+	KindSecretRun = "secret_run"
 )
 
 // maxEvent is the largest line Write accepts. One write per line only stays

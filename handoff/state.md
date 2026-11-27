@@ -1,6 +1,18 @@
-# State, 2026-11-22
+# State
 
-Where Bud stands at the handoff from Claude Code to OpenCode. Linear (team JGA, project "Bud Suite", milestone Bud 2.0) is the source of truth for status; this file says how the pieces fit and what to do next.
+Where Bud stands, first written 2026-11-22 and kept current in the same PR as each piece of work. Linear (team JGA, project "Bud Suite", milestone Bud 2.0) is the source of truth for status; this file says how the pieces fit and what to do next.
+
+## This folder
+
+| Path | What it holds |
+| --- | --- |
+| `state.md` | This file: what's merged, in flight and next |
+| `revisit.md` | Everything waiting on Jason: home-server rollouts and decisions |
+| `decisions.md` | The Suite decision log, D1 onward, append-only; "Suite Dn" means this list |
+| `design/` | The design docs the decisions came from |
+| `notes/` | Dated side notes and run logs from the build |
+
+The design docs and notes were copied out of the Claude project's shared folder with host names replaced by roles, so they still cite `/mnt/project-files/architecture/<name>` (read it as `handoff/design/<name>`), `/mnt/project-files/notes/<name>` and `/mnt/project-files/handoff/<name>` (as `handoff/notes/<name>`), and `/mnt/project-files/revisit-*.md` (as `revisit.md`). Status lines inside them are as of when each was written. Host names, tailnet IPs, real `op://` paths and the exact home-server paste blocks are in the private overlay's `handoff/`, which `bud sync` doesn't read. Here the machines are named by role: the home server runs Hermes, the gateway, the router and the other Bud services; the Qwen box runs the local model and sleeps; the laptop is Jason's dev machine.
 
 ## Main
 

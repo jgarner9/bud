@@ -72,6 +72,9 @@ func (a *Account) Fresh(ctx context.Context, folder string, mark Mark, o FreshOp
 	if maxText <= 0 || maxText > MaxText {
 		maxText = MaxText
 	}
+	// a first run can't return more than the limit: the mark moves to the
+	// newest uid, so anything left out here would be skipped for good
+	o.Backfill = min(o.Backfill, o.Limit)
 	var f Fresh
 	err := a.session(ctx, func(c *Client) error {
 		mb, err := c.Examine(ctx, folder)

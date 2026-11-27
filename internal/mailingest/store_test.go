@@ -68,3 +68,16 @@ func TestAStateFileThatIsNotJSONNamesTheFix(t *testing.T) {
 		t.Errorf("%+v, %v", st, err)
 	}
 }
+
+func TestNewStoreTightensAnExistingDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "state")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewStore(filepath.Join(dir, "mail-summaries.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(dir); info.Mode().Perm() != 0o700 {
+		t.Errorf("the directory is %v, want 0700", info.Mode().Perm())
+	}
+}

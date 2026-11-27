@@ -114,3 +114,16 @@ func TestFreshRefusesANonPositiveLimit(t *testing.T) {
 		t.Error("a zero limit was accepted")
 	}
 }
+
+func TestFreshNeverBackfillsMoreThanItsLimit(t *testing.T) {
+	m := newMemServer(t)
+	fixtureInbox(t, m)
+	f, err := ingestAccount(t, m).Fresh(context.Background(), "INBOX", Mark{}, FreshOptions{Limit: 2, Backfill: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the newest two, so none below the new mark is left unhandled
+	if len(f.Messages) != 2 || f.Messages[0].UID != 2 || f.More || f.Through != 3 {
+		t.Fatalf("%+v", f)
+	}
+}

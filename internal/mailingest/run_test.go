@@ -346,3 +346,43 @@ func TestARunIsBoundedAndTheRestWaits(t *testing.T) {
 		t.Fatalf("%+v", res)
 	}
 }
+
+func TestASecondRunWhileOneIsInProgressDoesNothing(t *testing.T) {
+	calls := 0
+	f := &fakeFolder{validity: 7}
+	r := newRun(t, f, func(context.Context, Input) (string, string, error) { calls++; return "s", "m", nil })
+	_, _ = r.Do(context.Background())
+	f.msgs = []mail.Fetched{fetched(1, "A", "x")}
+	unlock, err := lock(r.StatePath) // another process, as far as flock can tell
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Do(context.Background()); !errors.Is(err, ErrBusy) || calls != 0 {
+		t.Fatalf("got %v with %d model calls", err, calls)
+	}
+	unlock()
+	if res, err := r.Do(context.Background()); err != nil || res.Summarized != 1 {
+		t.Fatalf("%+v, %v", res, err)
+	}
+}
+
+func TestTheSummarizerNeverUsesAProxy(t *testing.T) {
+	if tr, ok := directTransport(nil).(*http.Transport); !ok || tr.Proxy != nil {
+		t.Errorf("a new transport: %+v", tr)
+	}
+	given := &http.Transport{Proxy: http.ProxyFromEnvironment}
+	tr, ok := directTransport(given).(*http.Transport)
+	if !ok || tr.Proxy != nil {
+		t.Errorf("a given transport still has its proxy: %+v", tr)
+	}
+	if given.Proxy == nil {
+		t.Error("the caller's transport was changed")
+	}
+	if tr, ok := directTransport(roundTripperFunc(nil)).(*http.Transport); !ok || tr.Proxy != nil {
+		t.Errorf("another kind of transport was kept: %+v", tr)
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

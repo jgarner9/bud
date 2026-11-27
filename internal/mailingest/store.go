@@ -97,6 +97,11 @@ func NewStore(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("make the mail summaries' directory: %w", err)
 	}
+	// MkdirAll keeps the mode of a directory that exists, so tighten it: the
+	// store holds P0 mail
+	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("set the mail summaries' directory to 0700: %w", err)
+	}
 	if err := os.Chmod(path, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("set the mail summaries to 0600: %w", err)
 	}

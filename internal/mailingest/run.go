@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"syscall"
 	"time"
 
 	"jgarner.dev/bud/internal/audit"
@@ -48,6 +51,31 @@ type Result struct {
 	More       bool     // mail was left for the next run
 }
 
+// ErrBusy says another run holds the lock, so this one did nothing
+var ErrBusy = errors.New("another mail-ingest run is in progress")
+
+// lock takes an exclusive lock on a file beside the state, without waiting:
+// two runs sharing one state would both read the same mark, summarize the
+// same messages and append them twice. flock goes when the process does
+func lock(statePath string) (func(), error) {
+	path := statePath + ".lock"
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("lock the mail ingest state: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("lock the mail ingest state: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, ErrBusy
+		}
+		return nil, fmt.Errorf("lock the mail ingest state: %w", err)
+	}
+	return func() { f.Close() }, nil
+}
+
 // Do runs once: for each folder, the mail newer than its mark is summarized
 // oldest first and appended to the store, and the mark moves past each
 // message only after its line is stored, so a crash repeats at most one
@@ -58,6 +86,11 @@ func (r *Run) Do(ctx context.Context) (Result, error) {
 	if r.Now == nil {
 		r.Now = time.Now
 	}
+	unlock, err := lock(r.StatePath)
+	if err != nil {
+		return res, err
+	}
+	defer unlock()
 	state, err := LoadState(r.StatePath)
 	if err != nil {
 		return res, err
@@ -74,7 +107,7 @@ func (r *Run) Do(ctx context.Context) (Result, error) {
 			break
 		}
 		mark := state.Folders[folder]
-		f, err := r.Fetch.Fresh(ctx, folder, mark, mail.FreshOptions{Limit: budget, MaxText: r.Opts.MaxText, Backfill: r.Opts.Backfill})
+		f, err := r.Fetch.Fresh(ctx, folder, mark, mail.FreshOptions{Limit: budget, MaxText: r.Opts.MaxText, Backfill: min(r.Opts.Backfill, budget)})
 		if err != nil {
 			return res, fmt.Errorf("fetch new mail in %s: %w", folder, err)
 		}

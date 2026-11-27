@@ -56,8 +56,12 @@ func ChatSummarizer(endpoints []curator.Endpoint, client *http.Client) Summarize
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Minute}
 	}
+	// no redirect and no proxy: a proxy named in the environment would carry
+	// P0 mail to wherever it points, so the transport is never the default
+	// one, whatever client is given
 	noRedirect := *client
 	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	noRedirect.Transport = directTransport(client.Transport)
 	client = &noRedirect
 	return func(ctx context.Context, in Input) (string, string, error) {
 		user, err := userMessage(in)
@@ -75,6 +79,19 @@ func ChatSummarizer(endpoints []curator.Endpoint, client *http.Client) Summarize
 		}
 		return "", "", fmt.Errorf("%w (tried %s)", ErrNoModel, strings.Join(down, ", "))
 	}
+}
+
+// directTransport is a transport that connects straight to the host: the
+// given one with its proxy removed, or a new one
+func directTransport(rt http.RoundTripper) http.RoundTripper {
+	if t, ok := rt.(*http.Transport); ok {
+		t = t.Clone()
+		t.Proxy = nil
+		return t
+	}
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.Proxy = nil
+	return t
 }
 
 // userMessage fences the message with markers carrying a random id, which a

@@ -72,7 +72,7 @@ type Finder struct {
 	GOOS string
 	// File is the token file, usually paths.OpTokenFile; none is tried when empty
 	File string
-	// Security is the macOS security tool; "security" on PATH when empty
+	// Security is the macOS security tool; /usr/bin/security when empty
 	Security string
 }
 
@@ -146,9 +146,19 @@ func (f Finder) keychain() (Token, bool, error) {
 	return Token{value: v, Source: FromKeychain, Detail: KeychainService}, true, nil
 }
 
-// KeychainAddCommand adds the Keychain item, asking for the token at a
-// hidden prompt so it never reaches shell history or the process list
-const KeychainAddCommand = `security add-generic-password -a "$USER" -s ` + KeychainService + ` -U -w`
+// KeychainAddCommand adds the Keychain item from the clipboard: copy the token
+// first, then run it. security's own -w prompt takes only 127 characters and a
+// service account token is several hundred, so a token typed or pasted there is
+// cut short and op fails to decode it. The token is in the command's arguments
+// while it runs, and the clipboard is emptied after, even when the add fails
+const KeychainAddCommand = `security add-generic-password -a "$USER" -s ` + KeychainService + ` -U -w "$(pbpaste)"; pbcopy < /dev/null`
+
+// KeychainPromptLimit is the longest token security's -w prompt keeps
+const KeychainPromptLimit = 127
+
+// Len is the token's length, which says nothing about its value; doctor uses
+// it to spot a token the Keychain prompt cut short
+func (t Token) Len() int { return len(t.value) }
 
 func (f Finder) missing(goos string) error {
 	var how []string

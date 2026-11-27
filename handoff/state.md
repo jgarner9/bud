@@ -108,7 +108,7 @@ None of the 2026-11-22 builds are rolled out there yet. **Jason hasn't done revi
 | JGA-349 | Backlog | Signal reactions and replies to approval requests | Likely stale (built in R6b, D101); confirm and close |
 | JGA-301 | In Progress | Ported search tools against a real private search service | A SearXNG instance |
 | JGA-368 | In Progress | SQLite memory packaging on the home server | Hard-kill and backup-restore checks, on the home server |
-| JGA-317 | Backlog | Isolate untrusted mail ingestion | Jason's mail `--record` output, then the summarizer shape (item 12) |
+| JGA-317 | Backlog | Isolate untrusted mail ingestion | The summarizer shape (item 12); the `--record` output is in (2026-11-27: no `MOVE`, `UIDPLUS`, trash is Deleted Messages); the live send and trash check passed (a send leaves a copy in Sent Messages); only the trash's retention is open, a look after 2026-12-04 |
 | JGA-318 | Backlog | A compact personal digest | After JGA-317 |
 | JGA-347 | Backlog | Queue private work and wake the Qwen box | Wake-on-LAN isn't enabled on the Qwen box |
 | JGA-345 | Backlog | Lemonade behind the router (D98) | The Qwen box |

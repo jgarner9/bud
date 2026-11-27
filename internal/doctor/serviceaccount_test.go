@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -157,5 +158,36 @@ func TestOpVaultNamesReportsOpsOwnMessageAndNothingElse(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if _, err := opVaultNames(context.Background(), tok); err == nil || !strings.Contains(err.Error(), "isn't installed") {
 		t.Errorf("without op: %v", err)
+	}
+}
+
+func TestServiceAccountCheckSaysWhenTheKeychainTokenWasCutShort(t *testing.T) {
+	p := serviceAccountSetup(t, "", func(context.Context, optoken.Token) ([]string, error) {
+		return nil, errors.New("failed to DecodeSACredentials: unexpected end of JSON input")
+	})
+	fake := func(tokenLen int) string {
+		sh := filepath.Join(t.TempDir(), "security")
+		body := "#!/bin/sh\nprintf '%s\\n' \"$(head -c " + strconv.Itoa(tokenLen) + " /dev/zero | tr '\\0' 'x')\"\n"
+		if err := os.WriteFile(sh, []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		return sh
+	}
+	for _, tc := range []struct {
+		tokenLen int
+		short    bool
+	}{{127, true}, {600, false}} {
+		serviceAccountFinder = func(*paths.Paths) optoken.Finder {
+			return optoken.Finder{GOOS: "darwin", Getenv: func(string) string { return "" }, Security: fake(tc.tokenLen)}
+		}
+		r, ok := checkServiceAccount(p, Options{Net: true})
+		if !ok || r.Status != Warn {
+			t.Fatalf("len %d: got %+v", tc.tokenLen, r)
+		}
+		cut := strings.Contains(r.Fix, "cut short") && strings.Contains(r.Fix, optoken.KeychainAddCommand)
+		if cut != tc.short || strings.Contains(r.Fix+r.Detail, "xxxx") {
+			t.Errorf("len %d: fix %q, want the cut-off hint %v and never the token", tc.tokenLen, r.Fix, tc.short)
+		}
 	}
 }

@@ -33,7 +33,7 @@ The service account sees only Bud Vault (`bud doctor --net` checks it sees one v
 
 ## Where the token lives
 
-- **macOS:** the login Keychain, item `bud-op-service-account`. Add it with `security add-generic-password -a "$USER" -s bud-op-service-account -U -w`, which asks for the token at a hidden prompt, so it never reaches shell history or the process list.
+- **macOS:** the login Keychain, item `bud-op-service-account`. Copy the token from 1Password, then add it with `security add-generic-password -a "$USER" -s bud-op-service-account -U -w "$(pbpaste)"` and clear the clipboard with `pbcopy < /dev/null`. Not with a bare `-w`, which asks at a hidden prompt: that prompt keeps 127 characters, a token is several hundred, and the cut-off one fails in `op` with "unexpected end of JSON input". The token is in the command's arguments for the moment it runs, which is the price of avoiding that limit; `security find-generic-password -s bud-op-service-account -w | wc -c` should print several hundred. `bud doctor --net` says when the Keychain token is short enough to be cut off.
 - **Home server:** `~/.config/bud-server/op-service-account.env` (mode 0600), which the units already load. The planning OpenCode has its own under its own user.
 - A launch with no token anywhere uses `op`'s own sign-in, as before.
 

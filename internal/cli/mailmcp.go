@@ -118,11 +118,17 @@ func runMailMCP(g *Globals, args []string, f mailFlags) error {
 		if f.summaries == "" {
 			f.summaries = p.MailSummaries()
 		}
-		store, err := mailingest.NewStore(f.summaries)
-		if err != nil {
-			return err
+if _, statErr := os.Stat(f.summaries); os.IsNotExist(statErr) {
+			g.Noticef("mail-mcp: list_summaries is off: run bud mail-ingest first")
+		} else if statErr != nil {
+			return statErr
+		} else {
+			store, err := mailingest.NewStore(f.summaries)
+			if err != nil {
+				return err
+			}
+			acct.Source = store
 		}
-		acct.Source = store
 	}
 	// sends need the From address; without it bud mail-mcp still reads
 	// and cleans up, and the send tools say what to set

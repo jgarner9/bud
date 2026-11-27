@@ -43,6 +43,8 @@ const (
 	KindSpend = "spend"
 	// KindMailAction is a mail move, restore or send
 	KindMailAction = "mail_action"
+	// KindMailIngest is one run of bud mail-ingest, with counts only
+	KindMailIngest = "mail_ingest"
 	// KindSecretRun is a command run with secrets, or refused them
 	KindSecretRun = "secret_run"
 )

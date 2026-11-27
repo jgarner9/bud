@@ -51,6 +51,8 @@ func (f *fakeFolder) Fresh(_ context.Context, _ string, mark mail.Mark, o mail.F
 	return out, nil
 }
 
+func received(i int) time.Time { return time.Date(2026, 11, 20, 9, 0, i, 0, time.UTC) }
+
 func fetched(uid uint32, subject, text string) mail.Fetched {
 	return mail.Fetched{UID: uid, Received: time.Date(2026, 11, 20, 9, 0, int(uid), 0, time.UTC), Message: mail.Message{
 		Header: mail.Header{From: []string{"Sam <sam@example.com>"}, Subject: subject, MessageID: "<m" + subject + "@example.com>"},

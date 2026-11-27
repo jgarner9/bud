@@ -1,0 +1,13 @@
+# Starts bud-mail-ingest.service every 15 minutes, and once after a boot
+# or a sleep that missed a run. A run that finds another still going does
+# nothing.
+[Unit]
+Description=Bud mail ingest, every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

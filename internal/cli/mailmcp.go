@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"jgarner.dev/bud/internal/mail"
+	"jgarner.dev/bud/internal/mailingest"
 	"jgarner.dev/bud/internal/paths"
 )
 
@@ -22,7 +23,7 @@ func init() {
 // mailFlags are bud mail-mcp's flags
 type mailFlags struct {
 	listen, imap, smtp, trash, log string
-	record                         string
+	record, summaries              string
 }
 
 // MailMCP runs the home server's mail MCP server over IMAP and SMTP (Suite
@@ -38,6 +39,7 @@ func MailMCP() *Command {
 			fs.StringVar(&f.smtp, "smtp", "smtp.mail.me.com:587", "the SMTP server, with STARTTLS")
 			fs.StringVar(&f.trash, "trash", "Deleted Messages", "the folder cleanup moves to when none has the \\Trash flag")
 			fs.StringVar(&f.log, "log", "", "the action log of moves, restores and sends (default ~/.local/state/bud/mail-actions.jsonl)")
+			fs.StringVar(&f.summaries, "summaries", "", "the store of summaries bud mail-ingest writes, which list_summaries reads (default ~/.local/state/bud/mail-summaries.jsonl)")
 			fs.StringVar(&f.record, "record", "", "instead of serving, record one read-only IMAP session to this file, redacted, and print what it found")
 		},
 		Run: func(g *Globals, args []string) error { return runMailMCP(g, args, f) },
@@ -109,6 +111,18 @@ func runMailMCP(g *Globals, args []string, f mailFlags) error {
 		g.Noticef("audit: the shared audit log is off (%v); fix it and restart", perr)
 	} else {
 		acct.Log.Audit = openAudit(g, p)
+	}
+	if perr != nil && f.summaries == "" {
+		g.Noticef("mail-mcp: list_summaries is off: %v", perr)
+	} else {
+		if f.summaries == "" {
+			f.summaries = p.MailSummaries()
+		}
+		store, err := mailingest.NewStore(f.summaries)
+		if err != nil {
+			return err
+		}
+		acct.Source = store
 	}
 	// sends need the From address; without it bud mail-mcp still reads
 	// and cleans up, and the send tools say what to set

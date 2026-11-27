@@ -406,7 +406,16 @@ func Failed(results []Result) int {
 
 // checkDeps reports the deps the profile installs (installer.Needed)
 func checkDeps(profile string) []Result {
-	return checkDepList(installer.Needed(profile), Fail, "")
+	var required, optional []installer.Dep
+	for _, dep := range installer.Needed(profile) {
+		if dep.Optional {
+			optional = append(optional, dep)
+		} else {
+			required = append(required, dep)
+		}
+	}
+
+	return append(checkDepList(required, Fail, ""), checkDepList(optional, Warn, ", Serena and cocoindex-code need it")...)
 }
 
 // checkDepList reports each dep, marking a missing one with status and the

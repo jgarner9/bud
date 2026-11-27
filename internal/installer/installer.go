@@ -24,6 +24,10 @@ type Dep struct {
 	Pkgs map[string][]string
 	// FullOnly deps are left out of the minimal profile
 	FullOnly bool
+	// Optional deps are installed like the rest, but bud doctor only warns
+	// when one is missing: bud update runs doctor and rolls back on a failure,
+	// and nothing bud itself needs depends on this one
+	Optional bool
 	// Also lists binaries that must all be on PATH too, for a dep whose
 	// package is split in two: node without npm can't install Mason's npm
 	// packages (JGA-233)
@@ -57,7 +61,7 @@ var Deps = []Dep{
 	// the synced coding fragment starts Serena and cocoindex-code with uvx; on
 	// a machine without it both show as failed MCP servers. apt carries uv only
 	// from Debian 13 and Ubuntu 25.10
-	{Name: "uv", Bins: []string{"uv"}, Also: []string{"uvx"}, FullOnly: true},
+	{Name: "uv", Bins: []string{"uv"}, Also: []string{"uvx"}, FullOnly: true, Optional: true},
 }
 
 // LanguageDeps are the system deps a language spec can ask for by binary (its

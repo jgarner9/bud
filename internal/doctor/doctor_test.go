@@ -211,6 +211,20 @@ func TestCheckDeps(t *testing.T) {
 	}
 }
 
+func TestAMissingOptionalDepIsAWarningNotAFailure(t *testing.T) {
+	// bud update runs doctor and rolls back when it fails, so a tool that only
+	// some MCP servers use (uv) can't fail it
+	fakePath(t, "here")
+	withDeps(t, []installer.Dep{
+		{Name: "here", Bins: []string{"here"}},
+		{Name: "uv", Bins: []string{"uv"}, Optional: true},
+	})
+	results := checkDeps("full")
+	if len(results) != 2 || results[0].Status != OK || results[1].Name != "uv" || results[1].Status != Warn || results[1].Fix == "" {
+		t.Fatalf("got %+v, want here ok and uv a warning with a fix", results)
+	}
+}
+
 func TestCheckConfigSync(t *testing.T) {
 	src := fstest.MapFS{
 		"init.lua":         {Data: []byte("1")},

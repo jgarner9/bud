@@ -162,9 +162,7 @@ func TestOpVaultNamesReportsOpsOwnMessageAndNothingElse(t *testing.T) {
 }
 
 func TestServiceAccountCheckSaysWhenTheKeychainTokenWasCutShort(t *testing.T) {
-	p := serviceAccountSetup(t, "", func(context.Context, optoken.Token) ([]string, error) {
-		return nil, errors.New("failed to DecodeSACredentials: unexpected end of JSON input")
-	})
+	decodeErr := errors.New("failed to DecodeSACredentials: unexpected end of JSON input")
 	fake := func(tokenLen int) string {
 		sh := filepath.Join(t.TempDir(), "security")
 		body := "#!/bin/sh\nprintf '%s\\n' \"$(head -c " + strconv.Itoa(tokenLen) + " /dev/zero | tr '\\0' 'x')\"\n"
@@ -175,19 +173,33 @@ func TestServiceAccountCheckSaysWhenTheKeychainTokenWasCutShort(t *testing.T) {
 		return sh
 	}
 	for _, tc := range []struct {
+		name     string
 		tokenLen int
-		short    bool
-	}{{127, true}, {600, false}} {
-		serviceAccountFinder = func(*paths.Paths) optoken.Finder {
-			return optoken.Finder{GOOS: "darwin", Getenv: func(string) string { return "" }, Security: fake(tc.tokenLen)}
-		}
-		r, ok := checkServiceAccount(p, Options{Net: true})
-		if !ok || r.Status != Warn {
-			t.Fatalf("len %d: got %+v", tc.tokenLen, r)
-		}
-		cut := strings.Contains(r.Fix, "cut short") && strings.Contains(r.Fix, optoken.KeychainAddCommand)
-		if cut != tc.short || strings.Contains(r.Fix+r.Detail, "xxxx") {
-			t.Errorf("len %d: fix %q, want the cut-off hint %v and never the token", tc.tokenLen, r.Fix, tc.short)
-		}
+		err      error
+		hint     bool
+	}{
+		{"cut at the prompt's limit", 127, decodeErr, true},
+		{"one past it was not cut", 128, decodeErr, false},
+		{"a full token", 600, decodeErr, false},
+		{"short, but op failed some other way", 127, errors.New("op isn't installed"), false},
+		{"short, with a 403", 127, errors.New("[ERROR] (403) Forbidden"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := serviceAccountSetup(t, "", func(context.Context, optoken.Token) ([]string, error) { return nil, tc.err })
+			serviceAccountFinder = func(*paths.Paths) optoken.Finder {
+				return optoken.Finder{GOOS: "darwin", Getenv: func(string) string { return "" }, Security: fake(tc.tokenLen)}
+			}
+			r, ok := checkServiceAccount(p, Options{Net: true})
+			if !ok || r.Status != Warn {
+				t.Fatalf("got %+v", r)
+			}
+			cut := strings.Contains(r.Fix, "cut short") && strings.Contains(r.Fix, optoken.KeychainAddCommand)
+			if cut != tc.hint || strings.Contains(r.Fix+r.Detail, "xxxx") {
+				t.Errorf("fix %q, want the cut-off hint %v and never the token", r.Fix, tc.hint)
+			}
+			if !tc.hint && !strings.Contains(r.Fix, "check the token is current") {
+				t.Errorf("fix %q, want the general advice", r.Fix)
+			}
+		})
 	}
 }

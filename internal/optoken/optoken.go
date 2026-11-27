@@ -150,8 +150,8 @@ func (f Finder) keychain() (Token, bool, error) {
 // first, then run it. security's own -w prompt takes only 127 characters and a
 // service account token is several hundred, so a token typed or pasted there is
 // cut short and op fails to decode it. The token is in the command's arguments
-// while it runs, so clear the clipboard after (pbcopy < /dev/null)
-const KeychainAddCommand = `security add-generic-password -a "$USER" -s ` + KeychainService + ` -U -w "$(pbpaste)"`
+// while it runs, and the clipboard is emptied after, even when the add fails
+const KeychainAddCommand = `security add-generic-password -a "$USER" -s ` + KeychainService + ` -U -w "$(pbpaste)"; pbcopy < /dev/null`
 
 // KeychainPromptLimit is the longest token security's -w prompt keeps
 const KeychainPromptLimit = 127

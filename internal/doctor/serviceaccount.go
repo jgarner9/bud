@@ -57,9 +57,12 @@ func checkServiceAccount(p *paths.Paths, opts Options) (Result, bool) {
 		r.Status = Warn
 		r.Detail += "; couldn't sign in with it: " + err.Error()
 		r.Fix = "check the token is current: a rotated or deleted service account fails with a 403"
-		if tok.Source == optoken.FromKeychain && tok.Len() <= optoken.KeychainPromptLimit+1 {
-			// security's -w prompt keeps 127 characters; a token is several hundred
-			r.Fix = fmt.Sprintf("the Keychain token is only %d characters, so it was probably cut short by security's prompt: copy the token from 1Password, then run %s and pbcopy < /dev/null", tok.Len(), optoken.KeychainAddCommand)
+		// security's -w prompt keeps 127 characters and a token is several
+		// hundred, so a short Keychain token that op can't decode was cut
+		// short. Any other failure (op missing, a timeout, a 403) keeps the
+		// general advice, since the token may be fine
+		if tok.Source == optoken.FromKeychain && tok.Len() <= optoken.KeychainPromptLimit && strings.Contains(err.Error(), "DecodeSACredentials") {
+			r.Fix = fmt.Sprintf("the Keychain token is only %d characters, so it was probably cut short by security's prompt: copy the token from 1Password, then run %s", tok.Len(), optoken.KeychainAddCommand)
 		}
 	case len(vaults) == 1:
 		r.Detail += "; signs in and sees one vault, " + vaults[0]

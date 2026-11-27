@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"slices"
 	"strings"
@@ -307,6 +308,10 @@ type Criteria struct {
 	MessageID               string    // the Message-ID header, with or without its <>
 	Since, Before           time.Time // by the date the server received it; only the day counts
 	Unseen                  bool
+	// UIDAfter keeps only uids above it. The server still answers the
+	// highest uid when none is above (N:* always includes the last), so a
+	// caller drops uids at or below it too
+	UIDAfter uint32
 }
 
 // criteria checks cr and turns it into the library's, refusing text that
@@ -341,6 +346,11 @@ func (cr Criteria) criteria() (*imap.SearchCriteria, error) {
 		out.Header = append(out.Header, imap.SearchCriteriaHeaderField{Key: "Message-ID", Value: cr.MessageID})
 	}
 	out.Since, out.Before = cr.Since, cr.Before
+	if cr.UIDAfter > 0 && cr.UIDAfter < math.MaxUint32 {
+		var set imap.UIDSet
+		set.AddRange(imap.UID(cr.UIDAfter+1), 0)
+		out.UID = []imap.UIDSet{set}
+	}
 	if cr.Unseen {
 		out.NotFlag = []imap.Flag{imap.FlagSeen}
 	}

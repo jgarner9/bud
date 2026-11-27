@@ -207,6 +207,14 @@ func (p *Paths) Audit() string { return filepath.Join(p.State, "audit.jsonl") }
 // D36, D106), which the cleanup digest and restores read
 func (p *Paths) MailActions() string { return filepath.Join(p.State, "mail-actions.jsonl") }
 
+// MailIngest is bud mail-ingest's state: for each folder, the UIDVALIDITY and
+// highest uid it has handled (Suite D106, JGA-317)
+func (p *Paths) MailIngest() string { return filepath.Join(p.State, "mail-ingest.json") }
+
+// MailSummaries is the append-only store of the summaries bud mail-ingest
+// writes and bud mail-mcp's list_summaries reads
+func (p *Paths) MailSummaries() string { return filepath.Join(p.State, "mail-summaries.jsonl") }
+
 // RunLogs holds private logs from bud run.
 func (p *Paths) RunLogs() string { return filepath.Join(p.State, "run") }
 

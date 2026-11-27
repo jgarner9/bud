@@ -126,10 +126,21 @@ func TestTheRequestCarriesNoToolsEvenWhenTheMailAsksForThem(t *testing.T) {
 	}
 	for k := range body {
 		switch k {
-		case "model", "temperature", "max_tokens", "messages":
+		case "model", "temperature", "max_tokens", "messages", "chat_template_kwargs":
 		default:
-			t.Errorf("the request has a %q field; it may carry only model, temperature, max_tokens and messages", k)
+			t.Errorf("the request has a %q field; it may carry only model, temperature, max_tokens, messages and chat_template_kwargs", k)
 		}
+	}
+	// the fix for a reasoning model that thought until the budget ran out and
+	// answered with nothing
+	var kwargs struct {
+		Thinking *bool `json:"enable_thinking"`
+	}
+	if err := json.Unmarshal(body["chat_template_kwargs"], &kwargs); err != nil || kwargs.Thinking == nil || *kwargs.Thinking {
+		t.Errorf("chat_template_kwargs must set enable_thinking false: %s", body["chat_template_kwargs"])
+	}
+	if string(body["max_tokens"]) != "1024" {
+		t.Errorf("max_tokens %s, want 1024", body["max_tokens"])
 	}
 	for _, banned := range []string{"tools", "functions", "tool_choice", "function_call", "response_format"} {
 		if _, ok := body[banned]; ok {

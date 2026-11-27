@@ -83,7 +83,7 @@ func TestHostileMailStaysDataFromTheMailboxToTheTool(t *testing.T) {
 		}
 		for k := range req {
 			switch k {
-			case "model", "temperature", "max_tokens", "messages":
+			case "model", "temperature", "max_tokens", "messages", "chat_template_kwargs":
 			default:
 				t.Errorf("the request has a %q field", k)
 			}
@@ -129,7 +129,7 @@ func TestHostileMailStaysDataFromTheMailboxToTheTool(t *testing.T) {
 			}
 			// outside untrusted there is provenance only: names, numbers and times
 			switch k {
-			case "folder", "uidvalidity", "uid", "message_id", "received", "summarized_at", "model":
+			case "folder", "uidvalidity", "uid", "received", "summarized_at", "model":
 			default:
 				t.Errorf("%q sits outside untrusted: %v", k, v)
 			}

@@ -44,7 +44,7 @@ const systemPrompt = `You summarize one email for the owner of the mailbox. The 
 - Reply with the summary and nothing else.`
 
 // maxTokens bounds the answer
-const maxTokens = 300
+const maxTokens = 1024
 
 // ChatSummarizer asks each endpoint in turn, moving on when one can't be
 // reached. The request is a chat with a system and a user message and
@@ -134,6 +134,9 @@ func chat(ctx context.Context, client *http.Client, e curator.Endpoint, user str
 		"model":       e.Model,
 		"temperature": 0,
 		"max_tokens":  maxTokens,
+		// a reasoning model (Qwen3) spends its whole token budget thinking and
+		// answers with an empty message; the switch asks it to answer straight
+		"chat_template_kwargs": map[string]any{"enable_thinking": false},
 		"messages": []map[string]string{
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": user},

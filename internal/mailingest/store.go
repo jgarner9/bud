@@ -73,7 +73,17 @@ type Store struct {
 	mu   sync.Mutex
 }
 
-// NewStore makes the store's directory, mode 0700
+// ErrNotStarted says the store's file isn't there: bud mail-ingest hasn't
+// run, so an empty answer would pass for "no new mail"
+var ErrNotStarted = errors.New("mail ingestion hasn't run yet: run bud mail-ingest (server/mail-mcp/ has its timer), which creates the store")
+
+// OpenStore opens the store to read it, as the mail server does. It makes
+// and changes nothing, so a store that isn't there yet stays not there
+func OpenStore(path string) *Store { return &Store{path: path} }
+
+// NewStore makes the store, as bud mail-ingest does: its directory, mode
+// 0700, and an empty file, mode 0600, so a reader can tell a store that has
+// no summaries yet from one that was never started
 func NewStore(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("make the mail summaries' directory: %w", err)
@@ -83,7 +93,12 @@ func NewStore(path string) (*Store, error) {
 	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("set the mail summaries' directory to 0700: %w", err)
 	}
-	if err := os.Chmod(path, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("make the mail summaries: %w", err)
+	}
+	defer f.Close()
+	if err := f.Chmod(0o600); err != nil {
 		return nil, fmt.Errorf("set the mail summaries to 0600: %w", err)
 	}
 	return &Store{path: path}, nil
@@ -159,6 +174,9 @@ func (st *Store) Has() (map[string]bool, error) {
 // Newest returns up to limit summaries received at or after since, newest
 // first (by when they were received, then uid), and how many matched
 func (st *Store) Newest(since time.Time, limit int) ([]Summary, int, error) {
+	if _, err := os.Stat(st.path); errors.Is(err, fs.ErrNotExist) {
+		return nil, 0, ErrNotStarted
+	}
 	all, err := st.All()
 	if err != nil {
 		return nil, 0, err

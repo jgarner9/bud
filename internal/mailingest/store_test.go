@@ -1,6 +1,7 @@
 package mailingest
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,5 +80,27 @@ func TestNewStoreTightensAnExistingDirectory(t *testing.T) {
 	}
 	if info, _ := os.Stat(dir); info.Mode().Perm() != 0o700 {
 		t.Errorf("the directory is %v, want 0700", info.Mode().Perm())
+	}
+}
+
+func TestAStoreThatWasNeverStartedSaysSoAndOneWithNoSummariesIsEmpty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state", "mail-summaries.jsonl")
+	reader := OpenStore(path)
+	if _, _, err := reader.Newest(time.Time{}, 10); !errors.Is(err, ErrNotStarted) {
+		t.Fatalf("got %v", err)
+	}
+	if _, err := os.Stat(filepath.Dir(path)); err == nil {
+		t.Error("opening the store to read it made its directory")
+	}
+	// bud mail-ingest makes the file, empty: now there is simply no mail yet
+	if _, err := NewStore(path); err != nil {
+		t.Fatal(err)
+	}
+	got, total, err := reader.Newest(time.Time{}, 10)
+	if err != nil || len(got) != 0 || total != 0 {
+		t.Errorf("%v, %d, %v", got, total, err)
+	}
+	if info, _ := os.Stat(path); info.Mode().Perm() != 0o600 {
+		t.Errorf("mode %v", info.Mode())
 	}
 }

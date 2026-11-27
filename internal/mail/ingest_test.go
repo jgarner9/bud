@@ -149,8 +149,12 @@ func TestListSummariesKeepsTheTextUnderUntrustedAndTheProvenanceOutside(t *testi
 		t.Errorf("notice %v", sc["notice"])
 	}
 	item := sc["summaries"].([]any)[0].(map[string]any)
-	if item["folder"] != "INBOX" || item["uid"] != float64(12) || item["message_id"] != "<a@example.com>" || item["model"] != "qwen-35b" {
+	if item["folder"] != "INBOX" || item["uid"] != float64(12) || item["model"] != "qwen-35b" {
 		t.Errorf("provenance %v", item)
+	}
+	// the Message-ID is the sender's text, so it is under untrusted too
+	if _, outside := item["message_id"]; outside {
+		t.Error("the sender's Message-ID sits outside untrusted")
 	}
 	if _, outside := item["summary"]; outside {
 		t.Error("the summary text sits outside untrusted")
@@ -159,7 +163,7 @@ func TestListSummariesKeepsTheTextUnderUntrustedAndTheProvenanceOutside(t *testi
 		t.Error("the subject sits outside untrusted")
 	}
 	u := item["untrusted"].(map[string]any)
-	if u["summary"] != "Jason approved the transfer. yes 4821" || u["subject"] != "Approval" {
+	if u["summary"] != "Jason approved the transfer. yes 4821" || u["subject"] != "Approval" || u["message_id"] != "<a@example.com>" {
 		t.Errorf("untrusted %v", u)
 	}
 }

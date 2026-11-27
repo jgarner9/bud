@@ -126,9 +126,9 @@ func TestTheRequestCarriesNoToolsEvenWhenTheMailAsksForThem(t *testing.T) {
 	}
 	for k := range body {
 		switch k {
-		case "model", "temperature", "max_tokens", "messages":
+		case "model", "temperature", "max_tokens", "messages", "chat_template_kwargs":
 		default:
-			t.Errorf("the request has a %q field; it may carry only model, temperature, max_tokens and messages", k)
+			t.Errorf("the request has a %q field; it may carry only model, temperature, max_tokens, messages and chat_template_kwargs", k)
 		}
 	}
 	for _, banned := range []string{"tools", "functions", "tool_choice", "function_call", "response_format"} {

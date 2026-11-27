@@ -433,3 +433,12 @@ func TestPythonCanVenvRunsPython(t *testing.T) {
 		t.Fatal("no python3 can't make a venv")
 	}
 }
+
+func TestUvComesWithTheFullProfileOnly(t *testing.T) {
+	has := func(profile string) bool {
+		return slices.ContainsFunc(Needed(profile), func(d Dep) bool { return d.Name == "uv" && slices.Contains(d.Also, "uvx") })
+	}
+	if !has("full") || has("minimal") {
+		t.Errorf("uv (with uvx) is in the full profile: %v, the minimal profile: %v; want true, false", has("full"), has("minimal"))
+	}
+}

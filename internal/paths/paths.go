@@ -154,6 +154,13 @@ func (p *Paths) OpenCodeConfig() string { return filepath.Join(filepath.Dir(p.Co
 // names and op:// references, never the values (Suite D7)
 func (p *Paths) OpenCodeEnv() string { return filepath.Join(p.State, "opencode.env") }
 
+// CocoindexSettings is cocoindex-code's global settings, which its MCP server
+// won't start without (JGA-424). bud sync writes it from the registry's
+// embedding role
+func (p *Paths) CocoindexSettings() string {
+	return filepath.Join(p.Home, ".cocoindex_code", "global_settings.yml")
+}
+
 // HermesConfig is Hermes's config.yaml, which bud sync renders on the home
 // server (Suite D48). Hermes reads it from ~/.hermes unless HERMES_HOME says
 // otherwise, and bud's units leave HERMES_HOME unset

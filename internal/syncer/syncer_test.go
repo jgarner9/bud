@@ -748,3 +748,69 @@ func TestContentOnDiskNeedingANewerFormatIsRefused(t *testing.T) {
 		t.Fatalf("syncing the version on disk: %v", err)
 	}
 }
+
+// codingOptions is a device whose profile takes the coding fragment, the one
+// that adds the cocoindex server
+func codingOptions(t *testing.T, s *server) Options {
+	t.Helper()
+	o := options(t, s)
+	o.Profiles = func() []profile.Dir {
+		return []profile.Dir{{Name: "examples", FS: fstest.MapFS{
+			"dev.json": {Data: []byte(`{"name": "dev", "components": ["ide", "harness"], "channel": "edge", "content": {"env": ["base", "coding"]}}`)},
+		}}}
+	}
+
+	return o
+}
+
+func codingTree(t *testing.T) fstest.MapFS {
+	t.Helper()
+	tr := tree(t)
+	tr["env/coding.jsonc"] = &fstest.MapFile{Data: repoFile(t, "coding.jsonc")}
+
+	return tr
+}
+
+func TestADeviceWithCocoindexGetsItsSettingsFromTheRegistry(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", codingTree(t))
+	o := codingOptions(t, s)
+
+	run(t, o)
+	got := read(t, o.Paths.CocoindexSettings())
+	for _, want := range []string{"provider: litellm", `model: "openai/qwen3-embedding-0.6b"`, "OPENAI_API_BASE: \"http://home.invalid:8082/v1\"", "OPENAI_API_KEY: not-needed"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("global_settings.yml lacks %s:\n%s", want, got)
+		}
+	}
+	led, _ := LoadLedger(o.Paths.SyncLedger())
+	if !slices.ContainsFunc(led.Files, func(f File) bool { return f.Path == o.Paths.CocoindexSettings() && f.Kind == "config" }) {
+		t.Fatalf("the settings aren't in the ledger: %+v", led.Files)
+	}
+	if rep := run(t, o); rep.Changed() || len(rep.Skipped) > 0 {
+		t.Fatalf("a second sync changed %+v, skipped %+v", rep.Changes, rep.Skipped)
+	}
+
+	// a hand edit stays, and the sync names it
+	if err := os.WriteFile(o.Paths.CocoindexSettings(), []byte("embedding: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep := run(t, o)
+	if len(rep.Skipped) != 1 || rep.Skipped[0].Path != o.Paths.CocoindexSettings() || !strings.Contains(rep.Skipped[0].Why, "changed by hand") {
+		t.Fatalf("want the settings skipped as a hand edit, got %+v", rep.Skipped)
+	}
+	if got := read(t, o.Paths.CocoindexSettings()); got != "embedding: {}\n" {
+		t.Fatalf("the hand edit was overwritten: %q", got)
+	}
+}
+
+func TestADeviceWithoutCocoindexGetsNoSettings(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", tree(t))
+	o := options(t, s)
+
+	run(t, o)
+	if _, err := os.Stat(o.Paths.CocoindexSettings()); !os.IsNotExist(err) {
+		t.Fatalf("a device without the cocoindex server got settings; stat: %v", err)
+	}
+}

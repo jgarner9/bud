@@ -18,7 +18,7 @@ bud is a personal tool that happens to be public: it's built around one person's
 | `gh`, the GitHub CLI | the dashboard's open pull requests | Optional. On the full profile `bud install` installs it and offers `gh auth login`. |
 | Linear, connected to OpenCode | filing issues from the editor | Optional. See [Filing issues](issues.md). |
 
-Everything else (Neovim 0.12+, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, each language's toolchain) is installed for you in step 2, after you've seen the command.
+Everything else (Neovim 0.12+, git, ripgrep, fd, fzf, tree-sitter-cli, a C compiler, uv on the full profile, each language's toolchain) is installed for you in step 2, after you've seen the command.
 
 The editor works without OpenCode: say no at step 3 and step 3 is skipped. `bud ai setup` picks it up later.
 

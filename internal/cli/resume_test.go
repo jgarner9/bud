@@ -282,9 +282,6 @@ func TestResumeSecretsNeedOpAndAnEnvFile(t *testing.T) {
 	if _, err := (resumeSecrets{envFiles: []string{"/no/such/file"}}).resolve(); err == nil || !strings.Contains(err.Error(), "op") {
 		t.Fatalf("without op: %v", err)
 	}
-	if _, err := readEnvValue(filepath.Join(t.TempDir(), "none"), "X"); err == nil {
-		t.Error("a missing token file was accepted")
-	}
 }
 
 func TestResumeSecretsFlags(t *testing.T) {

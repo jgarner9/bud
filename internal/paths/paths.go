@@ -184,6 +184,14 @@ func (p *Paths) HermesTiers() string { return filepath.Join(p.State, "hermes-tie
 // MCPGateway is the home server's MCP gateway config (Suite D72)
 func (p *Paths) MCPGateway() string { return filepath.Join(p.State, "mcp-gateway.json") }
 
+// OpTokenFile is the env file holding the 1Password service account's
+// OP_SERVICE_ACCOUNT_TOKEN, which the home server's units load and bud reads
+// when the environment and the Keychain don't have it (Suite D144). It lives
+// beside bud's directories, in ~/.config/bud-server
+func (p *Paths) OpTokenFile() string {
+	return filepath.Join(filepath.Dir(p.Config), "bud-server", "op-service-account.env")
+}
+
 // Audit is the shared audit log (internal/audit, Suite D140): one append-only
 // file every leaf writes its approval-tier and spend events to
 func (p *Paths) Audit() string { return filepath.Join(p.State, "audit.jsonl") }

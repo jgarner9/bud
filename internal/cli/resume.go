@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"jgarner.dev/bud/internal/envfile"
+	"jgarner.dev/bud/internal/optoken"
 	"jgarner.dev/bud/internal/paths"
 	"jgarner.dev/bud/internal/resume"
 )
@@ -279,24 +281,24 @@ func resumeLaunch(args []string, opencode string, sec resumeSecrets) error {
 // or in opencode's, and the values come back over a pipe. A value that isn't
 // a reference is passed as it is
 func (s resumeSecrets) resolve() ([]string, error) {
-	envv := withoutEnv(os.Environ(), "OP_SERVICE_ACCOUNT_TOKEN")
+	envv := envfile.Without(os.Environ(), optoken.EnvVar)
 	if len(s.envFiles) == 0 {
 		return envv, nil
 	}
 	opEnv := os.Environ()
 	if s.tokenFile != "" {
-		token, err := readEnvValue(s.tokenFile, "OP_SERVICE_ACCOUNT_TOKEN")
+		token, err := envfile.Value(s.tokenFile, optoken.EnvVar)
 		if err != nil {
 			return nil, fmt.Errorf("--op-token-file: %w", err)
 		}
-		opEnv = append(withoutEnv(opEnv, "OP_SERVICE_ACCOUNT_TOKEN"), "OP_SERVICE_ACCOUNT_TOKEN="+token)
+		opEnv = envfile.With(opEnv, optoken.EnvVar, token)
 	}
 	op, err := exec.LookPath("op")
 	if err != nil {
 		return nil, fmt.Errorf("find op for --op-env-file: %w; install the 1Password CLI or fix the unit's PATH", err)
 	}
 	for _, f := range s.envFiles {
-		pairs, err := readEnvFile(f)
+		pairs, err := envfile.Read(f)
 		if err != nil {
 			return nil, fmt.Errorf("--op-env-file: %w; bud sync writes opencode.env, and server/resume/README.md says what goes in the others", err)
 		}
@@ -311,7 +313,7 @@ func (s resumeSecrets) resolve() ([]string, error) {
 				}
 				val = string(out)
 			}
-			envv = append(withoutEnv(envv, kv[0]), kv[0]+"="+val)
+			envv = envfile.With(envv, kv[0], val)
 		}
 	}
 
@@ -327,57 +329,6 @@ func stderrOf(err error) string {
 	}
 
 	return ""
-}
-
-// readEnvFile reads a systemd-style env file: KEY=value lines, # comments, an
-// optional export and quotes around the value
-func readEnvFile(path string) ([][2]string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var out [][2]string
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
-		k, v, ok := strings.Cut(line, "=")
-		k = strings.TrimSpace(k)
-		if !ok || k == "" || strings.HasPrefix(k, "#") {
-			continue
-		}
-		v = strings.TrimSpace(v)
-		if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
-			v = v[1 : len(v)-1]
-		}
-		out = append(out, [2]string{k, v})
-	}
-
-	return out, nil
-}
-
-// readEnvValue reads key's value from an env file; it's never printed
-func readEnvValue(path, key string) (string, error) {
-	pairs, err := readEnvFile(path)
-	if err != nil {
-		return "", err
-	}
-	for _, kv := range pairs {
-		if kv[0] == key && kv[1] != "" {
-			return kv[1], nil
-		}
-	}
-
-	return "", fmt.Errorf("%s doesn't set %s", path, key)
-}
-
-// withoutEnv drops key from an environment list
-func withoutEnv(envv []string, key string) []string {
-	var out []string
-	for _, kv := range envv {
-		if !strings.HasPrefix(kv, key+"=") {
-			out = append(out, kv)
-		}
-	}
-	return out
 }
 
 // startChild starts argv on this terminal and returns a wait that forwards

@@ -76,6 +76,14 @@ Not set up on the home server yet: revisit item 31.
 | JGA-396 | A reviewer-only `retier` action in the memory service (`POST /retier {id, privacy, from, body_hash}`) and `bud memory-review retier <id> <tier>`, which asks on Signal with the whole record and moves it only on his yes. The reviewer token's policy needs `retier` and `export` (revisit item 36) | this PR | D136 |
 | JGA-395 | The shared audit log (D140), in three steps: `internal/audit` (`Open`, `Write`, `Record`, `Read`; one `O_APPEND` write per line, 0600, events refused over 32 KB or with no source or kind) is in (#149), and now the leaves write to it: `approval.Store.Dispatch` records every approval for the gateway, ops, router P0 fallback, memory-review and `bud improve`; the gateway records each call, the router each charge and mail each move, restore and send. step 3 (#151) has the gateway write only the shared log and drops `mcp-audit.jsonl`, `paths.MCPAudit` and the gateway's `audit_log` setting (still read, ignored) | #149, #150, #151 | D140 |
 
+## Built on 2026-11-27
+
+| Issue | What | PR | Decisions |
+| --- | --- | --- | --- |
+| JGA-413 to JGA-415, JGA-417 to JGA-419 | Sessions use vault secrets through `bud secrets run` (`bud run` was taken): `internal/optoken` finds the service account token (environment, macOS Keychain item `bud-op-service-account`, token file), `bud agent` signs `op run` in with it so the Mac launch needs no 1Password sign-in, `bud doctor` names its source and with `--net` warns unless it sees one vault, and `bud secrets run --secret NAME[=AS] -- gh ...` runs an allowlisted command (`gh pr`, `gh issue`, `gh api` reads, `gh run`) with only the named references, records it in `audit.jsonl`, and is allowed without a prompt. `op`, `security` and the token file stay denied. Design: `handoff/design/op-run-access.md`; how it works: `docs/internals/secrets.md` | this PR | D142 to D148 |
+
+Waiting on Jason, with the rollouts: JGA-412 (a measurement inside a `bud agent` session), JGA-416 (the Keychain item on the Mac), JGA-420 and JGA-421 (rolling out on the home server and the Mac). Revisit item 37.
+
 ## The home server
 
 Fully set up and verified by Jason as of 2026-11-22 08:20 UTC: gateway, router, Hermes (both profiles), signal-cli and bud-signal, embeddings, the memory service with memory-mcp through the gateway (Hermes's own memory off), calendar, contacts, mail, and the planning OpenCode as the `bud-planning` user.

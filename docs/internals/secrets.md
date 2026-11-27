@@ -19,13 +19,13 @@ How an OpenCode session on a device uses a Bud Vault secret without holding the 
 `bud secrets run --secret GITHUB_PERSONAL_ACCESS_TOKEN=GH_TOKEN -- gh pr list`:
 
 1. Refuse with no `--secret` or no command (a usage error).
-2. Open the audit log. A log that won't open stops the command: a secret shouldn't reach a command unrecorded.
+2. Open the audit log. A log that won't open stops the command: a secret shouldn't reach a command unrecorded. The run is also written to it before the command starts, and a failed write stops it too.
 3. `secretrun.Check` the command. It must name the command (no `/`), start with an allowed prefix, and not be `gh pr merge`, `gh issue delete` or `gh run delete`. `gh api` is reads only: no `-X` other than GET, no `-f`/`-F`/`--field`/`--raw-field`/`--input`, no `--hostname`, no URL.
 4. Read `opencode.env` (`paths.OpenCodeEnv`, written by `bud sync`) and look each `NAME` up. `NAME=AS` hands it over as `AS`; `AS` can't be `OP_*`, `LD_*`, `DYLD_*` or a variable bud passes through. An unknown name lists the synced names, never a reference.
-5. Find the token with `optoken` and `op`, `env` and the command with `exec.LookPath`.
-6. `secretrun.Build`: the environment for `op` is the variables in `passEnv` (`PATH`, `HOME`, `TERM`, the proxy settings and a few more) plus `AS=<the secret's op reference>` for each secret plus the token. Nothing else of the session's environment carries over, so `GH_HOST` can't point a token at another host. A `PATH` with a relative entry is refused.
+5. Find the token with `optoken`, and `op`, `env` and the command with `secretrun.Lookup`, which searches only `secretrun.TrustedDirs` (`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, `/bin`, and Linuxbrew's) and refuses a file anyone can write. The session's own `PATH` is never used: a fake `op` ahead of the real one would be handed the token.
+6. `secretrun.Build`: the environment for `op` is `PATH` set to `TrustedDirs`, the variables in `passEnv` (`HOME`, `TERM`, the XDG directories and a few more), `AS=<the secret's op reference>` for each secret, and the token. Nothing else of the session's environment carries over, so `GH_HOST` and the proxy variables can't send a token to another host. A passed-through variable that holds an `op` reference is refused, since `op run` would resolve it. A secret can't be given under a name in `steering` (`GH_HOST`, `GH_REPO`, the proxy and certificate variables, `GH_ENTERPRISE_TOKEN` and others).
 7. Run `op run -- env -u OP_SERVICE_ACCOUNT_TOKEN <command>`. `op run` resolves only the references it was given and masks their values in the command's output. The command holds the secrets and not the token.
-8. Write one audit line (`source: secrets`, `kind: secret_run`, target the command and subcommand, decision `allowed` or `refused`, detail the names and the exit code or reason) and pass the command's exit code through.
+8. Write a second audit line when the command ends and pass its exit code through. A line is `source: secrets`, `kind: secret_run`, with `target` the allowed prefix (`gh pr`, or `(not allowed)`), `decision` `allowed` or `refused`, and detail holding how many secrets were asked for, the names of those that passed, and the exit code or a fixed reason. What the caller typed (a spec, a command's arguments) is never recorded, since a session can put any value it holds there.
 
 ## What this does and doesn't stop
 

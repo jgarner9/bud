@@ -45,6 +45,10 @@ func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
 // token; swappable so tests never reach a real Keychain
 var secretsTokenFinder = func(p *paths.Paths) optoken.Finder { return optoken.Finder{File: p.OpTokenFile()} }
 
+// openAuditLog is swappable so a test can have a log that opens and then
+// can't be written
+var openAuditLog = audit.Open
+
 // secretsRun checks the request, starts the command under op run with only
 // the secrets it named, and records the call. Every refusal and every run is
 // in the audit log, with names and exit codes and never a value. A log that
@@ -60,33 +64,42 @@ func secretsRun(g *Globals, specs, argv []string) error {
 	if err != nil {
 		return err
 	}
-	log, err := audit.Open(p.Audit())
+	log, err := openAuditLog(p.Audit())
 	if err != nil {
 		return fmt.Errorf("secrets run: no secret goes to a command the audit log can't record: %w", err)
 	}
 
-	names := specs
-	record := func(decision string, detail map[string]any) {
+	// names is what the log holds of the request: how many secrets were asked
+	// for until they've been checked, then the names of those that passed. The
+	// text of a spec is never recorded, since a session can type anything there
+	var names []string
+	event := func(action, decision string, detail map[string]any) audit.Event {
 		if detail == nil {
 			detail = map[string]any{}
 		}
-		detail["secrets"] = names
-		log.Record(audit.Event{
-			Source: audit.SourceSecrets, Kind: audit.KindSecretRun, Action: "run",
-			Target: headOf(argv), Decision: decision, Detail: detail,
-		})
+		detail["requested"] = len(specs)
+		if len(names) > 0 {
+			detail["secrets"] = names
+		}
+
+		return audit.Event{
+			Source: audit.SourceSecrets, Kind: audit.KindSecretRun, Action: action,
+			Target: secretrun.Target(argv), Decision: decision, Detail: detail,
+		}
 	}
-	refuse := func(err error) error {
-		record("refused", map[string]any{"reason": err.Error()})
+	// refuse records the refusal under a fixed reason (the error can quote
+	// what the caller typed) and returns the error, which only the caller sees
+	refuse := func(reason string, err error) error {
+		log.Record(event("run", "refused", map[string]any{"reason": reason}))
 		return fmt.Errorf("secrets run: %w", err)
 	}
 
 	if err := secretrun.Check(argv); err != nil {
-		return refuse(err)
+		return refuse("command not allowed", err)
 	}
 	pairs, err := envfile.Read(p.OpenCodeEnv())
 	if err != nil {
-		return refuse(fmt.Errorf("no secrets are synced to this device: bud sync writes opencode.env: %w", err))
+		return refuse("no synced secrets", fmt.Errorf("no secrets are synced to this device: bud sync writes opencode.env: %w", err))
 	}
 	refs := map[string]string{}
 	for _, kv := range pairs {
@@ -94,28 +107,33 @@ func secretsRun(g *Globals, specs, argv []string) error {
 	}
 	secrets, err := secretrun.ParseSecrets(specs, refs)
 	if err != nil {
-		return refuse(err)
+		return refuse("secret request refused", err)
 	}
-	names = names[:0:0]
 	for _, s := range secrets {
 		names = append(names, s.Name)
 	}
 
 	tok, err := secretsTokenFinder(p).Lookup()
 	if err != nil {
-		return refuse(err)
+		return refuse("no token", err)
 	}
 	var bins [3]string
 	for i, name := range []string{"op", "env", argv[0]} {
-		if bins[i], err = exec.LookPath(name); err != nil {
-			return refuse(fmt.Errorf("find %s: %w", name, err))
+		if bins[i], err = secretrun.Lookup(name); err != nil {
+			return refuse("no trusted "+name, err)
 		}
 	}
 	plan, err := secretrun.Build(bins[0], bins[1], bins[2], secrets, argv, os.Environ(), tok)
 	if err != nil {
-		return refuse(err)
+		return refuse("plan refused", err)
 	}
 
+	// The run is recorded before the command starts, and a record that can't
+	// be written stops it: log.Record drops write errors, and a secret that
+	// went out unrecorded is the one case this log exists to prevent
+	if err := log.Write(event("run", "allowed", nil)); err != nil {
+		return fmt.Errorf("secrets run: no secret goes to a command the audit log can't record: %w", err)
+	}
 	g.Logf("running %s with %s", headOf(argv), strings.Join(names, ", "))
 	cmd := exec.Command(plan.Argv[0], plan.Argv[1:]...)
 	cmd.Env = plan.Env
@@ -124,14 +142,14 @@ func secretsRun(g *Globals, specs, argv []string) error {
 	var ee *exec.ExitError
 	switch {
 	case err == nil:
-		record("allowed", map[string]any{"exit": 0})
+		log.Record(event("exit", "allowed", map[string]any{"exit": 0}))
 		return nil
 	case errors.As(err, &ee):
 		code := max(ee.ExitCode(), ExitFailure) // -1 when a signal ended it
-		record("allowed", map[string]any{"exit": code})
+		log.Record(event("exit", "allowed", map[string]any{"exit": code}))
 		return &commandExitError{code: code}
 	}
-	record("allowed", map[string]any{"error": "op couldn't start"})
+	log.Record(event("exit", "allowed", map[string]any{"error": "op couldn't start"}))
 
 	return fmt.Errorf("secrets run: start op: %w", err)
 }

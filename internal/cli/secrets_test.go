@@ -10,6 +10,7 @@ import (
 	"jgarner.dev/bud/internal/audit"
 	"jgarner.dev/bud/internal/optoken"
 	"jgarner.dev/bud/internal/paths"
+	"jgarner.dev/bud/internal/secretrun"
 )
 
 const secretsTestToken = "ops_secrets-run-test-token"
@@ -49,7 +50,11 @@ shift 2
 for v in $(env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=op:\/\/.*/\1/p'); do export "$v=resolved-for-$v"; done
 exec "$@"`)
 	write("gh", ghBody)
-	t.Setenv("PATH", bin+":/usr/bin:/bin")
+	// the fakes are the trusted tools; the session's PATH is only a decoy
+	origDirs := secretrun.TrustedDirs
+	t.Cleanup(func() { secretrun.TrustedDirs = origDirs })
+	secretrun.TrustedDirs = []string{bin, "/usr/bin", "/bin"}
+	t.Setenv("PATH", t.TempDir()+":/usr/bin:/bin")
 	t.Setenv("TMPDIR", scratch)
 	t.Setenv("GH_HOST", "evil.example")
 	t.Setenv(optoken.EnvVar, "")
@@ -96,8 +101,13 @@ func TestSecretsRunGivesTheCommandTheSecretAndOpTheToken(t *testing.T) {
 		t.Errorf("op was started with %q, want the token", got)
 	}
 	evs := d.events(t)
-	if len(evs) != 1 || evs[0].Source != audit.SourceSecrets || evs[0].Kind != audit.KindSecretRun || evs[0].Decision != "allowed" || evs[0].Target != "gh pr" {
-		t.Fatalf("audit events: %+v", evs)
+	if len(evs) != 2 || evs[0].Action != "run" || evs[1].Action != "exit" {
+		t.Fatalf("audit events: %+v, want the run recorded before the command and its exit after", evs)
+	}
+	for _, e := range evs {
+		if e.Source != audit.SourceSecrets || e.Kind != audit.KindSecretRun || e.Decision != "allowed" || e.Target != "gh pr" {
+			t.Errorf("audit event %+v", e)
+		}
 	}
 	raw, _ := os.ReadFile(d.p.Audit())
 	for _, leak := range []string{secretsTestToken, "resolved-for", "op://"} {
@@ -114,7 +124,7 @@ func TestSecretsRunPassesTheCommandsExitCodeThrough(t *testing.T) {
 	if !errors.As(err, &ce) || ce.code != 7 {
 		t.Fatalf("err = %v, want exit code 7", err)
 	}
-	if evs := d.events(t); len(evs) != 1 || evs[0].Detail["exit"] != float64(7) {
+	if evs := d.events(t); len(evs) != 2 || evs[1].Detail["exit"] != float64(7) {
 		t.Errorf("audit events: %+v", evs)
 	}
 }
@@ -179,6 +189,71 @@ func TestSecretsRunStopsWhenTheAuditLogWontOpen(t *testing.T) {
 	d := newSecretsDevice(t, `echo ran > "$TMPDIR/gh-saw"`)
 	if err := os.Mkdir(d.p.Audit(), 0o700); err != nil { // a directory where the log should be
 		t.Fatal(err)
+	}
+	err := secretsRun(&Globals{}, []string{"EXA_API_KEY"}, []string{"gh", "pr", "list"})
+	if err == nil || !strings.Contains(err.Error(), "audit log") {
+		t.Fatalf("err = %v, want the audit log named", err)
+	}
+	if _, err := os.Stat(filepath.Join(d.scratch, "gh-saw")); err == nil {
+		t.Error("the command ran with no record of it")
+	}
+}
+
+func TestSecretsRunNeverRecordsTheTextOfARequest(t *testing.T) {
+	d := newSecretsDevice(t, `true`)
+	// a session can type any value it holds into a spec or a command
+	for _, tc := range []struct{ specs, argv []string }{
+		{[]string{"EXA_API_KEY=ghp_typed-by-the-session"}, []string{"gh", "pr", "list"}},
+		{[]string{"ghp_typed-by-the-session"}, []string{"gh", "pr", "list"}},
+		{[]string{"EXA_API_KEY"}, []string{"ghp_typed-by-the-session", "x"}},
+		{[]string{"ghp_typed-by-the-session"}, []string{"sh", "-c", "ghp_typed-by-the-session"}},
+		{[]string{"EXA_API_KEY"}, []string{"gh", "pr", "view", "--repo", "ghp_typed-by-the-session/a/b"}},
+	} {
+		if err := secretsRun(&Globals{}, tc.specs, tc.argv); err == nil {
+			t.Errorf("secretsRun(%q, %q) was accepted", tc.specs, tc.argv)
+		}
+	}
+	raw, _ := os.ReadFile(d.p.Audit())
+	if strings.Contains(string(raw), "typed-by-the-session") || len(d.events(t)) != 5 {
+		t.Errorf("the audit log holds what the caller typed, or lost a refusal: %s", raw)
+	}
+}
+
+func TestSecretsRunIgnoresTheSessionsPathAndProxies(t *testing.T) {
+	d := newSecretsDevice(t, `echo "path=$PATH proxy=${HTTPS_PROXY-unset}" > "$TMPDIR/gh-saw"`)
+	// a fake op in a directory the session controls must not get the token
+	decoy := t.TempDir()
+	if err := os.WriteFile(filepath.Join(decoy, "op"), []byte("#!/bin/sh\necho stolen > \"$TMPDIR/stolen\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", decoy+":/usr/bin:/bin")
+	t.Setenv("HTTPS_PROXY", "http://evil.example:3128")
+	if err := secretsRun(&Globals{}, []string{"EXA_API_KEY"}, []string{"gh", "pr", "list"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(d.scratch, "stolen")); err == nil {
+		t.Fatal("the op on the session's PATH was started")
+	}
+	want := "path=" + strings.Join(secretrun.TrustedDirs, ":") + " proxy=unset"
+	if got := d.saw(t, "gh-saw"); got != want {
+		t.Errorf("gh saw %q, want %q", got, want)
+	}
+}
+
+func TestSecretsRunStopsWhenTheAuditLogCantBeWrittenAfterItOpened(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes to any file, so there's no log it can't write")
+	}
+	d := newSecretsDevice(t, `echo ran > "$TMPDIR/gh-saw"`)
+	orig := openAuditLog
+	t.Cleanup(func() { openAuditLog = orig })
+	openAuditLog = func(path string) (*audit.Log, error) {
+		l, err := audit.Open(path)
+		if err == nil {
+			err = os.Chmod(path, 0o400) // it opened; now it can't be appended to
+		}
+
+		return l, err
 	}
 	err := secretsRun(&Globals{}, []string{"EXA_API_KEY"}, []string{"gh", "pr", "list"})
 	if err == nil || !strings.Contains(err.Error(), "audit log") {

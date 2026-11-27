@@ -10,6 +10,8 @@ package secretrun
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -35,12 +37,46 @@ var Allow = [][]string{
 var refusedGH = []string{"pr merge", "issue delete", "run delete"}
 
 // passEnv is the only part of the caller's environment a command keeps. The
-// rest (GH_HOST, which could point gh's token at another host, among it) is
-// dropped, so a session can't steer a secret by what it exports
+// rest (GH_HOST and the proxy variables, which could send gh's token to
+// another host, among it) is dropped, so a session can't steer a secret by
+// what it exports. PATH is not here: the command gets TrustedDirs
 var passEnv = []string{
-	"PATH", "HOME", "USER", "LOGNAME", "LANG", "TERM", "TMPDIR", "TZ", "NO_COLOR",
+	"HOME", "USER", "LOGNAME", "LANG", "TERM", "TMPDIR", "TZ", "NO_COLOR",
 	"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
-	"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
+}
+
+// steering are variables that point a command somewhere else or change what
+// it trusts, so no secret may be given under one of these names
+var steering = []string{
+	"PATH", "GH_HOST", "GH_REPO", "GH_CONFIG_DIR", "GH_PATH", "GH_BROWSER", "GH_EDITOR", "GH_PAGER",
+	"GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "SSL_CERT_FILE", "SSL_CERT_DIR", "GODEBUG", "GOFLAGS",
+	"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+}
+
+// TrustedDirs is where op, env and the allowed command are found, and the
+// PATH the command gets. The session's own PATH is never used: a fake op in a
+// directory the session controls would be handed the service account token
+var TrustedDirs = []string{"/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/home/linuxbrew/.linuxbrew/bin"} // leak-check: allow (Linuxbrew's own directory)
+
+// Lookup finds name in TrustedDirs. A file anyone can write to is refused
+func Lookup(name string) (string, error) {
+	if strings.Contains(name, "/") {
+		return "", fmt.Errorf("%q is a path; name the command", name)
+	}
+	for _, dir := range TrustedDirs {
+		p := filepath.Join(dir, name)
+		fi, err := os.Stat(p)
+		if err != nil || fi.IsDir() || fi.Mode().Perm()&0o111 == 0 {
+			continue
+		}
+		if fi.Mode().Perm()&0o002 != 0 {
+			return "", fmt.Errorf("%s can be written by anyone, so it won't be given a secret", p)
+		}
+
+		return p, nil
+	}
+
+	return "", fmt.Errorf("no %s in %s", name, strings.Join(TrustedDirs, ", "))
 }
 
 var nameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -112,6 +148,8 @@ func reservedName(as string) string {
 		return "a dynamic linker setting"
 	case slices.Contains(passEnv, as):
 		return "part of the environment bud passes through"
+	case slices.Contains(steering, as):
+		return "a setting that points a command somewhere else"
 	}
 
 	return ""
@@ -133,11 +171,43 @@ func Check(argv []string) error {
 	if argv[0] != "gh" {
 		return nil
 	}
-	if len(argv) >= 3 && slices.Contains(refusedGH, argv[1]+" "+argv[2]) {
-		return fmt.Errorf("%q can't run with secrets: it changes something Jason approves", argv[1]+" "+argv[2])
+	for _, a := range argv[1:] {
+		if strings.Contains(a, "://") {
+			return errors.New("gh can run with secrets against github.com only: name the path or the number, not a URL")
+		}
 	}
 	if argv[1] == "api" {
 		return checkGHAPI(argv[2:])
+	}
+	if len(argv) >= 3 {
+		sub := argv[2]
+		if strings.HasPrefix(sub, "-") && sub != "-h" && sub != "--help" {
+			return fmt.Errorf("put the subcommand right after gh %s: flags come after it", argv[1])
+		}
+		if slices.Contains(refusedGH, argv[1]+" "+sub) {
+			return fmt.Errorf("%q can't run with secrets: it changes something Jason approves", argv[1]+" "+sub)
+		}
+	}
+
+	return checkRepoFlags(argv[2:])
+}
+
+// checkRepoFlags refuses a -R/--repo that names a host (HOST/OWNER/REPO):
+// gh would take the call to that host
+func checkRepoFlags(args []string) error {
+	for i, a := range args {
+		var v string
+		switch {
+		case (a == "-R" || a == "--repo") && i+1 < len(args):
+			v = args[i+1]
+		case strings.HasPrefix(a, "--repo="):
+			v = strings.TrimPrefix(a, "--repo=")
+		case strings.HasPrefix(a, "-R") && len(a) > 2:
+			v = a[2:]
+		}
+		if strings.Count(v, "/") >= 2 {
+			return errors.New("gh can run with secrets against github.com only: --repo takes OWNER/REPO, without a host")
+		}
 	}
 
 	return nil
@@ -201,29 +271,26 @@ type Plan struct {
 	Env  []string // op's environment: the passed-through variables, the references and the token
 }
 
-// Build makes the plan. op, env and command are the paths of those tools, the
-// command being argv[0] found on PATH; environ is the caller's environment, of
-// which only passEnv carries over. Nothing in the plan's Argv is secret; the
-// token is in Env alone, and a reference is not a value
+// Build makes the plan. op, env and command are the paths of those tools
+// (see Lookup); environ is the caller's environment, of which only passEnv
+// carries over, and the command's PATH is TrustedDirs. Nothing in the plan's
+// Argv is secret; the token is in Env alone, and a reference is not a value
 func Build(op, env, command string, secrets []Secret, argv []string, environ []string, tok optoken.Token) (Plan, error) {
 	if err := Check(argv); err != nil {
 		return Plan{}, err
 	}
-	var penv []string
+	penv := []string{"PATH=" + strings.Join(TrustedDirs, ":")}
 	for _, kv := range environ {
-		k, _, _ := strings.Cut(kv, "=")
-		if slices.Contains(passEnv, k) {
-			penv = append(penv, kv)
+		k, v, _ := strings.Cut(kv, "=")
+		if !slices.Contains(passEnv, k) {
+			continue
 		}
-	}
-	for _, kv := range penv {
-		if k, v, _ := strings.Cut(kv, "="); k == "PATH" {
-			for _, dir := range strings.Split(v, ":") {
-				if !strings.HasPrefix(dir, "/") {
-					return Plan{}, fmt.Errorf("PATH has %q, which isn't an absolute directory; a secret won't go to a command found there", dir)
-				}
-			}
+		// op run resolves a reference in any variable it starts, which would
+		// let a session ask for a secret that --secret never named
+		if strings.Contains(v, "op://") {
+			return Plan{}, fmt.Errorf("%s holds an op reference; a secret can only be asked for with --secret", k)
 		}
+		penv = append(penv, kv)
 	}
 	for _, s := range secrets {
 		penv = append(penv, s.As+"="+s.Ref)
@@ -232,4 +299,17 @@ func Build(op, env, command string, secrets []Secret, argv []string, environ []s
 	run := []string{op, "run", "--", env, "-u", optoken.EnvVar}
 
 	return Plan{Argv: append(append(run, command), argv[1:]...), Env: penv}, nil
+}
+
+// Target is the allowed command prefix argv starts with, such as "gh pr", for
+// the audit log; a command that isn't allowed is "(not allowed)", so a word
+// the caller typed never reaches the log
+func Target(argv []string) string {
+	for _, p := range Allow {
+		if len(argv) >= len(p) && slices.Equal(argv[:len(p)], p) {
+			return strings.Join(p, " ")
+		}
+	}
+
+	return "(not allowed)"
 }

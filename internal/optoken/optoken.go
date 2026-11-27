@@ -120,8 +120,10 @@ func (f Finder) Lookup() (Token, error) {
 func (f Finder) keychain() (Token, bool, error) {
 	bin := f.Security
 	if bin == "" {
-		var err error
-		if bin, err = exec.LookPath("security"); err != nil {
+		// the fixed path, not PATH: a session can export a PATH with its own
+		// security first, and bud secrets run would take its answer for the token
+		bin = "/usr/bin/security"
+		if _, err := os.Stat(bin); err != nil {
 			return Token{}, false, nil
 		}
 	}

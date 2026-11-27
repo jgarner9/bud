@@ -154,6 +154,10 @@ func Run(opts Options) []Result {
 		cancel()
 	}
 
+	if r, ok := checkServiceAccount(p, opts); ok {
+		results = append(results, r)
+	}
+
 	return append(results, cfgResult, checkProjects(p))
 }
 

@@ -118,7 +118,7 @@ func runMailMCP(g *Globals, args []string, f mailFlags) error {
 		if f.summaries == "" {
 			f.summaries = p.MailSummaries()
 		}
-if _, statErr := os.Stat(f.summaries); os.IsNotExist(statErr) {
+		if _, statErr := os.Stat(f.summaries); os.IsNotExist(statErr) {
 			g.Noticef("mail-mcp: list_summaries is off: run bud mail-ingest first")
 		} else if statErr != nil {
 			return statErr

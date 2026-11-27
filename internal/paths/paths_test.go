@@ -30,6 +30,7 @@ func TestResolveDefaults(t *testing.T) {
 		{"language specs", p.LanguageSpecs(), "/home/me/.config/bud/languages"},
 		{"user language specs", p.UserLanguageSpecs(), "/home/me/.local/share/bud/user-tools/languages"},
 		{"prev binary", p.PrevBinary(), "/home/me/.local/share/bud/bud.prev"},
+		{"op token file", p.OpTokenFile(), "/home/me/.config/bud-server/op-service-account.env"},
 	}
 	for _, tt := range tests {
 		if tt.got != filepath.FromSlash(tt.want) {

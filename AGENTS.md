@@ -20,7 +20,15 @@ Nothing personal goes in this public repo: no hostnames, tailnet names, home pat
 
 ## Resuming work
 
-Before starting a task, read [handoff/README.md](handoff/README.md): how Jason works (lead with the answer, plain Unicode and no emoji, options with a recommendation, he decides design), the PR workflow, and links to the current state, the open items waiting on him and the Suite decision log (D1 onward). Keep `handoff/state.md` and `handoff/revisit.md` current in the same PR as the work. Host names and exact home-server commands are in the private overlay's `handoff/`, never here.
+Before starting a task, read `handoff/state.md` (where the work stands, in order) and `handoff/revisit.md` (what's waiting on Jason). The Suite decision log is `handoff/decisions.md`. Keep `handoff/state.md` and `handoff/revisit.md` current in the same PR as the work, and add any new Suite decision to `handoff/decisions.md` with the next number. Host names and exact home-server commands are in the private overlay's `handoff/`, never here. Linear (team JGA, project "Bud Suite") is the source of truth for status.
+
+How Jason works, beyond what `content/AGENTS.md` says:
+
+- Lead with the answer; plain Unicode symbols, never emoji; full sentences when explaining a change and why.
+- He drives the design. For a genuine design trade-off, a delete or a default he'll feel, give two or three options with a recommendation and let him choose. On a decision-only item, his standing rule (2026-11-21) is to take the recommendation: record it as a Suite decision noting that, and tell him so he can reverse it. That rule doesn't cover privacy tiers, approvals, deletions or anything on the home server that needs his hands.
+- He wants full insight into the architecture: keep `docs/architecture.md`, `docs/internals/`, `BASE.md` and the decision log complete, with the reason for each part.
+- Fewer Signal prompts: don't add a new one without saying so. Plain-text prompts, no JSON.
+- Anything he pastes into his shell (zsh, no interactive comments) has no `#` lines; put the explanation above the block. Home-server commands that loosen approvals, use `op`, merge or replace a binary are his to run.
 
 ## The IDE
 
@@ -127,7 +135,7 @@ Tests swap package-level vars and restore them with `t.Cleanup` (`internal/cli`'
 
 ## Commits
 
-For a fix, commit on a dedicated branch and open a PR as part of the task. Address review findings on that PR and leave one summary comment after pushing the fixes. If the review is clean, leave the PR alone. Leave merging to Jason unless he asks.
+For a fix, commit on a dedicated branch and open a PR as part of the task: one task, one branch, one PR. Run `just check` (or the tests that cover the change) first and show the result. The PR body says what changed and why, the Linear issue, and how it was tested; assign Jason. Request a Copilot review and wait for it: a review with no comments still counts, and nothing notifies you of it, so check the PR. Fix its findings on the same branch, run the relevant checks, push, resolve the addressed threads, and leave one top-level comment with the findings, the fixes and the commit. If the review is clean, leave the PR alone. Leave merging to Jason unless he asks. Never merge a PR labelled `bud-proposal` (the self-improvement loop's, D126): merging one is his approval of that change. Never force-push a shared branch; merge the old head instead.
 
 Lowercase conventional style: `feat:`, `fix:`, `chore:`, `docs:`, followed by a short summary.
 

@@ -736,6 +736,11 @@
     },
     {
       "action": "shell",
+      "effect": "allow",
+      "resource": "bud secrets run *"
+    },
+    {
+      "action": "shell",
       "effect": "deny",
       "resource": "op"
     },
@@ -745,9 +750,39 @@
       "resource": "op *"
     },
     {
+      "action": "shell",
+      "effect": "deny",
+      "resource": "security"
+    },
+    {
+      "action": "shell",
+      "effect": "deny",
+      "resource": "security *"
+    },
+    {
+      "action": "shell",
+      "effect": "deny",
+      "resource": "*/security"
+    },
+    {
+      "action": "shell",
+      "effect": "deny",
+      "resource": "*/security *"
+    },
+    {
+      "action": "shell",
+      "effect": "deny",
+      "resource": "*op-service-account*"
+    },
+    {
       "action": "read",
       "effect": "ask",
       "resource": "*.env"
+    },
+    {
+      "action": "read",
+      "effect": "deny",
+      "resource": "*op-service-account*"
     },
     {
       "action": "external_directory",

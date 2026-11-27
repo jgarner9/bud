@@ -210,3 +210,45 @@ func repoFileAt(t *testing.T, parts ...string) []byte {
 
 	return b
 }
+
+// Suite D142 to D146: a session runs a command with a vault secret only
+// through bud secrets run. OpenCode applies the last rule that matches, so
+// the allow has to follow the catch-all ask, and the denies for op, the
+// Keychain tool and the token file have to follow every ask and allow they
+// could otherwise lose to
+func TestTheShippedRulesLetSessionsRunBudSecretsRunAndNothingElseAboutSecrets(t *testing.T) {
+	s := newServer(t)
+	s.publish("2026.11.15.1", "edge", repoContent(t))
+	o := options(t, s)
+	o.Device = "dev-machine"
+	o.Profiles = func() []profile.Dir { return []profile.Dir{{Name: "bud's examples", FS: bud.Profiles()}} }
+	run(t, o)
+	cfg := read(t, filepath.Join(o.Paths.OpenCodeConfig(), "opencode.jsonc"))
+
+	rule := func(action, effect, resource string) int {
+		t.Helper()
+		i := strings.Index(cfg, `"action": "`+action+`",
+      "effect": "`+effect+`",
+      "resource": "`+resource+`"`)
+		if i < 0 {
+			t.Fatalf("opencode.jsonc has no %s rule that %ss %q", action, effect, resource)
+		}
+
+		return i
+	}
+	catchAll := rule("shell", "ask", "*")
+	if allow := rule("shell", "allow", "bud secrets run *"); allow < catchAll {
+		t.Errorf("bud secrets run's allow (at %d) comes before the catch-all ask (at %d), which would win", allow, catchAll)
+	}
+	for _, res := range []string{"op", "op *", "security", "security *", "*/security", "*/security *", "*op-service-account*"} {
+		if deny := rule("shell", "deny", res); deny < catchAll {
+			t.Errorf("the deny for %q (at %d) comes before the catch-all ask (at %d)", res, deny, catchAll)
+		}
+	}
+	if deny, ask := rule("read", "deny", "*op-service-account*"), rule("read", "ask", "*.env"); deny < ask {
+		t.Errorf("the token file's read deny (at %d) comes before the *.env ask (at %d), which would win", deny, ask)
+	}
+	if strings.Contains(cfg, `"resource": "bud secrets *"`) || strings.Contains(cfg, `"resource": "bud *"`) {
+		t.Error("a rule wider than bud secrets run * would let a session run other bud commands alone")
+	}
+}

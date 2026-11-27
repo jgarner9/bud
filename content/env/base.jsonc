@@ -135,10 +135,27 @@
     { "action": "shell", "resource": "npm add *", "effect": "ask" },
     { "action": "shell", "resource": "docker * --privileged*", "effect": "ask" },
 
+    // the one way a session uses a vault secret mid-session: bud finds the
+    // service account token itself and runs only an allowed command with only
+    // the secrets it names, and records the call. The command inside isn't
+    // matched by any rule here, so bud secrets run refuses what it shouldn't
+    // run (Suite D142, D145)
+    { "action": "shell", "resource": "bud secrets run *", "effect": "allow" },
+
     // never: the agent doesn't touch the secrets store; values reach tools only
-    // through op run at launch (Suite D7)
+    // through op run at launch (Suite D7) or bud secrets run (D142). The
+    // Keychain and the token file are where bud keeps the service account
+    // token (D144), so a session may not read them either. These are rules
+    // about what a session types, a speed bump and not a wall; the vault's
+    // own scope is what limits a leak (D146)
     { "action": "shell", "resource": "op", "effect": "deny" },
     { "action": "shell", "resource": "op *", "effect": "deny" },
+    { "action": "shell", "resource": "security", "effect": "deny" },
+    { "action": "shell", "resource": "security *", "effect": "deny" },
+    { "action": "shell", "resource": "*/security", "effect": "deny" },
+    { "action": "shell", "resource": "*/security *", "effect": "deny" },
+    { "action": "shell", "resource": "*op-service-account*", "effect": "deny" },
     { "action": "read", "resource": "*.env", "effect": "ask" },
+    { "action": "read", "resource": "*op-service-account*", "effect": "deny" },
   ],
 }

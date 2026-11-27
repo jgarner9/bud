@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"jgarner.dev/bud"
+	"jgarner.dev/bud/internal/adapter/cocoindex"
 	"jgarner.dev/bud/internal/adapter/hermes"
 	"jgarner.dev/bud/internal/adapter/opencode"
 	"jgarner.dev/bud/internal/atomicfile"
@@ -362,6 +363,19 @@ func apply(o *Options, led, next *Ledger, prof *profile.Profile, dir, overlayDir
 			wants = append(wants, want{p.OpenCodeEnv(), envFile(out.Secrets), 0o600, "secrets", "rendered"})
 		}
 		rep.Notes = append(rep.Notes, out.Notes...)
+		if slices.Contains(out.Servers, "cocoindex") {
+			// cocoindex-code won't start without its settings, and they name
+			// bud's own embedding server (JGA-424)
+			data, note, err := cocoindex.Render(in.Registry)
+			if err != nil {
+				return err
+			}
+			if note != "" {
+				rep.Notes = append(rep.Notes, note)
+			} else {
+				wants = append(wants, want{p.CocoindexSettings(), data, 0o644, "config", "rendered"})
+			}
+		}
 	}
 	if prof.Has("server") {
 		// Hermes, the manager, runs on the home server only (Suite D48)

@@ -92,6 +92,7 @@ type fakeAcct struct {
 	body    Body
 	err     error
 
+	stored    []StoredSummary
 	moved     []Moved
 	acts      []Action
 	sent      *Outgoing
@@ -129,6 +130,11 @@ func (f *fakeAcct) Restore(_ context.Context, id string) (Action, error) {
 func (f *fakeAcct) Digest(since time.Time) ([]Action, error) {
 	f.gotSince = since
 	return f.acts, f.err
+}
+
+func (f *fakeAcct) Summaries(since time.Time, limit int) ([]StoredSummary, int, error) {
+	f.gotSince, f.gotLimit = since, limit
+	return f.stored, len(f.stored), f.err
 }
 
 func (f *fakeAcct) Send(_ context.Context, m Outgoing) (string, error) {

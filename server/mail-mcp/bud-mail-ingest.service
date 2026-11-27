@@ -1,0 +1,24 @@
+# New-mail summaries for the mail MCP server (Suite D106, JGA-317), as a
+# systemd user oneshot that bud-mail-ingest.timer starts every 15 minutes:
+#
+#   cp bud-mail-ingest.service bud-mail-ingest.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bud-mail-ingest.timer
+#
+# It reads the same env file as bud-mail-mcp.service, so the Apple ID and
+# the app-specific password reach it through op run and never touch disk.
+# It fetches new mail by uid and has the registry's curator role, on local
+# providers only, summarize each message in a request that carries no
+# tools. It never sends, moves or marks anything, and it listens on nothing.
+[Unit]
+Description=Bud mail ingest (summarizes new mail with a local model that has no tools)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=30min
+EnvironmentFile=%h/.config/bud-server/op-service-account.env
+ExecStart=/usr/bin/env op run --env-file=%h/.config/bud-server/mail-mcp.env -- %h/.local/bin/bud mail-ingest
+NoNewPrivileges=yes
+PrivateTmp=yes

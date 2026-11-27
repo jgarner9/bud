@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Account is one mailbox reached over IMAP. Each call opens its own
@@ -32,6 +33,18 @@ type Account struct {
 	Log *Log
 	// Sender sends; without it the send tools say sending isn't set up
 	Sender *Sender
+	// Source holds the summaries bud mail-ingest wrote, for list_summaries;
+	// without it that tool says ingestion isn't set up
+	Source SummarySource
+}
+
+// Summaries returns the newest stored summaries received at or after since.
+// It reads the store file and opens no IMAP session
+func (a *Account) Summaries(since time.Time, limit int) ([]StoredSummary, int, error) {
+	if a.Source == nil {
+		return nil, 0, errors.New("mail ingestion isn't set up: run bud mail-ingest (server/mail-mcp/ has its timer) and restart bud mail-mcp")
+	}
+	return a.Source.Newest(since, limit)
 }
 
 // NewAccount checks the IMAP address and credentials. A loopback host is

@@ -24,30 +24,8 @@ import (
 	"jgarner.dev/bud/internal/mail"
 )
 
-// Summary is one stored line. Everything but the provenance (Folder,
-// UIDValidity, UID, MessageID, Received, At, Model) is the sender's or the
-// model's text and is untrusted
-type Summary struct {
-	Folder      string    `json:"folder"`
-	UIDValidity uint32    `json:"uidvalidity"`
-	UID         uint32    `json:"uid"`
-	MessageID   string    `json:"message_id,omitempty"`
-	Received    time.Time `json:"received"`
-	From        []string  `json:"from,omitempty"`
-	Subject     string    `json:"subject,omitempty"`
-	Summary     string    `json:"summary"`
-	// Error says why Summary is empty; the message still counts as handled
-	Error string    `json:"error,omitempty"`
-	Model string    `json:"model,omitempty"`
-	At    time.Time `json:"at"`
-}
-
-// Key names the message a line is about: one line per key, ever
-func (s Summary) Key() string { return key(s.Folder, s.UIDValidity, s.UID) }
-
-func key(folder string, validity, uid uint32) string {
-	return fmt.Sprintf("%s\x00%d\x00%d", folder, validity, uid)
-}
+// Summary is one stored line; see mail.StoredSummary for what is trusted
+type Summary = mail.StoredSummary
 
 // The caps on stored text, so one message can't fill the store
 const (
@@ -85,6 +63,9 @@ func Clean(s string, n int) string {
 func bidi(r rune) bool {
 	return r == '\u061c' || r == '\u200e' || r == '\u200f' || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')
 }
+
+// a Store is what the mail server's list_summaries reads
+var _ mail.SummarySource = (*Store)(nil)
 
 // Store is the append-only file of summaries
 type Store struct {

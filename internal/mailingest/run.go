@@ -122,7 +122,7 @@ func (r *Run) Do(ctx context.Context) (Result, error) {
 			done = 0
 		}
 		for _, m := range f.Messages {
-			k := key(folder, f.UIDValidity, m.UID)
+			k := mail.SummaryKey(folder, f.UIDValidity, m.UID)
 			if have[k] {
 				res.Skipped++
 			} else if err := r.handle(ctx, folder, f.UIDValidity, m, &res); err != nil {
